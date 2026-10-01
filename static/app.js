@@ -244,22 +244,16 @@ class LocalDB {
     // 推奨URL ＋ QRコード表示
     const qrDiv = document.createElement("div");
     qrDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#ffffff; border:1px solid #93c5fd; border-radius:8px; padding:12px 16px; margin-bottom:8px;";
-    qrDiv.innerHTML = `
-      <div style="flex-shrink:0; text-align:center;">
-        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(primaryUrl)}" 
-             alt="QRコード" 
-             style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; display:block;"
-             onerror="this.style.display='none'">
-        <span style="font-size:11px; color:#64748b; margin-top:4px; display:block;">カメラで読み取り</span>
-      </div>
-      <div style="flex:1;">
-        <div style="font-size:12px; color:#3b82f6; font-weight:bold; margin-bottom:4px;">★ 推奨接続URL（施設内Wi-Fi）</div>
-        <div style="font-family:monospace; font-size:16px; font-weight:bold; color:#1e40af; margin-bottom:8px; word-break:break-all;">
-          ${primaryUrl}
-        </div>
-        <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="copyShareUrl('${primaryUrl}')">📋 URLをコピー</button>
-      </div>
-    `;
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(primaryUrl);
+    qrDiv.innerHTML = '<div style="flex-shrink:0; text-align:center;">' +
+      '<img src="' + qrUrl + '" alt="QRコード" style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; display:block;">' +
+      '<span style="font-size:11px; color:#64748b; margin-top:4px; display:block;">カメラで読み取り</span>' +
+      '</div>' +
+      '<div style="flex:1;">' +
+      '<div style="font-size:12px; color:#3b82f6; font-weight:bold; margin-bottom:4px;">★ 推奨接続URL（施設内Wi-Fi）</div>' +
+      '<div style="font-family:monospace; font-size:16px; font-weight:bold; color:#1e40af; margin-bottom:8px; word-break:break-all;">' + primaryUrl + '</div>' +
+      '<button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="copyShareUrl(\'' + primaryUrl + '\')">📋 URLをコピー</button>' +
+      '</div>';
     container.appendChild(qrDiv);
 
     // その他の接続候補
@@ -468,7 +462,7 @@ function editFacilityName() {
       db.data.facility_name = trimmed;
       updateFacilityNameUI();
       db.saveToServer();
-      alert(`施設名を「${trimmed}」に更新しました。\n（このPCおよび接続しているタブレット・スマホにも自動反映されます）`);
+      alert("施設名を「" + trimmed + "」に更新しました。\n（このPCおよび接続しているタブレット・スマホにも自動反映されます）");
     }
   }
 }
@@ -3514,8 +3508,8 @@ function setupEventListeners() {
   setInterval(() => {
     const preview = document.getElementById("recordTimePreview");
     if (preview) {
-      const now = new Date();
-      preview.textContent = `現在: ${now.toLocaleDateString()} ${now.toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}`;
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      preview.textContent = "現在: " + now.toLocaleDateString() + " " + timeStr;
     }
   }, 1000);
 }
