@@ -1,8 +1,27 @@
-﻿# Care Portal Server Script (Windows Standard PowerShell + .NET)
+# Care Portal Server Script (Windows Standard PowerShell + .NET)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $port = 8000
+
+# 0. タブレット・他端末接続用ファイアウォール自動確認 (初回のみ設定確認)
+try {
+    $fwRule = Get-NetFirewallRule -DisplayName "CarePortal_Port8000" -ErrorAction SilentlyContinue
+    if (-not $fwRule) {
+        Write-Host "======================================================================" -ForegroundColor Cyan
+        Write-Host "  【初回セットアップ】タブレット・他端末接続の設定" -ForegroundColor Yellow
+        Write-Host "======================================================================" -ForegroundColor Cyan
+        Write-Host "  タブレットやスマホから接続できるようにするため、" -ForegroundColor White
+        Write-Host "  Windowsファイアウォールに通信許可を登録します（初回のみ）。" -ForegroundColor White
+        Write-Host "  画面に許可ダイアログが表示されたら「はい」を押してください..." -ForegroundColor Green
+        Write-Host ""
+        try {
+            $p = Start-Process "netsh" -ArgumentList 'advfirewall firewall add rule name="CarePortal_Port8000" dir=in action=allow protocol=TCP localport=8000 profile=any' -Verb RunAs -Wait -PassThru -ErrorAction Stop
+        } catch {
+            Write-Host "  ※ファイアウォール設定はスキップされました（このPC単体での利用は可能です）。" -ForegroundColor Gray
+        }
+    }
+} catch { }
 
 # 1. すでにポート8000が稼働中か確認 (二重起動の防止)
 $isPortInUse = $false
