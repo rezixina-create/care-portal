@@ -1,4 +1,4 @@
-# Care Portal Server Script (Windows Standard PowerShell + .NET)
+﻿# Care Portal Server Script (Windows Standard PowerShell + .NET)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
