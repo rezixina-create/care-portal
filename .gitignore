@@ -1,0 +1,17 @@
+# OS generated files
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+.DS_Store
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Temporary and test logs
+*.log
+tests/edge_test_output.*
+tests/e2e_result.html
+tests/edge_dom.html

@@ -1,0 +1,1360 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+  <title>介護施設 統合業務ポータルシステム</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- 1. 最上部ヘッダー -->
+  <header class="portal-header">
+    <div class="portal-title">
+      <span>🏢 陽だまりの家 統合ポータル</span>
+      <span class="badge" id="syncStatusBadge" onclick="openShareModal()" style="cursor:pointer; background:#2563eb;" title="クリックして他端末接続URLを確認">📶 施設内クラウド共有中</span>
+      <span class="badge" style="background:#10b981;">自動バックアップ稼働中</span>
+    </div>
+    <div class="header-controls">
+      <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()">📱 タブレット接続案内</button>
+      <div class="staff-selector">
+        <label for="currentStaff">👤 担当職員:</label>
+        <select id="currentStaff" onchange="onCurrentStaffChange()"></select>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="openStaffModal()">＋ 職員・認印の管理</button>
+      </div>
+    </div>
+  </header>
+
+  <!-- 2. 本日の勤務体制バー (介護現場ポータル上部に自動連携) -->
+  <div id="todayShiftBar" style="background:#f8fafc; border-bottom:1px solid #cbd5e1; padding:6px 24px; font-size:13px; display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+    <strong style="color:#1e40af;">🕒 本日の勤務体制:</strong>
+    <span>管理者: 施設長</span>
+    <span>リーダー: 山田</span>
+    <span>看護: 鈴木</span>
+    <span>介護: 佐藤</span>
+    <span>事務: 田中</span>
+  </div>
+
+  <!-- 3. メインナビゲーションタブ (介護現場 ⇄ 事務所) -->
+  <nav class="main-nav">
+    <button class="main-nav-btn active" id="btnNavCare" onclick="switchPortal('care')">
+      <span>🤝</span> 介護現場ポータル (ケア記録・チェック表)
+    </button>
+    <button class="main-nav-btn" id="btnNavOffice" onclick="switchPortal('office')">
+      <span>💼</span> 事務所ポータル (在庫・発注・預かり金・車両・監査)
+    </button>
+  </nav>
+
+  <!-- 4. アラートバナー群 (在庫補充・非常食2週前・前月誕生日・受診2週/1週前・要介護期限) -->
+  <div class="alerts-container" id="alertsContainer">
+    <!-- JSで条件に応じて動的に警告バナーを表示 -->
+  </div>
+
+  <main class="portal-content">
+
+    <!-- ============================================================ -->
+    <!-- 【A】介護現場ポータル -->
+    <!-- ============================================================ -->
+    <div id="portalCareSection">
+      
+      <!-- カレンダー ＆ 日付選択バー (記録がある日に○印) -->
+      <section class="calendar-bar">
+        <div class="cal-header">
+          <div class="cal-month-nav">
+            <button class="cal-month-btn" onclick="changeMonth(-1)">◀ 前月</button>
+            <span id="calCurrentMonthLabel">2026年9月</span>
+            <button class="cal-month-btn" onclick="changeMonth(1)">次月 ▶</button>
+          </div>
+          <div>
+            <span style="font-size:13px; color:var(--text-muted);">● 赤丸＝記録あり（タップでその日の記録を表示）</span>
+          </div>
+        </div>
+        <div class="cal-days-row" id="calDaysRow"></div>
+      </section>
+
+      <!-- 利用者カードリスト -->
+      <section>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; flex-wrap:wrap; gap:8px;">
+          <h3 style="font-size:16px;">👤 利用者を選択 (タップして記録・カルテを表示)</h3>
+          <div style="display:flex; gap:10px; align-items:center;">
+            <span style="font-size:13px; color:var(--text-muted);" id="residentCountLabel"></span>
+            <button class="btn btn-primary" style="padding:4px 12px; font-size:13px;" onclick="openAddResidentModal()">＋ 新規利用者を登録</button>
+          </div>
+        </div>
+        <div class="residents-strip" id="residentsStrip"></div>
+      </section>
+
+      <!-- 介護サブタブ切り替え (普段使う業務 ＆ 定例・状況別業務) -->
+      <div style="background:#ffffff; border-radius:8px; padding:10px 14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <!-- 普段使う（日常ケア） -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          <span style="font-size:12px; font-weight:bold; color:#1e40af; background:#eff6ff; padding:3px 8px; border-radius:4px; white-space:nowrap;">【普段使う】</span>
+          <button class="sub-tab-btn active" onclick="switchCareTab('record')">📝 介護記録</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('vitals')">🩺 バイタル</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('meal')">🍚 食事・水分</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('excretion')">🚽 排泄</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('med')">💊 服薬・点眼</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('notebook')">📋 連絡帳・申し送り</button>
+        </div>
+
+        <!-- たまに使う（定例・状況別） -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0;">
+          <span style="font-size:12px; font-weight:bold; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:4px; white-space:nowrap;">【定例・状況別】</span>
+          <button class="sub-tab-btn" onclick="switchCareTab('bath')">🛁 入浴・塗布薬</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('oral')">🪥 口腔ケア</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('night')">🌙 夜勤体位変換</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('linen')">🛏️ シーツ交換</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('grooming')">✂️ 身だしなみ</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('weight')">⚖️ 月次体重</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('visit')">👥 面会・荷物</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('recreation')">🎨 レク履歴</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('consume')">📦 物品消費</button>
+        </div>
+      </div>
+
+      <!-- 介護タブ内コンテンツ -->
+      <div id="careTabContent">
+
+        <!-- 1. 介護記録 ＆ 文字検索 ＆ カルテ -->
+        <div id="tabCareRecord" class="layout-grid">
+          <div>
+            <!-- 文字検索ボックス (何月何日何時の記録か一発検索) -->
+            <div class="panel-card" style="border-top:4px solid var(--primary-color);">
+              <div class="panel-title">
+                <span>🔍 全文文字検索 (発熱、転倒、血圧、ふらつき等)</span>
+              </div>
+              <div style="display:flex; gap:8px;">
+                <input type="text" id="searchInput" class="form-control" placeholder="検索キーワードを入力（例: 熱、転倒、佐藤、ふらつき）" onkeypress="if(event.key==='Enter') doSearch()">
+                <button class="btn btn-primary" onclick="doSearch()">検索</button>
+                <button class="btn btn-secondary" onclick="clearSearch()">クリア</button>
+              </div>
+              <div id="searchResults" style="margin-top:12px; display:none;"></div>
+            </div>
+
+            <!-- 新規介護記録入力フォーム -->
+            <div class="panel-card">
+              <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+                <span id="recordFormTitle">📝 介護記録の書き込み</span>
+                <span id="recordTimePreview" style="font-size:13px; font-weight:normal; color:var(--text-muted);"></span>
+              </div>
+
+              <!-- 対象利用者バナー -->
+              <div id="recordTargetResidentBanner" style="background:#eff6ff; border-left:4px solid #2563eb; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-weight:bold; color:#1e40af; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
+                <span id="recordTargetResidentText">✍️ 対象利用者: 選択中</span>
+                <span style="font-size:12px; font-weight:normal; color:#3b82f6;">※利用者カルテから自動連動</span>
+              </div>
+
+              <!-- 日報雛形挿入＆全画面執筆ボタンバー -->
+              <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
+                <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="insertB5Template()">📋 日報雛形を挿入</button>
+                <button type="button" class="btn btn-secondary" style="font-size:13px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe; font-weight:bold;" onclick="openFullscreenRecord()">⛶ 全画面拡大入力</button>
+              </div>
+
+              <!-- 定型文ボタン -->
+              <div>
+                <label style="font-size:12px; color:var(--text-muted); font-weight:bold;">よく使う定型文 (タップで文章追加):</label>
+                <div class="templates-list" id="quickTemplatesList"></div>
+              </div>
+
+              <div class="form-group" style="display:flex; gap:12px; margin-top:12px;">
+                <div style="flex:1;">
+                  <label>区分:</label>
+                  <select id="recordCategory" class="form-control">
+                    <option value="介護記録">介護記録 (日報・総合記録)</option>
+                    <option value="バイタル">バイタル</option>
+                    <option value="特変">特変 (いつもと違う)</option>
+                    <option value="食事">食事・水分</option>
+                    <option value="排泄">排泄</option>
+                    <option value="入浴・処置">入浴・処置</option>
+                    <option value="頓服服用">頓服服用</option>
+                    <option value="巡視">巡視</option>
+                  </select>
+                </div>
+                <div style="flex:1;">
+                  <label>記録時間:</label>
+                  <input type="datetime-local" id="recordCustomTime" class="form-control">
+                </div>
+              </div>
+
+              <div class="form-group">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+                  <label style="font-weight:bold;">記録内容:</label>
+                  <span style="font-size:13px; color:var(--text-muted);">
+                    文字数: <strong id="recordCharCount" style="color:#2563eb; font-size:14px;">0</strong> 字
+                    <span id="recordB5Badge" style="display:none;"></span>
+                  </span>
+                </div>
+                <textarea id="recordContent" class="form-control" rows="14" style="min-height:280px; font-size:14.5px; line-height:1.75; padding:12px; resize:vertical;" placeholder="利用者のご様子、日中の活動、バイタル、食事・排泄、処置、申し送り事項などを詳細に記入..." oninput="updateRecordCharCount()"></textarea>
+              </div>
+
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-primary" style="padding:10px 20px; font-size:15px; font-weight:bold;" onclick="submitCareRecord()">💾 保存して記録を追加</button>
+                  <button class="btn btn-secondary" style="font-size:13px;" onclick="clearRecordForm()">クリア</button>
+                </div>
+                <button class="btn btn-secondary" style="font-size:13px;" onclick="openIncidentFromRecord()">⚠️ ヒヤリハット・事故報告書を作成</button>
+              </div>
+            </div>
+
+            <!-- 選択された日の記録一覧 -->
+            <div class="panel-card">
+              <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <span id="selectedDateRecordsTitle">📅 指定日の介護記録一覧</span>
+                <button class="btn btn-secondary" style="font-size:13px; background:#f8fafc; border:1px solid #cbd5e1; display:flex; align-items:center; gap:4px;" onclick="printSelectedDateRecords()">
+                  🖨️ 本日の記録一覧を印刷 (日報形式)
+                </button>
+              </div>
+              <div id="selectedDateRecordsList"></div>
+            </div>
+          </div>
+
+          <!-- 右側: 選択中の利用者カルテ (フェイスシート・病歴ガイド・看取りスタンプ・見守り注意・私物行追加・備品・スクショ保管) -->
+          <div>
+            <div class="panel-card" id="residentDetailCard" style="border-left:5px solid #2563eb;"></div>
+          </div>
+        </div>
+
+        <!-- 2. バイタルチェック表 -->
+        <div id="tabCareVitals" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🩺 バイタルチェック表 (入力すると個人記録・特変は連絡帳へ自動連携)</span>
+          </div>
+          <table class="data-table" id="vitalsTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>体温 (℃)</th>
+                <th>血圧 (上/下)</th>
+                <th>脈拍</th>
+                <th>SpO2 (%)</th>
+                <th>特変 (いつもと違う)</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 3. 排泄チェック表 (15分刻み・微小中大・水様便) -->
+        <div id="tabCareExcretion" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🚽 排泄チェック表 (15分刻み・微/小/中/大・水様便など)</span>
+          </div>
+          <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+              <label style="font-size:12px; font-weight:bold;">時間 (15分刻み):</label>
+              <input type="time" id="exTime" step="900" class="form-control" style="width:130px;">
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:bold;">排尿:</label>
+              <select id="exUrine" class="form-control" style="width:110px;">
+                <option value="1">あり (＋)</option>
+                <option value="0">なし (ー)</option>
+                <option value="2">バルーン</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:bold;">便の量:</label>
+              <select id="exStoolAmount" class="form-control" style="width:110px;">
+                <option value="なし">なし</option>
+                <option value="微">微量</option>
+                <option value="小">少量</option>
+                <option value="中">中等量</option>
+                <option value="大">多量</option>
+              </select>
+            </div>
+            <div>
+              <label style="font-size:12px; font-weight:bold;">便の性状:</label>
+              <select id="exStoolCond" class="form-control" style="width:120px;">
+                <option value="普通便">普通便</option>
+                <option value="軟便">軟便</option>
+                <option value="水様便">水様便</option>
+                <option value="泥状便">泥状便</option>
+                <option value="硬便">硬便</option>
+              </select>
+            </div>
+            <div style="flex:1; min-width:200px;">
+              <label style="font-size:12px; font-weight:bold;">備考:</label>
+              <input type="text" id="exNotes" class="form-control" placeholder="失禁、浣腸実施、腹部膨満など">
+            </div>
+            <button class="btn btn-primary" onclick="submitExcretion()">排泄を記録</button>
+          </div>
+          <table class="data-table" id="excretionHistoryTable">
+            <thead>
+              <tr>
+                <th>時間</th>
+                <th>氏名</th>
+                <th>排尿</th>
+                <th>便の量</th>
+                <th>性状</th>
+                <th>備考</th>
+                <th>担当</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 4. 食事 ＆ 水分表 -->
+        <div id="tabCareMeal" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🍚 食事 ＆ 水分チェック表 (水分mlは1日累計を自動集計)</span>
+          </div>
+          <table class="data-table" id="mealsTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>食形態 / アレルギー</th>
+                <th>時間帯</th>
+                <th>主食 (割)</th>
+                <th>副食 (割)</th>
+                <th>水分 (ml)</th>
+                <th>本日水分累計</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 5. 入浴 ＆ 塗布薬 -->
+        <div id="tabCareBath" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🛁 入浴チェック表 ＆ 塗布薬 (必要な薬が備考欄に表示され自由に記録可能)</span>
+          </div>
+          <table class="data-table" id="bathTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>入浴区分</th>
+                <th>必要な薬・塗布後の状況 (備考欄)</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 6. 口腔ケア -->
+        <div id="tabCareOral" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🪥 口腔ケア ＆ 義歯洗浄チェック表</span>
+          </div>
+          <table class="data-table" id="oralTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>歯の状態 (義歯種別)</th>
+                <th>朝食後</th>
+                <th>昼食後</th>
+                <th>夕食後</th>
+                <th>備考 (口内炎等)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 7. 服薬 ＆ 点眼 -->
+        <div id="tabCareMed" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>💊 服薬 ＆ 点眼チェック表 (ワンタップで［済］を記録)</span>
+          </div>
+          <table class="data-table" id="medTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>朝食後</th>
+                <th>昼食後</th>
+                <th>夕食後</th>
+                <th>就寝前</th>
+                <th>点眼 (指示内容)</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 8. 夜勤体位変換 -->
+        <div id="tabCareNight" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🌙 夜勤・体位変換チェック表 (入力すると個人記録へ自動転記・監査対応)</span>
+          </div>
+          <table class="data-table" id="nightTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>22:00</th>
+                <th>00:00</th>
+                <th>02:00</th>
+                <th>04:00</th>
+                <th>06:00</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 9. 月次体重 -->
+        <div id="tabCareWeight" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>⚖️ 月次 体重測定表 (前月比増減を自動計算)</span>
+          </div>
+          <table class="data-table" id="weightTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>測定年月</th>
+                <th>今月の体重 (kg)</th>
+                <th>前月比 (±kg)</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 10. シーツ交換チェック -->
+        <div id="tabCareLinen" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🛏️ シーツ ＆ リネン交換チェック表</span>
+          </div>
+          <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
+            <span>選択中の利用者「<strong id="linenResidentName"></strong> 様」:</span>
+            <button class="btn btn-primary" onclick="saveLinen('定期交換')">定期シーツ交換完了 ✓</button>
+            <button class="btn btn-warning" onclick="saveLinen('臨時汚染交換')">汚染による臨時交換 ✓</button>
+          </div>
+          <table class="data-table" id="linenTable">
+            <thead>
+              <tr><th>交換日</th><th>氏名</th><th>区分</th><th>備考</th><th>担当</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 11. 身だしなみチェック (爪切り・髭剃り・耳掃除等) -->
+        <div id="tabCareGrooming" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>✂️ 身だしなみチェック表 (爪切り・髭剃り・耳掃除)</span>
+          </div>
+          <table class="data-table" id="groomingTable">
+            <thead>
+              <tr>
+                <th>居室</th>
+                <th>氏名</th>
+                <th>爪切り (手・足)</th>
+                <th>髭剃り (男性)</th>
+                <th>耳掃除</th>
+                <th>備考 (深爪注意・巻き爪等)</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 12. 面会 ＆ 荷物受付 -->
+        <div id="tabCareVisit" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>👥 面会 ＆ 差し入れ荷物受付 (個人記録へ自動連動・トラブル防止)</span>
+          </div>
+          <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px;">
+            <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+              <div>
+                <label>来訪者氏名・続柄:</label>
+                <input type="text" id="visitVisitor" class="form-control" placeholder="長男: 佐藤 一郎 様">
+              </div>
+              <div>
+                <label>持参品・差し入れ荷物:</label>
+                <input type="text" id="visitItems" class="form-control" placeholder="冬用カーディガン2着、カステラ1箱">
+              </div>
+              <div>
+                <label>保管場所:</label>
+                <input type="text" id="visitStorage" class="form-control" placeholder="居室タンス上段、事務所預かり等">
+              </div>
+              <div>
+                <label>面会内容・様子:</label>
+                <input type="text" id="visitNotes" class="form-control" placeholder="ご本人笑顔で談笑。お菓子は事務所で預かりおやつに提供。">
+              </div>
+            </div>
+            <button class="btn btn-primary" onclick="submitVisitation()">面会・荷物を登録 (個人記録へ自動転記)</button>
+          </div>
+        </div>
+
+        <!-- 13. レク履歴 (被り防止) -->
+        <div id="tabCareRecreation" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🎨 レクリエーション実施記録 (内容の被り防止履歴)</span>
+          </div>
+          <table class="data-table" id="recreationTable">
+            <thead>
+              <tr><th>実施日</th><th>レク種別・タイトル</th><th>実施内容・様子</th><th>担当職員</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 14. 連絡帳 (申し送り・【認】) -->
+        <div id="tabCareNotebook" style="display:none;">
+          <div class="layout-grid">
+            <div class="panel-card">
+              <div class="panel-title">
+                <span>📋 本日の連絡帳 ＆ 申し送り事項</span>
+              </div>
+              <div style="display:flex; gap:8px; margin-bottom:12px;">
+                <input type="text" id="notebookContent" class="form-control" placeholder="申し送り・連絡事項を入力...">
+                <button class="btn btn-primary" onclick="submitNotebook()">申し送りを追加</button>
+              </div>
+              <div id="notebookList"></div>
+            </div>
+
+            <!-- 職員確認ネーム欄 (名前のみ並ぶ形式) -->
+            <div class="panel-card">
+              <div class="panel-title">
+                <span>📋 申し送り・連絡事項の確認 (確認者一覧)</span>
+              </div>
+              <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+                申し送りを確認したら「確認済みにする」を押してください。（名前のみ並びます。押し間違えた名前はクリックで取り消せます）
+              </p>
+              <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+                <button class="btn btn-primary" id="notebookStampBtn" onclick="toggleNotebookStamp()">✓ 確認済みにする</button>
+              </div>
+              <div style="border:1px solid #e2e8f0; border-radius:8px; padding:14px; min-height:56px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:#ffffff;" id="hankoStampArea"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 15. 現場クイック消費 (優しい「修正」ボタン付き) -->
+        <div id="tabCareConsume" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>📦 現場クイック消費 (オムツや手袋をタップで在庫マイナス ＆ 請求明細へ連動)</span>
+          </div>
+          <p style="font-size:13px; color:var(--text-muted); margin-bottom:16px;">
+            選択中の利用者「<strong id="consumeResidentName"></strong> 様」に使用した物品をタップしてください。
+          </p>
+          <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:12px;" id="quickConsumeGrid"></div>
+
+          <!-- 直近の消費履歴 ＆ 優しい「修正」ボタン -->
+          <div style="margin-top:24px; border-top:2px solid #f1f5f9; padding-top:16px;">
+            <h4 style="font-size:15px; margin-bottom:8px;">🕒 本日の現場消費履歴 (押し間違えた場合は「修正」ボタンで戻せます):</h4>
+            <div id="recentConsumeList"></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+
+    <!-- ============================================================ -->
+    <!-- 【B】事務所ポータル (在庫・発注・預かり金・車両・監査) -->
+    <!-- ============================================================ -->
+    <div id="portalOfficeSection" style="display:none;">
+
+      <!-- 事務所サブタブ (普段使う業務 ＆ 定期・監査業務) -->
+      <div style="background:#ffffff; border-radius:8px; padding:10px 14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <!-- 普段使う -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
+          <span style="font-size:12px; font-weight:bold; color:#1e40af; background:#eff6ff; padding:3px 8px; border-radius:4px; white-space:nowrap;">【普段使う】</span>
+          <button class="sub-tab-btn active" onclick="switchOfficeTab('inventory')">📦 在庫管理</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('deposit')">💰 預かり金出納帳</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('vehicle')">🚗 送迎・公用車運行</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('orders')">📑 発注申請</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('incidents')">⚠️ ヒヤリハット・事故</button>
+        </div>
+
+        <!-- たまに使う -->
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0;">
+          <span style="font-size:12px; font-weight:bold; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:4px; white-space:nowrap;">【月次・定期・監査】</span>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('billing')">🧾 月末請求明細</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('shift')">📅 勤務表・シフト</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('emergency')">🥫 非常食・備蓄</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('suppliers')">🏭 取引先マスタ</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('vaccine')">💉 ワクチン管理</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('fire')">🚒 消防・避難訓練</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('committee')">🏛️ 委員会・研修</button>
+          <button class="sub-tab-btn" onclick="switchOfficeTab('complaint')">⚖️ 苦情受付簿</button>
+        </div>
+      </div>
+
+      <!-- 事務所タブ内コンテンツ -->
+      <div id="officeTabContent">
+
+        <!-- 1. 在庫管理 ＆ 補充アラート ＆ 棚卸し実数合わせ -->
+        <div id="tabOfficeInventory" class="panel-card">
+          <div class="panel-title">
+            <span>📦 施設消耗品 在庫一覧 (小分けバラ単位・棚卸し修正対応)</span>
+          </div>
+          <table class="data-table" id="officeInventoryTable">
+            <thead>
+              <tr>
+                <th>品名</th>
+                <th>区分</th>
+                <th>現在庫数</th>
+                <th>安全基準数</th>
+                <th>単価</th>
+                <th>状態</th>
+                <th>仕入れ先</th>
+                <th>操作</th>
+              </tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+
+          <!-- 在庫入出庫履歴 (対応者名付きログ) -->
+          <div style="margin-top:24px;">
+            <h4 style="font-size:15px; margin-bottom:8px;">📜 在庫入出庫履歴ログ (誰が・いつ・何個動かしたか):</h4>
+            <table class="data-table" id="inventoryLogsTable">
+              <thead>
+                <tr><th>日時</th><th>品名</th><th>種別</th><th>数量</th><th>在庫数</th><th>対象利用者</th><th>対応者</th><th>理由</th></tr>
+              </thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 2. 非常食・防災備蓄 (独立管理 ＆ 残り2週間告知) -->
+        <div id="tabOfficeEmergency" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🥫 非常食・防災備蓄品 管理 (残り2週間で消費促進告知)</span>
+          </div>
+          <table class="data-table" id="emergencyTable">
+            <thead>
+              <tr><th>品名</th><th>数量</th><th>単位</th><th>賞味期限</th><th>状態</th><th>保管メモ</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 3. 発注 ＆ 上司承認ワークフロー -->
+        <div id="tabOfficeOrders" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>📑 発注申請 ＆ 上司認証(承認) ワークフロー</span>
+            <button class="btn btn-primary" onclick="openOrderModal()">＋ 新規発注申請を起案</button>
+          </div>
+          <table class="data-table" id="ordersTable">
+            <thead>
+              <tr><th>申請日</th><th>品名</th><th>数量</th><th>合計金額</th><th>取引先</th><th>理由</th><th>ステータス</th><th>申請/承認</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 4. 取引先マスタ -->
+        <div id="tabOfficeSuppliers" style="display:none;" class="panel-card">
+          <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <span>🏭 取引先マスタ (取扱商品と単価の事前連動)</span>
+            <button class="btn btn-primary" onclick="openSupplierModal()">＋ 新規取引先を追加</button>
+          </div>
+          <table class="data-table" id="suppliersTable">
+            <thead>
+              <tr><th>業者名</th><th>連絡先電話</th><th>担当者</th><th>取扱品目・単価</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 5. 利用者別 月末請求明細 (事務員目視チェック＆修正対応) -->
+        <div id="tabOfficeBilling" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🧾 利用者別 月末消耗品請求明細 (個人請求品目のみ集計・総合計)</span>
+          </div>
+          <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
+            <label style="font-weight:bold;">利用者を選択:</label>
+            <select id="billingResidentSelect" class="form-control" style="width:200px;" onchange="renderBillingDetail()"></select>
+            <button class="btn btn-secondary" onclick="window.print()">🖨️ 請求明細書を印刷 (A4)</button>
+          </div>
+          <div id="billingDetailArea"></div>
+        </div>
+
+        <!-- 6. 預かり金・小遣い出納帳 -->
+        <div id="tabOfficeDeposit" style="display:none;" class="panel-card">
+          <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <span>💰 預かり金・小遣い出納帳</span>
+            <div style="display:flex; gap:8px; align-items:center;">
+              <button class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" id="depFilterToggleBtn" onclick="toggleDepositFilter()">全利用者の履歴を表示</button>
+            </div>
+          </div>
+
+          <!-- 選択中の利用者残高サマリーバー -->
+          <div id="depResidentBanner" style="background:#eff6ff; border-left:4px solid #2563eb; padding:12px 16px; border-radius:6px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+            <div>
+              <span id="depResidentName" style="font-size:16px; font-weight:bold; color:#1e40af;">利用者を選択してください</span>
+              <span id="depFilterStatusBadge" style="font-size:12px; background:#dbeafe; color:#1d4ed8; padding:2px 8px; border-radius:10px; margin-left:8px;">この利用者の出納を表示中</span>
+            </div>
+            <div style="font-size:15px; color:#1e293b;">
+              現在のお預かり残高: <strong id="depResidentBalance" style="color:#2563eb; font-size:18px;">¥0</strong>
+            </div>
+          </div>
+
+          <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+              <label>日付:</label>
+              <input type="date" id="depDate" class="form-control" style="width:145px;">
+            </div>
+            <div>
+              <label>対象利用者:</label>
+              <select id="depResidentSelect" class="form-control" style="width:160px;" onchange="onDepositResidentChange()"></select>
+            </div>
+            <div>
+              <label>区分:</label>
+              <select id="depType" class="form-control" style="width:110px;">
+                <option value="出金">出金</option>
+                <option value="入金">入金 (お預かり)</option>
+              </select>
+            </div>
+            <div>
+              <label>費目:</label>
+              <select id="depCategory" class="form-control" style="width:140px;">
+                <option value="訪問理美容代">訪問理美容代</option>
+                <option value="医療費・受診代">医療費・受診代</option>
+                <option value="買い物代">買い物代</option>
+                <option value="預かり補充">ご家族からの預かり</option>
+              </select>
+            </div>
+            <div>
+              <label>金額 (円):</label>
+              <input type="number" id="depAmount" class="form-control" style="width:120px;" placeholder="2500">
+            </div>
+            <div style="flex:1; min-width:160px;">
+              <label>備考:</label>
+              <input type="text" id="depNotes" class="form-control" placeholder="散髪・顔剃り実施など">
+            </div>
+            <button class="btn btn-primary" onclick="submitDeposit()">出納を記録</button>
+          </div>
+          <table class="data-table" id="depositTable">
+            <thead>
+              <tr><th>日付</th><th>氏名</th><th>区分</th><th>費目</th><th>金額</th><th>残高</th><th>備考</th><th>担当</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 7. 勤務表・シフト管理 (年月の変更履歴・A4印刷) -->
+        <div id="tabOfficeShift" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>📅 勤務表・シフト管理 (変更履歴保存・A4印刷対応)</span>
+            <button class="btn btn-secondary" onclick="window.print()">🖨️ シフト表をA4印刷</button>
+          </div>
+          <table class="data-table" id="shiftTable">
+            <thead>
+              <tr><th>職員名</th><th>役職</th><th>シフト種別 (本日)</th><th>備考</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>施設長</td><td>管理者</td><td>日勤・巡視 (08:30〜17:30)</td><td>施設統括・緊急対応</td></tr>
+              <tr><td>山田</td><td>介護リーダー</td><td>早番 (07:00〜16:00)</td><td>フロア統括・見守り</td></tr>
+              <tr><td>鈴木</td><td>看護師</td><td>日勤 (09:00〜18:00)</td><td>バイタル・処置担当</td></tr>
+              <tr><td>佐藤</td><td>介護職員</td><td>日勤 (08:30〜17:30)</td><td>入浴介助担当</td></tr>
+              <tr><td>田中</td><td>事務員</td><td>遅番 (10:00〜19:00)</td><td>窓口・送迎</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 8. 車両運行管理簿 (メーターkm・運転者・目的・鍵管理) -->
+        <div id="tabOfficeVehicle" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🚗 公用車・送迎車 運行管理簿 (メーターkm自動計算・鍵返却確認)</span>
+          </div>
+          <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
+            <div>
+              <label>車両:</label>
+              <select id="vehName" class="form-control" style="width:130px;">
+                <option value="キャラバン1号">キャラバン1号</option>
+                <option value="タント2号">タント2号</option>
+              </select>
+            </div>
+            <div>
+              <label>運転者:</label>
+              <input type="text" id="vehDriver" class="form-control" style="width:100px;" value="山田">
+            </div>
+            <div style="flex:1; min-width:180px;">
+              <label>行先・目的:</label>
+              <input type="text" id="vehPurpose" class="form-control" placeholder="佐藤様眼科受診送迎、消耗品買い出し等">
+            </div>
+            <div>
+              <label>出発時メーター (km):</label>
+              <input type="number" id="vehStartKm" class="form-control" style="width:110px;" value="14520">
+            </div>
+            <div>
+              <label>帰着時メーター (km):</label>
+              <input type="number" id="vehEndKm" class="form-control" style="width:110px;" value="14535">
+            </div>
+            <button class="btn btn-primary" onclick="submitVehicleLog()">運行記録を保存</button>
+          </div>
+          <table class="data-table" id="vehicleLogsTable">
+            <thead>
+              <tr><th>日付</th><th>車両</th><th>運転者</th><th>目的</th><th>出発km</th><th>帰着km</th><th>走行距離</th><th>鍵返却</th><th>備考</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 9. ワクチン予防接種管理 -->
+        <div id="tabOfficeVaccine" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>💉 ワクチン予防接種管理 (同意書有無・接種実績)</span>
+          </div>
+          <table class="data-table" id="vaccineTable">
+            <thead>
+              <tr><th>居室</th><th>氏名</th><th>ワクチン名</th><th>家族同意書</th><th>接種日</th><th>状態</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>101</td><td>佐藤 太郎 様</td><td>インフルエンザ</td><td><span style="color:#16a34a; font-weight:bold;">✓ 同意受領済</span></td><td>2026-10-15予定</td><td>準備完了</td></tr>
+              <tr><td>102</td><td>田中 ハナ 様</td><td>インフルエンザ</td><td><span style="color:#16a34a; font-weight:bold;">✓ 同意受領済</span></td><td>2026-10-15予定</td><td>準備完了</td></tr>
+              <tr><td>103</td><td>鈴木 一郎 様</td><td>インフルエンザ</td><td><span style="color:#b45309; font-weight:bold;">未返送 (確認中)</span></td><td>-</td><td>家族へ連絡中</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 10. 消防・避難訓練記録 -->
+        <div id="tabOfficeFire" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🚒 消防・避難訓練の実施記録 (年2回・法令義務・消防署点検)</span>
+          </div>
+          <table class="data-table" id="fireTable">
+            <thead>
+              <tr><th>実施日</th><th>訓練種別</th><th>参加人数</th><th>想定シナリオ・訓練内容</th><th>講評・所見</th><th>統括責任者</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 11. 法定委員会・研修記録 -->
+        <div id="tabOfficeCommittee" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>🏛️ 法定委員会・研修記録 (虐待防止・感染対策・身体拘束・事故防止)</span>
+          </div>
+          <table class="data-table" id="committeeTable">
+            <thead>
+              <tr><th>開催日</th><th>委員会名</th><th>出席者</th><th>議題・テーマ</th><th>協議内容・決定事項</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 12. 苦情・ご要望受付簿 -->
+        <div id="tabOfficeComplaint" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>⚖️ 苦情・ご要望 受付簿 (家族手書き対応・監査必須義務項目)</span>
+            <button class="btn btn-primary" onclick="openComplaintModal()">＋ 苦情・要望を登録</button>
+          </div>
+          <table class="data-table" id="complaintsTable">
+            <thead>
+              <tr><th>受付日</th><th>申出者</th><th>対象利用者</th><th>内容</th><th>事実確認・対応状況</th><th>改善策</th><th>家族報告日</th><th>状態</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+        <!-- 13. ヒヤリハット ＆ 事故報告書 -->
+        <div id="tabOfficeIncidents" style="display:none;" class="panel-card">
+          <div class="panel-title">
+            <span>⚠️ ヒヤリハット ＆ 事故報告書 一覧 (独立修正可能)</span>
+          </div>
+          <table class="data-table" id="incidentsTable">
+            <thead>
+              <tr><th>発生日時</th><th>種別</th><th>氏名</th><th>場所</th><th>発生状況</th><th>再発防止策</th><th>上司コメント</th><th>状態</th><th>操作</th></tr>
+            </thead>
+            <tbody></tbody>
+          </table>
+        </div>
+
+      </div>
+
+      <!-- 事務所画面下部：要介護認定有効期限 備考欄 -->
+      <section class="panel-card" style="border-top:4px solid var(--warning-color); margin-top:24px;">
+        <div class="panel-title" style="color:#b45309;">
+          <span>📋 【備考】要介護認定有効期限・更新チェック (認定切れ防止)</span>
+        </div>
+        <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
+          有効期限が迫っている利用者を自動抽出しています。更新申請の手続きを行ってください。
+        </p>
+        <div id="careExpiryNotesArea" style="display:flex; flex-direction:column; gap:8px;"></div>
+      </section>
+
+    </div>
+
+  </main>
+
+  <!-- ============================================================ -->
+  <!-- モーダル群 -->
+  <!-- ============================================================ -->
+
+  <!-- 1. 病歴ガイド モーダル -->
+  <div class="modal-overlay" id="diseaseModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="diseaseModalTitle">🩺 病歴ガイド</h3>
+        <button class="modal-close-btn" onclick="closeModal('diseaseModal')">×</button>
+      </div>
+      <div id="diseaseModalContent"></div>
+      <div style="margin-top:20px; display:flex; justify-content:space-between;">
+        <button class="btn btn-primary" id="btnSearchDiseaseRecords">この病気の過去記録を抽出</button>
+        <button class="btn btn-secondary" onclick="closeModal('diseaseModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 2. 職員・認印管理 モーダル -->
+  <div class="modal-overlay" id="staffModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3>👥 職員・認印の追加 ＆ 管理</h3>
+        <button class="modal-close-btn" onclick="closeModal('staffModal')">×</button>
+      </div>
+      <!-- 新規追加フォーム -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:16px;">
+        <h4 style="font-size:14px; margin-bottom:8px; color:#1e40af;">＋ 新規職員の登録</h4>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div>
+            <label style="font-size:12px; font-weight:bold;">職員名 (名字):</label>
+            <input type="text" id="newStaffName" class="form-control" placeholder="例: 木村">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:bold;">役職・職種:</label>
+            <input type="text" id="newStaffRole" class="form-control" placeholder="例: 介護職員, 看護師">
+          </div>
+        </div>
+        <div style="margin-top:10px; text-align:right;">
+          <button class="btn btn-primary" onclick="submitNewStaffStamp()">＋ 職員・認印を登録</button>
+        </div>
+      </div>
+      <!-- 登録中職員一覧 -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+        <h4 style="font-size:14px; margin:0;">📋 登録済み職員一覧 (役職・序列順):</h4>
+        <button class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="autoSortStaffByRank()">🔄 役職・序列順に整列</button>
+      </div>
+      <div id="staffModalList" style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
+      <div style="margin-top:16px; text-align:right;">
+        <button class="btn btn-secondary" onclick="closeModal('staffModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新規利用者登録・編集 モーダル -->
+  <div class="modal-overlay" id="residentModal" style="display:none;">
+    <div class="modal-card" style="max-width:680px; max-height:90vh; overflow-y:auto;">
+      <div class="modal-header">
+        <h3 id="resModalTitle">👤 新規利用者の登録</h3>
+        <button class="modal-close-btn" onclick="closeModal('residentModal')">×</button>
+      </div>
+      <input type="hidden" id="resEditId" value="">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>居室番号 <span style="color:#dc2626;">*</span>:</label>
+          <input type="text" id="resRoomNo" class="form-control" placeholder="例: 106">
+        </div>
+        <div class="form-group">
+          <label>氏名 <span style="color:#dc2626;">*</span>:</label>
+          <input type="text" id="resName" class="form-control" placeholder="例: 木村 健一">
+        </div>
+        <div class="form-group">
+          <label>要介護度:</label>
+          <select id="resCareLevel" class="form-control">
+            <option value="自立">自立</option>
+            <option value="要支援1">要支援1</option>
+            <option value="要支援2">要支援2</option>
+            <option value="要介護1">要介護1</option>
+            <option value="要介護2">要介護2</option>
+            <option value="要介護3" selected>要介護3</option>
+            <option value="要介護4">要介護4</option>
+            <option value="要介護5">要介護5</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>在所状況:</label>
+          <select id="resStatus" class="form-control">
+            <option value="在所" selected>在所</option>
+            <option value="入院中">入院中</option>
+            <option value="外泊中">外泊中</option>
+            <option value="ショート利用">ショート利用</option>
+            <option value="退所">退所</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>生年月日:</label>
+          <input type="date" id="resBirthDate" class="form-control">
+        </div>
+        <div class="form-group">
+          <label>基本方針:</label>
+          <select id="resPolicyStamp" class="form-control">
+            <option value="緊急搬送">緊急搬送</option>
+            <option value="看取り">看取り</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>食事形態:</label>
+          <select id="resDietType" class="form-control">
+            <option value="普通食 (一口大)">普通食 (一口大)</option>
+            <option value="普通食">普通食</option>
+            <option value="軟飯・一口刻み">軟飯・一口刻み</option>
+            <option value="極小刻み (とろみ中)">極小刻み (とろみ中)</option>
+            <option value="ミキサー食">ミキサー食</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>アレルギー:</label>
+          <input type="text" id="resAllergies" class="form-control" placeholder="例: なし, 卵, そば 等">
+        </div>
+        <div class="form-group">
+          <label>麻痺・身体状況:</label>
+          <input type="text" id="resParalysis" class="form-control" placeholder="例: 麻痺なし, 右片麻痺 等">
+        </div>
+        <div class="form-group">
+          <label>口腔・義歯状態:</label>
+          <input type="text" id="resOralState" class="form-control" placeholder="例: 総義歯, 上部義歯, 残歯 等">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>既往歴・主病名 (カンマ区切り):</label>
+        <input type="text" id="resDiseases" class="form-control" placeholder="例: 糖尿病, 高血圧, 脳梗塞後遺症">
+      </div>
+      <div class="form-group">
+        <label>緊急連絡先 (家族氏名・続柄・電話番号):</label>
+        <input type="text" id="resEmergencyContact" class="form-control" placeholder="例: 長男: 木村 一郎 (090-1234-5678)">
+      </div>
+      <div class="form-group">
+        <label>見守り注意事項・センサー等:</label>
+        <input type="text" id="resSensorAlert" class="form-control" placeholder="例: ⚠️ 離床センサーマット使用中 (ベッド脇)">
+      </div>
+      <div class="form-group">
+        <label>ケアプラン目標・配慮事項:</label>
+        <input type="text" id="resCarePlanGoal" class="form-control" placeholder="例: 歩行器での安全な移動。食事時のむせ込み予防。">
+      </div>
+      <div class="form-group">
+        <label>家族の意向・要望:</label>
+        <input type="text" id="resFamilyWishes" class="form-control" placeholder="例: 本人が穏やかに過ごせるようにお願いします。">
+      </div>
+      <div class="form-group">
+        <label>生活歴・人生歴・こだわり:</label>
+        <textarea id="resLifeHistory" class="form-control" rows="2" placeholder="例: 元大工職人。相撲観戦が大好き。"></textarea>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+        <div class="form-group">
+          <label>往診医・受診時指示:</label>
+          <input type="text" id="resDrInstructions" class="form-control" placeholder="例: 定期採血・低血糖留意">
+        </div>
+        <div class="form-group">
+          <label>次回受診・往診予定日:</label>
+          <input type="date" id="resNextClinicDate" class="form-control">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>要介護認定有効期限:</label>
+        <input type="date" id="resCareExpiryDate" class="form-control">
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('residentModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitResidentForm()">登録を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 新規取引先登録 モーダル -->
+  <div class="modal-overlay" id="supplierModal" style="display:none;">
+    <div class="modal-card" style="max-width:520px;">
+      <div class="modal-header">
+        <h3>🏭 新規取引先・業者の登録</h3>
+        <button class="modal-close-btn" onclick="closeModal('supplierModal')">×</button>
+      </div>
+      <div class="form-group">
+        <label>業者名 <span style="color:#dc2626;">*</span>:</label>
+        <input type="text" id="suppName" class="form-control" placeholder="例: サトー医療器株式会社">
+      </div>
+      <div class="form-group">
+        <label>連絡先電話番号:</label>
+        <input type="text" id="suppPhone" class="form-control" placeholder="例: 03-3333-5555">
+      </div>
+      <div class="form-group">
+        <label>担当者名:</label>
+        <input type="text" id="suppContact" class="form-control" placeholder="例: 佐藤 担当">
+      </div>
+      <div class="form-group">
+        <label>取扱品目・単価の例 (メモ):</label>
+        <textarea id="suppItems" class="form-control" rows="3" placeholder="例: 使い捨てマスク (¥450/箱), 消毒液 (¥980/本)"></textarea>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('supplierModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitNewSupplier()">取引先を登録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 3. 発注申請 モーダル -->
+  <div class="modal-overlay" id="orderModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>📑 新規発注申請の起案</h3>
+        <button class="modal-close-btn" onclick="closeModal('orderModal')">×</button>
+      </div>
+      <div class="form-group">
+        <label>取引先を選択:</label>
+        <select id="orderSupplierSelect" class="form-control" onchange="onSupplierChangeInOrder()"></select>
+      </div>
+      <div class="form-group">
+        <label>品目を選択 (単価が自動セット):</label>
+        <select id="orderItemSelect" class="form-control" onchange="onItemChangeInOrder()"></select>
+      </div>
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:1;">
+          <label>数量:</label>
+          <input type="number" id="orderQty" class="form-control" value="5" min="1" oninput="calcOrderTotal()">
+        </div>
+        <div style="flex:1;">
+          <label>単価 (円):</label>
+          <input type="number" id="orderUnitPrice" class="form-control" readonly>
+        </div>
+        <div style="flex:1;">
+          <label>合計金額 (円):</label>
+          <input type="number" id="orderTotalPrice" class="form-control" readonly>
+        </div>
+      </div>
+      <div class="form-group">
+        <label>申請理由・備考:</label>
+        <input type="text" id="orderReason" class="form-control" value="安全基準在庫を下回ったため補充発注">
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('orderModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitOrderApply()">発注申請を提出 (上司承認へ)</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 4. 苦情受付 モーダル -->
+  <div class="modal-overlay" id="complaintModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>⚖️ 苦情・ご要望の登録 (手書き・口頭受付対応)</h3>
+        <button class="modal-close-btn" onclick="closeModal('complaintModal')">×</button>
+      </div>
+      <div class="form-group">
+        <label>申出者 (長男様・ご本人等):</label>
+        <input type="text" id="compClaimant" class="form-control" placeholder="例: 長女: 田中 美咲 様">
+      </div>
+      <div class="form-group">
+        <label>対象利用者:</label>
+        <select id="compResidentSelect" class="form-control"></select>
+      </div>
+      <div class="form-group">
+        <label>苦情・ご要望の内容:</label>
+        <textarea id="compContent" class="form-control" rows="3" placeholder="手書き用紙や口頭での申し出内容を正確に転記..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>事実確認・初期対応:</label>
+        <textarea id="compInvestigation" class="form-control" rows="2" placeholder="担当職員へのヒアリング、状況確認..."></textarea>
+      </div>
+      <div class="form-group">
+        <label>再発防止策・改善対応:</label>
+        <textarea id="compImprovement" class="form-control" rows="2" placeholder="施設内ミーティングで周知徹底..."></textarea>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('complaintModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitComplaint()">台帳に登録して保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 5. ヒヤリハット・事故報告書 編集モーダル -->
+  <div class="modal-overlay" id="incidentModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="incidentModalTitle">⚠️ ヒヤリハット / 事故報告書 編集</h3>
+        <button class="modal-close-btn" onclick="closeModal('incidentModal')">×</button>
+      </div>
+      <input type="hidden" id="incId">
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:1;">
+          <label>種別:</label>
+          <select id="incType" class="form-control">
+            <option value="ヒヤリハット">ヒヤリハット</option>
+            <option value="事故報告書">事故報告書</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label>発生日時:</label>
+          <input type="datetime-local" id="incOccurredAt" class="form-control">
+        </div>
+      </div>
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:1;">
+          <label>対象利用者:</label>
+          <select id="incResidentSelect" class="form-control"></select>
+        </div>
+        <div style="flex:1;">
+          <label>発生場所:</label>
+          <input type="text" id="incPlace" class="form-control" placeholder="例: 居室ベッド脇, 食堂など">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>発生状況 (何が起きたか):</label>
+        <textarea id="incSituation" class="form-control" rows="3"></textarea>
+      </div>
+      <div class="form-group">
+        <label>原因の分析:</label>
+        <textarea id="incCause" class="form-control" rows="2" placeholder="足元のスリッパの引っかかり、照明の暗さ等"></textarea>
+      </div>
+      <div class="form-group">
+        <label>再発防止策:</label>
+        <textarea id="incPrevention" class="form-control" rows="2" placeholder="履物をかかと付きシューズに変更、センサーマット設置"></textarea>
+      </div>
+      <div class="form-group">
+        <label>上司・管理者コメント:</label>
+        <textarea id="incSupervisor" class="form-control" rows="2" placeholder="施設長等の確認コメント"></textarea>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('incidentModal')">キャンセル</button>
+        <button class="btn btn-danger" onclick="saveIncidentReport()">報告書を保存・更新</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6. 私物行追加モーダル (物と個数) -->
+  <div class="modal-overlay" id="belongingModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🧳 私物・持ち込み品の追加 (品名と個数)</h3>
+        <button class="modal-close-btn" onclick="closeModal('belongingModal')">×</button>
+      </div>
+      <div class="form-group">
+        <label>区分:</label>
+        <select id="belCat" class="form-control">
+          <option value="衣類・日用品">衣類・日用品</option>
+          <option value="家具・家電・私物">家具・家電・私物</option>
+        </select>
+      </div>
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:2;">
+          <label>品名 (物):</label>
+          <input type="text" id="belItemName" class="form-control" placeholder="例: ズボン, 半袖肌着, テレビ24型">
+        </div>
+        <div style="flex:1;">
+          <label>個数 (数量):</label>
+          <input type="text" id="belQty" class="form-control" placeholder="例: 4枚, 1台">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>記名確認・特徴メモ:</label>
+        <input type="text" id="belNotes" class="form-control" placeholder="タグに記名あり, 黒色など">
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('belongingModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitBelonging()">私物台帳へ追加</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 7. 棚卸し実数合わせモーダル -->
+  <div class="modal-overlay" id="inventoryAdjustModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3 id="invAdjustTitle">📦 月末棚卸し (実在庫数の直接合わせ)</h3>
+        <button class="modal-close-btn" onclick="closeModal('inventoryAdjustModal')">×</button>
+      </div>
+      <input type="hidden" id="invAdjustItemId">
+      <div class="form-group">
+        <label>品名:</label>
+        <input type="text" id="invAdjustItemName" class="form-control" readonly>
+      </div>
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:1;">
+          <label>現在のシステム在庫数:</label>
+          <input type="number" id="invAdjustCurrent" class="form-control" readonly>
+        </div>
+        <div style="flex:1;">
+          <label>実際の倉庫在庫数 (実数):</label>
+          <input type="number" id="invAdjustActual" class="form-control" min="0">
+        </div>
+      </div>
+      <div class="form-group">
+        <label>差異理由・メモ:</label>
+        <input type="text" id="invAdjustReason" class="form-control" value="月末棚卸しカウントによる実数合わせ">
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('inventoryAdjustModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitInventoryAdjust()">実在庫数に合わせる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 全画面介護記録エディタモーダル -->
+  <div class="modal-overlay" id="fullscreenRecordModal" style="display:none;">
+    <div class="modal-card" style="max-width:96vw; width:96vw; height:94vh; max-height:94vh; display:flex; flex-direction:column; padding:20px;">
+      <div class="modal-header" style="margin-bottom:12px; padding-bottom:10px;">
+        <div style="display:flex; align-items:center; gap:12px;">
+          <h3 style="margin:0; font-size:18px; color:#1e3a8a;">📝 全画面エディタ</h3>
+          <span id="fsResidentBadge" style="background:#eff6ff; color:#1e40af; padding:4px 10px; border-radius:6px; font-size:13px; font-weight:bold;"></span>
+        </div>
+        <button class="modal-close-btn" onclick="closeFullscreenRecord()">&times;</button>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="insertB5Template(true)">📋 日報雛形を挿入</button>
+          <div class="templates-list" id="fsQuickTemplatesList" style="margin:0; display:inline-flex;"></div>
+        </div>
+        <div style="font-size:14px; color:var(--text-muted);">
+          文字数: <strong id="fsCharCount" style="color:#2563eb; font-size:15px;">0</strong> 文字
+          <span id="fsB5Badge" style="display:none;"></span>
+        </div>
+      </div>
+
+      <div style="flex:1; display:flex; flex-direction:column; min-height:0;">
+        <textarea id="fsRecordContent" class="form-control" style="flex:1; width:100%; font-size:16px; line-height:1.8; padding:16px; border-radius:8px; resize:none; font-family:inherit;" placeholder="記録内容を入力してください..." oninput="syncFromFullscreen()"></textarea>
+      </div>
+
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:14px; padding-top:10px; border-top:1px solid #e2e8f0; flex-wrap:wrap; gap:8px;">
+        <span style="font-size:12px; color:var(--text-muted);">💡 入力内容は通常の編集画面とリアルタイムに同期されます。</span>
+        <div style="display:flex; gap:10px;">
+          <button class="btn btn-secondary" onclick="closeFullscreenRecord()">エディタを閉じる</button>
+          <button class="btn btn-primary" style="padding:8px 24px; font-size:15px; font-weight:bold;" onclick="submitCareRecordFromFullscreen()">💾 保存して記録を追加</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- 印刷用コンテナ (印刷時のみ表示) -->
+  <div id="printArea" style="display:none;"></div>
+
+  <!-- タブレット・他端末接続案内モーダル -->
+  <div id="shareModal" class="modal-backdrop">
+    <div class="modal" style="max-width:580px;">
+      <div class="modal-header">
+        <h3 style="margin:0; color:#1e3a8a;">📱 タブレット・他端末からの接続方法</h3>
+        <button class="modal-close" onclick="closeModal('shareModal')">&times;</button>
+      </div>
+      <div style="padding:10px 0;">
+        <p style="font-size:14px; color:#475569; margin-bottom:16px;">
+          施設内の同じWi-Fi（LAN）に接続しているiPad、Androidタブレット、職員スマホ、別のPCのブラウザから、以下のURLを開いてください。<br>
+          <strong>施設内のネットワーク環境でデータがリアルタイム共有されます。</strong>
+        </p>
+        
+        <div style="background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:16px;">
+          <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:8px;">📡 タブレット等で開くURL:</label>
+          <div id="shareUrlList" style="display:flex; flex-direction:column; gap:8px;">
+            <!-- JSで自動挿入 -->
+          </div>
+        </div>
+
+        <div style="background:#eff6ff; border-left:4px solid #3b82f6; padding:12px 16px; border-radius:4px; font-size:13px; color:#1e40af; line-height:1.6;">
+          <strong>💡 タブレット現場活用のコツ:</strong>
+          <ul style="margin:6px 0 0 18px; padding:0;">
+            <li>iPad（Safari）やAndroid（Chrome）のメニューから<strong>「ホーム画面に追加」</strong>をすると、アプリのように全画面でワンタップ起動できます。</li>
+            <li>親機パソコン（このPC）のサーバー画面が動いている間、いつでもどこでも記録・確認が可能です。</li>
+          </ul>
+        </div>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('shareModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
