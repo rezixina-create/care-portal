@@ -11,16 +11,19 @@
   <!-- 1. 最上部ヘッダー -->
   <header class="portal-header">
     <div class="portal-title">
-      <span>🏢 陽だまりの家 統合ポータル</span>
-      <span class="badge" id="syncStatusBadge" onclick="openShareModal()" style="cursor:pointer; background:#2563eb;" title="クリックして他端末接続URLを確認">📶 施設内クラウド共有中</span>
-      <span class="badge" style="background:#10b981;">自動バックアップ稼働中</span>
+      <span id="facilityTitleSpan" onclick="editFacilityName()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="クリックして施設名を変更">
+        🏢 <span id="facilityNameDisplay">陽だまりの家</span> 統合ポータル
+        <span style="font-size:11px; opacity:0.8; padding:1px 5px; background:rgba(255,255,255,0.25); border-radius:4px; font-weight:normal;">✏️施設名変更</span>
+      </span>
+      <span class="badge" id="syncStatusBadge" onclick="openShareModal()" style="cursor:pointer; background:#2563eb;" title="クリックして他端末接続URLを確認">📶 クラウド共有中</span>
+      <span class="badge" id="backupStatusBadge" style="background:#10b981;">自動バックアップ稼働中</span>
     </div>
     <div class="header-controls">
-      <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()">📱 タブレット接続案内</button>
+      <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()">📱 接続案内</button>
       <div class="staff-selector">
         <label for="currentStaff">👤 担当職員:</label>
         <select id="currentStaff" onchange="onCurrentStaffChange()"></select>
-        <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="openStaffModal()">＋ 職員・認印の管理</button>
+        <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="openStaffModal()">＋ 職員管理</button>
       </div>
     </div>
   </header>
@@ -38,10 +41,10 @@
   <!-- 3. メインナビゲーションタブ (介護現場 ⇄ 事務所) -->
   <nav class="main-nav">
     <button class="main-nav-btn active" id="btnNavCare" onclick="switchPortal('care')">
-      <span>🤝</span> 介護現場ポータル (ケア記録・チェック表)
+      <span>🤝</span> <span class="nav-label-full">介護現場ポータル (ケア記録・チェック表)</span><span class="nav-label-mobile">介護現場</span>
     </button>
     <button class="main-nav-btn" id="btnNavOffice" onclick="switchPortal('office')">
-      <span>💼</span> 事務所ポータル (在庫・発注・預かり金・車両・監査)
+      <span>💼</span> <span class="nav-label-full">事務所ポータル (在庫・発注・預かり金・車両・監査)</span><span class="nav-label-mobile">事務所</span>
     </button>
   </nav>
 

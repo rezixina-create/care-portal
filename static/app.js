@@ -458,7 +458,30 @@ const DISEASE_GUIDE = {
   }
 };
 
+function editFacilityName() {
+  const currentName = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+  const newName = prompt("施設名・事業所名を入力してください:", currentName);
+  if (newName !== null) {
+    const trimmed = newName.trim();
+    if (trimmed !== "" && trimmed !== currentName) {
+      if (!db.data) db.data = {};
+      db.data.facility_name = trimmed;
+      updateFacilityNameUI();
+      db.saveToServer();
+      alert(`施設名を「${trimmed}」に更新しました。\n（このPCおよび接続しているタブレット・スマホにも自動反映されます）`);
+    }
+  }
+}
+
+function updateFacilityNameUI() {
+  const name = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+  const display = document.getElementById("facilityNameDisplay");
+  if (display) display.textContent = name;
+  document.title = `${name} 統合業務ポータルシステム`;
+}
+
 window.addEventListener("DOMContentLoaded", () => {
+  updateFacilityNameUI();
   gState.stamps = sortStaffList(gState.stamps);
   db.data.stamps = gState.stamps;
   db.save();
@@ -3467,6 +3490,7 @@ function copyShareUrl(url) {
 
 function reloadStateFromDb() {
   if (!db || !db.data) return;
+  updateFacilityNameUI();
   gState.residents = db.data.residents;
   gState.inventory = db.data.inventory;
   gState.suppliers = db.data.suppliers;

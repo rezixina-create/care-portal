@@ -705,3 +705,179 @@ body {
   }
 }
 
+/* ==============================================================
+   スマートフォン向け最適化スタイル (レスポンシブ & 簡略化)
+   画面幅 640px 以下で自動適用
+   ============================================================== */
+.nav-label-mobile {
+  display: none;
+}
+
+@media (max-width: 640px) {
+  /* ナビゲーションラベルの簡略化 */
+  .nav-label-full {
+    display: none !important;
+  }
+  .nav-label-mobile {
+    display: inline !important;
+  }
+
+  /* ヘッダーのコンパクト化 */
+  .portal-header {
+    padding: 8px 12px !important;
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+
+  .portal-title {
+    font-size: 15px !important;
+    justify-content: space-between !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+
+  #backupStatusBadge {
+    display: none !important; /* スマホでは非表示にしてスッキリ */
+  }
+
+  .header-controls {
+    display: flex !important;
+    justify-content: space-between !important;
+    align-items: center !important;
+    gap: 8px !important;
+    width: 100% !important;
+  }
+
+  .staff-selector {
+    flex: 1 !important;
+    padding: 4px 8px !important;
+    justify-content: space-between !important;
+  }
+
+  .staff-selector select {
+    font-size: 14px !important;
+    max-width: 130px !important;
+  }
+
+  /* 勤務体制バーの横スクロール化（縦幅を圧迫しない） */
+  #todayShiftBar {
+    padding: 6px 12px !important;
+    font-size: 12px !important;
+    flex-wrap: nowrap !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+    gap: 10px !important;
+  }
+
+  /* メインナビ（現場／事務所）の均等2分割 */
+  .main-nav {
+    padding: 0 8px !important;
+    gap: 4px !important;
+  }
+
+  .main-nav-btn {
+    padding: 10px 6px !important;
+    font-size: 15px !important;
+    flex: 1 !important;
+    justify-content: center !important;
+    gap: 4px !important;
+  }
+
+  /* サブタブのタッチ操作最適化（横スクロール） */
+  .sub-tabs-nav {
+    padding: 6px 8px !important;
+    gap: 6px !important;
+    overflow-x: auto !important;
+    white-space: nowrap !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .sub-tab-btn {
+    padding: 8px 12px !important;
+    font-size: 13px !important;
+    min-height: 38px !important;
+    border-radius: 6px !important;
+  }
+
+  /* コンテンツ領域の余白調整 */
+  .portal-content {
+    padding: 10px 8px !important;
+  }
+
+  .panel-card {
+    padding: 12px 14px !important;
+    margin-bottom: 12px !important;
+    border-radius: 10px !important;
+  }
+
+  .panel-title {
+    font-size: 15px !important;
+    margin-bottom: 10px !important;
+  }
+
+  /* 利用者ストリップの横スクロール */
+  .resident-strip {
+    gap: 6px !important;
+    padding-bottom: 6px !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .resident-badge {
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+  }
+
+  /* テーブルの横スクロール保証 */
+  .table-responsive, table {
+    display: block !important;
+    width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  th, td {
+    padding: 8px 6px !important;
+    font-size: 13px !important;
+    white-space: nowrap;
+  }
+
+  /* スマホでの自動ズーム防止（入力フォームのフォント16px以上） */
+  input[type="text"],
+  input[type="number"],
+  input[type="date"],
+  input[type="time"],
+  select,
+  textarea {
+    font-size: 16px !important;
+  }
+
+  /* 入力ボタンの押しやすさ（指のタップ領域確保） */
+  .btn {
+    min-height: 38px;
+    padding: 6px 12px;
+    font-size: 13px;
+  }
+
+  /* モーダルを全画面近くまで広げて見やすく */
+  .modal-overlay {
+    padding: 8px !important;
+  }
+
+  .modal-card {
+    width: 96vw !important;
+    max-width: 96vw !important;
+    max-height: 94vh !important;
+    padding: 16px !important;
+    border-radius: 12px !important;
+  }
+
+  /* 介護記録の集中入力欄 */
+  #recordContent {
+    min-height: 160px !important;
+  }
+}
+
+
