@@ -218,7 +218,7 @@ class LocalDB {
     container.innerHTML = "";
 
     const currentHost = window.location.hostname;
-    const port = this.serverPort;
+    const port = this.serverPort || 8000;
 
     let ipsToShow = [...this.serverIPs];
     if (currentHost && currentHost !== "localhost" && currentHost !== "127.0.0.1" && !ipsToShow.includes(currentHost)) {
@@ -226,19 +226,61 @@ class LocalDB {
     }
 
     if (ipsToShow.length === 0) {
-      ipsToShow.push("192.168.11.17"); // 検出例
+      ipsToShow.push("192.168.11.17");
     }
 
-    ipsToShow.forEach(ip => {
-      const url = `http://${ip}:${port}`;
-      const div = document.createElement("div");
-      div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 12px;";
-      div.innerHTML = `
-        <span style="font-family:monospace; font-size:15px; font-weight:bold; color:#1e40af;">${url}</span>
-        <button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="copyShareUrl('${url}')">📋 コピー</button>
-      `;
-      container.appendChild(div);
+    // 施設内Wi-Fi/LAN (192.168.x.x または 10.x.x.x) を優先整列
+    ipsToShow.sort((a, b) => {
+      const aIsLan = a.startsWith("192.168.") || a.startsWith("10.");
+      const bIsLan = b.startsWith("192.168.") || b.startsWith("10.");
+      if (aIsLan && !bIsLan) return -1;
+      if (!aIsLan && bIsLan) return 1;
+      return 0;
     });
+
+    const primaryIp = ipsToShow[0];
+    const primaryUrl = `http://${primaryIp}:${port}`;
+
+    // 推奨URL ＋ QRコード表示
+    const qrDiv = document.createElement("div");
+    qrDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#ffffff; border:1px solid #93c5fd; border-radius:8px; padding:12px 16px; margin-bottom:8px;";
+    qrDiv.innerHTML = `
+      <div style="flex-shrink:0; text-align:center;">
+        <img src="https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=${encodeURIComponent(primaryUrl)}" 
+             alt="QRコード" 
+             style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; display:block;"
+             onerror="this.style.display='none'">
+        <span style="font-size:11px; color:#64748b; margin-top:4px; display:block;">カメラで読み取り</span>
+      </div>
+      <div style="flex:1;">
+        <div style="font-size:12px; color:#3b82f6; font-weight:bold; margin-bottom:4px;">★ 推奨接続URL（施設内Wi-Fi）</div>
+        <div style="font-family:monospace; font-size:16px; font-weight:bold; color:#1e40af; margin-bottom:8px; word-break:break-all;">
+          ${primaryUrl}
+        </div>
+        <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="copyShareUrl('${primaryUrl}')">📋 URLをコピー</button>
+      </div>
+    `;
+    container.appendChild(qrDiv);
+
+    // その他の接続候補
+    if (ipsToShow.length > 1) {
+      const subHeader = document.createElement("div");
+      subHeader.style.cssText = "font-size:12px; color:#64748b; margin:6px 0 2px 0;";
+      subHeader.textContent = "その他の接続候補:";
+      container.appendChild(subHeader);
+
+      for (let i = 1; i < ipsToShow.length; i++) {
+        const ip = ipsToShow[i];
+        const url = `http://${ip}:${port}`;
+        const div = document.createElement("div");
+        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px;";
+        div.innerHTML = `
+          <span style="font-family:monospace; font-size:13px; color:#334155;">${url}</span>
+          <button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="copyShareUrl('${url}')">コピー</button>
+        `;
+        container.appendChild(div);
+      }
+    }
   }
 
   initSeedData() {

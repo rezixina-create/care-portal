@@ -1322,30 +1322,46 @@
   <div id="printArea" style="display:none;"></div>
 
   <!-- タブレット・他端末接続案内モーダル -->
-  <div id="shareModal" class="modal-backdrop">
-    <div class="modal" style="max-width:580px;">
+  <div class="modal-overlay" id="shareModal" style="display:none;">
+    <div class="modal-card" style="max-width:620px; max-height:90vh; overflow-y:auto;">
       <div class="modal-header">
-        <h3 style="margin:0; color:#1e3a8a;">📱 タブレット・他端末からの接続方法</h3>
-        <button class="modal-close" onclick="closeModal('shareModal')">&times;</button>
+        <h3 style="margin:0; color:#1e3a8a;">📱 タブレット・スマホからの接続案内</h3>
+        <button class="modal-close-btn" onclick="closeModal('shareModal')">&times;</button>
       </div>
       <div style="padding:10px 0;">
         <p style="font-size:14px; color:#475569; margin-bottom:16px;">
-          施設内の同じWi-Fi（LAN）に接続しているiPad、Androidタブレット、職員スマホ、別のPCのブラウザから、以下のURLを開いてください。<br>
-          <strong>施設内のネットワーク環境でデータがリアルタイム共有されます。</strong>
+          施設内の同じWi-Fi（LAN）に接続しているiPad、Androidタブレット、職員スマホのブラウザから以下のURLを開いてください。<br>
+          <strong>同じデータがリアルタイムで共有され、どこでも記録・確認ができます。</strong>
         </p>
         
-        <div style="background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:16px;">
-          <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:8px;">📡 タブレット等で開くURL:</label>
+        <div style="background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #cbd5e1;">
+          <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:10px;">📡 タブレット等で開くURL:</label>
           <div id="shareUrlList" style="display:flex; flex-direction:column; gap:8px;">
             <!-- JSで自動挿入 -->
           </div>
         </div>
 
+        <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:#92400e; line-height:1.6;">
+          <strong style="display:flex; align-items:center; gap:6px; font-size:14px; margin-bottom:6px; color:#b45309;">
+            ⚠️ タブレットが繋がらない場合の3大チェック:
+          </strong>
+          <ol style="margin:4px 0 0 18px; padding:0;">
+            <li style="margin-bottom:4px;">
+              <strong>ファイアウォール許可</strong>: Windowsが通信をブロックしている場合があります。フォルダ内の <code>allow_firewall.bat</code> を右クリックして「管理者として実行」してください。
+            </li>
+            <li style="margin-bottom:4px;">
+              <strong>サーバー起動</strong>: 親機PCで黒いコマンド画面（PowerShell）が起動している必要があります（閉じると停止します。最小化してお使いください）。
+            </li>
+            <li style="margin-bottom:4px;">
+              <strong>同じWi-Fiへの接続</strong>: タブレットと親機PCが同一のWi-Fiルーターに接続されている必要があります（モバイル通信4G/5Gでは繋がりません）。
+            </li>
+          </ol>
+        </div>
+
         <div style="background:#eff6ff; border-left:4px solid #3b82f6; padding:12px 16px; border-radius:4px; font-size:13px; color:#1e40af; line-height:1.6;">
-          <strong>💡 タブレット現場活用のコツ:</strong>
+          <strong>💡 現場活用のコツ:</strong>
           <ul style="margin:6px 0 0 18px; padding:0;">
-            <li>iPad（Safari）やAndroid（Chrome）のメニューから<strong>「ホーム画面に追加」</strong>をすると、アプリのように全画面でワンタップ起動できます。</li>
-            <li>親機パソコン（このPC）のサーバー画面が動いている間、いつでもどこでも記録・確認が可能です。</li>
+            <li>iPad（Safari）やAndroid（Chrome）のメニューから<strong>「ホーム画面に追加」</strong>をすると、専用アプリのように全画面でワンタップ起動できます。</li>
           </ul>
         </div>
       </div>
