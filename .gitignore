@@ -15,3 +15,7 @@ __pycache__/
 tests/edge_test_output.*
 tests/e2e_result.html
 tests/edge_dom.html
+
+# Cloudflare Tunnel binary and runtime
+cloudflared.exe
+tunnel_url.txt

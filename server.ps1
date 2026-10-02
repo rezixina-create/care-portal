@@ -179,7 +179,13 @@ namespace CarePortal
                     if (urlPath == "/api/ip")
                     {
                         List<string> ips = GetIPs();
-                        string json = "{\"ips\":[\"" + string.Join("\",\"", ips.ToArray()) + "\"],\"port\":" + _port + "}";
+                        string tUrl = "";
+                        string tPath = Path.Combine(_baseDir, "tunnel_url.txt");
+                        if (File.Exists(tPath))
+                        {
+                            try { tUrl = File.ReadAllText(tPath).Trim(); } catch { }
+                        }
+                        string json = "{\"ips\":[\"" + string.Join("\",\"", ips.ToArray()) + "\"],\"port\":" + _port + ",\"tunnel_url\":\"" + tUrl + "\"}";
                         SendJsonResponse(stream, 200, json);
                         return;
                     }

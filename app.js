@@ -127,6 +127,9 @@ class LocalDB {
         const ipData = await resIp.json();
         this.serverIPs = ipData.ips || [];
         this.serverPort = ipData.port || window.location.port || 8888;
+        if (ipData.tunnel_url && ipData.tunnel_url.trim() !== "") {
+          localStorage.setItem("care_portal_tunnel_url", ipData.tunnel_url.trim());
+        }
         this.renderShareModalUrls();
       }
     } catch (e) {}
