@@ -290,6 +290,9 @@
       assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
       assert(typeof openClinicInstructionModal === "function" && typeof submitClinicInstructions === "function", "Test 46: 往診医・受診時指示＆特殊指示の項目別クイック変更・保存関数が存在すること");
       assert(typeof openCarePlanModal === "function" && typeof openBodyConditionModal === "function", "Test 47: 基本方針・身体状況の項目別クイック変更関数が存在すること");
+      assert(typeof dismissAlert === "function" && typeof isAlertDismissed === "function", "Test 48: アラート完了・非表示ディスミス関数 (dismissAlert) が存在すること");
+      assert(typeof quickReplenishStock === "function" && typeof quickReplenishAllStock === "function", "Test 49: アラートからの即時在庫補充関数 (quickReplenishStock) が存在すること");
+      assert(typeof confirmAllMonthlyNoticesForStaff === "function", "Test 50: 月間連絡一括確認完了関数 (confirmAllMonthlyNoticesForStaff) が存在すること");
 
       // 18. 総合結果判定
       log("====================================================");
