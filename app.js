@@ -718,12 +718,9 @@ function checkGlobalAlerts() {
       <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
         <div style="width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span>📑 ⚠️ <strong>【発注・在庫認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様、スタッフからの承認待ち発注が <strong>${pendingOrders.length}件</strong> あります！内容を確認し認証を行ってください。</span>
+            <span>📑 ⚠️ <strong>【発注・在庫認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様、スタッフからの承認待ち発注が <strong>${pendingOrders.length}件</strong> あります！<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
             <div style="display:flex; gap:6px; align-items:center;">
               <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');">📋 発注台帳を開く</button>
-              ${pendingOrders.length > 1 ? `
-                <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="quickApproveAllPendingOrders()">✓ 全件を一括承認する</button>
-              ` : ''}
               <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')">✕ 閉じる</button>
             </div>
           </div>
@@ -4186,37 +4183,19 @@ function approveOrder(id, status) {
   }
   const staff = document.getElementById("currentStaff").value;
   const o = db.data.orders.find(x => x.id === id);
-  if (o) {
-    o.status = status;
-    o.approver = staff;
-    o.approved_at = new Date().toISOString().split("T")[0];
-    db.save();
-    if (gState.activePortal === "office") loadOfficeData();
-    checkGlobalAlerts();
-    alert(`発注申請（${o.item_name} × ${o.quantity}）を「${status}」にしました！`);
-  }
-}
+  if (!o) return;
 
-function quickApproveAllPendingOrders() {
-  if (!isCurrentStaffAdmin()) {
-    alert("⚠️ 発注申請の承認は管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
-    return;
-  }
-  const staff = document.getElementById("currentStaff")?.value || "管理者";
-  const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
-  if (pendingOrders.length === 0) return;
+  const actionLabel = status === "承認済" ? "承認" : "差戻し";
+  const ok = confirm(`【発注申請 ${actionLabel}確認】\n以下の申請内容を目視確認の上、${actionLabel}を実行しますか？\n\n・申請者: ${o.applicant || '職員'}\n・品名: ${o.item_name}\n・数量: ${o.quantity}\n・合計金額: ¥${(o.total_price || 0).toLocaleString()}\n・業者: ${o.supplier_name || '-'}\n・理由: ${o.reason || '特記なし'}\n\n※誤認防止のため1件ずつの目視確認が必須です。`);
+  if (!ok) return;
 
-  const todayStr = new Date().toISOString().split("T")[0];
-  pendingOrders.forEach(o => {
-    o.status = "承認済";
-    o.approver = staff;
-    o.approved_at = todayStr;
-  });
-
+  o.status = status;
+  o.approver = staff;
+  o.approved_at = new Date().toISOString().split("T")[0];
   db.save();
   if (gState.activePortal === "office") loadOfficeData();
   checkGlobalAlerts();
-  alert(`承認待ちの発注 ${pendingOrders.length}件 をすべて「承認済」にしました！認証アラートおよび要発注アラートを更新しました。`);
+  alert(`発注申請（${o.item_name} × ${o.quantity}）を目視確認の上、「${status}」にしました！`);
 }
 
 function receiveOrder(id) {
