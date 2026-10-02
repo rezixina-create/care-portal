@@ -374,27 +374,17 @@ class LocalDB {
         <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">📱 カメラでスキャン</span>
       </div>
       <div style="flex:1; min-width:260px;">
-        <div style="display:inline-flex; align-items:center; gap:6px; background:#2563eb; color:#ffffff; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:4px; margin-bottom:6px;">
-          🌐 スマホ・他端末 接続用（統一案内）
-        </div>
-        <div style="font-size:13.5px; font-weight:bold; color:#1e293b; margin-bottom:4px;">
-          ご自宅Wi-Fi・学校・外出先スマホ(4G/5G) どこからでも接続可能
-        </div>
-        <div style="font-family:monospace; font-size:13px; font-weight:bold; color:#1d4ed8; margin-bottom:8px; word-break:break-all; background:#ffffff; padding:7px 11px; border-radius:6px; border:1px solid #bfdbfe;">
+        <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1d4ed8; margin-bottom:12px; word-break:break-all; background:#ffffff; padding:8px 12px; border-radius:6px; border:1px solid #bfdbfe;">
           ${unifiedUrl}
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
-          <button class="btn btn-primary" style="padding:6px 16px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">📋 接続URLをコピー</button>
-          <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:6px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">📋 接続URLをコピー</button>
+          <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:7px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
           <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">✏️ URL変更</button>
         </div>
-        <div style="font-size:11.5px; color:#475569; line-height:1.4;">
-          スマホ等のカメラで上記QRコードを読み取るだけで、どこからでもリアルタイムにアクセス・記録できます。
-        </div>
         ${isTunnel ? `
-        <div style="margin-top:8px; padding-top:6px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
-          <span>同一Wi-Fi限定 直接アクセス: <code style="color:#334155;">${localUrl}</code></span>
-          <span style="color:#059669; font-weight:bold;">● 暗号化トンネル有効</span>
+        <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+          <span>同一Wi-Fi内 直接アクセス: <code style="color:#334155;">${localUrl}</code></span>
         </div>` : ''}
       </div>
     `;

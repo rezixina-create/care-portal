@@ -137,7 +137,13 @@ if (Test-Path $renderedOut) {
 }
 
 # Cleanup server
-Stop-Process -Id $serverProc.Id -Force
+if ($serverProc) { Stop-Process -Id $serverProc.Id -Force -ErrorAction SilentlyContinue }
+$conns = Get-NetTCPConnection -LocalPort 8888 -ErrorAction SilentlyContinue
+foreach ($c in $conns) {
+    if ($c.OwningProcess -gt 0) {
+        Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
+    }
+}
 Remove-Item $testHtmlPath -Force -ErrorAction SilentlyContinue
 
 Write-Host "Result from rendered DOM:" -ForegroundColor Yellow

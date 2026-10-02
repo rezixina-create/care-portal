@@ -12,7 +12,7 @@ function Cleanup-Port8888 {
         }
     }
     Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
-    Start-Sleep -Milliseconds 500
+    Start-Sleep -Seconds 1
 }
 
 Write-Host "==========================================================" -ForegroundColor Cyan
