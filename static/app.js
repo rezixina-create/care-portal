@@ -76,7 +76,7 @@ class LocalDB {
       "shifts", "notebooks", "notebook_stamps", "vitals", "excretions",
       "meals", "oral_cares", "baths", "meds", "turns", "linens",
       "groomings", "weight_records", "visitations", "inventory_logs",
-      "consumptions", "orders", "deposits", "complaints", "incidents"
+      "consumptions", "orders", "deposits", "complaints", "incidents", "photos"
     ];
     arrayKeys.forEach(k => {
       if (!Array.isArray(d[k])) d[k] = [];
@@ -809,6 +809,10 @@ function renderResidentDetail() {
     </span>
   `).join("");
 
+  // 写真・重要書類件数
+  const resDocs = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'documents');
+  const resPhotos = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'personal');
+
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
       <div>
@@ -879,11 +883,20 @@ function renderResidentDetail() {
     </div>
 
     <!-- 同意書・写真スクショ保管 -->
-    <div style="margin-bottom:12px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#fafafa;">
-      <strong style="font-size:13px;">📁 同意書 ＆ 写真スクショ保管:</strong>
-      <div style="display:flex; gap:8px; margin-top:6px;">
-        <button class="btn btn-secondary" style="font-size:12px; padding:4px 8px;" onclick="alert('手書き同意書や保険証のスクショが【重要書類フォルダ (年/月)】に保管されています。')">📜 重要書類(同意書)フォルダを開く</button>
-        <button class="btn btn-secondary" style="font-size:12px; padding:4px 8px;" onclick="alert('日常の笑顔・イベント写真が【個人写真フォルダ (年/月)】に保管されています。')">📷 個人写真フォルダを開く</button>
+    <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; background:#f8fafc;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
+        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真スクショ保管庫:</strong>
+        <span style="font-size:11px; color:#64748b;">タップで画像一覧・拡大表示・追加</span>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
+          📜 重要書類(同意書)
+          <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
+        </button>
+        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
+          📷 個人写真
+          <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
+        </button>
       </div>
     </div>
 
@@ -3508,8 +3521,257 @@ function setupEventListeners() {
   setInterval(() => {
     const preview = document.getElementById("recordTimePreview");
     if (preview) {
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      preview.textContent = "現在: " + now.toLocaleDateString() + " " + timeStr;
+      const cur = new Date();
+      const timeStr = cur.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      preview.textContent = "現在: " + cur.toLocaleDateString() + " " + timeStr;
     }
   }, 1000);
+}
+
+// ==========================================
+// 写真・重要書類保管庫 管理機能
+// ==========================================
+let currentPhotoCategory = 'documents';
+let currentPickedPhotoDataUrl = null;
+
+function openPhotoModal(category) {
+  const modal = document.getElementById("photoModal");
+  if (!modal) return;
+  const res = gState.residents ? gState.residents.find(x => x.id === gState.selectedResidentId) : null;
+  const titleEl = document.getElementById("photoModalTitle");
+  if (titleEl) {
+    titleEl.textContent = res ? `📁 ${res.name} 様の写真・重要書類保管庫` : "📁 写真・重要書類保管庫";
+  }
+
+  const formArea = document.getElementById("addPhotoFormArea");
+  if (formArea) formArea.style.display = "none";
+  resetPhotoForm();
+
+  switchPhotoCategory(category || 'documents');
+  modal.style.display = "flex";
+}
+
+function switchPhotoCategory(cat) {
+  currentPhotoCategory = cat;
+  const btnDoc = document.getElementById("tabBtnDocPhotos");
+  const btnPersonal = document.getElementById("tabBtnPersonalPhotos");
+  if (btnDoc && btnPersonal) {
+    if (cat === "documents") {
+      btnDoc.className = "btn btn-primary";
+      btnPersonal.className = "btn btn-outline";
+    } else {
+      btnDoc.className = "btn btn-outline";
+      btnPersonal.className = "btn btn-primary";
+    }
+  }
+  const selectCat = document.getElementById("photoNewCategory");
+  if (selectCat) selectCat.value = cat;
+
+  renderPhotoGrid();
+}
+
+function renderPhotoGrid() {
+  const grid = document.getElementById("photoGridArea");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const photos = (db.data.photos || []).filter(p => 
+    p.resident_id === gState.selectedResidentId && p.category === currentPhotoCategory
+  );
+
+  if (photos.length === 0) {
+    const isDoc = currentPhotoCategory === 'documents';
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align:center; padding:36px 12px; color:var(--text-muted); background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">
+        <div style="font-size:32px; margin-bottom:8px;">${isDoc ? '📜' : '📷'}</div>
+        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">
+          ${isDoc ? '重要書類・同意書はまだありません' : '個人写真はまだありません'}
+        </div>
+        <div style="font-size:12px;">右上の「➕ 写真・書類の追加」から撮影・アップロードするか、<br>PCの保存フォルダに直接ファイルを入れてください。</div>
+      </div>
+    `;
+    return;
+  }
+
+  photos.forEach(p => {
+    const card = document.createElement("div");
+    card.style.cssText = "background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; flex-direction:column; transition:transform 0.15s, box-shadow 0.15s;";
+    card.onmouseenter = () => { card.style.transform = "translateY(-2px)"; card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.12)"; };
+    card.onmouseleave = () => { card.style.transform = "none"; card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; };
+
+    const safeTitle = (p.title || "").replace(/'/g, "\\'");
+    card.innerHTML = `
+      <div style="position:relative; width:100%; height:130px; background:#0f172a; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
+        <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a3b8; font-size:12px;\\'>⚠️ 画像読込エラー</span>';">
+        <div style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; border-radius:4px;">🔍 拡大</div>
+      </div>
+      <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+          <div style="font-weight:bold; font-size:13px; color:#1e293b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${p.title || ''}">
+            ${p.title || "名称未設定"}
+          </div>
+          <div style="font-size:11px; color:#64748b;">📅 ${p.uploaded_at || "-"}</div>
+          <div style="font-size:11px; color:#64748b;">👤 担当: ${p.uploader || "-"}</div>
+        </div>
+        <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #f1f5f9; padding-top:6px;">
+          <button class="btn btn-secondary" style="font-size:11px; padding:3px 8px;" onclick="openLightbox('${p.url}', '${safeTitle}')">拡大表示</button>
+          <button class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;" onclick="deletePhoto(${p.id})">削除</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleAddPhotoForm() {
+  const form = document.getElementById("addPhotoFormArea");
+  if (!form) return;
+  if (form.style.display === "none" || !form.style.display) {
+    resetPhotoForm();
+    form.style.display = "block";
+    const titleInput = document.getElementById("photoNewTitle");
+    if (titleInput) titleInput.focus();
+  } else {
+    form.style.display = "none";
+  }
+}
+
+function resetPhotoForm() {
+  currentPickedPhotoDataUrl = null;
+  const titleInput = document.getElementById("photoNewTitle");
+  if (titleInput) titleInput.value = "";
+  const fileInput = document.getElementById("photoFileInput");
+  if (fileInput) fileInput.value = "";
+  const previewContainer = document.getElementById("photoPreviewContainer");
+  if (previewContainer) previewContainer.style.display = "none";
+  const previewImg = document.getElementById("photoPreviewImg");
+  if (previewImg) previewImg.src = "";
+  const selectCat = document.getElementById("photoNewCategory");
+  if (selectCat) selectCat.value = currentPhotoCategory;
+}
+
+function onPhotoFilePicked(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const titleInput = document.getElementById("photoNewTitle");
+  if (titleInput && !titleInput.value.trim()) {
+    const baseName = file.name.replace(/\.[^/.]+$/, "");
+    titleInput.value = baseName;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rawDataUrl = e.target.result;
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      currentPickedPhotoDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
+      const previewContainer = document.getElementById("photoPreviewContainer");
+      const previewImg = document.getElementById("photoPreviewImg");
+      if (previewContainer && previewImg) {
+        previewImg.src = currentPickedPhotoDataUrl;
+        previewContainer.style.display = "block";
+      }
+    };
+    img.src = rawDataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveNewPhoto() {
+  if (!currentPickedPhotoDataUrl) {
+    alert("写真または書類の画像ファイルを選択してください。");
+    return;
+  }
+
+  const cat = document.getElementById("photoNewCategory").value || currentPhotoCategory;
+  let title = document.getElementById("photoNewTitle").value.trim();
+  if (!title) {
+    title = (cat === "documents" ? "重要書類 " : "写真 ") + new Date().toLocaleDateString();
+  }
+
+  const staff = (document.getElementById("currentStaff") && document.getElementById("currentStaff").value) || "職員";
+  const d = new Date();
+  const nowStr = d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0") + " " +
+    String(d.getHours()).padStart(2, "0") + ":" +
+    String(d.getMinutes()).padStart(2, "0");
+
+  if (!db.data.photos) db.data.photos = [];
+
+  const newPhoto = {
+    id: Date.now(),
+    resident_id: gState.selectedResidentId,
+    category: cat,
+    title: title,
+    url: currentPickedPhotoDataUrl,
+    uploaded_at: nowStr,
+    uploader: staff
+  };
+
+  db.data.photos.unshift(newPhoto);
+  db.save();
+
+  resetPhotoForm();
+  const formArea = document.getElementById("addPhotoFormArea");
+  if (formArea) formArea.style.display = "none";
+
+  currentPhotoCategory = cat;
+  switchPhotoCategory(cat);
+  if (typeof renderResidentDetail === 'function') renderResidentDetail();
+
+  alert("✅ " + (cat === "documents" ? "重要書類" : "写真") + "を登録・保存しました！");
+}
+
+function deletePhoto(id) {
+  if (!confirm("この写真・書類を保管庫から削除してもよろしいですか？")) return;
+  db.data.photos = (db.data.photos || []).filter(p => p.id !== id);
+  db.save();
+  renderPhotoGrid();
+  if (typeof renderResidentDetail === 'function') renderResidentDetail();
+}
+
+function openPCFolder() {
+  fetch("/api/open-folder?type=" + encodeURIComponent(currentPhotoCategory))
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.success) {
+        alert("🖥️ PCのエクスプローラーで保存フォルダを開きました。\nファイルを直接追加・確認できます。");
+      } else {
+        alert("フォルダ場所:\ncare_portal\\data\\photos\\" + currentPhotoCategory);
+      }
+    })
+    .catch(() => {
+      alert("フォルダ場所:\ncare_portal\\data\\photos\\" + currentPhotoCategory);
+    });
+}
+
+function openLightbox(src, caption) {
+  const modal = document.getElementById("lightboxModal");
+  const img = document.getElementById("lightboxImg");
+  const cap = document.getElementById("lightboxCaption");
+  if (!modal || !img) return;
+
+  img.src = src;
+  if (cap) cap.textContent = caption || "";
+  modal.style.display = "flex";
 }

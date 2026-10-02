@@ -18,7 +18,7 @@ $reqKeys = @(
     "shifts", "notebooks", "notebook_stamps", "vitals", "excretions",
     "meals", "oral_cares", "baths", "meds", "turns", "linens",
     "groomings", "weight_records", "visitations", "inventory_logs",
-    "consumptions", "orders", "deposits", "complaints", "incidents"
+    "consumptions", "orders", "deposits", "complaints", "incidents", "photos"
 )
 
 $missing = @()

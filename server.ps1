@@ -118,6 +118,7 @@ namespace CarePortal
                     string method = requestLineParts[0].ToUpper();
                     string rawUrl = requestLineParts[1];
                     string urlPath = rawUrl.Split('?')[0];
+                    try { urlPath = Uri.UnescapeDataString(urlPath); } catch { }
 
                     if (method == "OPTIONS")
                     {
@@ -155,6 +156,24 @@ namespace CarePortal
                         int read = stream.Read(bodyBytes, totalBodyRead, contentLength - totalBodyRead);
                         if (read <= 0) break;
                         totalBodyRead += read;
+                    }
+
+                    if (urlPath == "/api/open-folder")
+                    {
+                        string fType = "documents";
+                        if (rawUrl.Contains("type=personal")) fType = "personal";
+                        string folder = Path.Combine(_dataDir, "photos", fType);
+                        if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                        try
+                        {
+                            System.Diagnostics.Process.Start("explorer.exe", folder);
+                            SendJsonResponse(stream, 200, "{\"success\":true}");
+                        }
+                        catch
+                        {
+                            SendJsonResponse(stream, 500, "{\"error\":\"Failed to open folder\"}");
+                        }
+                        return;
                     }
 
                     if (urlPath == "/api/ip")

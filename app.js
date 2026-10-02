@@ -76,7 +76,7 @@ class LocalDB {
       "shifts", "notebooks", "notebook_stamps", "vitals", "excretions",
       "meals", "oral_cares", "baths", "meds", "turns", "linens",
       "groomings", "weight_records", "visitations", "inventory_logs",
-      "consumptions", "orders", "deposits", "complaints", "incidents"
+      "consumptions", "orders", "deposits", "complaints", "incidents", "photos"
     ];
     arrayKeys.forEach(k => {
       if (!Array.isArray(d[k])) d[k] = [];
@@ -286,7 +286,7 @@ class LocalDB {
       residents: [
         { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: "⚠️ 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (左側からの介助推奨)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
         { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: "⚠️ ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
-        { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護4", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: "⚠️ 車椅子移乗時全介助", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "誤嚥性肺炎, パーキンソン病", care_plan_goal: "食後30分は座位保持。小刻みな歩行に付き添い。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+        { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: "⚠️ 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
         { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
       ],
       stamps: [
@@ -410,7 +410,8 @@ let gState = {
   currentMonth: new Date().toISOString().slice(0, 7),
   activePortal: "care",
   activeCareTab: "record",
-  activeOfficeTab: "inventory"
+  activeOfficeTab: "inventory",
+  recordScope: "today"
 };
 
 // 病歴ガイド辞書
@@ -434,6 +435,16 @@ const DISEASE_GUIDE = {
     symptoms: "発熱、湿性咳嗽、食欲低下、食事中の激しいむせ、痰の増加、呼吸促迫、元気がない（活気低下）。",
     care_points: "食事中の姿勢（軽度前傾・顎引き）、食形態（きざみ・とろみ）の徹底。一口量を少なくしペースを守る。食後30分は横にならず座位を保持する。食後の口腔ケアと義歯洗浄を徹底。",
     emergency: "38度以上の発熱、呼吸数24回/分以上、SpO2低下（90%以下）、喘鳴が続く場合は直ちに医師へ報告。"
+  },
+  "誤嚥性肺炎既往": {
+    symptoms: "過去に誤嚥性肺炎の罹患歴あり。活気低下、微熱、食事摂取量の低下などの初期徴候に留意。",
+    care_points: "再発予防が最重要。食後の丁寧な口腔ケア・義歯清掃、毎食後の座位保持（30分〜1時間）、喀痰吸引の準備。",
+    emergency: "37.5℃以上の発熱、SpO2低下、痰の増加が見られた場合は初期段階で看護師・往診医へ報告。"
+  },
+  "嚥下障害": {
+    symptoms: "食事中のむせ、湿性嗄声（ガラガラ声）、口腔内への食物残留、飲み込みの遅れ、食欲低下。",
+    care_points: "食事形態の厳守（刻み食・とろみ調整）。一口量を適量にし、交互嚥下（固形物と水分）を促す。食後30分は座位保持を徹底。",
+    emergency: "食物の気道閉塞（チョークサイン、チアノーゼ、声が出ない）時は直ちに背部叩打法またはハイムリック法を実施し救急要請。"
   },
   "脳梗塞後遺症": {
     symptoms: "片麻痺、構音障害（ろれつ不良）、嚥下障害、感覚鈍麻、感情失禁、半側空間無視。",
@@ -636,7 +647,7 @@ function switchCareTab(tab) {
   });
 
   const tabMap = {
-    record: "tabCareRecord", vitals: "tabCareVitals", excretion: "tabCareExcretion",
+    record: "tabCareRecord", daily_journal: "tabCareDailyJournal", vitals: "tabCareVitals", excretion: "tabCareExcretion",
     meal: "tabCareMeal", bath: "tabCareBath", oral: "tabCareOral", med: "tabCareMed",
     night: "tabCareNight", weight: "tabCareWeight", linen: "tabCareLinen",
     grooming: "tabCareGrooming", visit: "tabCareVisit", recreation: "tabCareRecreation",
@@ -650,6 +661,8 @@ function switchCareTab(tab) {
   const target = document.getElementById(tabMap[tab]);
   if (target) target.style.display = "block";
 
+  if (tab === "record") renderSelectedDateRecords();
+  if (tab === "daily_journal") renderDailyJournal();
   if (tab === "vitals") renderVitalsTable();
   if (tab === "excretion") renderExcretionTable();
   if (tab === "meal") renderMealsTable();
@@ -727,6 +740,7 @@ function selectDate(dt) {
 function loadDateRecords(dt) {
   renderSelectedDateRecords();
   renderNotebook();
+  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
   if (gState.activeCareTab === "vitals") renderVitalsTable();
   if (gState.activeCareTab === "excretion") renderExcretionTable();
   if (gState.activeCareTab === "meal") renderMealsTable();
@@ -769,6 +783,7 @@ function selectResident(id) {
   renderResidentsStrip();
   renderResidentDetail();
   updateRecordTargetBanner();
+  renderSelectedDateRecords();
   if (gState.activeCareTab === "consume") renderQuickConsume();
   if (gState.activeCareTab === "linen") renderLinenTable();
   renderOfficeDepositTable();
@@ -808,6 +823,10 @@ function renderResidentDetail() {
       ${eq.equipment_name} (${eq.ownership_type})
     </span>
   `).join("");
+
+  // 写真・重要書類件数
+  const resDocs = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'documents');
+  const resPhotos = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'personal');
 
   container.innerHTML = `
     <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
@@ -879,11 +898,20 @@ function renderResidentDetail() {
     </div>
 
     <!-- 同意書・写真スクショ保管 -->
-    <div style="margin-bottom:12px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:#fafafa;">
-      <strong style="font-size:13px;">📁 同意書 ＆ 写真スクショ保管:</strong>
-      <div style="display:flex; gap:8px; margin-top:6px;">
-        <button class="btn btn-secondary" style="font-size:12px; padding:4px 8px;" onclick="alert('手書き同意書や保険証のスクショが【重要書類フォルダ (年/月)】に保管されています。')">📜 重要書類(同意書)フォルダを開く</button>
-        <button class="btn btn-secondary" style="font-size:12px; padding:4px 8px;" onclick="alert('日常の笑顔・イベント写真が【個人写真フォルダ (年/月)】に保管されています。')">📷 個人写真フォルダを開く</button>
+    <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; background:#f8fafc;">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
+        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真スクショ保管庫:</strong>
+        <span style="font-size:11px; color:#64748b;">タップで画像一覧・拡大表示・追加</span>
+      </div>
+      <div style="display:flex; gap:8px; flex-wrap:wrap;">
+        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
+          📜 重要書類(同意書)
+          <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
+        </button>
+        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
+          📷 個人写真
+          <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
+        </button>
       </div>
     </div>
 
@@ -1169,25 +1197,98 @@ function toggleRecordExpand(recId) {
   renderSelectedDateRecords();
 }
 
-// 指定日の介護記録一覧表示 (長文カルテ対応)
+// 記録表示範囲の切り替え（指定日のみ ⇄ 全過去履歴）
+function toggleRecordScope() {
+  gState.recordScope = (gState.recordScope === "all") ? "today" : "all";
+  const btn = document.getElementById("btnToggleRecordScope");
+  if (btn) {
+    if (gState.recordScope === "all") {
+      btn.textContent = "📅 指定日の記録のみ表示";
+      btn.style.background = "#eff6ff";
+      btn.style.color = "#1d4ed8";
+      btn.style.border = "1px solid #93c5fd";
+    } else {
+      btn.textContent = "📖 すべての過去履歴を表示";
+      btn.style.background = "#f0fdf4";
+      btn.style.color = "#166534";
+      btn.style.border = "1px solid #bbf7d0";
+    }
+  }
+  renderSelectedDateRecords();
+}
+
+// 年月アコーディオン開閉状態 Set & 選択中月フィルター
+const gOpenMonthAccordions = new Set();
+let gSelectedHistoryMonth = "all";
+
+function toggleMonthAccordion(ym) {
+  if (gOpenMonthAccordions.has(ym)) {
+    gOpenMonthAccordions.delete(ym);
+  } else {
+    gOpenMonthAccordions.add(ym);
+  }
+  renderSelectedDateRecords();
+}
+
+function filterHistoryMonth(ym) {
+  gSelectedHistoryMonth = ym;
+  if (ym !== "all") {
+    gOpenMonthAccordions.add(ym);
+  }
+  renderSelectedDateRecords();
+}
+
+// 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
 function renderSelectedDateRecords() {
   const list = document.getElementById("selectedDateRecordsList");
   if (!list) return;
   const titleEl = document.getElementById("selectedDateRecordsTitle");
-  if (titleEl) titleEl.textContent = `📅 【${gState.selectedDate}】の介護記録一覧`;
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+
+  const isAllScope = gState.recordScope === "all";
+  if (titleEl) {
+    titleEl.textContent = isAllScope
+      ? `👤 【${resName}】の個別カルテ履歴 (年月別アーカイブ)`
+      : `👤 【${resName}】の個別介護記録 (${gState.selectedDate})`;
+  }
   list.innerHTML = "";
 
-  const records = (db.data.care_records || []).filter(r => {
-    const timeStr = r.recorded_at || r.record_time || "";
-    return timeStr.startsWith(gState.selectedDate);
-  });
+  // 選択中利用者の記録のみに厳密絞り込み
+  const allUserRecords = (db.data.care_records || [])
+    .filter(r => r.resident_id === gState.selectedResidentId)
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return tb.localeCompare(ta); // 新しい順
+    });
+
+  const records = isAllScope
+    ? allUserRecords
+    : allUserRecords.filter(r => {
+        const timeStr = r.recorded_at || r.record_time || "";
+        return timeStr.startsWith(gState.selectedDate);
+      });
+
   if (records.length === 0) {
-    list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:16px; text-align:center;">この日の介護記録はありません。</p>';
+    if (!isAllScope && allUserRecords.length > 0) {
+      list.innerHTML = `
+        <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px dashed #cbd5e1;">
+          <p style="font-size:14px; color:#64748b; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の個別記録はまだ登録されていません。</p>
+          <p style="font-size:13px; color:#2563eb; margin-bottom:12px;">（※この利用者様には過去のカルテ記録が計 ${allUserRecords.length} 件あります）</p>
+          <button type="button" class="btn btn-secondary" style="font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="toggleRecordScope()">
+            📖 すべての過去履歴を表示する
+          </button>
+        </div>
+      `;
+    } else {
+      list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:20px; text-align:center;">この利用者様の介護記録はありません。</p>';
+    }
     return;
   }
 
-  records.forEach(r => {
-    const res = gState.residents.find(x => x.id === r.resident_id);
+  // レコード単体の描画ヘルパー関数
+  const createRecordItem = (r) => {
     const item = document.createElement("div");
     item.className = "care-record-card";
 
@@ -1195,9 +1296,9 @@ function renderSelectedDateRecords() {
     if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
     else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
     else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+    else if (r.category === "連絡") catBadgeStyle = "background:#fef9c3; color:#854d0e; font-weight:bold;";
 
     const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
-    const resName = res ? `${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様` : "利用者未指定";
     const rawContent = r.content || "";
     const charLen = rawContent.length;
     const isLong = charLen > 400;
@@ -1216,7 +1317,7 @@ function renderSelectedDateRecords() {
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
-          <strong style="font-size:15px; color:#1e293b;">${resName}</strong>
+          <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
           ${isLong ? `<span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
         </div>
         <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
@@ -1224,19 +1325,113 @@ function renderSelectedDateRecords() {
       <div class="care-record-body">${escapeHtml(displayContent)}</div>
       ${toggleBtnHtml}
     `;
-    list.appendChild(item);
-  });
+    return item;
+  };
+
+  // 全履歴表示（isAllScope）の場合は年月別アコーディオンでグループ化！
+  if (isAllScope) {
+    const monthGroups = {};
+    allUserRecords.forEach(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      const ym = timeStr.slice(0, 7) || "その他";
+      if (!monthGroups[ym]) monthGroups[ym] = [];
+      monthGroups[ym].push(r);
+    });
+
+    const ymList = Object.keys(monthGroups).sort().reverse(); // 新しい月順
+
+    // デフォルトで最新の月を展開状態にしておく
+    if (gOpenMonthAccordions.size === 0 && ymList.length > 0) {
+      gOpenMonthAccordions.add(ymList[0]);
+    }
+
+    // 月別クイック絞り込みバー
+    const filterBar = document.createElement("div");
+    filterBar.style.cssText = "display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center;";
+    filterBar.innerHTML = `
+      <span style="font-size:12px; font-weight:bold; color:#475569; margin-right:4px;">月別表示:</span>
+      <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
+      ${ymList.map(ym => {
+        const parts = ym.split("-");
+        const label = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月 (${monthGroups[ym].length}件)` : ym;
+        const active = gSelectedHistoryMonth === ym;
+        return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
+      }).join("")}
+    `;
+    list.appendChild(filterBar);
+
+    // 各月の描画
+    ymList.forEach(ym => {
+      if (gSelectedHistoryMonth !== "all" && gSelectedHistoryMonth !== ym) return;
+
+      const parts = ym.split("-");
+      const ymTitle = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月` : ym;
+      const mRecs = monthGroups[ym];
+      const isOpen = gOpenMonthAccordions.has(ym);
+
+      const accordionContainer = document.createElement("div");
+      accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; background:#fff;";
+
+      // アコーディオンヘッダー
+      const header = document.createElement("div");
+      header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3b82f6; transition:background 0.2s;";
+      header.onmouseover = () => header.style.background = "#f1f5f9";
+      header.onmouseout = () => header.style.background = "#f8fafc";
+      header.onclick = () => toggleMonthAccordion(ym);
+
+      header.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:14px; font-weight:bold; color:#1e3a8a;">📅 ${ymTitle}</span>
+          <span style="font-size:11px; background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
+        </div>
+        <span style="font-size:12px; color:#64748b; font-weight:bold;">
+          ${isOpen ? '▲ 折りたたむ' : '▼ 展開して表示'}
+        </span>
+      `;
+      accordionContainer.appendChild(header);
+
+      // アコーディオン中身（展開時のみ表示）
+      if (isOpen) {
+        const body = document.createElement("div");
+        body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #e2e8f0;";
+        mRecs.forEach(r => {
+          body.appendChild(createRecordItem(r));
+        });
+        accordionContainer.appendChild(body);
+      }
+
+      list.appendChild(accordionContainer);
+    });
+
+  } else {
+    // 指定日モードの場合はそのまま表示
+    records.forEach(r => {
+      list.appendChild(createRecordItem(r));
+    });
+  }
 }
 
-// 本日の記録一覧を日報書類として印刷
+// 選択中利用者の個別カルテ記録を印刷
 function printSelectedDateRecords() {
-  const records = (db.data.care_records || []).filter(r => {
-    const timeStr = r.recorded_at || r.record_time || "";
-    return timeStr.startsWith(gState.selectedDate);
-  });
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+
+  const isAllScope = gState.recordScope === "all";
+  const records = (db.data.care_records || [])
+    .filter(r => {
+      if (r.resident_id !== gState.selectedResidentId) return false;
+      if (isAllScope) return true;
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    })
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return tb.localeCompare(ta);
+    });
 
   if (records.length === 0) {
-    alert(`【${gState.selectedDate}】の介護記録はありません。印刷するデータがありません。`);
+    alert(`【${resName}】の対象記録はありません。印刷するデータがありません。`);
     return;
   }
 
@@ -1250,10 +1445,7 @@ function printSelectedDateRecords() {
   const nowStr = new Date().toLocaleString("ja-JP");
 
   let recordsHtml = records.map((r, idx) => {
-    const res = gState.residents.find(x => x.id === r.resident_id);
-    const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
     const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
-
     return `
       <div style="margin-bottom:18px; border:1px solid #cbd5e1; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
         <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
@@ -1277,11 +1469,11 @@ ${escapeHtml(r.content || '')}
     <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
       <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:10px; margin-bottom:16px;">
         <div>
-          <h1 style="font-size:22px; margin:0; color:#1e3a8a;">📑 介護業務日報・総合記録書</h1>
-          <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 施設ポータル帳票</p>
+          <h1 style="font-size:22px; margin:0; color:#1e3a8a;">📑 個別介護記録・カルテ報告書</h1>
+          <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
         </div>
         <div style="text-align:right; font-size:12px; color:#64748b;">
-          <div>印刷出力日時: ${nowStr}</div>
+          <div>印刷日時: ${nowStr}</div>
           <div>出力担当者: ${escapeHtml(staffName)}</div>
           <div>記録件数: 計 ${records.length} 件</div>
         </div>
@@ -1292,8 +1484,269 @@ ${escapeHtml(r.content || '')}
       </div>
 
       <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
-        <span>ケアポータル 統合管理システム (業務日報印刷)</span>
+        <span>ケアポータル 統合管理システム (個別カルテ印刷)</span>
         <span>確認印: __________________</span>
+      </div>
+    </div>
+  `;
+
+  window.print();
+}
+
+// ============================================================
+// 📰 施設・フロア 業務日誌 (一日の記録) の描画 ＆ 印刷
+// ============================================================
+function renderDailyJournal() {
+  const titleEl = document.getElementById("dailyJournalTitle");
+  if (titleEl) {
+    titleEl.textContent = `📰 【${gState.selectedDate}】施設・フロア 業務日誌 (一日の記録)`;
+  }
+
+  // 1. サマリーバー（勤務体制 ＆ 利用者概況 ＆ 記録件数）
+  const summaryBar = document.getElementById("dailyJournalSummaryBar");
+  if (summaryBar) {
+    const presentCount = gState.residents.filter(r => r.status === "在所").length;
+    const hospitalCount = gState.residents.filter(r => r.status === "入院中").length;
+
+    const dayRecords = (db.data.care_records || []).filter(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    });
+    const tokukanCount = dayRecords.filter(r => r.category === "特変").length;
+
+    const shiftText = (document.getElementById("todayShiftBar") ? document.getElementById("todayShiftBar").innerText : "").replace("🕒 本日の勤務体制:", "").trim();
+
+    summaryBar.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="font-size:13px; color:#1e40af; font-weight:bold;">🕒 本日のフロア勤務体制:</div>
+        <div style="font-size:13px; color:#334155;">${escapeHtml(shiftText || '管理者: 施設長 | リーダー: 山田 | 看護: 鈴木 | 介護: 佐藤 | 事務: 田中')}</div>
+      </div>
+      <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">入居者状況</div>
+          <div style="font-size:14px; font-weight:bold; color:#1e293b;">在所 ${presentCount}名 / 入院 ${hospitalCount}名</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">本日の介護記録</div>
+          <div style="font-size:14px; font-weight:bold; color:#2563eb;">計 ${dayRecords.length} 件</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">特変・要申送</div>
+          <div style="font-size:14px; font-weight:bold; color:${tokukanCount > 0 ? '#dc2626' : '#16a34a'};">${tokukanCount} 件</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 2. 指定日の全入居者タイムライン記録一覧
+  const recordsListEl = document.getElementById("dailyJournalRecordsList");
+  if (recordsListEl) {
+    const allRecords = (db.data.care_records || [])
+      .filter(r => {
+        const timeStr = r.recorded_at || r.record_time || "";
+        return timeStr.startsWith(gState.selectedDate);
+      })
+      .sort((a, b) => {
+        const ta = a.recorded_at || a.record_time || "";
+        const tb = b.recorded_at || b.record_time || "";
+        return ta.localeCompare(tb); // 朝から夜への時系列昇順
+      });
+
+    if (allRecords.length === 0) {
+      recordsListEl.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:16px; text-align:center; background:#f8fafc; border-radius:6px;">この日の介護記録はありません。</p>';
+    } else {
+      recordsListEl.innerHTML = "";
+      allRecords.forEach(r => {
+        const res = gState.residents.find(x => x.id === r.resident_id);
+        const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+        const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
+
+        let catBadgeStyle = "background:#e0f2fe; color:#0369a1;";
+        if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+        else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
+        else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+
+        const item = document.createElement("div");
+        item.className = "care-record-card";
+        item.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
+              <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
+            </div>
+            <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
+          </div>
+          <div class="care-record-body" style="margin-top:6px;">${escapeHtml(r.content || '')}</div>
+        `;
+        recordsListEl.appendChild(item);
+      });
+    }
+  }
+
+  // 3. フロア全体ケアサマリー表 (バイタル・食事・排泄・入浴)
+  const summaryTableEl = document.getElementById("dailyJournalCareSummaryTable");
+  if (summaryTableEl) {
+    let rowsHtml = gState.residents.map(r => {
+      // 本日のバイタル
+      const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
+      const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
+
+      // 本日の食事 (朝・昼)
+      const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
+      const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
+      const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+
+      // 本日の排泄
+      const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
+      const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
+      const excStr = excs.length > 0 ? `排尿:${excs.length}回 / 排便:${stoolCount}回` : "記録なし";
+
+      // 本日の入浴
+      const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
+      const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+
+      return `
+        <tr>
+          <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no)}号室</td>
+          <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.name)} 様</td>
+          <td style="font-size:12px; white-space:nowrap;">${escapeHtml(r.care_level)}</td>
+          <td style="font-size:12px;">${escapeHtml(vitStr)}</td>
+          <td style="font-size:12px;">${escapeHtml(mealStr)}</td>
+          <td style="font-size:12px;">${escapeHtml(excStr)}</td>
+          <td style="font-size:12px; white-space:nowrap;">${escapeHtml(bathStr)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    summaryTableEl.innerHTML = `
+      <table class="data-table" style="font-size:13px; width:100%;">
+        <thead>
+          <tr>
+            <th>居室</th>
+            <th>氏名</th>
+            <th>介護度</th>
+            <th>バイタル (体温/血圧/脈拍/SpO2)</th>
+            <th>食事摂取量 (主食)</th>
+            <th>排泄状況</th>
+            <th>入浴実施</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+  }
+}
+
+// 施設・フロア業務日誌 (一日の記録) の印刷
+function printDailyJournal() {
+  const records = (db.data.care_records || [])
+    .filter(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    })
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return ta.localeCompare(tb);
+    });
+
+  const printArea = document.getElementById("printArea");
+  if (!printArea) {
+    alert("印刷コンテナが見つかりません。");
+    return;
+  }
+
+  const staffName = document.getElementById("currentStaff").value || "未記録";
+  const nowStr = new Date().toLocaleString("ja-JP");
+  const facilityName = (db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+
+  let summaryTableRows = gState.residents.map(r => {
+    const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
+    const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
+    const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
+    const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
+    const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+    const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
+    const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
+    const excStr = excs.length > 0 ? `尿:${excs.length}回 便:${stoolCount}回` : "記録なし";
+    const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
+    const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+
+    return `
+      <tr>
+        <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(r.care_level)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(vitStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(mealStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(excStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(bathStr)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  let recordsHtml = records.map((r, idx) => {
+    const res = gState.residents.find(x => x.id === r.resident_id);
+    const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+    const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
+
+    return `
+      <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:4px; padding:10px; page-break-inside:avoid;">
+        <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px; font-size:12px;">
+          <div>
+            <span style="font-weight:bold; background:#e2e8f0; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
+            <strong style="font-size:14px; margin-left:6px;">${escapeHtml(resName)}</strong>
+          </div>
+          <div style="color:#64748b;">
+            <span>${escapeHtml(timeDisplay)}</span> / <span>記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
+          </div>
+        </div>
+        <div style="white-space:pre-wrap; font-size:13px; line-height:1.6; color:#1e293b;">
+${escapeHtml(r.content || '')}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  printArea.innerHTML = `
+    <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:8px; margin-bottom:14px;">
+        <div>
+          <h1 style="font-size:20px; margin:0; color:#1e3a8a;">📑 ${escapeHtml(facilityName)} フロア業務日誌 (一日の記録)</h1>
+          <p style="font-size:12px; color:#475569; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 日報管理書類</p>
+        </div>
+        <div style="text-align:right; font-size:11px; color:#64748b;">
+          <div>印刷日時: ${nowStr}</div>
+          <div>出力者: ${escapeHtml(staffName)}</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px; margin:12px 0 6px 0; color:#1e3a8a;">1. フロア全体 ケア実施サマリー表</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">氏名・居室</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">介護度</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">バイタル</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">食事</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">排泄</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">入浴</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryTableRows}
+        </tbody>
+      </table>
+
+      <h3 style="font-size:14px; margin:14px 0 6px 0; color:#1e3a8a;">2. 全入居者 タイムライン介護記録 (計 ${records.length} 件)</h3>
+      <div>
+        ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#64748b;">記録なし</p>'}
+      </div>
+
+      <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+        <span>ケアポータル 統合管理システム (フロア日報印刷)</span>
+        <span>施設長印: __________________ / リーダー印: __________________</span>
       </div>
     </div>
   `;
@@ -3508,8 +3961,257 @@ function setupEventListeners() {
   setInterval(() => {
     const preview = document.getElementById("recordTimePreview");
     if (preview) {
-      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-      preview.textContent = "現在: " + now.toLocaleDateString() + " " + timeStr;
+      const cur = new Date();
+      const timeStr = cur.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      preview.textContent = "現在: " + cur.toLocaleDateString() + " " + timeStr;
     }
   }, 1000);
+}
+
+// ==========================================
+// 写真・重要書類保管庫 管理機能
+// ==========================================
+let currentPhotoCategory = 'documents';
+let currentPickedPhotoDataUrl = null;
+
+function openPhotoModal(category) {
+  const modal = document.getElementById("photoModal");
+  if (!modal) return;
+  const res = gState.residents ? gState.residents.find(x => x.id === gState.selectedResidentId) : null;
+  const titleEl = document.getElementById("photoModalTitle");
+  if (titleEl) {
+    titleEl.textContent = res ? `📁 ${res.name} 様の写真・重要書類保管庫` : "📁 写真・重要書類保管庫";
+  }
+
+  const formArea = document.getElementById("addPhotoFormArea");
+  if (formArea) formArea.style.display = "none";
+  resetPhotoForm();
+
+  switchPhotoCategory(category || 'documents');
+  modal.style.display = "flex";
+}
+
+function switchPhotoCategory(cat) {
+  currentPhotoCategory = cat;
+  const btnDoc = document.getElementById("tabBtnDocPhotos");
+  const btnPersonal = document.getElementById("tabBtnPersonalPhotos");
+  if (btnDoc && btnPersonal) {
+    if (cat === "documents") {
+      btnDoc.className = "btn btn-primary";
+      btnPersonal.className = "btn btn-outline";
+    } else {
+      btnDoc.className = "btn btn-outline";
+      btnPersonal.className = "btn btn-primary";
+    }
+  }
+  const selectCat = document.getElementById("photoNewCategory");
+  if (selectCat) selectCat.value = cat;
+
+  renderPhotoGrid();
+}
+
+function renderPhotoGrid() {
+  const grid = document.getElementById("photoGridArea");
+  if (!grid) return;
+  grid.innerHTML = "";
+
+  const photos = (db.data.photos || []).filter(p => 
+    p.resident_id === gState.selectedResidentId && p.category === currentPhotoCategory
+  );
+
+  if (photos.length === 0) {
+    const isDoc = currentPhotoCategory === 'documents';
+    grid.innerHTML = `
+      <div style="grid-column: 1 / -1; text-align:center; padding:36px 12px; color:var(--text-muted); background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">
+        <div style="font-size:32px; margin-bottom:8px;">${isDoc ? '📜' : '📷'}</div>
+        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">
+          ${isDoc ? '重要書類・同意書はまだありません' : '個人写真はまだありません'}
+        </div>
+        <div style="font-size:12px;">右上の「➕ 写真・書類の追加」から撮影・アップロードするか、<br>PCの保存フォルダに直接ファイルを入れてください。</div>
+      </div>
+    `;
+    return;
+  }
+
+  photos.forEach(p => {
+    const card = document.createElement("div");
+    card.style.cssText = "background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; flex-direction:column; transition:transform 0.15s, box-shadow 0.15s;";
+    card.onmouseenter = () => { card.style.transform = "translateY(-2px)"; card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.12)"; };
+    card.onmouseleave = () => { card.style.transform = "none"; card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; };
+
+    const safeTitle = (p.title || "").replace(/'/g, "\\'");
+    card.innerHTML = `
+      <div style="position:relative; width:100%; height:130px; background:#0f172a; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
+        <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a3b8; font-size:12px;\\'>⚠️ 画像読込エラー</span>';">
+        <div style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; border-radius:4px;">🔍 拡大</div>
+      </div>
+      <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
+        <div>
+          <div style="font-weight:bold; font-size:13px; color:#1e293b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${p.title || ''}">
+            ${p.title || "名称未設定"}
+          </div>
+          <div style="font-size:11px; color:#64748b;">📅 ${p.uploaded_at || "-"}</div>
+          <div style="font-size:11px; color:#64748b;">👤 担当: ${p.uploader || "-"}</div>
+        </div>
+        <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #f1f5f9; padding-top:6px;">
+          <button class="btn btn-secondary" style="font-size:11px; padding:3px 8px;" onclick="openLightbox('${p.url}', '${safeTitle}')">拡大表示</button>
+          <button class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;" onclick="deletePhoto(${p.id})">削除</button>
+        </div>
+      </div>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+function toggleAddPhotoForm() {
+  const form = document.getElementById("addPhotoFormArea");
+  if (!form) return;
+  if (form.style.display === "none" || !form.style.display) {
+    resetPhotoForm();
+    form.style.display = "block";
+    const titleInput = document.getElementById("photoNewTitle");
+    if (titleInput) titleInput.focus();
+  } else {
+    form.style.display = "none";
+  }
+}
+
+function resetPhotoForm() {
+  currentPickedPhotoDataUrl = null;
+  const titleInput = document.getElementById("photoNewTitle");
+  if (titleInput) titleInput.value = "";
+  const fileInput = document.getElementById("photoFileInput");
+  if (fileInput) fileInput.value = "";
+  const previewContainer = document.getElementById("photoPreviewContainer");
+  if (previewContainer) previewContainer.style.display = "none";
+  const previewImg = document.getElementById("photoPreviewImg");
+  if (previewImg) previewImg.src = "";
+  const selectCat = document.getElementById("photoNewCategory");
+  if (selectCat) selectCat.value = currentPhotoCategory;
+}
+
+function onPhotoFilePicked(event) {
+  const file = event.target.files && event.target.files[0];
+  if (!file) return;
+
+  const titleInput = document.getElementById("photoNewTitle");
+  if (titleInput && !titleInput.value.trim()) {
+    const baseName = file.name.replace(/\.[^/.]+$/, "");
+    titleInput.value = baseName;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    const rawDataUrl = e.target.result;
+    const img = new Image();
+    img.onload = function() {
+      const maxDim = 1200;
+      let w = img.width;
+      let h = img.height;
+      if (w > maxDim || h > maxDim) {
+        if (w > h) {
+          h = Math.round((h * maxDim) / w);
+          w = maxDim;
+        } else {
+          w = Math.round((w * maxDim) / h);
+          h = maxDim;
+        }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = w;
+      canvas.height = h;
+      const ctx = canvas.getContext("2d");
+      ctx.drawImage(img, 0, 0, w, h);
+      currentPickedPhotoDataUrl = canvas.toDataURL("image/jpeg", 0.82);
+
+      const previewContainer = document.getElementById("photoPreviewContainer");
+      const previewImg = document.getElementById("photoPreviewImg");
+      if (previewContainer && previewImg) {
+        previewImg.src = currentPickedPhotoDataUrl;
+        previewContainer.style.display = "block";
+      }
+    };
+    img.src = rawDataUrl;
+  };
+  reader.readAsDataURL(file);
+}
+
+function saveNewPhoto() {
+  if (!currentPickedPhotoDataUrl) {
+    alert("写真または書類の画像ファイルを選択してください。");
+    return;
+  }
+
+  const cat = document.getElementById("photoNewCategory").value || currentPhotoCategory;
+  let title = document.getElementById("photoNewTitle").value.trim();
+  if (!title) {
+    title = (cat === "documents" ? "重要書類 " : "写真 ") + new Date().toLocaleDateString();
+  }
+
+  const staff = (document.getElementById("currentStaff") && document.getElementById("currentStaff").value) || "職員";
+  const d = new Date();
+  const nowStr = d.getFullYear() + "-" +
+    String(d.getMonth() + 1).padStart(2, "0") + "-" +
+    String(d.getDate()).padStart(2, "0") + " " +
+    String(d.getHours()).padStart(2, "0") + ":" +
+    String(d.getMinutes()).padStart(2, "0");
+
+  if (!db.data.photos) db.data.photos = [];
+
+  const newPhoto = {
+    id: Date.now(),
+    resident_id: gState.selectedResidentId,
+    category: cat,
+    title: title,
+    url: currentPickedPhotoDataUrl,
+    uploaded_at: nowStr,
+    uploader: staff
+  };
+
+  db.data.photos.unshift(newPhoto);
+  db.save();
+
+  resetPhotoForm();
+  const formArea = document.getElementById("addPhotoFormArea");
+  if (formArea) formArea.style.display = "none";
+
+  currentPhotoCategory = cat;
+  switchPhotoCategory(cat);
+  if (typeof renderResidentDetail === 'function') renderResidentDetail();
+
+  alert("✅ " + (cat === "documents" ? "重要書類" : "写真") + "を登録・保存しました！");
+}
+
+function deletePhoto(id) {
+  if (!confirm("この写真・書類を保管庫から削除してもよろしいですか？")) return;
+  db.data.photos = (db.data.photos || []).filter(p => p.id !== id);
+  db.save();
+  renderPhotoGrid();
+  if (typeof renderResidentDetail === 'function') renderResidentDetail();
+}
+
+function openPCFolder() {
+  fetch("/api/open-folder?type=" + encodeURIComponent(currentPhotoCategory))
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.success) {
+        alert("🖥️ PCのエクスプローラーで保存フォルダを開きました。\nファイルを直接追加・確認できます。");
+      } else {
+        alert("フォルダ場所:\ncare_portal\\data\\photos\\" + currentPhotoCategory);
+      }
+    })
+    .catch(() => {
+      alert("フォルダ場所:\ncare_portal\\data\\photos\\" + currentPhotoCategory);
+    });
+}
+
+function openLightbox(src, caption) {
+  const modal = document.getElementById("lightboxModal");
+  const img = document.getElementById("lightboxImg");
+  const cap = document.getElementById("lightboxCaption");
+  if (!modal || !img) return;
+
+  img.src = src;
+  if (cap) cap.textContent = caption || "";
+  modal.style.display = "flex";
 }

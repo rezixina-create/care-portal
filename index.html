@@ -92,7 +92,8 @@
         <!-- 普段使う（日常ケア） -->
         <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
           <span style="font-size:12px; font-weight:bold; color:#1e40af; background:#eff6ff; padding:3px 8px; border-radius:4px; white-space:nowrap;">【普段使う】</span>
-          <button class="sub-tab-btn active" onclick="switchCareTab('record')">📝 介護記録</button>
+          <button class="sub-tab-btn active" onclick="switchCareTab('record')">📝 個別介護記録</button>
+          <button class="sub-tab-btn" onclick="switchCareTab('daily_journal')">📰 業務日誌 (一日の記録)</button>
           <button class="sub-tab-btn" onclick="switchCareTab('vitals')">🩺 バイタル</button>
           <button class="sub-tab-btn" onclick="switchCareTab('meal')">🍚 食事・水分</button>
           <button class="sub-tab-btn" onclick="switchCareTab('excretion')">🚽 排泄</button>
@@ -199,13 +200,18 @@
               </div>
             </div>
 
-            <!-- 選択された日の記録一覧 -->
+            <!-- 選択された利用者の個別介護記録一覧（カルテ履歴） -->
             <div class="panel-card">
               <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-                <span id="selectedDateRecordsTitle">📅 指定日の介護記録一覧</span>
-                <button class="btn btn-secondary" style="font-size:13px; background:#f8fafc; border:1px solid #cbd5e1; display:flex; align-items:center; gap:4px;" onclick="printSelectedDateRecords()">
-                  🖨️ 本日の記録一覧を印刷 (日報形式)
-                </button>
+                <span id="selectedDateRecordsTitle">👤 【選択中の利用者】の個別介護記録</span>
+                <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+                  <button type="button" class="btn btn-secondary" id="btnToggleRecordScope" style="font-size:12px; padding:4px 10px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="toggleRecordScope()">
+                    📖 すべての過去履歴を表示
+                  </button>
+                  <button class="btn btn-secondary" style="font-size:13px; background:#f8fafc; border:1px solid #cbd5e1; display:flex; align-items:center; gap:4px;" onclick="printSelectedDateRecords()">
+                    🖨️ 個別カルテ記録を印刷
+                  </button>
+                </div>
               </div>
               <div id="selectedDateRecordsList"></div>
             </div>
@@ -214,6 +220,35 @@
           <!-- 右側: 選択中の利用者カルテ (フェイスシート・病歴ガイド・看取りスタンプ・見守り注意・私物行追加・備品・スクショ保管) -->
           <div>
             <div class="panel-card" id="residentDetailCard" style="border-left:5px solid #2563eb;"></div>
+          </div>
+        </div>
+
+        <!-- 1.5 業務日誌 (一日の記録・フロア全体日報) -->
+        <div id="tabCareDailyJournal" style="display:none;" class="panel-card">
+          <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">
+            <span id="dailyJournalTitle" style="font-size:17px; font-weight:bold; color:#1e3a8a;">📰 施設・フロア 業務日誌 (一日の記録)</span>
+            <button class="btn btn-secondary" style="font-size:13px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:flex; align-items:center; gap:6px;" onclick="printDailyJournal()">
+              🖨️ 本日の業務日誌を印刷 (日報形式)
+            </button>
+          </div>
+
+          <!-- 勤務体制 ＆ フロア状況サマリーカード -->
+          <div id="dailyJournalSummaryBar" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin:14px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;"></div>
+
+          <!-- 全入居者のその日の記録一覧 -->
+          <div style="margin-top:16px;">
+            <h4 style="font-size:15px; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+              <span>📋 全入居者のタイムライン記録 (時系列フロア日誌)</span>
+            </h4>
+            <div id="dailyJournalRecordsList"></div>
+          </div>
+
+          <!-- 本日のケア実施サマリー表 (バイタル・食事・排泄・入浴一覧) -->
+          <div style="margin-top:24px;">
+            <h4 style="font-size:15px; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
+              <span>📊 本日のフロア全体ケアサマリー表 (バイタル・食事・排泄・入浴)</span>
+            </h4>
+            <div id="dailyJournalCareSummaryTable" style="overflow-x:auto;"></div>
           </div>
         </div>
 
@@ -1371,6 +1406,85 @@
       <div style="margin-top:20px; display:flex; justify-content:flex-end;">
         <button class="btn btn-secondary" onclick="closeModal('shareModal')">閉じる</button>
       </div>
+    </div>
+  </div>
+
+  <!-- 8. 写真・重要書類保管庫 モーダル -->
+  <div class="modal-overlay" id="photoModal" style="display:none;">
+    <div class="modal-card" style="max-width:760px; max-height:92vh; display:flex; flex-direction:column; padding:20px;">
+      <div class="modal-header" style="margin-bottom:12px; padding-bottom:10px;">
+        <h3 id="photoModalTitle" style="color:#1e3a8a; display:flex; align-items:center; gap:8px;">
+          📁 写真・重要書類保管庫
+        </h3>
+        <button class="modal-close-btn" onclick="closeModal('photoModal')">&times;</button>
+      </div>
+
+      <!-- フォルダ種別タブ & PCフォルダ展開ボタン -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" id="tabBtnDocPhotos" onclick="switchPhotoCategory('documents')" style="font-size:13px; padding:6px 14px;">
+            📜 重要書類・同意書
+          </button>
+          <button class="btn btn-outline" id="tabBtnPersonalPhotos" onclick="switchPhotoCategory('personal')" style="font-size:13px; padding:6px 14px;">
+            📷 個人写真
+          </button>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px;" onclick="openPCFolder()" title="PCの実際の保存フォルダをエクスプローラーで開きます">
+            🖥️ PCの保存フォルダを開く
+          </button>
+          <button class="btn btn-primary" style="font-size:12px; padding:5px 12px; background:#10b981; border-color:#10b981;" onclick="toggleAddPhotoForm()">
+            ➕ 写真・書類の追加
+          </button>
+        </div>
+      </div>
+
+      <!-- 写真・書類 追加フォーム (初期非表示・トグル表示) -->
+      <div id="addPhotoFormArea" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:13px; color:#1e40af; margin-bottom:8px;">📸 写真・書類の新規登録</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">保存先フォルダ:</label>
+            <select id="photoNewCategory" style="width:100%; padding:6px; font-size:13px; border:1px solid #cbd5e1; border-radius:4px;">
+              <option value="documents">📜 重要書類・同意書</option>
+              <option value="personal">📷 日常・個人写真</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">タイトル・備考:</label>
+            <input type="text" id="photoNewTitle" placeholder="例: 介護利用同意書、誕生会笑顔" style="width:100%; padding:6px; font-size:13px; border:1px solid #cbd5e1; border-radius:4px;">
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">画像ファイル選択（カメラ撮影または端末から選択）:</label>
+          <input type="file" id="photoFileInput" accept="image/*" onchange="onPhotoFilePicked(event)" style="font-size:13px;">
+        </div>
+        <div id="photoPreviewContainer" style="display:none; margin-bottom:10px; text-align:center;">
+          <img id="photoPreviewImg" src="" style="max-height:160px; max-width:100%; border-radius:6px; border:1px solid #cbd5e1; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="toggleAddPhotoForm()">キャンセル</button>
+          <button class="btn btn-success" style="font-size:12px; padding:5px 16px;" onclick="saveNewPhoto()">登録する</button>
+        </div>
+      </div>
+
+      <!-- 写真グリッド表示領域 -->
+      <div id="photoGridArea" style="flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; padding:4px;">
+        <!-- JSで動的描画 -->
+      </div>
+      
+      <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('photoModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. フルサイズ拡大表示 (ライトボックス) モーダル -->
+  <div class="modal-overlay" id="lightboxModal" style="display:none; z-index:1100; background:rgba(0,0,0,0.85);" onclick="closeModal('lightboxModal')">
+    <div style="position:relative; max-width:90vw; max-height:90vh; text-align:center;" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" style="position:absolute; top:-36px; right:0; color:white; font-size:28px;" onclick="closeModal('lightboxModal')">&times;</button>
+      <img id="lightboxImg" src="" style="max-width:90vw; max-height:80vh; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);">
+      <div id="lightboxCaption" style="color:white; margin-top:10px; font-size:15px; font-weight:bold;"></div>
     </div>
   </div>
 

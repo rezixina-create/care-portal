@@ -1374,6 +1374,85 @@
     </div>
   </div>
 
+  <!-- 8. 写真・重要書類保管庫 モーダル -->
+  <div class="modal-overlay" id="photoModal" style="display:none;">
+    <div class="modal-card" style="max-width:760px; max-height:92vh; display:flex; flex-direction:column; padding:20px;">
+      <div class="modal-header" style="margin-bottom:12px; padding-bottom:10px;">
+        <h3 id="photoModalTitle" style="color:#1e3a8a; display:flex; align-items:center; gap:8px;">
+          📁 写真・重要書類保管庫
+        </h3>
+        <button class="modal-close-btn" onclick="closeModal('photoModal')">&times;</button>
+      </div>
+
+      <!-- フォルダ種別タブ & PCフォルダ展開ボタン -->
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px; border-bottom:1px solid #e2e8f0; padding-bottom:8px;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-primary" id="tabBtnDocPhotos" onclick="switchPhotoCategory('documents')" style="font-size:13px; padding:6px 14px;">
+            📜 重要書類・同意書
+          </button>
+          <button class="btn btn-outline" id="tabBtnPersonalPhotos" onclick="switchPhotoCategory('personal')" style="font-size:13px; padding:6px 14px;">
+            📷 個人写真
+          </button>
+        </div>
+        <div style="display:flex; gap:6px;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px;" onclick="openPCFolder()" title="PCの実際の保存フォルダをエクスプローラーで開きます">
+            🖥️ PCの保存フォルダを開く
+          </button>
+          <button class="btn btn-primary" style="font-size:12px; padding:5px 12px; background:#10b981; border-color:#10b981;" onclick="toggleAddPhotoForm()">
+            ➕ 写真・書類の追加
+          </button>
+        </div>
+      </div>
+
+      <!-- 写真・書類 追加フォーム (初期非表示・トグル表示) -->
+      <div id="addPhotoFormArea" style="display:none; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:13px; color:#1e40af; margin-bottom:8px;">📸 写真・書類の新規登録</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+          <div>
+            <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">保存先フォルダ:</label>
+            <select id="photoNewCategory" style="width:100%; padding:6px; font-size:13px; border:1px solid #cbd5e1; border-radius:4px;">
+              <option value="documents">📜 重要書類・同意書</option>
+              <option value="personal">📷 日常・個人写真</option>
+            </select>
+          </div>
+          <div>
+            <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">タイトル・備考:</label>
+            <input type="text" id="photoNewTitle" placeholder="例: 介護利用同意書、誕生会笑顔" style="width:100%; padding:6px; font-size:13px; border:1px solid #cbd5e1; border-radius:4px;">
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label style="font-size:12px; color:#475569; display:block; margin-bottom:3px;">画像ファイル選択（カメラ撮影または端末から選択）:</label>
+          <input type="file" id="photoFileInput" accept="image/*" onchange="onPhotoFilePicked(event)" style="font-size:13px;">
+        </div>
+        <div id="photoPreviewContainer" style="display:none; margin-bottom:10px; text-align:center;">
+          <img id="photoPreviewImg" src="" style="max-height:160px; max-width:100%; border-radius:6px; border:1px solid #cbd5e1; box-shadow:0 2px 6px rgba(0,0,0,0.1);">
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="toggleAddPhotoForm()">キャンセル</button>
+          <button class="btn btn-success" style="font-size:12px; padding:5px 16px;" onclick="saveNewPhoto()">登録する</button>
+        </div>
+      </div>
+
+      <!-- 写真グリッド表示領域 -->
+      <div id="photoGridArea" style="flex:1; overflow-y:auto; display:grid; grid-template-columns:repeat(auto-fill, minmax(180px, 1fr)); gap:12px; padding:4px;">
+        <!-- JSで動的描画 -->
+      </div>
+      
+      <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('photoModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 9. フルサイズ拡大表示 (ライトボックス) モーダル -->
+  <div class="modal-overlay" id="lightboxModal" style="display:none; z-index:1100; background:rgba(0,0,0,0.85);" onclick="closeModal('lightboxModal')">
+    <div style="position:relative; max-width:90vw; max-height:90vh; text-align:center;" onclick="event.stopPropagation()">
+      <button class="modal-close-btn" style="position:absolute; top:-36px; right:0; color:white; font-size:28px;" onclick="closeModal('lightboxModal')">&times;</button>
+      <img id="lightboxImg" src="" style="max-width:90vw; max-height:80vh; border-radius:8px; box-shadow:0 4px 20px rgba(0,0,0,0.5);">
+      <div id="lightboxCaption" style="color:white; margin-top:10px; font-size:15px; font-weight:bold;"></div>
+    </div>
+  </div>
+
   <script src="app.js"></script>
 </body>
 </html>
