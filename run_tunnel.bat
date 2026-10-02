@@ -1,9 +1,10 @@
 @echo off
 cd /d "%~dp0"
-title Care Portal Cloudflare Tunnel (外部アクセス用)
-powershell.exe -NoProfile -ExecutionPolicy Bypass -File "%~dp0start_tunnel.ps1"
-if errorlevel 1 (
-    echo.
-    echo Tunnel stopped with error.
-    pause
-)
+title Care Portal (サーバー ＆ 外部トンネル統合起動)
+echo.
+echo ======================================================================
+echo  外部接続トンネルは run_portal.bat に統合されました。
+echo  サーバーと外部接続トンネルを同時に自動起動します...
+echo ======================================================================
+echo.
+call "%~dp0run_portal.bat"
