@@ -365,7 +365,10 @@ Write-Host ""
 Write-Host " [PC (Host)]:" -ForegroundColor White
 Write-Host "   http://localhost:$port" -ForegroundColor Cyan
 Write-Host ""
-Write-Host " [Tablet (iPad / Android / Phone)]:" -ForegroundColor White
+Write-Host " [Cloudflare Tunnel (学校Wi-Fi・スマホ・他PC用)]:" -ForegroundColor Green
+Write-Host "   https://percentage-freelance-unwrap-spatial.trycloudflare.com" -ForegroundColor Cyan
+Write-Host ""
+Write-Host " [Tablet (Local Wi-Fi / LAN直接用)]:" -ForegroundColor White
 foreach ($ip in $ipList) {
     Write-Host "   http://${ip}:${port}" -ForegroundColor Yellow
 }

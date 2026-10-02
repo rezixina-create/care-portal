@@ -217,64 +217,70 @@ class LocalDB {
     if (!container) return;
     container.innerHTML = "";
 
-    const currentHost = window.location.hostname;
-    const port = this.serverPort || 8000;
+    // 1. 学校Wi-Fi・外部アクセス用 Cloudflare Tunnel 公式URL (最優先＆QRコード化)
+    const cloudflareUrl = "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
+    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent(cloudflareUrl);
 
+    const qrDiv = document.createElement("div");
+    qrDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#eff6ff; border:2px solid #3b82f6; border-radius:10px; padding:14px 16px; margin-bottom:12px; box-shadow:0 2px 6px rgba(59,130,246,0.15);";
+    qrDiv.innerHTML = `
+      <div style="flex-shrink:0; text-align:center;">
+        <img src="${qrUrl}" alt="接続QRコード" style="width:120px; height:120px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
+        <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">📱 カメラで読み取り</span>
+      </div>
+      <div style="flex:1; min-width:0;">
+        <div style="display:inline-flex; align-items:center; gap:6px; background:#2563eb; color:#ffffff; font-size:11px; font-weight:bold; padding:3px 8px; border-radius:4px; margin-bottom:6px;">
+          🌐 学校Wi-Fi・外部接続対応 (HTTPS暗号化)
+        </div>
+        <div style="font-size:13px; font-weight:bold; color:#1e293b; margin-bottom:4px;">公式 クラウド共有URL (Cloudflare Tunnel)</div>
+        <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1d4ed8; margin-bottom:8px; word-break:break-all; background:#ffffff; padding:6px 10px; border-radius:6px; border:1px solid #bfdbfe;">
+          ${cloudflareUrl}
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick="copyShareUrl('${cloudflareUrl}')">📋 URLをコピー</button>
+          <a href="${cloudflareUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:6px 12px; font-size:13px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
+        </div>
+        <div style="font-size:11.5px; color:#475569; margin-top:6px; line-height:1.4;">
+          ※ 学校Wi-Fiのセキュリティ制限下や、スマートフォンの4G/5G回線からでもそのまま安全にリアルタイム同期・利用できます。
+        </div>
+      </div>
+    `;
+    container.appendChild(qrDiv);
+
+    // 2. ローカルWi-Fi / LAN直接接続（自宅や同一LAN用・予備）
+    const port = this.serverPort || 8000;
     let ipsToShow = [...this.serverIPs];
+    const currentHost = window.location.hostname;
     if (currentHost && currentHost !== "localhost" && currentHost !== "127.0.0.1" && !ipsToShow.includes(currentHost)) {
       ipsToShow.unshift(currentHost);
     }
-
     if (ipsToShow.length === 0) {
       ipsToShow.push("192.168.11.17");
     }
 
-    // 施設内Wi-Fi/LAN (192.168.x.x または 10.x.x.x) を優先整列
-    ipsToShow.sort((a, b) => {
-      const aIsLan = a.startsWith("192.168.") || a.startsWith("10.");
-      const bIsLan = b.startsWith("192.168.") || b.startsWith("10.");
-      if (aIsLan && !bIsLan) return -1;
-      if (!aIsLan && bIsLan) return 1;
-      return 0;
-    });
+    const subSection = document.createElement("details");
+    subSection.style.cssText = "background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:8px 12px; margin-top:8px;";
 
-    const primaryIp = ipsToShow[0];
-    const primaryUrl = `http://${primaryIp}:${port}`;
+    let subIpsHtml = ipsToShow.map(ip => {
+      const url = `http://${ip}:${port}`;
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:6px 10px; margin-top:4px;">
+          <span style="font-family:monospace; font-size:12.5px; color:#334155;">${url}</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="copyShareUrl('${url}')">コピー</button>
+        </div>
+      `;
+    }).join("");
 
-    // 推奨URL ＋ QRコード表示
-    const qrDiv = document.createElement("div");
-    qrDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#ffffff; border:1px solid #93c5fd; border-radius:8px; padding:12px 16px; margin-bottom:8px;";
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(primaryUrl);
-    qrDiv.innerHTML = '<div style="flex-shrink:0; text-align:center;">' +
-      '<img src="' + qrUrl + '" alt="QRコード" style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; display:block;">' +
-      '<span style="font-size:11px; color:#64748b; margin-top:4px; display:block;">カメラで読み取り</span>' +
-      '</div>' +
-      '<div style="flex:1;">' +
-      '<div style="font-size:12px; color:#3b82f6; font-weight:bold; margin-bottom:4px;">★ 推奨接続URL（施設内Wi-Fi）</div>' +
-      '<div style="font-family:monospace; font-size:16px; font-weight:bold; color:#1e40af; margin-bottom:8px; word-break:break-all;">' + primaryUrl + '</div>' +
-      '<button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="copyShareUrl(\'' + primaryUrl + '\')">📋 URLをコピー</button>' +
-      '</div>';
-    container.appendChild(qrDiv);
-
-    // その他の接続候補
-    if (ipsToShow.length > 1) {
-      const subHeader = document.createElement("div");
-      subHeader.style.cssText = "font-size:12px; color:#64748b; margin:6px 0 2px 0;";
-      subHeader.textContent = "その他の接続候補:";
-      container.appendChild(subHeader);
-
-      for (let i = 1; i < ipsToShow.length; i++) {
-        const ip = ipsToShow[i];
-        const url = `http://${ip}:${port}`;
-        const div = document.createElement("div");
-        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px;";
-        div.innerHTML = `
-          <span style="font-family:monospace; font-size:13px; color:#334155;">${url}</span>
-          <button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="copyShareUrl('${url}')">コピー</button>
-        `;
-        container.appendChild(div);
-      }
-    }
+    subSection.innerHTML = `
+      <summary style="font-size:12px; color:#64748b; font-weight:bold; cursor:pointer; user-select:none;">
+        🏠 ローカルLAN・同一Wi-Fi直接接続用 (自宅環境・予備)
+      </summary>
+      <div style="margin-top:8px;">
+        <div style="font-size:11px; color:#64748b; margin-bottom:4px;">※同一ルーター直接接続時のローカルIPです（学校Wi-Fi等ではセキュリティ制限により繋がりません）。</div>
+        ${subIpsHtml}
+      </div>
+    `;
+    container.appendChild(subSection);
   }
 
   initSeedData() {
