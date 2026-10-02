@@ -294,6 +294,7 @@
       assert(typeof quickReplenishStock === "function" && typeof quickReplenishAllStock === "function", "Test 49: アラートからの即時在庫補充関数 (quickReplenishStock) が存在すること");
       assert(typeof confirmAllMonthlyNoticesForStaff === "function", "Test 50: 月間連絡一括確認完了関数 (confirmAllMonthlyNoticesForStaff) が存在すること");
       assert(typeof adjustOrderQty === "function" && typeof setOrderQtyToNormalDeficit === "function", "Test 51: 発注数量の平常時自動算出＆上下調整機能 (adjustOrderQty, setOrderQtyToNormalDeficit) が存在すること");
+      assert(typeof quickApproveAllPendingOrders === "function", "Test 52: 管理者用発注認証一括承認関数 (quickApproveAllPendingOrders) が存在すること");
 
       // 18. 総合結果判定
       log("====================================================");

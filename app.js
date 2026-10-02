@@ -577,8 +577,12 @@ function isCurrentStaffAdmin() {
   const staff = staffSelect.value || "";
   if (!staff) return false;
   const staffObj = (gState.stamps || []).find(s => (s.name || s) === staff);
-  if (staffObj && (staffObj.role === "管理者" || staffObj.role === "施設長")) return true;
-  return staff.includes("施設長") || staff.includes("管理者");
+  const role = staffObj ? (staffObj.role || "") : "";
+  const combined = `${role} ${staff}`.toLowerCase();
+  if (combined.includes("管理者") || combined.includes("施設長") || combined.includes("所長") || combined.includes("ホーム長") || combined.includes("院長") || combined.includes("理事") || combined.includes("事務長")) {
+    return true;
+  }
+  return false;
 }
 
 // ==========================================
@@ -680,13 +684,56 @@ function confirmAllMonthlyNoticesForStaff() {
   alert(`${staff} さんの未確認連絡をすべて「確認済」にしました！未確認アラートを解除しました。`);
 }
 
-// アラート監視（前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限・排便3日以上なし・月間連絡未確認）
+// アラート監視（管理者発注認証待ち・前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限・排便3日以上なし・月間連絡未確認）
 function checkGlobalAlerts() {
   const container = document.getElementById("alertsContainer");
   if (!container) return;
   let alertHtml = "";
   const today = new Date();
   const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
+
+  // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
+  const isAdmin = isCurrentStaffAdmin();
+  const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
+  if (isAdmin && pendingOrders.length > 0 && !isAlertDismissed('admin_pending_orders')) {
+    const currentStaffName = (document.getElementById("currentStaff")?.value) || "管理者";
+    const orderItemsSummary = pendingOrders.map(o => {
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; padding:6px 12px; border-radius:6px; border:1px solid #fed7aa; margin-top:4px;">
+          <div>
+            <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
+            <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
+            <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
+            <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '補充発注')} / 申請日: ${o.ordered_at || '-'}</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')">✓ 承認する</button>
+            <button class="btn btn-danger" style="padding:3px 8px; font-size:12px; background:#ef4444; border-color:#dc2626; color:#fff;" onclick="approveOrder(${o.id}, '差戻し')">✕ 差戻し</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    alertHtml += `
+      <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
+        <div style="width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <span>📑 ⚠️ <strong>【発注・在庫認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様、スタッフからの承認待ち発注が <strong>${pendingOrders.length}件</strong> あります！内容を確認し認証を行ってください。</span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');">📋 発注台帳を開く</button>
+              ${pendingOrders.length > 1 ? `
+                <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="quickApproveAllPendingOrders()">✓ 全件を一括承認する</button>
+              ` : ''}
+              <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')">✕ 閉じる</button>
+            </div>
+          </div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+            ${orderItemsSummary}
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
   // 1. 【前月誕生日事前アラート】
   const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
@@ -4142,11 +4189,34 @@ function approveOrder(id, status) {
   if (o) {
     o.status = status;
     o.approver = staff;
+    o.approved_at = new Date().toISOString().split("T")[0];
     db.save();
-    loadOfficeData();
+    if (gState.activePortal === "office") loadOfficeData();
     checkGlobalAlerts();
-    alert(`発注申請を「${status}」にしました！`);
+    alert(`発注申請（${o.item_name} × ${o.quantity}）を「${status}」にしました！`);
   }
+}
+
+function quickApproveAllPendingOrders() {
+  if (!isCurrentStaffAdmin()) {
+    alert("⚠️ 発注申請の承認は管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
+    return;
+  }
+  const staff = document.getElementById("currentStaff")?.value || "管理者";
+  const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
+  if (pendingOrders.length === 0) return;
+
+  const todayStr = new Date().toISOString().split("T")[0];
+  pendingOrders.forEach(o => {
+    o.status = "承認済";
+    o.approver = staff;
+    o.approved_at = todayStr;
+  });
+
+  db.save();
+  if (gState.activePortal === "office") loadOfficeData();
+  checkGlobalAlerts();
+  alert(`承認待ちの発注 ${pendingOrders.length}件 をすべて「承認済」にしました！認証アラートおよび要発注アラートを更新しました。`);
 }
 
 function receiveOrder(id) {
@@ -5213,14 +5283,19 @@ function submitOrderApply() {
     id: Date.now(), ordered_at: new Date().toISOString().split("T")[0], supplier_id: suppId,
     supplier_name: supp ? supp.name : "", item_name: itemName, quantity: qty,
     unit_price: unitPrice, total_price: totalPrice, reason: reason, status: "申請中",
-    applicant: applicant, approver: null, approved_at: null
   });
+  
+  // 新規申請時は管理者向け未承認アラートの非表示を解除
+  if (Array.isArray(gState.dismissedAlerts)) {
+    gState.dismissedAlerts = gState.dismissedAlerts.filter(k => k !== 'admin_pending_orders');
+  }
+
   db.save();
 
   closeModal("orderModal");
   loadOfficeData();
   checkGlobalAlerts();
-  alert("発注申請を提出しました（上司承認待ちへ）！要発注アラートを発注手配済みに更新しました。");
+  alert("発注申請を提出しました（上司承認待ちへ）！要発注アラートを発注手配済みに更新し、管理者の認証アラートへ通知しました。");
 }
 
 function updateResidentStatus(resId, status) {
