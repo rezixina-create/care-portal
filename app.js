@@ -596,7 +596,7 @@ function isAlertDismissed(alertKey) {
   return Array.isArray(gState.dismissedAlerts) && gState.dismissedAlerts.includes(alertKey);
 }
 
-// アラートから直接ワンタップで在庫を安全基準値まで補充する
+// アラートから直接ワンタップで在庫を平常時定数まで補充する
 function quickReplenishStock(itemId) {
   const item = (gState.inventory || []).find(i => i.id === itemId);
   if (!item) return;
@@ -605,7 +605,8 @@ function quickReplenishStock(itemId) {
   const now = new Date();
   const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
   
-  const addQty = Math.max(item.safety_stock * 2 - item.current_stock, item.safety_stock);
+  const normalStock = item.normal_stock || (item.safety_stock * 2);
+  const addQty = Math.max(normalStock - item.current_stock, item.safety_stock);
   item.current_stock += addQty;
 
   if (!db.data.inventory_logs) db.data.inventory_logs = [];
@@ -618,13 +619,13 @@ function quickReplenishStock(itemId) {
     change_qty: addQty,
     after_qty: item.current_stock,
     staff_name: staff,
-    reason: "現場アラートより即時補充"
+    reason: "現場アラートより即時補充 (平常時定数達成)"
   });
 
   db.save();
   if (typeof renderOfficeInventory === 'function') renderOfficeInventory();
   checkGlobalAlerts();
-  alert(`「${item.name}」を ${addQty}${item.unit} 補充しました！（現在在庫: ${item.current_stock}${item.unit}）\n要発注アラートを解除しました。`);
+  alert(`「${item.name}」を ${addQty}${item.unit} 補充しました！（平常時定数: ${normalStock}${item.unit} / 現在庫: ${item.current_stock}${item.unit}）\n要発注アラートを解除しました。`);
 }
 
 // すべての不足在庫を一括補充する
@@ -636,7 +637,8 @@ function quickReplenishAllStock() {
 
   (gState.inventory || []).forEach(item => {
     if (item.current_stock <= item.safety_stock) {
-      const addQty = Math.max(item.safety_stock * 2 - item.current_stock, item.safety_stock);
+      const normalStock = item.normal_stock || (item.safety_stock * 2);
+      const addQty = Math.max(normalStock - item.current_stock, item.safety_stock);
       item.current_stock += addQty;
       replenishedNames.push(`${item.name} (+${addQty}${item.unit})`);
 
@@ -650,7 +652,7 @@ function quickReplenishAllStock() {
         change_qty: addQty,
         after_qty: item.current_stock,
         staff_name: staff,
-        reason: "現場アラートより一括補充"
+        reason: "現場アラートより全品一括補充 (平常時定数達成)"
       });
     }
   });
@@ -658,7 +660,7 @@ function quickReplenishAllStock() {
   db.save();
   if (typeof renderOfficeInventory === 'function') renderOfficeInventory();
   checkGlobalAlerts();
-  alert(`以下の消耗品を一括補充しました！\n・${replenishedNames.join("\n・")}\n\n要発注アラートをすべて解除しました。`);
+  alert(`以下の消耗品を平常時定数まで一括補充しました！\n・${replenishedNames.join("\n・")}\n\n要発注アラートをすべて解除しました。`);
 }
 
 // 月間業務連絡を当職員分すべて一括確認済にする
@@ -744,22 +746,50 @@ function checkGlobalAlerts() {
   });
 
   if (lowStockItems.length > 0) {
-    const names = lowStockItems.map(i => `${i.name} (残${i.current_stock}${i.unit}/基準${i.safety_stock})`).join(", ");
-    const singleItem = lowStockItems.length === 1 ? lowStockItems[0] : null;
-    alertHtml += `
-      <div class="alert-banner alert-danger">
-        <span>⚠️ 【要発注アラート】以下の消耗品の補充が必要です：${names}</span>
-        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-          ${singleItem ? `
-            <button class="btn btn-success" style="padding:2px 8px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishStock(${singleItem.id})">📦 補充完了 (+${singleItem.safety_stock}${singleItem.unit})</button>
-          ` : `
-            <button class="btn btn-success" style="padding:2px 8px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishAllStock()">📦 不足分を一括補充完了</button>
-          `}
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px;" onclick="switchPortal('office'); switchOfficeTab('orders'); openOrderModal();">発注申請へ</button>
-          <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="dismissAlert('stock_all')">✕ 閉じる</button>
+    if (lowStockItems.length === 1) {
+      const item = lowStockItems[0];
+      const normalStock = item.normal_stock || (item.safety_stock * 2);
+      const deficit = Math.max(1, normalStock - item.current_stock);
+      alertHtml += `
+        <div class="alert-banner alert-danger">
+          <span>⚠️ <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 推奨補充: <strong>+${deficit}${item.unit}</strong>）</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">🛒 『${escapeHtml(item.name)}』を追加発注 (推奨+${deficit}${item.unit})</button>
+            <button class="btn btn-success" style="padding:3px 10px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishStock(${item.id})">📦 補充完了 (+${deficit}${item.unit})</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}')">✕ 閉じる</button>
+          </div>
         </div>
-      </div>
-    `;
+      `;
+    } else {
+      const itemListHtml = lowStockItems.map(item => {
+        const normalStock = item.normal_stock || (item.safety_stock * 2);
+        const deficit = Math.max(1, normalStock - item.current_stock);
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
+            <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">🛒 発注 (+${deficit})</button>
+              <button class="btn btn-success" style="padding:2px 8px; font-size:11px; background:#16a34a; color:#fff;" onclick="quickReplenishStock(${item.id})">📦 補充 (+${deficit})</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      alertHtml += `
+        <div class="alert-banner alert-danger">
+          <div style="width:100%;">
+            <span>⚠️ <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで補充・追加発注してください）：</span>
+            <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+              ${itemListHtml}
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+            <button class="btn btn-success" style="padding:3px 10px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishAllStock()">📦 全品平常時まで一括補充完了</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_all')">✕ 全て閉じる</button>
+          </div>
+        </div>
+      `;
+    }
   }
 
   // 4. 受診2週前・1週前事前告知 ＆ 往診特殊指示アラート (絶食・薬のみ等)
@@ -5049,17 +5079,53 @@ function openOrderModal() {
 
 function openOrderModalWithItem(itemId) {
   openOrderModal();
-  const item = gState.inventory.find(i => i.id === itemId);
-  if (item && item.supplier_id) {
-    document.getElementById("orderSupplierSelect").value = item.supplier_id;
-    onSupplierChangeInOrder();
+  const item = (gState.inventory || []).find(i => i.id === itemId);
+  if (item) {
+    if (item.supplier_id) {
+      document.getElementById("orderSupplierSelect").value = item.supplier_id;
+      onSupplierChangeInOrder();
+    }
     document.getElementById("orderItemSelect").value = item.name;
+    
+    // 平常時までの不足数を初期発注数量として自動算出
+    const normalStock = item.normal_stock || (item.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - item.current_stock);
+    const qtyEl = document.getElementById("orderQty");
+    if (qtyEl) qtyEl.value = deficit;
+
+    const reasonEl = document.getElementById("orderReason");
+    if (reasonEl) reasonEl.value = `平常時定数(${normalStock}${item.unit})までの補充発注 (現在庫: ${item.current_stock}${item.unit})`;
+
     onItemChangeInOrder();
+    calcOrderTotal();
+  }
+}
+
+function adjustOrderQty(delta) {
+  const el = document.getElementById("orderQty");
+  if (!el) return;
+  let cur = parseInt(el.value, 10) || 1;
+  cur = Math.max(1, cur + delta);
+  el.value = cur;
+  calcOrderTotal();
+}
+
+function setOrderQtyToNormalDeficit() {
+  const itemName = document.getElementById("orderItemSelect")?.value;
+  const item = (gState.inventory || []).find(i => i.name === itemName);
+  if (item) {
+    const normalStock = item.normal_stock || (item.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - item.current_stock);
+    const el = document.getElementById("orderQty");
+    if (el) {
+      el.value = deficit;
+      calcOrderTotal();
+    }
   }
 }
 
 function onSupplierChangeInOrder() {
-  const suppId = parseInt(document.getElementById("orderSupplierSelect").value);
+  const suppId = parseInt(document.getElementById("orderSupplierSelect").value, 10);
   const supp = gState.suppliers.find(s => s.id === suppId);
   const itemSel = document.getElementById("orderItemSelect");
   itemSel.innerHTML = "";
@@ -5079,15 +5145,58 @@ function onSupplierChangeInOrder() {
 function onItemChangeInOrder() {
   const itemSel = document.getElementById("orderItemSelect");
   const selectedOpt = itemSel.selectedOptions[0];
-  const price = selectedOpt ? parseInt(selectedOpt.dataset.price || 0) : 0;
+  const price = selectedOpt ? parseInt(selectedOpt.dataset.price || 0, 10) : 0;
   document.getElementById("orderUnitPrice").value = price;
+
+  const itemName = itemSel.value;
+  const invItem = (gState.inventory || []).find(i => i.name === itemName);
+  const hintEl = document.getElementById("orderStockHint");
+  const qtyEl = document.getElementById("orderQty");
+
+  if (invItem) {
+    const normalStock = invItem.normal_stock || (invItem.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - invItem.current_stock);
+
+    if (qtyEl && (!qtyEl.value || qtyEl.value === "0")) {
+      qtyEl.value = deficit;
+    }
+
+    if (hintEl) {
+      hintEl.style.display = "block";
+      const isLow = invItem.current_stock <= invItem.safety_stock;
+      const headerEl = document.getElementById("orderStockHintHeader");
+      if (headerEl) {
+        headerEl.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+            <span>📦 <strong>在庫現況:</strong> 現在庫: <strong style="${isLow ? 'color:#dc2626;' : ''}">${invItem.current_stock}${invItem.unit}</strong> / 安全基準: ${invItem.safety_stock}${invItem.unit} / 平常時定数: <strong>${normalStock}${invItem.unit}</strong></span>
+            <span style="font-weight:bold; color:#1d4ed8;">🎯 平常時不足: +${deficit}${invItem.unit}</span>
+          </div>
+        `;
+      }
+    }
+  } else {
+    if (hintEl) hintEl.style.display = "none";
+  }
+
   calcOrderTotal();
 }
 
 function calcOrderTotal() {
-  const qty = parseInt(document.getElementById("orderQty").value || 1);
-  const price = parseInt(document.getElementById("orderUnitPrice").value || 0);
+  const qtyEl = document.getElementById("orderQty");
+  const qty = parseInt(qtyEl?.value || 1, 10);
+  const price = parseInt(document.getElementById("orderUnitPrice").value || 0, 10);
   document.getElementById("orderTotalPrice").value = qty * price;
+
+  const itemName = document.getElementById("orderItemSelect")?.value;
+  const invItem = (gState.inventory || []).find(i => i.name === itemName);
+  const projText = document.getElementById("orderProjectedStockText");
+  if (invItem && projText) {
+    const normalStock = invItem.normal_stock || (invItem.safety_stock * 2);
+    const after = invItem.current_stock + qty;
+    const diffToNormal = after - normalStock;
+    let note = diffToNormal === 0 ? "（平常時定数とピッタリ一致 🎯）" : (diffToNormal > 0 ? `（平常時定数より ＋${diffToNormal}${invItem.unit} 多め）` : `（平常時定数まであと ${Math.abs(diffToNormal)}${invItem.unit} 不足）`);
+    projText.innerHTML = `※ 発注納品後の想定在庫: <strong>${after}${invItem.unit}</strong> <span style="color:#0369a1; font-weight:bold;">${note}</span>`;
+  }
 }
 
 function submitOrderApply() {
