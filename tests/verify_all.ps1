@@ -10,11 +10,12 @@ $tests = @(
     "check_server_syntax.ps1",
     "validate_json.ps1",
     "check_b5_features.ps1",
-    "check_management_features.ps1"
+    "check_management_features.ps1",
+    "test_index_dom.ps1"
 )
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  Care Portal Comprehensive Multi-Check (8 Tests)" -ForegroundColor Cyan
+Write-Host "  Care Portal Comprehensive Multi-Check (9 Tests)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $passed = 0
