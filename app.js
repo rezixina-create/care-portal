@@ -1229,19 +1229,30 @@ function renderResidentDetail() {
   const belongings = (db.data.belongings || []).filter(b => b.resident_id === r.id);
   let belongingsHtml = belongings.map(b => `
     <tr style="font-size:12px;">
-      <td>${b.category}</td>
-      <td><strong>${b.item_name}</strong></td>
-      <td><span style="color:#0284c7; font-weight:bold;">${b.quantity}</span></td>
-      <td>${b.marked ? '✓ 記名済' : '未確認'}</td>
-      <td>${b.notes || '-'}</td>
+      <td>${escapeHtml(b.category || '-')}</td>
+      <td><strong>${escapeHtml(b.item_name || '-')}</strong></td>
+      <td>
+        <div style="display:inline-flex; align-items:center; gap:4px;">
+          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ減らす（劣化・破棄時）" onclick="adjustBelongingQty(${b.id}, -1)">−</button>
+          <span style="color:#0284c7; font-weight:bold; min-width:32px; text-align:center;">${escapeHtml(b.quantity || '1')}</span>
+          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ増やす（追加持参時）" onclick="adjustBelongingQty(${b.id}, 1)">＋</button>
+        </div>
+      </td>
+      <td>${b.marked ? '✓ 記名済' : '<span style="color:#dc2626;">未確認</span>'}</td>
+      <td style="color:#64748b;">${escapeHtml(b.notes || '-')}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})">✏️ 編集</button>
+        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">🗑️ 削除</button>
+      </td>
     </tr>
   `).join("");
 
   // 備品リスト
   const equipments = (db.data.equipments || []).filter(eq => eq.resident_id === r.id);
   let equipmentsHtml = equipments.map(eq => `
-    <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:3px 8px; font-size:12px; margin-right:4px;">
-      ${eq.equipment_name} (${eq.ownership_type})
+    <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; font-size:12px; margin-right:6px; margin-bottom:4px; display:inline-flex; align-items:center; gap:6px;">
+      <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(eq.ownership_type || '施設備品')})</span>
+      <button style="border:none; background:none; color:#0369a1; cursor:pointer; font-size:13px; font-weight:bold; padding:0 2px;" title="使用解除・返却" onclick="deleteEquipment(${eq.id})">✕</button>
     </span>
   `).join("");
 
@@ -1371,23 +1382,29 @@ function renderResidentDetail() {
     <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🧳 福祉用具 ＆ 私物・持ち込み品台帳 (${belongings.length}点)</span>
-        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openBelongingModal()">＋私物を追加</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
       </summary>
       <div style="padding:12px;">
-        <div style="margin-bottom:10px; font-size:13px;">
-          <strong>🦼 使用福祉用具・備品:</strong>
-          <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted);">登録なし</span>'}</div>
+        <div style="margin-bottom:12px; font-size:13px; background:#f0fdf4; border:1px solid #bbf7d0; padding:8px 10px; border-radius:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <strong style="color:#166534;">🦼 使用福祉用具・備品 (${equipments.length}点):</strong>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="openEquipmentModal()">＋福祉用具・備品を追加</button>
+          </div>
+          <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted); font-size:12px;">登録なし</span>'}</div>
         </div>
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-          <strong style="font-size:13px;">私物・持ち込み品一覧:</strong>
+          <strong style="font-size:13px;">私物・持ち込み品一覧 (衣類・日用品・家具等):</strong>
           <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openBelongingModal()">＋私物行を追加</button>
         </div>
         <table class="data-table" style="font-size:12px; margin-top:4px;">
           <thead>
-            <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考</th></tr>
+            <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考・劣化状態</th><th style="width:110px;">操作</th></tr>
           </thead>
           <tbody>
-            ${belongingsHtml || '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
+            ${belongingsHtml || '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
           </tbody>
         </table>
       </div>
@@ -1413,21 +1430,30 @@ function renderResidentDetail() {
       </div>
     </details>
 
-    <!-- 6. 緊急連絡先 ＆ 家族の要望・生活歴 (アコーディオン) -->
-    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+    <!-- 6. 緊急連絡先 ＆ 家族の要望・生活歴・こだわり (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>👪 緊急連絡先 ＆ 家族の要望・生活歴・こだわり</span>
-        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openFamilyHistoryModal(${r.id})">✏️ 変更・更新</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
       </summary>
       <div style="padding:12px; font-size:13px;">
-        <div><strong>📞 緊急連絡先:</strong> ${escapeHtml(r.emergency_contact || "未登録")}</div>
-        <div style="margin-top:6px;"><strong>👪 家族の要望:</strong> ${escapeHtml(r.family_wishes || "特になし")}</div>
-        <div style="margin-top:8px; background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
-          <strong>📖 生活歴・人生歴・こだわり:</strong>
-          <p style="margin-top:2px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+          <div style="flex:1;">
+            <div><strong>📞 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
+            <div style="margin-top:6px;"><strong>👪 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#334155;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
+          </div>
+          <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#f1f5f9; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})">✏️ 項目を編集</button>
+        </div>
+        <div style="background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
+          <strong>📖 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
+          <p style="margin-top:3px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
         </div>
       </div>
     </details>
+
   `;
 }
 
@@ -4773,11 +4799,38 @@ function saveIncidentReport() {
   alert("報告書を保存しました！");
 }
 
-// 私物行追加
-function openBelongingModal() {
-  document.getElementById("belongingModal").style.display = "flex";
+// 私物行 追加・編集
+function openBelongingModal(editId = null) {
+  const modal = document.getElementById("belongingModal");
+  if (!modal) return;
+  const titleEl = document.getElementById("belModalTitle");
+  const submitBtn = document.getElementById("belSubmitBtn");
+  const editIdEl = document.getElementById("belEditId");
+
+  if (editId) {
+    const b = (db.data.belongings || []).find(x => x.id === editId);
+    if (!b) return;
+    if (editIdEl) editIdEl.value = b.id;
+    if (titleEl) titleEl.textContent = `🧳 私物・持ち込み品の編集 (${b.item_name})`;
+    if (submitBtn) submitBtn.textContent = "私物情報を更新・保存";
+    document.getElementById("belCat").value = b.category || "衣類・日用品";
+    document.getElementById("belItemName").value = b.item_name || "";
+    document.getElementById("belQty").value = b.quantity || "";
+    document.getElementById("belNotes").value = b.notes || "";
+  } else {
+    if (editIdEl) editIdEl.value = "";
+    if (titleEl) titleEl.textContent = "🧳 私物・持ち込み品の追加 (品名と個数)";
+    if (submitBtn) submitBtn.textContent = "私物台帳へ追加";
+    document.getElementById("belCat").value = "衣類・日用品";
+    document.getElementById("belItemName").value = "";
+    document.getElementById("belQty").value = "";
+    document.getElementById("belNotes").value = "";
+  }
+  modal.style.display = "flex";
 }
+
 function submitBelonging() {
+  const editId = document.getElementById("belEditId")?.value;
   const cat = document.getElementById("belCat").value;
   const name = document.getElementById("belItemName").value.trim();
   const qty = document.getElementById("belQty").value.trim();
@@ -4788,19 +4841,195 @@ function submitBelonging() {
     return;
   }
 
-  db.data.belongings.push({
-    id: Date.now(), resident_id: gState.selectedResidentId, category: cat,
-    item_name: name, quantity: qty, marked: 1, notes: notes
-  });
+  if (!db.data.belongings) db.data.belongings = [];
+
+  if (editId) {
+    const b = db.data.belongings.find(x => x.id == editId);
+    if (b) {
+      b.category = cat;
+      b.item_name = name;
+      b.quantity = qty;
+      b.notes = notes;
+    }
+    alert(`私物『${name}』の情報を更新しました！`);
+  } else {
+    db.data.belongings.push({
+      id: Date.now(),
+      resident_id: gState.selectedResidentId,
+      category: cat,
+      item_name: name,
+      quantity: qty,
+      marked: 1,
+      notes: notes
+    });
+    alert(`私物台帳に『${name}』を追加しました！`);
+  }
   db.save();
 
   closeModal("belongingModal");
   document.getElementById("belItemName").value = "";
   document.getElementById("belQty").value = "";
   document.getElementById("belNotes").value = "";
+  if (document.getElementById("belEditId")) document.getElementById("belEditId").value = "";
   renderResidentDetail();
-  alert("私物台帳に行を追加しました！");
 }
+
+// 数量クイック調整 (衣類破棄・劣化・買い足し時)
+function adjustBelongingQty(id, delta) {
+  const b = (db.data.belongings || []).find(x => x.id === id);
+  if (!b) return;
+
+  const currentStr = String(b.quantity || "1").trim();
+  const numMatch = currentStr.match(/\d+/);
+  let curNum = numMatch ? parseInt(numMatch[0], 10) : 1;
+  const unit = currentStr.replace(/\d+/g, "").trim() || "点";
+
+  const nextNum = curNum + delta;
+  if (nextNum <= 0) {
+    const ok = confirm(`『${b.item_name}』の数量が0になります。\n衣類の劣化・廃棄、またはご家族持ち帰りとして私物台帳から削除しますか？`);
+    if (ok) {
+      deleteBelonging(id, false);
+    }
+    return;
+  }
+
+  b.quantity = `${nextNum}${unit}`;
+  db.save();
+  renderResidentDetail();
+}
+
+// 私物の削除 (廃棄・持ち帰り)
+function deleteBelonging(id, needConfirm = true) {
+  const b = (db.data.belongings || []).find(x => x.id === id);
+  if (!b) return;
+
+  if (needConfirm) {
+    const ok = confirm(`『${b.item_name} (数量: ${b.quantity})』を私物台帳から削除（劣化による廃棄・ご家族持ち帰り等）しますか？`);
+    if (!ok) return;
+  }
+
+  db.data.belongings = (db.data.belongings || []).filter(x => x.id !== id);
+  db.save();
+  renderResidentDetail();
+  alert(`『${b.item_name}』を台帳から削除・整理しました。`);
+}
+
+// 福祉用具・備品 追加
+function openEquipmentModal() {
+  const modal = document.getElementById("equipmentModal");
+  if (!modal) return;
+  document.getElementById("eqName").value = "";
+  document.getElementById("eqOwnership").value = "施設備品";
+  document.getElementById("eqNotes").value = "";
+  modal.style.display = "flex";
+}
+
+function submitEquipment() {
+  const name = document.getElementById("eqName").value.trim();
+  const ownership = document.getElementById("eqOwnership").value;
+  const notes = document.getElementById("eqNotes").value.trim();
+
+  if (!name) {
+    alert("用具・備品名を入力してください。");
+    return;
+  }
+
+  if (!db.data.equipments) db.data.equipments = [];
+  db.data.equipments.push({
+    id: Date.now(),
+    resident_id: gState.selectedResidentId,
+    equipment_name: name,
+    ownership_type: ownership,
+    notes: notes
+  });
+  db.save();
+
+  closeModal("equipmentModal");
+  renderResidentDetail();
+  alert(`福祉用具『${name}』を登録しました！`);
+}
+
+// 福祉用具・備品の解除・返却
+function deleteEquipment(id) {
+  const eq = (db.data.equipments || []).find(x => x.id === id);
+  if (!eq) return;
+
+  const ok = confirm(`福祉用具『${eq.equipment_name} (${eq.ownership_type})』の使用を終了（返却・解除）しますか？`);
+  if (!ok) return;
+
+  db.data.equipments = (db.data.equipments || []).filter(x => x.id !== id);
+  db.save();
+  renderResidentDetail();
+  alert(`『${eq.equipment_name}』の使用を終了・解除しました。`);
+}
+
+// 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針 クイック変更モーダル
+function openFamilyHistoryModal(residentId) {
+  const r = (gState.residents || []).find(x => x.id === residentId);
+  if (!r) return;
+
+  const modal = document.getElementById("familyHistoryModal");
+  if (!modal) return;
+
+  document.getElementById("familyHistoryModalTitle").textContent = `👪 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針の変更 (${r.name} 様)`;
+  document.getElementById("fhResidentId").value = r.id;
+  document.getElementById("fhEmergencyContact").value = r.emergency_contact || "";
+  document.getElementById("fhPolicyStamp").value = r.policy_stamp || "緊急搬送";
+  document.getElementById("fhSensorAlert").value = r.sensor_alert || "";
+  document.getElementById("fhFamilyWishes").value = r.family_wishes || "";
+  document.getElementById("fhLifeHistory").value = r.life_history || "";
+
+  modal.style.display = "flex";
+}
+
+function submitFamilyHistory() {
+  const resId = parseInt(document.getElementById("fhResidentId").value, 10);
+  const r = (gState.residents || []).find(x => x.id === resId);
+  if (!r) return;
+
+  const staff = (document.getElementById("currentStaff")?.value) || "担当職員";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+
+  const newContact = document.getElementById("fhEmergencyContact").value.trim();
+  const newStamp = document.getElementById("fhPolicyStamp").value;
+  const newSensor = document.getElementById("fhSensorAlert").value.trim();
+  const newWishes = document.getElementById("fhFamilyWishes").value.trim();
+  const newHistory = document.getElementById("fhLifeHistory").value.trim();
+
+  // 変更前と比較してログ作成
+  const changes = [];
+  if (r.emergency_contact !== newContact) changes.push(`連絡先・延命方針: ${newContact || 'なし'}`);
+  if (r.policy_stamp !== newStamp) changes.push(`方針: ［${r.policy_stamp}］→［${newStamp}］`);
+  if (r.family_wishes !== newWishes) changes.push(`家族要望更新`);
+  if (r.life_history !== newHistory) changes.push(`生活歴・こだわり更新`);
+  if (r.sensor_alert !== newSensor) changes.push(`見守り・センサー: ${newSensor || 'なし'}`);
+
+  r.emergency_contact = newContact;
+  r.policy_stamp = newStamp;
+  r.sensor_alert = newSensor;
+  r.family_wishes = newWishes;
+  r.life_history = newHistory;
+
+  if (changes.length > 0) {
+    if (!db.data.care_records) db.data.care_records = [];
+    db.data.care_records.unshift({
+      id: Date.now(),
+      resident_id: r.id,
+      category: "特変",
+      recorded_at: nowStr,
+      content: `【基本情報更新】家族要望・緊急連絡先・看取り方針等の更新 (${changes.join(" / ")})`,
+      staff_name: staff
+    });
+  }
+
+  db.save();
+  closeModal("familyHistoryModal");
+  renderResidentDetail();
+  checkGlobalAlerts();
+  alert(`『${r.name} 様』の緊急連絡先・家族要望・看取り方針を最新状態に更新・保存しました！`);
+}
+
 
 // 新規利用者登録・編集
 function openAddResidentModal() {

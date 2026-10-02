@@ -1367,13 +1367,14 @@
     </div>
   </div>
 
-  <!-- 6. 私物行追加モーダル (物と個数) -->
+  <!-- 6. 私物行追加・編集モーダル (物と個数・劣化廃棄対応) -->
   <div class="modal-overlay" id="belongingModal" style="display:none;">
     <div class="modal-card">
       <div class="modal-header">
-        <h3>🧳 私物・持ち込み品の追加 (品名と個数)</h3>
+        <h3 id="belModalTitle">🧳 私物・持ち込み品の追加 (品名と個数)</h3>
         <button class="modal-close-btn" onclick="closeModal('belongingModal')">×</button>
       </div>
+      <input type="hidden" id="belEditId">
       <div class="form-group">
         <label>区分:</label>
         <select id="belCat" class="form-control">
@@ -1392,15 +1393,97 @@
         </div>
       </div>
       <div class="form-group">
-        <label>記名確認・特徴メモ:</label>
-        <input type="text" id="belNotes" class="form-control" placeholder="タグに記名あり, 黒色など">
+        <label>記名確認・特徴・劣化状態メモ:</label>
+        <input type="text" id="belNotes" class="form-control" placeholder="タグ記名あり, 劣化破棄1着, 娘様持参品など">
       </div>
       <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
         <button class="btn btn-secondary" onclick="closeModal('belongingModal')">キャンセル</button>
-        <button class="btn btn-primary" onclick="submitBelonging()">私物台帳へ追加</button>
+        <button class="btn btn-primary" id="belSubmitBtn" onclick="submitBelonging()">私物台帳へ追加</button>
       </div>
     </div>
   </div>
+
+  <!-- 6b. 福祉用具・備品 追加モーダル -->
+  <div class="modal-overlay" id="equipmentModal" style="display:none;">
+    <div class="modal-card">
+      <div class="modal-header">
+        <h3>🦼 使用福祉用具・備品の登録</h3>
+        <button class="modal-close-btn" onclick="closeModal('equipmentModal')">×</button>
+      </div>
+      <div class="form-group">
+        <label>用具・備品名:</label>
+        <input type="text" id="eqName" class="form-control" placeholder="例: 標準自走式車椅子, エアマット (ここちあ), 四輪歩行器, 杖, ポータブルトイレ">
+      </div>
+      <div class="form-group">
+        <label>所有・利用区分:</label>
+        <select id="eqOwnership" class="form-control">
+          <option value="施設備品">施設備品 (施設貸与)</option>
+          <option value="個人レンタル">個人レンタル (介護保険貸与)</option>
+          <option value="個人購入・私物持込">個人購入・私物持込</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>型番・特記事項 (設置場所など):</label>
+        <input type="text" id="eqNotes" class="form-control" placeholder="例: ノーパンクタイヤ, ベッド右側設置, 褥瘡防止圧切替など">
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('equipmentModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitEquipment()">福祉用具台帳へ登録</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 6c. 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針変更モーダル -->
+  <div class="modal-overlay" id="familyHistoryModal" style="display:none;">
+    <div class="modal-card" style="max-width:580px;">
+      <div class="modal-header">
+        <h3 id="familyHistoryModalTitle">👪 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針の変更</h3>
+        <button class="modal-close-btn" onclick="closeModal('familyHistoryModal')">×</button>
+      </div>
+      <input type="hidden" id="fhResidentId">
+      
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:8px 12px; border-radius:6px; font-size:12px; color:#1e40af; margin-bottom:12px;">
+        💡 年齢や体調の変化、看取り期への移行、救急搬送時の方針（延命処置希望なし/DNARなど）や、ご家族の最新のご要望・生活歴のこだわりを即時更新できます。
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:bold;">📞 緊急連絡先 ＆ 搬送・延命処置方針:</label>
+        <input type="text" id="fhEmergencyContact" class="form-control" placeholder="例: 長男: 佐藤 一郎 (090-1111-2222) / 救急搬送時: 延命処置希望なし(DNAR同意済)">
+        <small style="color:var(--text-muted); font-size:11px;">※看取り移行時の連絡優先順位や、「搬送されても延命処置は行わないでほしい」等の指示も明記できます。</small>
+      </div>
+
+      <div class="form-group" style="display:flex; gap:12px;">
+        <div style="flex:1;">
+          <label style="font-weight:bold;">［医療・看取り基本方針］:</label>
+          <select id="fhPolicyStamp" class="form-control">
+            <option value="看取り">［ 看取り ］(穏やかな終末期ケア)</option>
+            <option value="緊急搬送">［ 緊急搬送 ］(急変時即時救急要請)</option>
+            <option value="医療連携">［ 医療連携 ］(嘱託医・協力病院相談)</option>
+          </select>
+        </div>
+        <div style="flex:1;">
+          <label style="font-weight:bold;">⚠️ 見守り・離床センサー:</label>
+          <input type="text" id="fhSensorAlert" class="form-control" placeholder="例: ⚠️ 離床センサーマット使用中">
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:bold;">👪 家族の要望 (ACP・看取り・面会・ケアへの希望):</label>
+        <textarea id="fhFamilyWishes" class="form-control" rows="3" placeholder="例: 状態悪化時も苦痛のない穏やかな看取りを希望。夜間急変時も直ちに連絡希望。週1回面会来所。"></textarea>
+      </div>
+
+      <div class="form-group">
+        <label style="font-weight:bold;">📖 生活歴・人生歴・こだわり (元職歴・趣味・習慣・性格):</label>
+        <textarea id="fhLifeHistory" class="form-control" rows="3" placeholder="例: 元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。朝の温茶にこだわりあり。"></textarea>
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('familyHistoryModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitFamilyHistory()">最新情報で更新・保存</button>
+      </div>
+    </div>
+  </div>
+
 
   <!-- 7. 棚卸し実数合わせモーダル -->
   <div class="modal-overlay" id="inventoryAdjustModal" style="display:none;">

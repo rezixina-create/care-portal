@@ -301,6 +301,8 @@
       assert(typeof confirmAllMonthlyNoticesForStaff === "function", "Test 50: 月間連絡一括確認完了関数 (confirmAllMonthlyNoticesForStaff) が存在すること");
       assert(typeof adjustOrderQty === "function" && typeof setOrderQtyToNormalDeficit === "function", "Test 51: 発注数量の平常時自動算出＆上下調整機能 (adjustOrderQty, setOrderQtyToNormalDeficit) が存在すること");
       assert(typeof approveOrder === "function" && typeof isCurrentStaffAdmin === "function", "Test 52: 発注申請の個別目視確認・承認機能 (approveOrder) が存在すること (誤認防止・一括承認排除)");
+      assert(typeof adjustBelongingQty === "function" && typeof deleteBelonging === "function" && typeof openBelongingModal === "function" && typeof submitBelonging === "function", "Test 53: 私物・持ち込み品台帳の数量増減・編集・削除機能 (adjustBelongingQty, deleteBelonging) が存在すること");
+      assert(typeof openEquipmentModal === "function" && typeof submitEquipment === "function" && typeof deleteEquipment === "function" && typeof openFamilyHistoryModal === "function" && typeof submitFamilyHistory === "function", "Test 54: 福祉用具備品追加・解除および緊急連絡先・家族要望・看取り方針変更機能 (submitEquipment, submitFamilyHistory) が存在すること");
 
       // 18. 総合結果判定
       log("====================================================");

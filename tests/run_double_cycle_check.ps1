@@ -41,16 +41,16 @@ for ($cycle = 1; $cycle -le 2; $cycle++) {
 
     Cleanup-Port8888
 
-    # 2. run_e2e_test.ps1 (54 Assertions in Real Headless Browser)
-    Write-Host "`n[Cycle $cycle - Step 2] Running run_e2e_test.ps1 (54 assertions in Real Browser)..." -ForegroundColor Cyan
+    # 2. run_e2e_test.ps1 (Assertions in Real Headless Browser)
+    Write-Host "`n[Cycle $cycle - Step 2] Running run_e2e_test.ps1 (E2E assertions in Real Browser)..." -ForegroundColor Cyan
     $res2 = & powershell.exe -ExecutionPolicy Bypass -File "$PSScriptRoot\run_e2e_test.ps1" 2>&1
     $out2 = $res2 -join "`n"
-    if ($LASTEXITCODE -ne 0 -or $out2 -notmatch "ALL 54 TESTS PASSED") {
+    if ($LASTEXITCODE -ne 0 -or $out2 -notmatch "ALL \d+ TESTS PASSED") {
         Write-Host "[FAIL] run_e2e_test.ps1 failed in Cycle $cycle!" -ForegroundColor Red
         Write-Host $out2
         $cycleErrors[$cycle - 1]++
     } else {
-        Write-Host "  [CYCLE $cycle - PASS] All 54 E2E assertions passed cleanly!" -ForegroundColor Green
+        Write-Host "  [CYCLE $cycle - PASS] All E2E assertions passed cleanly!" -ForegroundColor Green
     }
 
     Cleanup-Port8888
