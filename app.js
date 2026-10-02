@@ -49,6 +49,7 @@ class LocalDB {
     this.data = this.loadLocal();
     this.serverIPs = [];
     this.serverPort = window.location.port || 8888;
+    this.hasSyncedWithServer = !this.isServerMode;
     this.lastSavedJson = JSON.stringify(this.data);
 
     if (this.isServerMode) {
@@ -76,7 +77,8 @@ class LocalDB {
       "shifts", "notebooks", "notebook_stamps", "vitals", "excretions",
       "meals", "oral_cares", "baths", "meds", "turns", "linens",
       "groomings", "weight_records", "visitations", "inventory_logs",
-      "consumptions", "orders", "deposits", "complaints", "incidents", "photos"
+      "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
+      "daily_schedules", "monthly_notices"
     ];
     arrayKeys.forEach(k => {
       if (!Array.isArray(d[k])) d[k] = [];
@@ -93,13 +95,14 @@ class LocalDB {
       localStorage.setItem(this.key, JSON.stringify(this.data));
     } catch (e) {}
 
-    // 2. サーバーモードなら親機へ即時送信
-    if (this.isServerMode) {
+    // 2. サーバーモードなら親機へ即時送信 (初回同期完了後のみ)
+    if (this.isServerMode && this.hasSyncedWithServer) {
       this.saveToServer();
     }
   }
 
   async saveToServer() {
+    if (this.isServerMode && !this.hasSyncedWithServer) return;
     try {
       const payload = JSON.stringify(this.data);
       this.lastSavedJson = payload;
@@ -110,6 +113,12 @@ class LocalDB {
       });
       if (res.ok) {
         this.updateSyncBadge(true);
+        try {
+          const resp = await res.json();
+          this.updateBackupBadge(resp.saved_at || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        } catch (e) {
+          this.updateBackupBadge(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
       } else {
         this.updateSyncBadge(false);
       }
@@ -117,6 +126,14 @@ class LocalDB {
       console.warn("Server save error:", err);
       this.updateSyncBadge(false);
     }
+  }
+
+  updateBackupBadge(timeStr) {
+    const b = document.getElementById("backupStatusBadge");
+    if (!b) return;
+    b.textContent = `💾 自動バックアップ済 (${timeStr})`;
+    b.style.background = "#10b981";
+    b.title = `最新データは ${timeStr} に自動3重バックアップ保管されました (PC・USB内完結)`;
   }
 
   async initServerSync() {
@@ -154,8 +171,10 @@ class LocalDB {
           }
         } else {
           // サーバーが空ならローカル初期データをサーバーへ初回登録
+          this.hasSyncedWithServer = true;
           await this.saveToServer();
         }
+        this.hasSyncedWithServer = true;
         this.updateSyncBadge(true);
       }
     } catch (e) {
@@ -503,8 +522,6 @@ function updateFacilityNameUI() {
 window.addEventListener("DOMContentLoaded", () => {
   updateFacilityNameUI();
   gState.stamps = sortStaffList(gState.stamps);
-  db.data.stamps = gState.stamps;
-  db.save();
   renderStaffSelect();
   renderResidentsStrip();
   renderResidentDetail();
@@ -540,13 +557,30 @@ function renderStaffSelect() {
 
 function onCurrentStaffChange() {
   renderNotebook();
+  checkGlobalAlerts();
+  if (gState.activePortal === "office" && gState.activeOfficeTab === "orders") {
+    renderOfficeOrders();
+  }
 }
 
-// アラート監視（前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限）
+// 管理者権限チェック (施設長または管理者ロール)
+function isCurrentStaffAdmin() {
+  const staffSelect = document.getElementById("currentStaff");
+  if (!staffSelect) return false;
+  const staff = staffSelect.value || "";
+  if (!staff) return false;
+  const staffObj = (gState.stamps || []).find(s => (s.name || s) === staff);
+  if (staffObj && (staffObj.role === "管理者" || staffObj.role === "施設長")) return true;
+  return staff.includes("施設長") || staff.includes("管理者");
+}
+
+// アラート監視（前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限・排便3日以上なし・月間連絡未確認）
 function checkGlobalAlerts() {
   const container = document.getElementById("alertsContainer");
+  if (!container) return;
   container.innerHTML = "";
   const today = new Date();
+  const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
 
   // 1. 【前月誕生日事前アラート】
   const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
@@ -572,7 +606,7 @@ function checkGlobalAlerts() {
   }
 
   // 2. 【非常食・防災備蓄 賞味期限2週間前アラート】
-  gState.emergencySupplies.forEach(item => {
+  (gState.emergencySupplies || []).forEach(item => {
     if (item.expiry_date) {
       const expDate = new Date(item.expiry_date);
       const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
@@ -587,7 +621,7 @@ function checkGlobalAlerts() {
   });
 
   // 3. 在庫補充アラート
-  const lowStockItems = gState.inventory.filter(i => i.current_stock <= i.safety_stock);
+  const lowStockItems = (gState.inventory || []).filter(i => i.current_stock <= i.safety_stock);
   if (lowStockItems.length > 0) {
     const names = lowStockItems.map(i => `${i.name} (残${i.current_stock}${i.unit}/基準${i.safety_stock})`).join(", ");
     container.innerHTML += `
@@ -598,24 +632,79 @@ function checkGlobalAlerts() {
     `;
   }
 
-  // 4. 受診2週前・1週前事前告知
+  // 4. 受診2週前・1週前事前告知 ＆ 往診特殊指示アラート (絶食・薬のみ等)
   gState.residents.forEach(r => {
     if (r.next_clinic_date) {
       const clinicDate = new Date(r.next_clinic_date);
       const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
-      if (diffDays > 0 && diffDays <= 14) {
+      const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;">⚠️ 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
+      
+      if (diffDays === 0 || r.next_clinic_date === todayStr) {
+        // 当日往診
+        container.innerHTML += `
+          <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
+            <span>🩺 <strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
+          </div>
+        `;
+      } else if (diffDays > 0 && diffDays <= 14) {
         const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
         const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
         container.innerHTML += `
           <div class="alert-banner ${alertType}">
-            <span>🏥 ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備</span>
+            <span>🏥 ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
           </div>
         `;
       }
     }
   });
 
-  // 5. 要介護認定有効期限 (満了60日以内)
+  // 5. 【排便3日以上なしアラート (便秘コントロール)】
+  // 各利用者の最新排便日を調べ、3日以上経過していれば警告（排便登録で即時解除、出るまで1日ずつ加算）
+  const excretions = db.data.excretions || [];
+  gState.residents.forEach(r => {
+    if (r.status !== "在所") return;
+    // stool_amount が「なし」以外の最新レコードを探す
+    const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
+    let daysNoStool = 0;
+    if (resExcs.length > 0) {
+      // 日付降順ソート
+      resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      const latestDateStr = resExcs[0].date;
+      const latestDate = new Date(latestDateStr);
+      const curDate = new Date(todayStr);
+      daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
+    } else {
+      // 排便記録が過去に全くない場合は3日以上とみなす
+      daysNoStool = 3;
+    }
+
+    if (daysNoStool >= 3) {
+      container.innerHTML += `
+        <div class="alert-banner alert-danger" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
+          <span>🚽 ⚠️ <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
+        </div>
+      `;
+    }
+  });
+
+  // 6. 【月間業務連絡 未確認アラート】
+  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+  const curMonth = todayStr.slice(0, 7);
+  const monthlyNotices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  if (currentStaff && monthlyNotices.length > 0) {
+    const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
+    if (unconfirmed.length > 0) {
+      container.innerHTML += `
+        <div class="alert-banner alert-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
+          <span>📢 ⚠️ <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
+        </div>
+      `;
+    }
+  }
+
+  // 7. 要介護認定有効期限 (満了60日以内)
   const expiringResidents = [];
   gState.residents.forEach(r => {
     if (r.care_expiry_date) {
@@ -865,91 +954,133 @@ function renderResidentDetail() {
       </div>
     </div>
 
-    <!-- 見守り注意書きバッジ (新規スタッフ・夜勤転倒防止) -->
-    ${r.sensor_alert ? `
-      <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#991b1b; font-size:13px;">
-        ${r.sensor_alert}
+    <!-- 1. 基本方針・見守り注意・ケアプラン目標 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🎯 基本方針 ＆ ケアプラン目標・見守り注意</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        ${r.sensor_alert ? `
+          <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px;">
+            ${escapeHtml(r.sensor_alert)}
+          </div>
+        ` : ''}
+        <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px;">
+          <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
+          <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
+        </div>
+        ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
+          <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e;">
+            <strong>⚠️ 設定済バイタル注意基準:</strong>
+            ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
+            ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
+            ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
+          </div>
+        ` : ''}
       </div>
-    ` : ''}
+    </details>
 
-    <!-- ケアマネのケアプラン目標 -->
-    <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
-      <div style="font-size:13px; margin-top:2px;">${r.care_plan_goal || "安全な日常生活の維持・転倒予防"}</div>
-    </div>
-
-    <!-- 病歴ガイド -->
-    <div style="margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで症状ガイド表示):</div>
-      <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
-    </div>
-
-    <!-- 身体状況・アレルギー・食形態・口腔状態 -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:12px; background:#f8fafc; padding:10px; border-radius:6px;">
-      <div><strong>身体・麻痺:</strong> ${r.paralysis || "特記なし"}</div>
-      <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${r.allergies || "なし"}</span></div>
-      <div><strong>食形態:</strong> ${r.diet_type || "普通食"}</div>
-      <div><strong>口腔状態:</strong> ${r.oral_state || "残歯のみ"}</div>
-    </div>
-
-    <!-- 備品・福祉用具 (施設備品/個人レンタル/個人購入) -->
-    <div style="margin-bottom:12px; font-size:13px;">
-      <strong>🦼 使用福祉用具・備品:</strong>
-      <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted);">登録なし</span>'}</div>
-    </div>
-
-    <!-- 私物・持ち込み品管理 (品名と個数の行追加テーブル) -->
-    <div style="margin-bottom:12px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:white;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <strong style="font-size:13px;">🧳 私物・持ち込み品台帳 (物と個数):</strong>
-        <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openBelongingModal()">＋私物行を追加</button>
+    <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで症状ガイド表示):</div>
+          <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; background:#f8fafc; padding:10px; border-radius:6px;">
+          <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "特記なし")}</div>
+          <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
+          <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
+          <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+        </div>
       </div>
-      <table class="data-table" style="font-size:12px; margin-top:4px;">
-        <thead>
-          <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考</th></tr>
-        </thead>
-        <tbody>
-          ${belongingsHtml || '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
-        </tbody>
-      </table>
-    </div>
+    </details>
 
-    <!-- 同意書・写真スクショ保管 -->
-    <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; background:#f8fafc;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
-        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真スクショ保管庫:</strong>
-        <span style="font-size:11px; color:#64748b;">タップで画像一覧・拡大表示・追加</span>
+    <!-- 3. 往診医・受診時指示 ＆ 特殊指示 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
+        <span>🏥 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        ${r.clinic_special_notes ? `
+          <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px; margin-bottom:10px; color:#991b1b; font-weight:bold; font-size:13px;">
+            ⚠️ 【往診・受診 特殊指示】 ${escapeHtml(r.clinic_special_notes)}
+          </div>
+        ` : ''}
+        <div style="font-size:13px;">
+          <div><strong>🩺 医師の指示内容:</strong> ${escapeHtml(r.dr_instructions || "定期採血・血圧コントロール")}</div>
+          <div style="font-size:12px; color:#2563eb; margin-top:4px;"><strong>次回受診・往診予定日:</strong> ${r.next_clinic_date || "未定"}</div>
+        </div>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
-          📜 重要書類(同意書)
-          <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
-        </button>
-        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
-          📷 個人写真
-          <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
-        </button>
+    </details>
+
+    <!-- 4. 福祉用具 ＆ 私物持ち込み品台帳 (アコーディオン) -->
+    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🧳 福祉用具 ＆ 私物・持ち込み品台帳 (${belongings.length}点)</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        <div style="margin-bottom:10px; font-size:13px;">
+          <strong>🦼 使用福祉用具・備品:</strong>
+          <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted);">登録なし</span>'}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="font-size:13px;">私物・持ち込み品一覧:</strong>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openBelongingModal()">＋私物行を追加</button>
+        </div>
+        <table class="data-table" style="font-size:12px; margin-top:4px;">
+          <thead>
+            <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考</th></tr>
+          </thead>
+          <tbody>
+            ${belongingsHtml || '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </details>
 
-    <!-- 往診医・受診時指示 -->
-    <div style="background:#eff6ff; border-left:4px solid #2563eb; padding:10px; border-radius:6px; margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:#1e40af;">🩺 往診医・受診時指示:</div>
-      <div style="font-size:13px; margin-top:2px;">${r.dr_instructions || "定期採血・血圧コントロール"}</div>
-      <div style="font-size:11px; color:#60a5fa; margin-top:4px;">次回予定日: ${r.next_clinic_date || "-"}</div>
-    </div>
+    <!-- 5. 同意書 ＆ 写真スクショ保管庫 (アコーディオン) -->
+    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>📁 重要書類(同意書) ＆ 写真スクショ保管庫 (${resDocs.length + resPhotos.length}件)</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
+            📜 重要書類(同意書)
+            <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
+          </button>
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
+            📷 個人写真
+            <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
+          </button>
+        </div>
+      </div>
+    </details>
 
-    <!-- 緊急連絡先 ＆ 家族の要望 -->
-    <div style="font-size:13px; margin-bottom:12px;">
-      <div><strong>📞 緊急連絡先:</strong> ${r.emergency_contact || "未登録"}</div>
-      <div style="margin-top:4px;"><strong>👪 家族の要望:</strong> ${r.family_wishes || "特になし"}</div>
-    </div>
-
-    <!-- 生活歴・人生歴 -->
-    <div style="font-size:12px; background:#fffbeb; border:1px solid #fef3c7; padding:8px; border-radius:6px;">
-      <strong>📖 生活歴・人生歴・こだわり:</strong>
-      <p style="margin-top:2px; color:#78350f;">${r.life_history || "穏やかな生活を好まれる。"}</p>
-    </div>
+    <!-- 6. 緊急連絡先 ＆ 家族の要望・生活歴 (アコーディオン) -->
+    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>👪 緊急連絡先 ＆ 家族の要望・生活歴・こだわり</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px; font-size:13px;">
+        <div><strong>📞 緊急連絡先:</strong> ${escapeHtml(r.emergency_contact || "未登録")}</div>
+        <div style="margin-top:6px;"><strong>👪 家族の要望:</strong> ${escapeHtml(r.family_wishes || "特になし")}</div>
+        <div style="margin-top:8px; background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
+          <strong>📖 生活歴・人生歴・こだわり:</strong>
+          <p style="margin-top:2px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
+        </div>
+      </div>
+    </details>
   `;
 }
 
@@ -1012,8 +1143,38 @@ function updateRecordCharCount() {
   const len = area.value.length;
   if (countEl) countEl.textContent = len;
   if (fsCountEl) fsCountEl.textContent = len;
-  if (badgeEl) badgeEl.style.display = "none";
-  if (fsBadgeEl) fsBadgeEl.style.display = "none";
+
+  let badgeText = "";
+  let badgeBg = "#64748b";
+
+  if (len === 0) {
+    if (badgeEl) badgeEl.style.display = "none";
+    if (fsBadgeEl) fsBadgeEl.style.display = "none";
+    return;
+  } else if (len < 400) {
+    badgeText = "📄 B5目安: 約1/3枚";
+    badgeBg = "#64748b";
+  } else if (len < 700) {
+    badgeText = "📄 B5目安: 約半分";
+    badgeBg = "#0284c7";
+  } else if (len <= 1000) {
+    badgeText = "📄 B5用紙1枚適量 (推奨)";
+    badgeBg = "#16a34a";
+  } else {
+    badgeText = "⚠️ B5用紙1枚超過 (2枚目へ)";
+    badgeBg = "#d97706";
+  }
+
+  if (badgeEl) {
+    badgeEl.textContent = badgeText;
+    badgeEl.style.background = badgeBg;
+    badgeEl.style.display = "inline-block";
+  }
+  if (fsBadgeEl) {
+    fsBadgeEl.textContent = badgeText;
+    fsBadgeEl.style.background = badgeBg;
+    fsBadgeEl.style.display = "inline-block";
+  }
 }
 
 // 日報・総合記録テンプレートの挿入
@@ -1511,7 +1672,7 @@ ${escapeHtml(r.content || '')}
 }
 
 // ============================================================
-// 📰 施設・フロア 業務日誌 (一日の記録) の描画 ＆ 印刷
+// 📰 施設・フロア 業務日誌 (一日の記録・日課スケジュール ＆ 特変日報)
 // ============================================================
 function renderDailyJournal() {
   const titleEl = document.getElementById("dailyJournalTitle");
@@ -1555,22 +1716,28 @@ function renderDailyJournal() {
     `;
   }
 
-  // 2. 指定日の全入居者タイムライン記録一覧
+  // 2. 施設・フロア 一日の日課スケジュールタイムライン (何時に何を行ったか)
+  renderDailyScheduleTimeline();
+
+  // 3. 指定日のフロア特変・申し送り記録一覧 (個別の体位交換「左側臥位」等は除外)
   const recordsListEl = document.getElementById("dailyJournalRecordsList");
   if (recordsListEl) {
     const allRecords = (db.data.care_records || [])
       .filter(r => {
         const timeStr = r.recorded_at || r.record_time || "";
-        return timeStr.startsWith(gState.selectedDate);
+        if (!timeStr.startsWith(gState.selectedDate)) return false;
+        // 個別の体位変換・巡視記録(左側臥位等)は日誌の一日の記録から除外
+        if (r.category === "巡視" && (r.content || "").includes("夜間巡視")) return false;
+        return true;
       })
       .sort((a, b) => {
         const ta = a.recorded_at || a.record_time || "";
         const tb = b.recorded_at || b.record_time || "";
-        return ta.localeCompare(tb); // 朝から夜への時系列昇順
+        return ta.localeCompare(tb);
       });
 
     if (allRecords.length === 0) {
-      recordsListEl.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:16px; text-align:center; background:#f8fafc; border-radius:6px;">この日の介護記録はありません。</p>';
+      recordsListEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:12px; text-align:center; background:#f8fafc; border-radius:6px;">この日の特変・特記事項はありません。</p>';
     } else {
       recordsListEl.innerHTML = "";
       allRecords.forEach(r => {
@@ -1756,7 +1923,30 @@ ${escapeHtml(r.content || '')}
         </tbody>
       </table>
 
-      <h3 style="font-size:14px; margin:14px 0 6px 0; color:#1e3a8a;">2. 全入居者 タイムライン介護記録 (計 ${records.length} 件)</h3>
+      <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) -->
+      <h3 style="font-size:14px; margin:16px 0 6px 0; color:#1e3a8a;">2. フロア一日の日課・業務スケジュール実施記録</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:70px;">時間</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:150px;">日課・行事項目</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">実施内容・様子</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:100px;">担当</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(db.data.daily_schedules || []).slice().sort((a,b) => (a.time||'').localeCompare(b.time||'')).map(s => `
+            <tr>
+              <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold; text-align:center;">${s.time}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(s.title)}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.content || '-')}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.staff_name || '-')}</td>
+            </tr>
+          `).join("") || '<tr><td colspan="4" style="text-align:center; padding:8px;">スケジュール記録なし</td></tr>'}
+        </tbody>
+      </table>
+
+      <h3 style="font-size:14px; margin:14px 0 6px 0; color:#1e3a8a;">3. 特変・申し送り記録 (計 ${records.length} 件)</h3>
       <div>
         ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#64748b;">記録なし</p>'}
       </div>
@@ -1769,6 +1959,82 @@ ${escapeHtml(r.content || '')}
   `;
 
   window.print();
+}
+
+// 施設・フロア 一日の日課・業務スケジュール
+function renderDailyScheduleTimeline() {
+  const container = document.getElementById("dailyScheduleTimeline");
+  if (!container) return;
+  const list = (db.data.daily_schedules || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  
+  if (list.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">登録された日課・行事スケジュールはありません。「＋ 日課・業務を追加」から追加できます。</p>';
+    return;
+  }
+
+  let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+  list.forEach(s => {
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;">
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <span style="background:#1e40af; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap;">
+            ${s.time}
+          </span>
+          <div>
+            <strong style="color:#0f172a; font-size:14px;">${escapeHtml(s.title)}</strong>
+            ${s.content ? `<div style="font-size:12.5px; color:#475569; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
+            ${s.staff_name ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailySchedule(${s.id})">削除</button>
+      </div>
+    `;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function openDailyScheduleModal() {
+  const tm = new Date().toTimeString().slice(0, 5);
+  document.getElementById("schedTime").value = tm;
+  document.getElementById("schedTitle").value = "";
+  document.getElementById("schedContent").value = "";
+  const staff = document.getElementById("currentStaff").value || "";
+  document.getElementById("schedStaff").value = staff;
+  document.getElementById("dailyScheduleModal").style.display = "flex";
+}
+
+function submitDailySchedule() {
+  const tm = document.getElementById("schedTime").value;
+  const title = document.getElementById("schedTitle").value.trim();
+  const content = document.getElementById("schedContent").value.trim();
+  const staff = document.getElementById("schedStaff").value.trim();
+
+  if (!tm || !title) {
+    alert("時間と日課・項目名は必須入力です。");
+    return;
+  }
+
+  if (!Array.isArray(db.data.daily_schedules)) db.data.daily_schedules = [];
+  db.data.daily_schedules.push({
+    id: Date.now(),
+    time: tm,
+    title: title,
+    content: content,
+    staff_name: staff
+  });
+
+  db.save();
+  closeModal("dailyScheduleModal");
+  renderDailyScheduleTimeline();
+  alert(`日課スケジュール「${title}」を追加しました！`);
+}
+
+function deleteDailySchedule(id) {
+  if (!confirm("この日課スケジュールを削除してもよろしいですか？")) return;
+  db.data.daily_schedules = (db.data.daily_schedules || []).filter(s => s.id !== id);
+  db.save();
+  renderDailyScheduleTimeline();
 }
 
 // 文字検索機能 (何月何日何時の記録か一発検索)
@@ -1886,6 +2152,43 @@ function saveVital(resId) {
     return;
   }
 
+  // 個別注意基準値チェック (いつもより外れている場合の確認警告)
+  const res = gState.residents.find(x => x.id === resId);
+  if (res) {
+    const warnings = [];
+    const tNum = temp ? parseFloat(temp) : null;
+    const bpHNum = bpHigh ? parseInt(bpHigh, 10) : null;
+    const bpLNum = bpLow ? parseInt(bpLow, 10) : null;
+    const spNum = spo2 ? parseInt(spo2, 10) : null;
+    const pNum = pulse ? parseInt(pulse, 10) : null;
+
+    if (tNum !== null && res.temp_max && tNum > res.temp_max) {
+      warnings.push(`体温が個別上限(${res.temp_max}℃)を超えています (測定値: ${tNum}℃)`);
+    }
+    if (bpHNum !== null && res.bp_high_max && bpHNum > res.bp_high_max) {
+      warnings.push(`最高血圧が個別上限(${res.bp_high_max}mmHg)を超えています (測定値: ${bpHNum}mmHg)`);
+    }
+    if (bpHNum !== null && res.bp_high_min && bpHNum < res.bp_high_min) {
+      warnings.push(`最高血圧が個別下限(${res.bp_high_min}mmHg)を下回っています (測定値: ${bpHNum}mmHg)`);
+    }
+    if (spNum !== null && res.spo2_min && spNum < res.spo2_min) {
+      warnings.push(`SpO2が個別下限(${res.spo2_min}%)を下回っています (測定値: ${spNum}%)`);
+    }
+    if (pNum !== null && res.pulse_max && pNum > res.pulse_max) {
+      warnings.push(`脈拍が個別上限(${res.pulse_max}bpm)を超えています (測定値: ${pNum}bpm)`);
+    }
+    if (pNum !== null && res.pulse_min && pNum < res.pulse_min) {
+      warnings.push(`脈拍が個別下限(${res.pulse_min}bpm)を下回っています (測定値: ${pNum}bpm)`);
+    }
+
+    if (warnings.length > 0) {
+      const confirmMsg = `⚠️ いつもより数値が外れていますが間違いありませんか？\n\n【${res.name} 様の個別注意設定】\n・${warnings.join("\n・")}\n\nこの数値のまま記録してよろしいですか？`;
+      if (!confirm(confirmMsg)) {
+        return; // キャンセルされたら入力修正のため中断
+      }
+    }
+  }
+
   const staff = document.getElementById("currentStaff").value;
   const tm = new Date().toTimeString().slice(0, 5);
 
@@ -1906,7 +2209,6 @@ function saveVital(resId) {
   db.data.vitals.push(vitalObj);
 
   // 個人記録へ自動連動
-  const res = gState.residents.find(x => x.id === resId);
   const vitalText = `バイタル測定: 体温${temp || '-'}℃, 血圧${bpHigh || '-'}/${bpLow || '-'}, 脈拍${pulse || '-'}, SpO2 ${spo2 || '-'}%`;
   db.data.care_records.unshift({
     id: Date.now() + 1,
@@ -2199,89 +2501,174 @@ function saveMed(resId, slot) {
   alert(`${r ? r.name : '利用者'}様の【${slot}】服薬/点眼完了を記録しました！`);
 }
 
-// 7. 夜勤体位変換 ➔ 個人記録自動転記
+// 7. 夜勤体位変換 ➔ トグル解除 ＆ 一括確定 (個人記録自動転記)
+gState.nightTurnDrafts = {};
+
+function initNightTurnDrafts() {
+  gState.nightTurnDrafts = {};
+  const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
+  turns.forEach(t => {
+    gState.nightTurnDrafts[`${t.resident_id}_${t.time}`] = t.action;
+  });
+}
+
+function setNightTurnAction(resId, time, action) {
+  const key = `${resId}_${time}`;
+  if (!action) {
+    delete gState.nightTurnDrafts[key];
+  } else {
+    gState.nightTurnDrafts[key] = action;
+  }
+  renderNightTable();
+}
+
+function toggleNightTurnAction(resId, time) {
+  const key = `${resId}_${time}`;
+  delete gState.nightTurnDrafts[key];
+  renderNightTable();
+}
+
+function submitNightTurnsBatch() {
+  const staff = document.getElementById("currentStaff").value;
+  const turns = db.data.turns || [];
+  db.data.turns = turns.filter(t => t.date !== gState.selectedDate);
+
+  const resActionsMap = {};
+
+  Object.keys(gState.nightTurnDrafts).forEach(key => {
+    const parts = key.split("_");
+    const resId = parseInt(parts[0], 10);
+    const time = parts[1];
+    const action = gState.nightTurnDrafts[key];
+    if (action) {
+      db.data.turns.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        date: gState.selectedDate,
+        time: time,
+        resident_id: resId,
+        action: action,
+        staff_name: staff
+      });
+      if (!resActionsMap[resId]) resActionsMap[resId] = [];
+      resActionsMap[resId].push(`${time} ${action}`);
+    }
+  });
+
+  const nowTm = new Date().toTimeString().slice(0, 5);
+  Object.keys(resActionsMap).forEach(resIdStr => {
+    const resId = parseInt(resIdStr, 10);
+    const actions = resActionsMap[resId];
+    if (actions.length > 0) {
+      db.data.care_records.unshift({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        recorded_at: `${gState.selectedDate} ${nowTm}`,
+        resident_id: resId,
+        category: "巡視",
+        content: `夜間巡視・体位変換: ${actions.join(", ")}`,
+        staff_name: staff
+      });
+    }
+  });
+
+  db.save();
+  renderNightTable();
+  loadDateRecords(gState.selectedDate);
+  alert("体位変換・夜間巡視を一括確定しました！個人記録へも反映されました。");
+}
+
 function renderNightTable() {
   const tbody = document.querySelector("#nightTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
-  const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
+  if (!gState.nightTurnDrafts || Object.keys(gState.nightTurnDrafts).length === 0) {
+    initNightTurnDrafts();
+  }
+
+  const times = ["22:00", "00:00", "02:00", "04:00", "06:00"];
 
   gState.residents.forEach(r => {
     const tr = document.createElement("tr");
-    const getActionBtn = (tm) => {
-      const turn = turns.find(t => t.resident_id === r.id && t.time === tm);
-      if (turn) return `<span style="color:#16a34a; font-weight:bold; font-size:12px;">✓ ${turn.action}</span>`;
+    const cells = times.map(tm => {
+      const key = `${r.id}_${tm}`;
+      const curAction = gState.nightTurnDrafts[key];
+      if (curAction) {
+        return `
+          <td style="text-align:center;">
+            <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで解除">
+              ✓ ${curAction} ✕
+            </button>
+          </td>
+        `;
+      }
       return `
-        <select class="form-control" style="font-size:12px; padding:2px;" onchange="saveNightTurn(${r.id}, '${tm}', this.value)">
-          <option value="">選択</option>
-          <option value="安眠中">安眠中</option>
-          <option value="左側臥位">左側臥位</option>
-          <option value="右側臥位">右側臥位</option>
-          <option value="仰臥位">仰臥位</option>
-          <option value="おむつ交換">おむつ交換</option>
-        </select>
+        <td>
+          <select class="form-control" style="font-size:11px; padding:2px;" onchange="setNightTurnAction(${r.id}, '${tm}', this.value)">
+            <option value="">選択</option>
+            <option value="安眠中">安眠中</option>
+            <option value="左側臥位">左側臥位</option>
+            <option value="右側臥位">右側臥位</option>
+            <option value="仰臥位">仰臥位</option>
+            <option value="おむつ交換">おむつ交換</option>
+          </select>
+        </td>
       `;
-    };
+    }).join("");
 
     tr.innerHTML = `
       <td>${r.room_no}</td>
       <td><strong>${r.name} 様</strong></td>
-      <td>${getActionBtn("22:00")}</td>
-      <td>${getActionBtn("00:00")}</td>
-      <td>${getActionBtn("02:00")}</td>
-      <td>${getActionBtn("04:00")}</td>
-      <td>${getActionBtn("06:00")}</td>
+      ${cells}
     `;
     tbody.appendChild(tr);
   });
 }
 
 function saveNightTurn(resId, time, action) {
-  if (!action) return;
-  const staff = document.getElementById("currentStaff").value;
-  let existing = (db.data.turns || []).find(t => t.date === gState.selectedDate && t.resident_id === resId && t.time === time);
-  if (existing) {
-    existing.action = action;
-    existing.staff_name = staff;
-  } else {
-    db.data.turns.push({
-      id: Date.now(), date: gState.selectedDate, time: time, resident_id: resId, action: action, staff_name: staff
-    });
-  }
-  db.data.care_records.unshift({
-    id: Date.now() + 1, recorded_at: `${gState.selectedDate} ${time}`, resident_id: resId, category: "巡視", content: `夜間巡視: ${action}`, staff_name: staff
-  });
-  db.save();
-  loadDateRecords(gState.selectedDate);
-  alert(`体位変換/巡視（${time}: ${action}）を記録しました！個人記録にも自動転記されました。`);
+  setNightTurnAction(resId, time, action);
 }
 
-// 8. 月次体重
+// 8. 月次体重 (前月比 ＆ 前々月比 ＆ 1年推移グラフ)
 function renderWeightTable() {
   const tbody = document.querySelector("#weightTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
   const records = db.data.weight_records || [];
   
-  // 前月の年月文字列を算出 (例: "2026-09" -> "2026-08")
   const [y, m] = gState.currentMonth.split("-").map(Number);
   const prevDate = new Date(y, m - 2, 1);
   const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+  const prev2Date = new Date(y, m - 3, 1);
+  const prev2Month = `${prev2Date.getFullYear()}-${String(prev2Date.getMonth() + 1).padStart(2, "0")}`;
 
   gState.residents.forEach(r => {
-    // 当月と前月の最新レコードを取得
     const currentRec = records.filter(w => w.resident_id === r.id && (w.month === gState.currentMonth || (w.date && w.date.startsWith(gState.currentMonth)))).sort((a,b) => b.id - a.id)[0];
     const prevRec = records.filter(w => w.resident_id === r.id && (w.month === prevMonth || (w.date && w.date.startsWith(prevMonth)))).sort((a,b) => b.id - a.id)[0];
+    const prev2Rec = records.filter(w => w.resident_id === r.id && (w.month === prev2Month || (w.date && w.date.startsWith(prev2Month)))).sort((a,b) => b.id - a.id)[0];
 
+    // 前月比
     let diffDisplay = "-";
     if (currentRec && prevRec) {
       const diff = (currentRec.weight - prevRec.weight).toFixed(1);
       const diffNum = parseFloat(diff);
       const diffStr = diffNum > 0 ? `+${diff} kg` : (diffNum < 0 ? `${diff} kg` : `±0.0 kg`);
       const color = diffNum > 0 ? '#16a34a' : (diffNum < 0 ? '#dc2626' : '#64748b');
-      diffDisplay = `<strong style="color:${color}; font-size:14px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(前月: ${prevRec.weight}kg)</span>`;
+      diffDisplay = `<strong style="color:${color}; font-size:13px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prevRec.weight}k)</span>`;
     } else if (currentRec) {
-      diffDisplay = `<span style="font-size:12px; color:var(--text-muted);">- (前月なし)</span>`;
+      diffDisplay = `<span style="font-size:11px; color:var(--text-muted);">- (前月なし)</span>`;
     } else if (prevRec) {
-      diffDisplay = `<span style="font-size:12px; color:var(--text-muted);">前月: ${prevRec.weight}kg</span>`;
+      diffDisplay = `<span style="font-size:11px; color:var(--text-muted);">前月: ${prevRec.weight}k</span>`;
+    }
+
+    // 前々月比
+    let diff2Display = "-";
+    if (currentRec && prev2Rec) {
+      const diff2 = (currentRec.weight - prev2Rec.weight).toFixed(1);
+      const diff2Num = parseFloat(diff2);
+      const diff2Str = diff2Num > 0 ? `+${diff2} kg` : (diff2Num < 0 ? `${diff2} kg` : `±0.0 kg`);
+      const color2 = diff2Num > 0 ? '#16a34a' : (diff2Num < 0 ? '#dc2626' : '#64748b');
+      diff2Display = `<strong style="color:${color2}; font-size:13px;">${diff2Str}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prev2Rec.weight}k)</span>`;
+    } else if (currentRec) {
+      diff2Display = `<span style="font-size:11px; color:var(--text-muted);">-</span>`;
     }
 
     const currentVal = currentRec ? currentRec.weight : "";
@@ -2291,12 +2678,116 @@ function renderWeightTable() {
       <td>${r.room_no}</td>
       <td><strong>${r.name} 様</strong></td>
       <td>${gState.currentMonth}</td>
-      <td><input type="number" step="0.1" class="form-control" style="width:100px;" id="wVal_${r.id}" value="${currentVal}" placeholder="52.4"></td>
+      <td><input type="number" step="0.1" class="form-control" style="width:90px;" id="wVal_${r.id}" value="${currentVal}" placeholder="52.4"></td>
       <td>${diffDisplay}</td>
-      <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveWeight(${r.id})">測定登録</button></td>
+      <td>${diff2Display}</td>
+      <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveWeight(${r.id})">測定登録</button></td>
     `;
     tbody.appendChild(tr);
   });
+
+  renderWeightChart();
+}
+
+function renderWeightChart(selectedResId = null) {
+  const container = document.getElementById("weightChartContainer");
+  if (!container) return;
+
+  const targetResId = selectedResId || gState.selectedResidentId || (gState.residents[0] ? gState.residents[0].id : 1);
+  const targetRes = gState.residents.find(r => r.id === targetResId);
+  const records = (db.data.weight_records || []).filter(w => w.resident_id === targetResId);
+
+  // 過去12ヶ月の月リスト生成 (例: 2025-11 〜 2026-10)
+  const [curY, curM] = gState.currentMonth.split("-").map(Number);
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(curY, curM - 1 - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  // 各月の最新体重を取得
+  const points = months.map(mStr => {
+    const rec = records.filter(w => (w.month === mStr || (w.date && w.date.startsWith(mStr)))).sort((a,b) => b.id - a.id)[0];
+    return { month: mStr, weight: rec ? rec.weight : null };
+  });
+
+  // 利用者切り替えボタン
+  const resButtons = gState.residents.map(r => `
+    <button class="btn ${r.id === targetResId ? 'btn-primary' : 'btn-secondary'}" style="padding:3px 10px; font-size:12px;" onclick="renderWeightChart(${r.id})">
+      ${r.room_no}号室 ${r.name}様
+    </button>
+  `).join("");
+
+  // グラフ描画用スケール計算
+  const validWeights = points.filter(p => p.weight !== null).map(p => p.weight);
+  const minW = validWeights.length > 0 ? Math.floor(Math.min(...validWeights) - 2) : 40;
+  const maxW = validWeights.length > 0 ? Math.ceil(Math.max(...validWeights) + 2) : 70;
+  const range = maxW - minW || 10;
+
+  const svgW = 760;
+  const svgH = 220;
+  const padL = 50;
+  const padR = 30;
+  const padT = 30;
+  const padB = 40;
+  const graphW = svgW - padL - padR;
+  const graphH = svgH - padT - padB;
+
+  // グリッド線
+  let gridLines = "";
+  const steps = 4;
+  for (let s = 0; s <= steps; s++) {
+    const val = (minW + (range / steps) * s).toFixed(1);
+    const yPos = padT + graphH - (s / steps) * graphH;
+    gridLines += `
+      <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}" stroke="#e2e8f0" stroke-dasharray="3,3" />
+      <text x="${padL - 8}" y="${yPos + 4}" font-size="11" fill="#64748b" text-anchor="end">${val}kg</text>
+    `;
+  }
+
+  // 折れ線と点
+  let pathD = "";
+  let dotsHtml = "";
+  let monthLabelsHtml = "";
+  const numPts = points.length;
+
+  points.forEach((pt, idx) => {
+    const xPos = padL + (idx / (numPts - 1)) * graphW;
+    const shortM = pt.month.slice(5) + "月";
+    monthLabelsHtml += `<text x="${xPos}" y="${svgH - padB + 18}" font-size="11" fill="#475569" text-anchor="middle">${shortM}</text>`;
+
+    if (pt.weight !== null) {
+      const yPos = padT + graphH - ((pt.weight - minW) / range) * graphH;
+      if (!pathD) {
+        pathD = `M ${xPos} ${yPos}`;
+      } else {
+        pathD += ` L ${xPos} ${yPos}`;
+      }
+      dotsHtml += `
+        <circle cx="${xPos}" cy="${yPos}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2" />
+        <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#1e3a8a" text-anchor="middle">${pt.weight}kg</text>
+      `;
+    }
+  });
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+      <div style="font-weight:bold; font-size:14px; color:#1e3a8a;">
+        📈 過去1年間の体重推移グラフ (${targetRes ? `${targetRes.name} 様` : ''})
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${resButtons}
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:${svgW}px; height:auto; background:#f8fafc; border-radius:6px; display:block;">
+        ${gridLines}
+        ${pathD ? `<path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ''}
+        ${dotsHtml}
+        ${monthLabelsHtml}
+      </svg>
+    </div>
+  `;
 }
 
 function saveWeight(resId) {
@@ -2447,6 +2938,68 @@ function saveGrooming(resId) {
   alert("身だしなみチェックを保存しました！");
 }
 
+function submitGroomingsBatch() {
+  const staff = document.getElementById("currentStaff").value;
+  const nowTm = new Date().toTimeString().slice(0, 5);
+  let savedCount = 0;
+
+  gState.residents.forEach(r => {
+    const nailEl = document.getElementById(`gNail_${r.id}`);
+    const shaveEl = document.getElementById(`gShave_${r.id}`);
+    const earEl = document.getElementById(`gEar_${r.id}`);
+    const notesEl = document.getElementById(`gNotes_${r.id}`);
+    if (!nailEl || !shaveEl || !earEl) return;
+
+    const nail = nailEl.checked ? 1 : 0;
+    const shave = shaveEl.checked ? 1 : 0;
+    const ear = earEl.checked ? 1 : 0;
+    const notes = notesEl ? notesEl.value.trim() : "";
+
+    if (nail || shave || ear || notes) {
+      let existing = (db.data.groomings || []).find(g => g.date === gState.selectedDate && g.resident_id === r.id);
+      if (existing) {
+        existing.nail_done = nail;
+        existing.shave_done = shave;
+        existing.ear_done = ear;
+        existing.notes = notes;
+        existing.staff_name = staff;
+      } else {
+        db.data.groomings.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          date: gState.selectedDate,
+          resident_id: r.id,
+          nail_done: nail,
+          shave_done: shave,
+          ear_done: ear,
+          notes: notes,
+          staff_name: staff
+        });
+      }
+
+      const parts = [];
+      if (nail) parts.push("爪切り");
+      if (shave) parts.push("髭剃り");
+      if (ear) parts.push("耳掃除");
+      if (notes) parts.push(`特記:${notes}`);
+      
+      db.data.care_records.unshift({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        recorded_at: `${gState.selectedDate} ${nowTm}`,
+        resident_id: r.id,
+        category: "身だしなみ",
+        content: `身だしなみケア実施: ${parts.join(", ")}`,
+        staff_name: staff
+      });
+      savedCount++;
+    }
+  });
+
+  db.save();
+  renderGroomingTable();
+  loadDateRecords(gState.selectedDate);
+  alert(`身だしなみチェックを一括確定しました（${savedCount}名分のケアを個人記録へ転記完了）！`);
+}
+
 // 11. レク履歴
 function renderRecreationTable() {
   const tbody = document.querySelector("#recreationTable tbody");
@@ -2499,15 +3052,17 @@ function submitVisitation() {
   alert("面会・差し入れ荷物を登録しました！個人記録へ自動転記されました。");
 }
 
-// 13. 連絡帳 ＆ 【認】名前スタンプ (時間なし)
+// 13. 連絡帳 ＆ 【認】名前スタンプ ＆ 月間業務連絡表 (完全分離)
 function renderNotebook() {
+  renderMonthlyNotices();
+
   const list = document.getElementById("notebookList");
   if (!list) return;
   list.innerHTML = "";
   const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
 
   if (notebooks.length === 0) {
-    list.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">本日の連絡事項・申し送りはありません。</p>';
+    list.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">本日の引継ぎ・申し送り事項はありません。</p>';
   } else {
     notebooks.forEach(nb => {
       const card = document.createElement("div");
@@ -2622,12 +3177,180 @@ function removeNotebookStamp(date, staffName) {
   }
 }
 
+// 📢 月間業務連絡表 (全館・当月1ヶ月間継続掲示・変更事項等)
+function renderMonthlyNotices() {
+  const container = document.getElementById("monthlyNoticeList");
+  const alertArea = document.getElementById("monthlyNoticeAlertArea");
+  if (!container) return;
+  container.innerHTML = "";
+  if (alertArea) alertArea.innerHTML = "";
+
+  const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+  const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+
+  // 未確認アラート表示
+  if (currentStaff && notices.length > 0) {
+    const unconfirmed = notices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
+    if (unconfirmed.length > 0 && alertArea) {
+      alertArea.innerHTML = `
+        <div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
+          ⚠️ ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「✓ 確認済にする」を押してください。
+        </div>
+      `;
+    }
+  }
+
+  if (notices.length === 0) {
+    container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
+    return;
+  }
+
+  notices.forEach(n => {
+    const isConfirmedByMe = currentStaff && (n.confirmed_staff || []).includes(currentStaff);
+    let prioStyle = "background:#f1f5f9; color:#475569;";
+    if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+    else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
+
+    const confirmedListStr = (n.confirmed_staff || []).length > 0
+      ? (n.confirmed_staff || []).join("・")
+      : "未確認";
+
+    const card = document.createElement("div");
+    card.style.background = isConfirmedByMe ? "#f8fafc" : "#ffffff";
+    card.style.border = isConfirmedByMe ? "1px solid #cbd5e1" : "2px solid #818cf8";
+    card.style.borderRadius = "8px";
+    card.style.padding = "12px 14px";
+    card.style.marginBottom = "10px";
+    card.style.boxShadow = isConfirmedByMe ? "none" : "0 2px 6px rgba(99,102,241,0.15)";
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
+          <strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+          <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
+        </div>
+      </div>
+      <div style="font-size:13.5px; line-height:1.7; color:#334155; margin:8px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; padding-top:8px; font-size:12px;">
+        <div style="color:#64748b;">
+          <strong>確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
+        </div>
+        <div>
+          ${isConfirmedByMe ? `
+            <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="confirmMonthlyNotice(${n.id})">
+              ✓ 確認済 (解除する)
+            </button>
+          ` : `
+            <button class="btn btn-primary" style="padding:4px 14px; font-size:12px; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
+              ✓ 私が確認済みにする
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function openMonthlyNoticeModal() {
+  const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+  document.getElementById("noticeMonth").value = curMonth;
+  document.getElementById("noticePriority").value = "重要";
+  document.getElementById("noticeTitle").value = "";
+  document.getElementById("noticeContent").value = "";
+  document.getElementById("monthlyNoticeModal").style.display = "flex";
+}
+
+function submitMonthlyNotice() {
+  const m = document.getElementById("noticeMonth").value;
+  const prio = document.getElementById("noticePriority").value;
+  const title = document.getElementById("noticeTitle").value.trim();
+  const content = document.getElementById("noticeContent").value.trim();
+  const staff = document.getElementById("currentStaff").value || "施設長";
+
+  if (!m || !title || !content) {
+    alert("対象月、件名、連絡内容は必須入力です。");
+    return;
+  }
+
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+
+  if (!Array.isArray(db.data.monthly_notices)) db.data.monthly_notices = [];
+  db.data.monthly_notices.unshift({
+    id: Date.now(),
+    month: m,
+    priority: prio,
+    title: title,
+    content: content,
+    staff_name: staff,
+    created_at: nowStr,
+    confirmed_staff: [staff]
+  });
+
+  db.save();
+  closeModal("monthlyNoticeModal");
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+  alert(`月間業務連絡「${title}」を登録しました！全職員に1ヶ月間掲示されます。`);
+}
+
+function confirmMonthlyNotice(id) {
+  const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
+  if (!currentStaff) {
+    alert("担当職員を選択してください。");
+    return;
+  }
+
+  const notice = (db.data.monthly_notices || []).find(n => n.id === id);
+  if (!notice) return;
+  if (!Array.isArray(notice.confirmed_staff)) notice.confirmed_staff = [];
+
+  const idx = notice.confirmed_staff.indexOf(currentStaff);
+  if (idx !== -1) {
+    notice.confirmed_staff.splice(idx, 1);
+  } else {
+    notice.confirmed_staff.push(currentStaff);
+  }
+
+  db.save();
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+}
+
+function deleteMonthlyNotice(id) {
+  if (!confirm("この月間業務連絡を削除してもよろしいですか？")) return;
+  db.data.monthly_notices = (db.data.monthly_notices || []).filter(n => n.id !== id);
+  db.save();
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+}
+
 // 14. 現場クイック消費 (優しい「修正」ボタン付き)
+let gPendingConsume = null;
+
 function renderQuickConsume() {
   const r = gState.residents.find(x => x.id === gState.selectedResidentId);
-  document.getElementById("consumeResidentName").textContent = r ? r.name : "利用者";
+  const nameEl = document.getElementById("consumeResidentName");
+  if (nameEl) nameEl.textContent = r ? r.name : "利用者";
+
+  // 利用者切り替えドロップダウンの同期
+  const sel = document.getElementById("consumeResidentSelect");
+  if (sel) {
+    sel.innerHTML = gState.residents.map(res => `
+      <option value="${res.id}" ${res.id === gState.selectedResidentId ? 'selected' : ''}>
+        ${res.room_no}号室 ${res.name} 様
+      </option>
+    `).join("");
+  }
 
   const grid = document.getElementById("quickConsumeGrid");
+  if (!grid) return;
   grid.innerHTML = "";
 
   gState.inventory.forEach(item => {
@@ -2642,14 +3365,14 @@ function renderQuickConsume() {
 
     card.innerHTML = `
       <div>
-        <div style="font-weight:bold; font-size:14px;">${item.name}</div>
+        <div style="font-weight:bold; font-size:14px; color:#1e293b;">${item.name}</div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-          現在庫: ${item.current_stock} ${item.unit} | 単価: ¥${item.unit_price}
-          ${item.is_personal_billable ? '<span style="color:#0284c7;">[個人請求対象]</span>' : '<span style="color:#16a34a;">[施設負担]</span>'}
+          現在庫: <strong>${item.current_stock}</strong> ${item.unit} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
+          ${item.is_personal_billable ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
         </div>
       </div>
       <div style="margin-top:10px;">
-        <button class="btn btn-primary" style="width:100%; padding:8px; font-size:14px;" onclick="consumeItem(${item.id}, 1)">➖ 1${item.unit}使用</button>
+        <button class="btn btn-primary" style="width:100%; padding:8px; font-size:13px; font-weight:bold;" onclick="consumeItem(${item.id}, 1)">➖ 1${item.unit}使用する</button>
       </div>
     `;
     grid.appendChild(card);
@@ -2658,48 +3381,95 @@ function renderQuickConsume() {
   renderRecentConsumeLogs();
 }
 
+function onConsumeResidentChange() {
+  const sel = document.getElementById("consumeResidentSelect");
+  if (!sel) return;
+  const newId = parseInt(sel.value, 10);
+  if (!isNaN(newId)) {
+    gState.selectedResidentId = newId;
+    renderResidentsStrip();
+    renderResidentDetail();
+    updateRecordTargetBanner();
+    renderQuickConsume();
+  }
+}
+
 function consumeItem(itemId, qty) {
   const item = gState.inventory.find(i => i.id === itemId);
   const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  if (!item || !res) return;
+
+  gPendingConsume = { itemId, qty, resId: res.id };
+
+  const billNote = item.is_personal_billable
+    ? `<div style="margin-top:8px; font-size:12px; color:#0284c7; background:#f0f9ff; padding:6px 10px; border-radius:4px;">※ 個人購入として月次請求明細に 1${item.unit} (¥${item.unit_price.toLocaleString()}) 自動計上されます。<br>（預かり金出納帳の残高からは引かれません）</div>`
+    : `<div style="margin-top:8px; font-size:12px; color:#15803d; background:#f0fdf4; padding:6px 10px; border-radius:4px;">※ 施設負担備品として在庫から消費されます。</div>`;
+
+  const msgEl = document.getElementById("confirmConsumeMsg");
+  if (msgEl) {
+    msgEl.innerHTML = `
+      <strong style="font-size:16px; color:#1e3a8a;">${res.room_no}号室 ${res.name} 様</strong> に<br>
+      【<strong>${item.name}</strong>】 を <strong>${qty} ${item.unit}</strong> 使用します。<br><br>
+      対象者と物品はお間違いないですか？
+      ${billNote}
+    `;
+    document.getElementById("confirmConsumeModal").style.display = "flex";
+  } else {
+    // モーダルがない場合のフォールバック
+    if (confirm(`${res.name}様に「${item.name}」を${qty}${item.unit}使用します。よろしいですか？`)) {
+      executeConsume();
+    }
+  }
+}
+
+function executeConsume() {
+  if (!gPendingConsume) return;
+  const { itemId, qty, resId } = gPendingConsume;
+  const item = gState.inventory.find(i => i.id === itemId);
+  const res = gState.residents.find(r => r.id === resId);
   const staff = document.getElementById("currentStaff").value;
   const now = new Date();
   const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
 
-  item.current_stock -= qty;
+  if (item) {
+    item.current_stock -= qty;
 
-  if (item.is_personal_billable === 1) {
-    db.data.consumptions.unshift({
-      id: Date.now(),
-      consumed_at: nowStr,
-      resident_id: gState.selectedResidentId,
+    if (item.is_personal_billable === 1) {
+      db.data.consumptions.unshift({
+        id: Date.now(),
+        consumed_at: nowStr,
+        resident_id: resId,
+        item_id: item.id,
+        item_name: item.name,
+        quantity: qty,
+        unit_price: item.unit_price,
+        subtotal: item.unit_price * qty,
+        staff_name: staff
+      });
+    }
+
+    const logId = Date.now() + 1;
+    db.data.inventory_logs.unshift({
+      id: logId,
+      timestamp: nowStr,
       item_id: item.id,
       item_name: item.name,
-      quantity: qty,
-      unit_price: item.unit_price,
-      subtotal: item.unit_price * qty,
-      staff_name: staff
+      action_type: "消費",
+      change_qty: -qty,
+      after_qty: item.current_stock,
+      resident_id: resId,
+      resident_name: res ? res.name : "",
+      staff_name: staff,
+      reason: "現場ケア時使用"
     });
+
+    db.save();
+    renderQuickConsume();
+    checkGlobalAlerts();
+    closeModal("confirmConsumeModal");
+    alert(`${res ? res.name : ''}様に ${item.name} を ${qty}${item.unit} 消費記録しました！`);
   }
-
-  const logId = Date.now() + 1;
-  db.data.inventory_logs.unshift({
-    id: logId,
-    timestamp: nowStr,
-    item_id: item.id,
-    item_name: item.name,
-    action_type: "消費",
-    change_qty: -qty,
-    after_qty: item.current_stock,
-    resident_id: gState.selectedResidentId,
-    resident_name: res ? res.name : "",
-    staff_name: staff,
-    reason: "ケア時使用"
-  });
-
-  db.save();
-  renderQuickConsume();
-  checkGlobalAlerts();
-  alert(`${item.name} を${qty}点消費しました！`);
+  gPendingConsume = null;
 }
 
 function renderRecentConsumeLogs() {
@@ -2994,34 +3764,140 @@ function renderOfficeFireDrills() {
   });
 }
 
-// 法定委員会
+// 法定委員会・研修記録
 function renderOfficeCommittees() {
   const tbody = document.querySelector("#committeeTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
-  const list = db.data.committees || db.data.committee_meetings || [];
+  const list = db.data.committees || [];
+  if (list.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="7" style="text-align:center; color:#64748b; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
   list.forEach(c => {
     const tr = document.createElement("tr");
+    const cat = c.category || "法定委員会";
+    let catBadgeColor = "#2563eb";
+    let catBgColor = "#dbeafe";
+    if (cat === "施設内研修") {
+      catBadgeColor = "#166534";
+      catBgColor = "#dcfce7";
+    } else if (cat === "外部研修") {
+      catBadgeColor = "#7c2d12";
+      catBgColor = "#ffedd5";
+    } else if (cat === "その他業務項目") {
+      catBadgeColor = "#4b5563";
+      catBgColor = "#f3f4f6";
+    }
+
     tr.innerHTML = `
-      <td>${c.date}</td>
-      <td><strong>${c.committee_name}</strong></td>
+      <td>${c.date || '-'}</td>
+      <td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${cat}</span></td>
+      <td><strong>${c.committee_name || c.name || '-'}</strong></td>
       <td>${c.attendees || '-'}</td>
       <td>${c.agenda || '-'}</td>
-      <td>${c.content}</td>
+      <td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${c.content || '-'}</td>
+      <td>
+        <button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#dc2626;" onclick="deleteCommittee(${c.id})">削除</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// 発注 ＆ 上司承認
+function openCommitteeModal() {
+  const today = new Date().toISOString().split("T")[0];
+  const dateInput = document.getElementById("comDate");
+  if (dateInput) dateInput.value = today;
+  const nameInput = document.getElementById("comName");
+  if (nameInput) nameInput.value = "";
+  const attendeesInput = document.getElementById("comAttendees");
+  if (attendeesInput) {
+    const curStaff = document.getElementById("currentStaff")?.value || "";
+    attendeesInput.value = curStaff;
+  }
+  const agendaInput = document.getElementById("comAgenda");
+  if (agendaInput) agendaInput.value = "";
+  const contentInput = document.getElementById("comContent");
+  if (contentInput) contentInput.value = "";
+  const catInput = document.getElementById("comCategory");
+  if (catInput) catInput.value = "法定委員会";
+
+  const modal = document.getElementById("committeeModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function submitCommittee() {
+  const date = document.getElementById("comDate")?.value;
+  const category = document.getElementById("comCategory")?.value || "法定委員会";
+  const name = document.getElementById("comName")?.value?.trim();
+  const attendees = document.getElementById("comAttendees")?.value?.trim() || "-";
+  const agenda = document.getElementById("comAgenda")?.value?.trim() || "-";
+  const content = document.getElementById("comContent")?.value?.trim();
+
+  if (!date || !name || !content) {
+    alert("開催日、委員会・研修名、および協議内容は必須項目です。");
+    return;
+  }
+
+  if (!db.data.committees) db.data.committees = [];
+  const newRecord = {
+    id: Date.now(),
+    date: date,
+    category: category,
+    committee_name: name,
+    attendees: attendees,
+    agenda: agenda,
+    content: content,
+    created_at: new Date().toISOString().replace("T", " ").slice(0, 16)
+  };
+  db.data.committees.unshift(newRecord);
+  db.save();
+  closeModal("committeeModal");
+  renderOfficeCommittees();
+  alert("法定委員会・研修記録を登録・保存しました！");
+}
+
+function deleteCommittee(id) {
+  if (!confirm("この委員会・研修記録を削除してもよろしいですか？")) return;
+  if (!db.data.committees) return;
+  db.data.committees = db.data.committees.filter(c => c.id !== id);
+  db.save();
+  renderOfficeCommittees();
+}
+
+// 発注 ＆ 上司承認 (管理者のみ認証・閲覧制限)
 function renderOfficeOrders() {
   const tbody = document.querySelector("#ordersTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
+  const isAdmin = isCurrentStaffAdmin();
+
   (db.data.orders || []).forEach(o => {
     const tr = document.createElement("tr");
     let badgeColor = "#fef3c7; color:#92400e;";
     if (o.status === "承認済") badgeColor = "#dbeafe; color:#1e40af;";
     if (o.status === "納品完了") badgeColor = "#dcfce7; color:#166534;";
     if (o.status === "差戻し") badgeColor = "#fee2e2; color:#991b1b;";
+
+    let actionButtons = "";
+    if (o.status === "申請中") {
+      if (isAdmin) {
+        actionButtons = `
+          <button class="btn btn-primary" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '承認済')">上司承認</button>
+          <button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '差戻し')">差戻し</button>
+        `;
+      } else {
+        actionButtons = `<span style="font-size:11px; color:#94a3b8; background:#f1f5f9; padding:3px 6px; border-radius:4px;">※ 承認権限: 管理者のみ</span>`;
+      }
+    } else if (o.status === "承認済") {
+      actionButtons = `
+        <button class="btn btn-success" style="padding:4px 8px; font-size:12px;" onclick="receiveOrder(${o.id})">納品受取 (在庫加算)</button>
+      `;
+    }
 
     tr.innerHTML = `
       <td>${o.ordered_at || o.order_date || '-'}</td>
@@ -3032,21 +3908,17 @@ function renderOfficeOrders() {
       <td>${o.reason || '-'}</td>
       <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${o.status}</span></td>
       <td>${o.applicant} / ${o.approver || '-'}</td>
-      <td>
-        ${o.status === '申請中' ? `
-          <button class="btn btn-primary" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '承認済')">上司承認</button>
-          <button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '差戻し')">差戻し</button>
-        ` : ''}
-        ${o.status === '承認済' ? `
-          <button class="btn btn-success" style="padding:4px 8px; font-size:12px;" onclick="receiveOrder(${o.id})">納品受取 (在庫加算)</button>
-        ` : ''}
-      </td>
+      <td>${actionButtons}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 function approveOrder(id, status) {
+  if (!isCurrentStaffAdmin()) {
+    alert("⚠️ 発注申請の承認・差戻しは管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
+    return;
+  }
   const staff = document.getElementById("currentStaff").value;
   const o = db.data.orders.find(x => x.id === id);
   if (o) {
@@ -3600,6 +4472,13 @@ function openAddResidentModal() {
   document.getElementById("resDrInstructions").value = "";
   document.getElementById("resNextClinicDate").value = "";
   document.getElementById("resCareExpiryDate").value = "";
+  document.getElementById("resClinicSpecialNotes").value = "";
+  document.getElementById("resBpHighMax").value = "";
+  document.getElementById("resBpHighMin").value = "";
+  document.getElementById("resTempMax").value = "";
+  document.getElementById("resSpo2Min").value = "";
+  document.getElementById("resPulseMax").value = "";
+  document.getElementById("resPulseMin").value = "";
 
   document.getElementById("residentModal").style.display = "flex";
 }
@@ -3629,6 +4508,13 @@ function openEditResidentModal(id) {
   document.getElementById("resDrInstructions").value = r.dr_instructions || "";
   document.getElementById("resNextClinicDate").value = r.next_clinic_date || "";
   document.getElementById("resCareExpiryDate").value = r.care_expiry_date || "";
+  document.getElementById("resClinicSpecialNotes").value = r.clinic_special_notes || "";
+  document.getElementById("resBpHighMax").value = r.bp_high_max || "";
+  document.getElementById("resBpHighMin").value = r.bp_high_min || "";
+  document.getElementById("resTempMax").value = r.temp_max || "";
+  document.getElementById("resSpo2Min").value = r.spo2_min || "";
+  document.getElementById("resPulseMax").value = r.pulse_max || "";
+  document.getElementById("resPulseMin").value = r.pulse_min || "";
 
   document.getElementById("residentModal").style.display = "flex";
 }
@@ -3661,7 +4547,14 @@ function submitResidentForm() {
     life_history: document.getElementById("resLifeHistory").value.trim(),
     dr_instructions: document.getElementById("resDrInstructions").value.trim(),
     next_clinic_date: document.getElementById("resNextClinicDate").value,
-    care_expiry_date: document.getElementById("resCareExpiryDate").value
+    care_expiry_date: document.getElementById("resCareExpiryDate").value,
+    clinic_special_notes: document.getElementById("resClinicSpecialNotes").value.trim(),
+    bp_high_max: document.getElementById("resBpHighMax").value ? parseInt(document.getElementById("resBpHighMax").value, 10) : null,
+    bp_high_min: document.getElementById("resBpHighMin").value ? parseInt(document.getElementById("resBpHighMin").value, 10) : null,
+    temp_max: document.getElementById("resTempMax").value ? parseFloat(document.getElementById("resTempMax").value) : null,
+    spo2_min: document.getElementById("resSpo2Min").value ? parseInt(document.getElementById("resSpo2Min").value, 10) : null,
+    pulse_max: document.getElementById("resPulseMax").value ? parseInt(document.getElementById("resPulseMax").value, 10) : null,
+    pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null
   };
 
   let targetId;

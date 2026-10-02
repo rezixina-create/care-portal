@@ -221,16 +221,16 @@ namespace CarePortal
                                 File.WriteAllText(_dbFile, postData, Encoding.UTF8);
                                 try
                                 {
-                                    string backupName = "backup_" + DateTime.Now.ToString("yyyyMMdd_HH") + ".json";
-                                    string backupPath = Path.Combine(_backupDir, backupName);
-                                    if (!File.Exists(backupPath))
-                                    {
-                                        File.WriteAllText(backupPath, postData, Encoding.UTF8);
-                                    }
+                                    string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+                                    string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
+                                    File.WriteAllText(backupPath, postData, Encoding.UTF8);
+                                    string latestPath = Path.Combine(_backupDir, "backup_latest.json");
+                                    File.WriteAllText(latestPath, postData, Encoding.UTF8);
                                 }
                                 catch { }
                             }
-                            SendJsonResponse(stream, 200, "{\"success\":true,\"saved_at\":\"" + DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss") + "\"}");
+                            string nowTime = DateTime.Now.ToString("HH:mm");
+                            SendJsonResponse(stream, 200, "{\"success\":true,\"saved_at\":\"" + nowTime + "\"}");
                         }
                         else
                         {

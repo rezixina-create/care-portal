@@ -204,7 +204,7 @@
       assert(db.data.incidents.length === incidentInitialCount + 1, "Test 13: 事故・ヒヤリハット報告書の保存が正常");
 
       // 9. 消耗品在庫管理・自動出庫テスト
-      const initialPaperDiaper = (db.data.inventory || []).find(i => i.item_name.includes("紙パンツ"));
+      const initialPaperDiaper = (db.data.inventory || []).find(i => (i.name || i.item_name || "").includes("パンツ"));
       assert(initialPaperDiaper && initialPaperDiaper.current_stock > 0, "Test 14: 消耗品マスターおよび初期在庫が正常保持されていること");
 
       // 10. クラウド同期/サーバー通信ロジックテスト
@@ -278,7 +278,18 @@
       const badgeText = document.getElementById("recordB5Badge").textContent;
       assert(badgeText.includes("B5用紙1枚適量"), "Test 36: B5目安判定ゲージが850文字で『B5用紙1枚適量』と判定されること");
 
-      // 17. 総合結果判定
+      // 17. 新改善要件（全16項目関連）の機能・関数完全性テスト
+      assert(typeof isCurrentStaffAdmin === "function", "Test 37: 管理者認証判定関数 (isCurrentStaffAdmin) が存在すること");
+      assert(typeof renderWeightChart === "function", "Test 38: 月次体重表 1年間SVG折れ線グラフ描画関数 (renderWeightChart) が存在すること");
+      assert(Array.isArray(db.data.daily_schedules) && db.data.daily_schedules.length >= 10, "Test 39: 業務日誌日課スケジュール (daily_schedules) が正常保持されていること");
+      assert(Array.isArray(db.data.monthly_notices) && db.data.monthly_notices.length >= 2, "Test 40: 月間業務連絡表 (monthly_notices) が正常保持されていること");
+      assert(typeof renderOfficeCommittees === "function" && typeof submitCommittee === "function", "Test 41: 法定委員会・研修記録管理関数 (renderOfficeCommittees, submitCommittee) が存在すること");
+      assert(typeof checkGlobalAlerts === "function", "Test 42: 排便3日以上なし・往診指示・未確認通知の全域アラート関数 (checkGlobalAlerts) が存在すること");
+      assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function", "Test 43: 夜間体位変換トグル＆一括確定関数 (toggleNightTurnAction, submitNightTurnsBatch) が存在すること");
+      assert(typeof submitGroomingsBatch === "function", "Test 44: 身だしなみ一括確定関数 (submitGroomingsBatch) が存在すること");
+      assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
+
+      // 18. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
