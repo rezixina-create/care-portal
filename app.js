@@ -6092,7 +6092,7 @@ function generateMonthlyShiftAction() {
   }
   generateMonthlyShiftData(ym);
   renderShiftTable(ym);
-  alert(`✅ ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（週休2日）\n・公休：全員週休2日配分`);
+  alert(`✅ ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・早出・遅出：毎日必ず各1名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（土日祝・年末年始休み）\n・公休：全員週休2日配分`);
 }
 
 // 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
@@ -6165,6 +6165,24 @@ function isHolidayOrYearEnd(year, month, day) {
   return { isHoliday: false, name: null };
 }
 
+// 職員の職種カテゴリ判定 (director:施設長, office:事務員, nurse:看護師, care:介護職員)
+function getStaffRoleCategory(staffName) {
+  const allStamps = db.data.stamps || [];
+  const staff = allStamps.find(s => (s.name || s) === staffName);
+  const role = staff && staff.role ? staff.role : "";
+  const name = staffName || "";
+  if (role.includes("施設長") || role.includes("管理者") || name.includes("施設長") || name.includes("木村")) {
+    return "director";
+  }
+  if (role.includes("事務") || name.includes("田中") || name.includes("松本")) {
+    return "office";
+  }
+  if (role.includes("看護") || name.includes("鈴木") || name.includes("加藤")) {
+    return "nurse";
+  }
+  return "care";
+}
+
 function generateMonthlyShiftData(yearMonth) {
   if (!yearMonth) yearMonth = getShiftYearMonth();
   const [yearStr, monthStr] = yearMonth.split("-");
@@ -6176,14 +6194,15 @@ function generateMonthlyShiftData(yearMonth) {
   const allStamps = sortStaffList(db.data.stamps || []);
   const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
 
-  const isDirector = s => (s.role && (s.role.includes("施設長") || s.role.includes("管理者"))) || s.name.includes("施設長") || s.name.includes("木村");
-  const isOffice = s => (s.role && s.role.includes("事務")) || s.name.includes("田中") || s.name.includes("松本");
-  const isNurse = s => (s.role && s.role.includes("看護")) || s.name.includes("鈴木") || s.name.includes("加藤");
+  const isDirector = s => getStaffRoleCategory(s.name) === "director";
+  const isOffice = s => getStaffRoleCategory(s.name) === "office";
+  const isNurse = s => getStaffRoleCategory(s.name) === "nurse";
+  const isCare = s => getStaffRoleCategory(s.name) === "care";
 
-  const directors = staffList.filter(s => isDirector(s));
-  const officeStaff = staffList.filter(s => isOffice(s) && !isDirector(s));
-  const nurses = staffList.filter(s => isNurse(s) && !isDirector(s));
-  const careStaff = staffList.filter(s => !isDirector(s) && !isOffice(s) && !isNurse(s));
+  const directors = staffList.filter(isDirector);
+  const officeStaff = staffList.filter(isOffice);
+  const nurses = staffList.filter(isNurse);
+  const careStaff = staffList.filter(isCare);
 
   // NGペアチェック関数
   const ngPairs = db.data.shift_ng_pairs || [];
@@ -6237,16 +6256,24 @@ function generateMonthlyShiftData(yearMonth) {
     }
   });
 
-  // 5. 介護職員 (10名体制): 毎日2名夜勤、連夜勤不可、特例配慮(同番NG)、週休2日、早遅日均等
+  // 5. 介護職員 (10名体制): 毎日必ず「早出1名」「遅出1名」「夜勤2名」配置、明け2名、週休2日、残り日勤
   if (careStaff.length > 0) {
     const careNames = careStaff.map(s => s.name);
     const nightCount = {};
-    careNames.forEach(n => nightCount[n] = 0);
+    const earlyCount = {};
+    const lateCount = {};
+    const holidayCount = {};
+    careNames.forEach(n => {
+      nightCount[n] = 0;
+      earlyCount[n] = 0;
+      lateCount[n] = 0;
+      holidayCount[n] = 0;
+    });
 
     // 月間公休目標 (週休2日 = 約8〜9日)
     const targetHolidays = Math.floor(daysInMonth / 7) * 2 + (daysInMonth % 7 >= 5 ? 1 : 0);
-    const holidayCount = {};
-    careNames.forEach(n => holidayCount[n] = 0);
+    const dailyCareHolidays = {};
+    for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
 
     // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
     for (let d = 1; d <= daysInMonth; d++) {
@@ -6295,44 +6322,43 @@ function generateMonthlyShiftData(yearMonth) {
     }
 
     // Step B: 週休2日 (公休「休」) の配分
-    // 夜勤明けの翌日を優先して「休」とする
+    // 1日の介護職公休数は最大3名までに制御（毎日最低3〜4名が日中勤務可能）
+    // 優先1: 夜勤明けの翌日を優先して「休」とする
     for (let d = 1; d <= daysInMonth; d++) {
       careNames.forEach(n => {
         if (!shiftData[n][d]) {
-          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays) {
+          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays && dailyCareHolidays[d] < 3) {
             shiftData[n][d] = "休";
             holidayCount[n]++;
+            dailyCareHolidays[d]++;
           }
         }
       });
     }
 
-    // 週ごとのブロックで公休をバランス良く配分
-    const totalBlocks = Math.ceil(daysInMonth / 7);
-    for (let b = 0; b < totalBlocks; b++) {
-      const sDay = b * 7 + 1;
-      const eDay = Math.min((b + 1) * 7, daysInMonth);
-      careNames.forEach(n => {
-        if (holidayCount[n] < targetHolidays) {
-          for (let d = sDay; d <= eDay; d++) {
-            if (!shiftData[n][d]) {
-              shiftData[n][d] = "休";
-              holidayCount[n]++;
-              if (holidayCount[n] >= targetHolidays) break;
-            }
+    // 優先2: 各日に公休をバランス配分 (1日最大3名まで)
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (dailyCareHolidays[d] < 3) {
+        const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
+        for (const n of sortedCare) {
+          if (holidayCount[n] < targetHolidays && !shiftData[n][d] && dailyCareHolidays[d] < 3) {
+            shiftData[n][d] = "休";
+            holidayCount[n]++;
+            dailyCareHolidays[d]++;
           }
         }
-      });
+      }
     }
 
-    // 目標未達の場合は空きセルに公休を補填
+    // 目標未達者がいれば空き日に公休を充当
     careNames.forEach(n => {
       while (holidayCount[n] < targetHolidays) {
         let ok = false;
         for (let d = 1; d <= daysInMonth; d++) {
-          if (!shiftData[n][d]) {
+          if (!shiftData[n][d] && dailyCareHolidays[d] < 3) {
             shiftData[n][d] = "休";
             holidayCount[n]++;
+            dailyCareHolidays[d]++;
             ok = true;
             break;
           }
@@ -6341,15 +6367,41 @@ function generateMonthlyShiftData(yearMonth) {
       }
     });
 
-    // Step C: 残りの空き日に日中勤務 (早・遅・日) をバランス良く割り当て
-    const dayShiftTypes = ["早", "遅", "日"];
+    // Step C: 毎日必ず「早出1名」「遅出1名」を割り当て、残りを日勤「日」とする
     for (let d = 1; d <= daysInMonth; d++) {
-      let shiftTypeIdx = (d * 2) % 3;
-      careNames.forEach(n => {
-        if (!shiftData[n][d]) {
-          shiftData[n][d] = dayShiftTypes[shiftTypeIdx % 3];
-          shiftTypeIdx++;
-        }
+      const avail = careNames.filter(n => !shiftData[n][d]);
+
+      // 早出の選定 (1名必ず選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
+      const earlyCandidates = [...avail].sort((a, b) => {
+        const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
+        const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
+        if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate; // 前日遅番の人は後回し
+        const eDiff = earlyCount[a] - earlyCount[b];
+        if (eDiff !== 0) return eDiff;
+        return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
+      });
+      const pickedEarly = earlyCandidates[0];
+      if (pickedEarly) {
+        shiftData[pickedEarly][d] = "早";
+        earlyCount[pickedEarly]++;
+      }
+
+      // 遅出の選定 (1名必ず選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
+      const lateCandidates = avail.filter(n => n !== pickedEarly).sort((a, b) => {
+        const lDiff = lateCount[a] - lateCount[b];
+        if (lDiff !== 0) return lDiff;
+        return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
+      });
+      const pickedLate = lateCandidates[0];
+      if (pickedLate) {
+        shiftData[pickedLate][d] = "遅";
+        lateCount[pickedLate]++;
+      }
+
+      // 残りの出勤介護職員はすべて「日」（日勤）
+      const remainingDay = avail.filter(n => n !== pickedEarly && n !== pickedLate);
+      remainingDay.forEach(n => {
+        shiftData[n][d] = "日";
       });
     }
   }
@@ -6367,8 +6419,8 @@ function renderShiftTable(yearMonth) {
   const month = parseInt(monthStr, 10);
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  // シフトデータが存在しなければ自動生成
-  if (!db.data.monthly_shifts || !db.data.monthly_shifts[ym]) {
+  // シフトデータが存在しないか空オブジェクトであれば自動生成
+  if (!db.data.monthly_shifts || !db.data.monthly_shifts[ym] || Object.keys(db.data.monthly_shifts[ym]).length === 0) {
     generateMonthlyShiftData(ym);
   }
   const shiftData = db.data.monthly_shifts[ym] || {};
@@ -6381,7 +6433,9 @@ function renderShiftTable(yearMonth) {
 
   const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
 
-  // 日別統計用
+  // 日別統計用 (早出1名・遅出1名・夜勤2名体制監視)
+  const dailyEarlyCount = new Array(daysInMonth + 1).fill(0);
+  const dailyLateCount = new Array(daysInMonth + 1).fill(0);
   const dailyNightCount = new Array(daysInMonth + 1).fill(0);
   const dailyDayCount = new Array(daysInMonth + 1).fill(0);
   const dailyHolidayCount = new Array(daysInMonth + 1).fill(0);
@@ -6469,9 +6523,9 @@ function renderShiftTable(yearMonth) {
 
       let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
       let badgeClass = "";
-      if (sym === "早") { badgeClass = "shift-badge shift-haya"; workDays++; dailyDayCount[d]++; }
+      if (sym === "早") { badgeClass = "shift-badge shift-haya"; workDays++; dailyEarlyCount[d]++; }
       else if (sym === "日") { badgeClass = "shift-badge shift-nichi"; workDays++; dailyDayCount[d]++; }
-      else if (sym === "遅") { badgeClass = "shift-badge shift-osoba"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "遅") { badgeClass = "shift-badge shift-osoba"; workDays++; dailyLateCount[d]++; }
       else if (sym === "夜") { badgeClass = "shift-badge shift-yakan"; workDays++; nightDays++; dailyNightCount[d]++; }
       else if (sym === "明") { badgeClass = "shift-badge shift-ake"; workDays++; }
       else if (sym === "休") { badgeClass = "shift-badge shift-kyu"; holidays++; dailyHolidayCount[d]++; }
@@ -6494,61 +6548,99 @@ function renderShiftTable(yearMonth) {
 
   tbodyHtml += "</tbody>";
 
-  // 3. フッター集計行 (🌙夜勤2名チェック、☀️日中人数、🍵公休人数)
+  // 3. フッター集計行 (🌅早出1名・🌆遅出1名・🌙夜勤2名・☀️日勤・🍵公休)
   let tfootHtml = `
     <tfoot>
-      <!-- 夜勤人数チェック行 -->
-      <tr style="background:#e0e7ff; font-weight:bold; border-top:2px solid #6366f1;">
-        <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:6px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
+      <!-- 早出人数チェック行 (基準: 1名) -->
+      <tr style="background:#ffedd5; font-weight:bold; border-top:2px solid #ea580c;">
+        <td style="position:sticky; left:0; z-index:2; background:#ffedd5; text-align:left; padding:5px 8px; border:1px solid #fed7aa; color:#9a3412;" colspan="2">
+          🌅 早出体制 (基準: 1名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyEarlyCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 1) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt === 0) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fed7aa; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">毎日1名</td>
+      </tr>
+
+      <!-- 遅出人数チェック行 (基準: 1名) -->
+      <tr style="background:#ede9fe; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#ede9fe; text-align:left; padding:5px 8px; border:1px solid #ddd6fe; color:#5b21b6;" colspan="2">
+          🌆 遅出体制 (基準: 1名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyLateCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 1) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt === 0) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #ddd6fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日1名</td>
+      </tr>
+
+      <!-- 夜勤人数チェック行 (基準: 2名) -->
+      <tr style="background:#e0e7ff; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:5px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
           🌙 夜勤体制 (基準: 2名)
         </td>
   `;
-
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyNightCount[d];
-    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:13px;";
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
     if (cnt === 2) {
-      badgeStyle = "color:#16a34a; font-weight:bold; font-size:13px;";
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
     } else if (cnt < 2) {
-      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px;";
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
     } else {
-      badgeStyle = "color:#b45309; font-weight:bold;";
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
     }
-    tfootHtml += `<td style="border:1px solid #c7d2fe; padding:4px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+    tfootHtml += `<td style="border:1px solid #c7d2fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
   }
-
   tfootHtml += `
         <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日2名</td>
       </tr>
 
       <!-- 日中体制人数行 -->
       <tr style="background:#f1f5f9; font-weight:bold;">
-        <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
-          ☀️ 日中勤務 (早/遅/日)
+        <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:5px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
+          ☀️ 日勤人数
         </td>
   `;
-
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyDayCount[d];
-    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:4px 2px; color:#0369a1;">${cnt}</td>`;
+    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:3px 2px; color:#0369a1;">${cnt}</td>`;
   }
-
   tfootHtml += `
-        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">日中配置</td>
+        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">日勤配置</td>
       </tr>
 
       <!-- 公休人数行 -->
       <tr style="background:#fef2f2; font-weight:bold;">
-        <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:6px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
+        <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:5px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
           🍵 公休人数 (週休2日)
         </td>
   `;
-
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyHolidayCount[d];
-    tfootHtml += `<td style="border:1px solid #fecaca; padding:4px 2px; color:#b91c1c;">${cnt}</td>`;
+    tfootHtml += `<td style="border:1px solid #fecaca; padding:3px 2px; color:#b91c1c;">${cnt}</td>`;
   }
-
   tfootHtml += `
         <td colspan="3" style="border:1px solid #fecaca; color:#991b1b; font-size:11px;">公休合計</td>
       </tr>
@@ -6558,7 +6650,7 @@ function renderShiftTable(yearMonth) {
   table.innerHTML = theadHtml + tbodyHtml + tfootHtml;
 }
 
-// クイック変更ポップオーバー (セル直下でワンクリック変更)
+// クイック変更ポップオーバー (セル直下で職種別安全選択)
 function openShiftCellPopover(event, staffName, day, currentSymbol) {
   if (event) event.stopPropagation();
   const ym = getShiftYearMonth();
@@ -6581,36 +6673,74 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
 
   const rect = event ? event.currentTarget.getBoundingClientRect() : { top: 200, bottom: 230, left: 200 };
   const dateInfo = hol.isHoliday ? `${month}/${day}(${dowNames[dow]}・${hol.name})` : `${month}/${day}(${dowNames[dow]})`;
+  const roleCategory = getStaffRoleCategory(staffName);
 
-  popover.innerHTML = `
-    <div class="shift-popover-header">
-      <div>
-        <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
-        <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+  let roleBadgeLabel = "介護職員";
+  if (roleCategory === "director") roleBadgeLabel = "施設長（日勤専従）";
+  else if (roleCategory === "office") roleBadgeLabel = "事務員（日勤専従）";
+  else if (roleCategory === "nurse") roleBadgeLabel = "看護師（日勤専従）";
+
+  let contentHtml = "";
+
+  if (roleCategory !== "care") {
+    // 施設長・事務員・看護師: 日勤または公休のみ！夜勤・早・遅は完全除外で誤操作を絶対防止
+    contentHtml = `
+      <div class="shift-popover-header">
+        <div>
+          <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
+          <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+        </div>
+        <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
       </div>
-      <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
-    </div>
-    <div class="shift-popover-grid">
-      <button class="shift-popover-btn btn-haya" onclick="executeShiftCellEdit('早')">🌅 早番</button>
-      <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
-      <button class="shift-popover-btn btn-osoba" onclick="executeShiftCellEdit('遅')">🌆 遅番</button>
-      <button class="shift-popover-btn btn-yakan" onclick="executeShiftCellEdit('夜')">🌙 夜勤</button>
-      <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')">🌤️ 明け</button>
-      <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
-      <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
-    </div>
-    <div style="margin-top:6px; text-align:right;">
-      <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細モーダルで編集</a>
-    </div>
-  `;
+      <div style="font-size:11px; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:3px 6px; margin-bottom:8px;">
+        🔒 <strong>${roleBadgeLabel}</strong><br>日勤または公休のみ選択可能です（夜勤・早遅は自動ガード）
+      </div>
+      <div class="shift-popover-grid" style="grid-template-columns: 1fr 1fr;">
+        <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
+        <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
+        <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
+      </div>
+      <div style="margin-top:6px; text-align:right;">
+        <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細設定</a>
+      </div>
+    `;
+  } else {
+    // 介護職員: 全シフト選択可能
+    contentHtml = `
+      <div class="shift-popover-header">
+        <div>
+          <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
+          <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+        </div>
+        <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+      </div>
+      <div style="font-size:11px; color:#475569; margin-bottom:6px;">
+        👥 介護職員シフト（基準: 早出1名・遅出1名・夜勤2名体制）
+      </div>
+      <div class="shift-popover-grid">
+        <button class="shift-popover-btn btn-haya" onclick="executeShiftCellEdit('早')">🌅 早番</button>
+        <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
+        <button class="shift-popover-btn btn-osoba" onclick="executeShiftCellEdit('遅')">🌆 遅番</button>
+        <button class="shift-popover-btn btn-yakan" onclick="executeShiftCellEdit('夜')">🌙 夜勤</button>
+        <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')">🌤️ 明け</button>
+        <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
+        <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
+      </div>
+      <div style="margin-top:6px; text-align:right;">
+        <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細設定</a>
+      </div>
+    `;
+  }
+
+  popover.innerHTML = contentHtml;
 
   // 画面位置の調整 (画面外はみ出し防止)
   let top = rect.bottom + window.scrollY + 6;
   let left = rect.left + window.scrollX - 60;
   if (left < 10) left = 10;
   if (left + 270 > window.innerWidth) left = window.innerWidth - 280;
-  if (rect.bottom + 150 > window.innerHeight) {
-    top = rect.top + window.scrollY - 140;
+  if (rect.bottom + 160 > window.innerHeight) {
+    top = rect.top + window.scrollY - 150;
   }
 
   popover.style.top = `${top}px`;
@@ -6628,7 +6758,7 @@ function executeShiftCellEdit(symbol) {
   closeShiftPopover();
 }
 
-// ダブルクリックで循環切り替え (日 → 早 → 遅 → 夜 → 明 → 休 → 日)
+// ダブルクリックで安全な切り替え (事務・施設長・看護師は「日 ⇄ 休」のみ、介護職も日勤・公休安全トグルで夜勤誤爆を完全防止)
 function cycleShiftCell(staffName, day) {
   const ym = getShiftYearMonth();
   if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
@@ -6636,16 +6766,22 @@ function cycleShiftCell(staffName, day) {
   if (!db.data.monthly_shifts[ym][staffName]) db.data.monthly_shifts[ym][staffName] = {};
 
   const cur = db.data.monthly_shifts[ym][staffName][day] || "";
-  const cycleMap = {
-    "": "日",
-    "日": "早",
-    "早": "遅",
-    "遅": "夜",
-    "夜": "明",
-    "明": "休",
-    "休": "日"
-  };
-  const nextSym = cycleMap[cur] || "日";
+  const roleCategory = getStaffRoleCategory(staffName);
+
+  let nextSym = "日";
+  if (roleCategory !== "care") {
+    // 施設長・事務員・看護師: 「日 ⇄ 休」のみ安全にトグル！決して夜勤や早出・遅出にならない！
+    nextSym = (cur === "日") ? "休" : "日";
+  } else {
+    // 介護職員: 誤操作で夜勤にならないよう安全に「日 ⇄ 休」をトグル
+    // 夜勤・早番・遅番への変更はポップオーバーから明示的に選択
+    if (cur === "日") nextSym = "休";
+    else if (cur === "休") nextSym = "日";
+    else if (cur === "早" || cur === "遅" || cur === "夜") nextSym = "日";
+    else if (cur === "明") nextSym = "休";
+    else nextSym = "日";
+  }
+
   gShiftEditingCell = { staffName, day, yearMonth: ym };
   applyShiftCellEdit(nextSym);
 }
@@ -6662,7 +6798,7 @@ if (typeof window !== "undefined") {
   });
 }
 
-// 手動セル編集モーダル (全ボタン選択可能・専従ガイド付き)
+// 手動セル編集モーダル (職種別ガード付き)
 function openShiftCellModal(staffName, day) {
   const ym = getShiftYearMonth();
   const [yearStr, monthStr] = ym.split("-");
@@ -6680,35 +6816,46 @@ function openShiftCellModal(staffName, day) {
     targetText.textContent = `${staffName} - ${dateLabel}`;
   }
 
-  // 職種に応じたガイド表示 (ボタンは自由に選択可能)
-  const staff = (db.data.stamps || []).find(s => (s.name || s) === staffName);
-  const role = staff && staff.role ? staff.role : "";
-  const isDayOnlyRole = role.includes("施設長") || role.includes("管理者") || role.includes("事務") || role.includes("看護") || staffName.includes("木村") || staffName.includes("田中") || staffName.includes("松本") || staffName.includes("鈴木") || staffName.includes("加藤");
-
+  const roleCategory = getStaffRoleCategory(staffName);
   const notice = document.getElementById("shiftEditRoleNotice");
-  if (isDayOnlyRole) {
-    if (notice) notice.textContent = "💡 施設長・事務員・看護師は基本的に日勤専従（土日祝・年末年始休み）です。";
-  } else {
-    if (notice) notice.textContent = "";
-  }
-
-  // 全ボタンを表示状態に保つ
   const btnEarly = document.querySelector("#shiftEditButtonsContainer button:nth-child(1)");
+  const btnDay = document.querySelector("#shiftEditButtonsContainer button:nth-child(2)");
   const btnLate = document.querySelector("#shiftEditButtonsContainer button:nth-child(3)");
   const btnNight = document.querySelector("#shiftEditButtonsContainer button:nth-child(4)");
   const btnDawn = document.querySelector("#shiftEditButtonsContainer button:nth-child(5)");
-  if (btnEarly) btnEarly.style.display = "inline-block";
-  if (btnLate) btnLate.style.display = "inline-block";
-  if (btnNight) btnNight.style.display = "inline-block";
-  if (btnDawn) btnDawn.style.display = "inline-block";
+  const btnHoliday = document.querySelector("#shiftEditButtonsContainer button:nth-child(6)");
+
+  if (roleCategory !== "care") {
+    if (notice) notice.innerHTML = "<span style='color:#0369a1; font-weight:bold;'>🔒 施設長・事務員・看護師は日勤専従（土日祝・年末年始休み）です。<br>日勤または公休のみ選択可能です。</span>";
+    if (btnEarly) { btnEarly.disabled = true; btnEarly.style.opacity = "0.35"; btnEarly.style.pointerEvents = "none"; }
+    if (btnLate) { btnLate.disabled = true; btnLate.style.opacity = "0.35"; btnLate.style.pointerEvents = "none"; }
+    if (btnNight) { btnNight.disabled = true; btnNight.style.opacity = "0.35"; btnNight.style.pointerEvents = "none"; }
+    if (btnDawn) { btnDawn.disabled = true; btnDawn.style.opacity = "0.35"; btnDawn.style.pointerEvents = "none"; }
+    if (btnDay) { btnDay.disabled = false; btnDay.style.opacity = "1"; btnDay.style.pointerEvents = "auto"; }
+    if (btnHoliday) { btnHoliday.disabled = false; btnHoliday.style.opacity = "1"; btnHoliday.style.pointerEvents = "auto"; }
+  } else {
+    if (notice) notice.innerHTML = "<span style='color:#475569;'>👥 介護職員（基準: 毎日早出1名・遅出1名・夜勤2名体制）</span>";
+    [btnEarly, btnDay, btnLate, btnNight, btnDawn, btnHoliday].forEach(btn => {
+      if (btn) { btn.disabled = false; btn.style.opacity = "1"; btn.style.pointerEvents = "auto"; }
+    });
+  }
 
   const modal = document.getElementById("shiftEditModal");
   if (modal) modal.style.display = "flex";
 }
 
 function applyShiftCellEdit(symbol) {
+  if (!gShiftEditingCell) return;
   const { staffName, day, yearMonth } = gShiftEditingCell;
   if (!staffName || !day || !yearMonth) return;
+
+  const roleCategory = getStaffRoleCategory(staffName);
+
+  // 職種制約ガード: 施設長・事務員・看護師は「日」「休」「クリア」以外を厳格に拒絶
+  if (roleCategory !== "care" && symbol && symbol !== "日" && symbol !== "休") {
+    alert(`⚠️ 【職種制約ガード】\n${staffName} は日勤専従のため、「日勤」または「公休」のみ設定可能です。\n（夜勤・早番・遅番・明けへの誤変更を防止しました）`);
+    return;
+  }
 
   if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
   if (!db.data.monthly_shifts[yearMonth]) db.data.monthly_shifts[yearMonth] = {};
@@ -6716,8 +6863,8 @@ function applyShiftCellEdit(symbol) {
 
   db.data.monthly_shifts[yearMonth][staffName][day] = symbol;
 
-  // 夜勤に手動変更した場合、翌日が当月内であれば「明」にする連動アシスト
-  if (symbol === "夜") {
+  // 介護職で夜勤に手動変更した場合、翌日が当月内であれば「明」にする連動アシスト
+  if (roleCategory === "care" && symbol === "夜") {
     const [yStr, mStr] = yearMonth.split("-");
     const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
     if (day + 1 <= daysInMonth) {
@@ -6730,6 +6877,7 @@ function applyShiftCellEdit(symbol) {
 
   db.save();
   closeModal("shiftEditModal");
+  closeShiftPopover();
   renderShiftTable(yearMonth);
 }
 

@@ -376,12 +376,33 @@
       assert(kimuraOct12 === "休" && tanakaOct12 === "休" && matsumotoOct12 === "休", "Test 63: 施設長および事務員2名が祝日 (2026-10-12 スポーツの日) に完全自動で『休』が割り振られていること");
 
       // 20. セル直下クイック選択ポップオーバー＆ダブルクリック循環切り替えテスト
-      assert(typeof openShiftCellPopover === "function" && typeof closeShiftPopover === "function" && typeof executeShiftCellEdit === "function" && typeof cycleShiftCell === "function", "Test 64: シフトセル即時編集ポップオーバーおよび循環切り替え関数が存在すること");
+      assert(typeof openShiftCellPopover === "function" && typeof closeShiftPopover === "function" && typeof executeShiftCellEdit === "function" && typeof cycleShiftCell === "function" && typeof getStaffRoleCategory === "function", "Test 64: シフトセル即時編集ポップオーバー・循環切り替え・職種カテゴリ判定関数が存在すること");
       cycleShiftCell("木村 健一", 1);
       const cycledVal = db.data.monthly_shifts["2026-10"]["木村 健一"][1];
-      assert(cycledVal && ["早", "日", "遅", "夜", "明", "休"].includes(cycledVal), "Test 65: セルダブルクリック (cycleShiftCell) によりシフト記号がダイレクトに循環切り替え・即時保存されること");
+      assert(cycledVal === "日" || cycledVal === "休", "Test 65: 施設長および事務員へのダブルクリック (cycleShiftCell) では『日 ⇄ 休』のみ安全にトグルし夜勤等への誤変更を完全防止すること");
 
-      // 21. 総合結果判定
+      // 21. 早出1名・遅出1名 毎日完全配置テスト (全31日間)
+      let allDaysOneEarly = true;
+      let allDaysOneLate = true;
+      for (let d = 1; d <= 31; d++) {
+        let earlyCount = 0;
+        let lateCount = 0;
+        Object.keys(shiftOct).forEach(staffName => {
+          if (shiftOct[staffName][d] === "早") earlyCount++;
+          if (shiftOct[staffName][d] === "遅") lateCount++;
+        });
+        if (earlyCount !== 1) allDaysOneEarly = false;
+        if (lateCount !== 1) allDaysOneLate = false;
+      }
+      assert(allDaysOneEarly && allDaysOneLate, "Test 66: 1ヶ月31日間すべての日に早出が必ず『毎日1名』、遅出が必ず『毎日1名』厳密に配置されていること");
+
+      // 22. 職種制約ガードテスト (事務員・施設長・看護師への夜勤・早・遅設定の拒絶)
+      gShiftEditingCell = { staffName: "田中 慎一", day: 10, yearMonth: "2026-10" };
+      const originalTanakaShift = db.data.monthly_shifts["2026-10"]["田中 慎一"][10];
+      applyShiftCellEdit("夜"); // 事務員への夜勤設定を試行
+      assert(db.data.monthly_shifts["2026-10"]["田中 慎一"][10] === originalTanakaShift, "Test 67: 事務員・施設長・看護師に対する夜勤 (夜) や早出・遅出への手動変更が職種制約ガードにより安全にブロックされること");
+
+      // 23. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
