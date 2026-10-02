@@ -86,6 +86,87 @@ class LocalDB {
     if (Array.isArray(d.stamps)) {
       d.stamps = sortStaffList(d.stamps);
     }
+
+    // 消耗品マスター・アイテム同期＆移行 (手袋S/L追加、尿取りパッド名称統一、ワイドパッド追加)
+    if (Array.isArray(d.inventory)) {
+      d.inventory.forEach(i => {
+        if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
+      });
+      if (!d.inventory.some(i => i.name === "ワイドパッド")) {
+        d.inventory.push({
+          id: 401,
+          name: "ワイドパッド",
+          category: "オムツ・パッド",
+          current_stock: 4,
+          safety_stock: 5,
+          normal_stock: 10,
+          unit: "パック",
+          unit_price: 1600,
+          is_personal_billable: 1,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+      if (!d.inventory.some(i => i.name === "使い捨てプラスチック手袋 S")) {
+        d.inventory.push({
+          id: 402,
+          name: "使い捨てプラスチック手袋 S",
+          category: "衛生用品",
+          current_stock: 12,
+          safety_stock: 8,
+          normal_stock: 16,
+          unit: "箱",
+          unit_price: 650,
+          is_personal_billable: 0,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+      if (!d.inventory.some(i => i.name === "使い捨てプラスチック手袋 L")) {
+        d.inventory.push({
+          id: 403,
+          name: "使い捨てプラスチック手袋 L",
+          category: "衛生用品",
+          current_stock: 10,
+          safety_stock: 8,
+          normal_stock: 16,
+          unit: "箱",
+          unit_price: 650,
+          is_personal_billable: 0,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+    }
+
+    // 取引先 (suppliers) の取扱品目同期
+    if (Array.isArray(d.suppliers)) {
+      const careSupp = d.suppliers.find(s => s.id === 1 || (s.name || "").includes("ケアサポート"));
+      if (careSupp && Array.isArray(careSupp.items)) {
+        careSupp.items.forEach(i => {
+          if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
+        });
+        if (!careSupp.items.some(i => i.name === "ワイドパッド")) {
+          careSupp.items.push({ name: "ワイドパッド", unit_price: 1600, unit: "パック" });
+        }
+        if (!careSupp.items.some(i => i.name === "使い捨てプラスチック手袋 S")) {
+          careSupp.items.push({ name: "使い捨てプラスチック手袋 S", unit_price: 650, unit: "箱" });
+        }
+        if (!careSupp.items.some(i => i.name === "使い捨てプラスチック手袋 L")) {
+          careSupp.items.push({ name: "使い捨てプラスチック手袋 L", unit_price: 650, unit: "箱" });
+        }
+      }
+    }
+
+    // 過去履歴内の旧表記更新
+    ["orders", "consumptions", "inventory_logs"].forEach(tblKey => {
+      if (Array.isArray(d[tblKey])) {
+        d[tblKey].forEach(row => {
+          if (row.item_name === "尿取りパッド 4回分") row.item_name = "尿取りパッド";
+        });
+      }
+    });
+
     return d;
   }
 
@@ -348,8 +429,11 @@ class LocalDB {
         { id: 1, name: "ケアサポート商事", phone: "03-1234-5678", contact_person: "佐々木", items: [
           { name: "テープ止めオムツ L", unit_price: 2600, unit: "パック" },
           { name: "テープ止めオムツ M", unit_price: 2400, unit: "パック" },
-          { name: "尿取りパッド 4回分", unit_price: 1400, unit: "パック" },
-          { name: "使い捨てプラスチック手袋 M", unit_price: 650, unit: "箱" }
+          { name: "尿取りパッド", unit_price: 1400, unit: "パック" },
+          { name: "ワイドパッド", unit_price: 1600, unit: "パック" },
+          { name: "使い捨てプラスチック手袋 S", unit_price: 650, unit: "箱" },
+          { name: "使い捨てプラスチック手袋 M", unit_price: 650, unit: "箱" },
+          { name: "使い捨てプラスチック手袋 L", unit_price: 650, unit: "箱" }
         ]},
         { id: 2, name: "メディカル薬品", phone: "03-9876-5432", contact_person: "木村", items: [
           { name: "ヒルドイドソフト軟膏 100g", unit_price: 1800, unit: "本" },
@@ -358,12 +442,15 @@ class LocalDB {
         ]}
       ],
       inventory: [
-        { id: 1, name: "テープ止めオムツ L", category: "オムツ・パッド", current_stock: 2, safety_stock: 5, unit: "パック", unit_price: 2600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 2, name: "テープ止めオムツ M", category: "オムツ・パッド", current_stock: 8, safety_stock: 5, unit: "パック", unit_price: 2400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 3, name: "尿取りパッド 4回分", category: "オムツ・パッド", current_stock: 3, safety_stock: 6, unit: "パック", unit_price: 1400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 4, name: "使い捨てプラスチック手袋 M", category: "衛生用品", current_stock: 15, safety_stock: 10, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 5, name: "手指消毒用アルコール 1L", category: "消毒", current_stock: 4, safety_stock: 3, unit: "本", unit_price: 1200, is_personal_billable: 0, supplier_id: 2, supplier_name: "メディカル薬品" },
-        { id: 6, name: "とろみ調整剤 1kg", category: "食事関連", current_stock: 6, safety_stock: 4, unit: "袋", unit_price: 2800, is_personal_billable: 1, supplier_id: 2, supplier_name: "メディカル薬品" }
+        { id: 1, name: "テープ止めオムツ L", category: "オムツ・パッド", current_stock: 2, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 2600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 2, name: "テープ止めオムツ M", category: "オムツ・パッド", current_stock: 8, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 2400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 3, name: "尿取りパッド", category: "オムツ・パッド", current_stock: 3, safety_stock: 6, normal_stock: 12, unit: "パック", unit_price: 1400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 4, name: "ワイドパッド", category: "オムツ・パッド", current_stock: 4, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 1600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 5, name: "使い捨てプラスチック手袋 S", category: "衛生用品", current_stock: 12, safety_stock: 8, normal_stock: 16, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 6, name: "使い捨てプラスチック手袋 M", category: "衛生用品", current_stock: 15, safety_stock: 10, normal_stock: 20, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 7, name: "使い捨てプラスチック手袋 L", category: "衛生用品", current_stock: 10, safety_stock: 8, normal_stock: 16, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 8, name: "手指消毒用アルコール 1L", category: "消毒", current_stock: 4, safety_stock: 3, normal_stock: 8, unit: "本", unit_price: 1200, is_personal_billable: 0, supplier_id: 2, supplier_name: "メディカル薬品" },
+        { id: 9, name: "とろみ調整剤 1kg", category: "食事関連", current_stock: 6, safety_stock: 4, normal_stock: 10, unit: "袋", unit_price: 2800, is_personal_billable: 1, supplier_id: 2, supplier_name: "メディカル薬品" }
       ],
       emergency_supplies: [
         { id: 1, name: "保存水 2L (6本入)", quantity: 30, unit: "箱", expiry_date: "2028-09-30", notes: "地下備蓄庫" },

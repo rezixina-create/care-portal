@@ -206,6 +206,12 @@
       // 9. 消耗品在庫管理・自動出庫テスト
       const initialPaperDiaper = (db.data.inventory || []).find(i => (i.name || i.item_name || "").includes("パンツ"));
       assert(initialPaperDiaper && initialPaperDiaper.current_stock > 0, "Test 14: 消耗品マスターおよび初期在庫が正常保持されていること");
+      const hasGloveS = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 S");
+      const hasGloveL = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 L");
+      const hasWidePad = (db.data.inventory || []).some(i => i.name === "ワイドパッド");
+      const hasOldPad = (db.data.inventory || []).some(i => i.name === "尿取りパッド 4回分");
+      const hasNewPad = (db.data.inventory || []).some(i => i.name === "尿取りパッド");
+      assert(hasGloveS && hasGloveL && hasWidePad && !hasOldPad && hasNewPad, "Test 14b: 手袋S/L・ワイドパッド追加および尿取りパッド名称変更が正常保持されていること");
 
       // 10. クラウド同期/サーバー通信ロジックテスト
       assert(typeof db.save === "function", "Test 15: db.save() 関数が存在すること");
