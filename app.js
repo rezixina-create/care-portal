@@ -4846,6 +4846,9 @@ function submitBelonging() {
   if (editId) {
     const b = db.data.belongings.find(x => x.id == editId);
     if (b) {
+      const ok = confirm(`【私物情報の変更確認】\n『${b.item_name}』の登録内容を以下のように変更・反映しますか？\n\n・品名: ${b.item_name} → ${name}\n・個数: ${b.quantity} → ${qty}\n・区分: ${b.category} → ${cat}\n・備考: ${b.notes || 'なし'} → ${notes || 'なし'}\n\n※誤入力を防ぐための確認です。`);
+      if (!ok) return;
+
       b.category = cat;
       b.item_name = name;
       b.quantity = qty;
@@ -4886,12 +4889,17 @@ function adjustBelongingQty(id, delta) {
 
   const nextNum = curNum + delta;
   if (nextNum <= 0) {
-    const ok = confirm(`『${b.item_name}』の数量が0になります。\n衣類の劣化・廃棄、またはご家族持ち帰りとして私物台帳から削除しますか？`);
+    const ok = confirm(`【私物数量0の確認】\n『${b.item_name}』の数量が0になります。\n衣類の劣化・廃棄、またはご家族持ち帰りとして私物台帳から削除（整理）しますか？`);
     if (ok) {
       deleteBelonging(id, false);
     }
     return;
   }
+
+  // 誤タップ・連打による過剰な減少/増加を防ぐ事前確認ダイアログ
+  const actionText = delta > 0 ? "追加（ご家族持参など）" : "減少（衣類の劣化・廃棄など）";
+  const ok = confirm(`【私物数量変更の確認】\n『${b.item_name}』の数量変更を反映しますか？\n\n【 変更前 】: ${b.quantity}\n　　↓\n【 変更後 】: ${nextNum}${unit} (${delta > 0 ? '+' : ''}${delta})\n\n※「1つ減らしたつもりが2つ減ってしまう」等のミスを防ぐための確認です。\n反映してよろしいですか？`);
+  if (!ok) return;
 
   b.quantity = `${nextNum}${unit}`;
   db.save();
@@ -4904,7 +4912,7 @@ function deleteBelonging(id, needConfirm = true) {
   if (!b) return;
 
   if (needConfirm) {
-    const ok = confirm(`『${b.item_name} (数量: ${b.quantity})』を私物台帳から削除（劣化による廃棄・ご家族持ち帰り等）しますか？`);
+    const ok = confirm(`【私物削除の確認】\n『${b.item_name} (数量: ${b.quantity})』を私物台帳から削除（劣化による廃棄・ご家族持ち帰り等）しますか？`);
     if (!ok) return;
   }
 
@@ -4954,7 +4962,7 @@ function deleteEquipment(id) {
   const eq = (db.data.equipments || []).find(x => x.id === id);
   if (!eq) return;
 
-  const ok = confirm(`福祉用具『${eq.equipment_name} (${eq.ownership_type})』の使用を終了（返却・解除）しますか？`);
+  const ok = confirm(`【福祉用具の解除確認】\n福祉用具『${eq.equipment_name} (${eq.ownership_type})』の使用を終了（返却・解除）しますか？`);
   if (!ok) return;
 
   db.data.equipments = (db.data.equipments || []).filter(x => x.id !== id);
@@ -4997,13 +5005,19 @@ function submitFamilyHistory() {
   const newWishes = document.getElementById("fhFamilyWishes").value.trim();
   const newHistory = document.getElementById("fhLifeHistory").value.trim();
 
-  // 変更前と比較してログ作成
+  // 変更前と比較して差分チェック
   const changes = [];
-  if (r.emergency_contact !== newContact) changes.push(`連絡先・延命方針: ${newContact || 'なし'}`);
-  if (r.policy_stamp !== newStamp) changes.push(`方針: ［${r.policy_stamp}］→［${newStamp}］`);
-  if (r.family_wishes !== newWishes) changes.push(`家族要望更新`);
-  if (r.life_history !== newHistory) changes.push(`生活歴・こだわり更新`);
-  if (r.sensor_alert !== newSensor) changes.push(`見守り・センサー: ${newSensor || 'なし'}`);
+  if (r.emergency_contact !== newContact) changes.push(`・緊急連絡/延命方針: ${r.emergency_contact || '未登録'} → ${newContact || 'なし'}`);
+  if (r.policy_stamp !== newStamp) changes.push(`・基本方針: ［${r.policy_stamp}］→［${newStamp}］`);
+  if (r.family_wishes !== newWishes) changes.push(`・家族の要望: ${r.family_wishes || 'なし'} → ${newWishes || 'なし'}`);
+  if (r.life_history !== newHistory) changes.push(`・生活歴/こだわりを更新`);
+  if (r.sensor_alert !== newSensor) changes.push(`・見守り/センサー: ${r.sensor_alert || 'なし'} → ${newSensor || 'なし'}`);
+
+  if (changes.length > 0) {
+    const ok = confirm(`【基本情報・看取り方針変更の確認】\n『${r.name} 様』の情報を以下のように変更・反映しますか？\n\n${changes.join("\n")}\n\n※看取り方針や延命処置・連絡先の誤変更を防ぐための確認です。`);
+    if (!ok) return;
+  }
+
 
   r.emergency_contact = newContact;
   r.policy_stamp = newStamp;
