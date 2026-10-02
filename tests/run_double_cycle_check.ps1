@@ -11,6 +11,7 @@ function Cleanup-Port8888 {
             Stop-Process -Id $c.OwningProcess -Force -ErrorAction SilentlyContinue
         }
     }
+    Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     Start-Sleep -Milliseconds 500
 }
 

@@ -2,7 +2,7 @@ $ErrorActionPreference = "Stop"
 
 $baseDir = Resolve-Path .
 $serverScript = Join-Path $baseDir "server.ps1"
-$serverProc = Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$serverScript`"" -PassThru -WindowStyle Hidden
+$serverProc = Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$serverScript`" -NoBrowser -NoTunnel" -PassThru -WindowStyle Hidden
 Start-Sleep -Seconds 2
 
 try {

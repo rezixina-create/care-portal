@@ -8,7 +8,7 @@ Write-Host "==========================================================" -Foregro
 # 1. Start server in background
 $baseDir = Resolve-Path .
 $serverScript = Join-Path $baseDir "server.ps1"
-$serverProc = Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$serverScript`"" -PassThru -WindowStyle Hidden
+$serverProc = Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -File `"$serverScript`" -NoBrowser -NoTunnel" -PassThru -WindowStyle Hidden
 
 Start-Sleep -Seconds 2
 

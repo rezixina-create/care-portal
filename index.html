@@ -1566,12 +1566,11 @@
       </div>
       <div style="padding:10px 0;">
         <p style="font-size:14px; color:#475569; margin-bottom:16px;">
-          学校Wi-Fiのセキュリティ制限（端末間通信の遮断）に対応するため、セキュアな暗号化クラウドトンネル（Cloudflare Tunnel・HTTPS）を設定しています。<br>
-          <strong>学校のWi-Fiはもちろん、スマホの4G/5G回線や他PCからでもリアルタイムに共有・記録が可能です。</strong>
+          外部接続トンネル（Cloudflare Tunnel・暗号化通信）が自動で統合されているため、<strong>ご自宅のWi-Fi・学校・外出先スマホ（4G/5G）など、環境を問わず1つのQRコード・URLでリアルタイムに共有・記録が可能です。</strong>
         </p>
         
         <div style="background:#f1f5f9; border-radius:8px; padding:16px; margin-bottom:16px; border:1px solid #cbd5e1;">
-          <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:10px;">📡 接続用URL ＆ QRコード:</label>
+          <label style="font-weight:bold; color:#1e293b; display:block; margin-bottom:10px;">📡 接続用URL ＆ QRコード（統一案内）:</label>
           <div id="shareUrlList" style="display:flex; flex-direction:column; gap:8px;">
             <!-- JSで自動挿入 -->
           </div>
@@ -1579,17 +1578,17 @@
 
         <div style="background:#fffbeb; border:1px solid #fde68a; border-radius:8px; padding:14px 16px; margin-bottom:16px; font-size:13px; color:#92400e; line-height:1.6;">
           <strong style="display:flex; align-items:center; gap:6px; font-size:14px; margin-bottom:6px; color:#b45309;">
-            ⚠️ 接続時の3大チェック:
+            💡 接続のポイント:
           </strong>
           <ol style="margin:4px 0 0 18px; padding:0;">
             <li style="margin-bottom:4px;">
-              <strong>クラウドトンネル接続</strong>: 上記のトンネルURL（<code>https://percentage-freelance-unwrap-spatial.trycloudflare.com</code>）およびQRコードをご利用ください。学校Wi-Fiのセキュリティ制限を受けずに直接接続できます。
+              <strong>カメラでスキャンするだけ</strong>: スマホやタブレットの標準カメラで上記QRコードを読み取れば、どこからでも即座に開けます。
             </li>
             <li style="margin-bottom:4px;">
-              <strong>親機サーバー稼働</strong>: 親機PCでポータルサーバー（PowerShell）およびCloudflare Tunnelプロセスが起動している必要があります（閉じると停止します。最小化してお使いください）。
+              <strong>1クリック起動</strong>: 親機PCで <code>run_portal.bat</code> を起動している間、外部からいつでもアクセスできます（ウィンドウは最小化してお使いください）。
             </li>
             <li style="margin-bottom:4px;">
-              <strong>カメラで一発スキャン</strong>: スマホやタブレットの標準カメラでQRコードをかざすだけで、ブラウザが自動起動して即座にログイン・操作できます。
+              <strong>ホーム画面に追加</strong>: スマホ・iPadのブラウザで「ホーム画面に追加」を行うと、専用アプリのように全画面で起動できます。
             </li>
           </ol>
         </div>

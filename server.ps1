@@ -1,4 +1,8 @@
 ﻿# Care Portal Server Script (Windows Standard PowerShell + .NET)
+param(
+    [switch]$NoBrowser,
+    [switch]$NoTunnel
+)
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
@@ -361,37 +365,93 @@ Add-Type -TypeDefinition $ServerSource
 # IPアドレス取得
 $ipList = [CarePortal.SimpleServer]::GetIPs()
 
+# 3. 外部接続トンネル (Cloudflare Tunnel) の自動同時起動
+$tunnelProc = $null
+$cloudflared = Join-Path $ScriptDir "cloudflared.exe"
+$tunnelLog = Join-Path $ScriptDir "tunnel.log"
+$tunnelUrlFile = Join-Path $ScriptDir "tunnel_url.txt"
+
+if (-not $NoTunnel -and (Test-Path $cloudflared)) {
+    # 既存の古いトンネルプロセスを念のため整理
+    Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+    if (Test-Path $tunnelLog) { Remove-Item $tunnelLog -Force -ErrorAction SilentlyContinue }
+
+    try {
+        # WindowStyle Hidden で起動（パイプハンドルを継承させず独立プロセスとして起動）
+        $tunnelProc = Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:$port" -RedirectStandardError $tunnelLog -PassThru -WindowStyle Hidden
+        
+        # トンネルURLの自動取得（最大5秒待機）
+        for ($i = 0; $i -lt 10; $i++) {
+            Start-Sleep -Milliseconds 500
+            if (Test-Path $tunnelLog) {
+                $content = Get-Content $tunnelLog -Raw -ErrorAction SilentlyContinue
+                if ($content -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") {
+                    Set-Content -Path $tunnelUrlFile -Value $matches[0] -Encoding UTF8
+                    break
+                }
+            }
+        }
+    } catch {
+        Write-Host "※トンネルの自動起動に失敗しました（ローカルサーバーとして継続します）" -ForegroundColor Gray
+    }
+}
+
 # 画面コンソール表示
 Clear-Host
 Write-Host "======================================================================" -ForegroundColor Cyan
-Write-Host "   Care Portal Server (Local Wi-Fi Shared Mode)" -ForegroundColor Green
-Write-Host "   介護施設 統合業務ポータル [施設内Wi-Fi共有サーバー稼働中]" -ForegroundColor Yellow
+Write-Host "   Care Portal Server (サーバー ＆ 外部トンネル統合モード)" -ForegroundColor Green
+Write-Host "   介護施設 統合業務ポータル [ローカル ＆ 外部接続トンネル同時稼働中]" -ForegroundColor Yellow
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host " [PC (Host)]:" -ForegroundColor White
 Write-Host "   http://localhost:$port" -ForegroundColor Cyan
 Write-Host ""
-Write-Host " [Cloudflare Tunnel (学校Wi-Fi・スマホ・他PC用)]:" -ForegroundColor Green
-Write-Host "   https://percentage-freelance-unwrap-spatial.trycloudflare.com" -ForegroundColor Cyan
+
+$latestTunnelUrl = $null
+if (Test-Path $tunnelUrlFile) {
+    try { $latestTunnelUrl = (Get-Content $tunnelUrlFile -Raw -ErrorAction SilentlyContinue).Trim() } catch { }
+}
+if ($latestTunnelUrl) {
+    Write-Host " [📱 スマホ・他端末 外部接続用 (統一案内URL)]:" -ForegroundColor Green
+    Write-Host "   $latestTunnelUrl" -ForegroundColor Yellow -BackgroundColor Black
+    Write-Host "   ※ 自宅Wi-Fi・学校・外出先スマホ(4G/5G)どこからでもこのURLで繋がります。" -ForegroundColor Gray
+} else {
+    Write-Host " [📱 外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
+    Write-Host "   バックグラウンドで接続準備中... (画面右上の「📱接続案内」に自動反映されます)" -ForegroundColor Gray
+}
 Write-Host ""
-Write-Host " [Tablet (Local Wi-Fi / LAN直接用)]:" -ForegroundColor White
+Write-Host " [Tablet (同一Wi-Fi / LAN直接アクセス用)]:" -ForegroundColor White
 foreach ($ip in $ipList) {
     Write-Host "   http://${ip}:${port}" -ForegroundColor Yellow
 }
 Write-Host ""
 Write-Host " * Please keep this window open while using the portal." -ForegroundColor Gray
-Write-Host " * この黒い画面を閉じるとサーバーが停止します。最小化してお使いください。" -ForegroundColor Magenta
+Write-Host " * この黒い画面を閉じるとサーバーとトンネルが停止します。最小化してお使いください。" -ForegroundColor Magenta
 Write-Host "======================================================================" -ForegroundColor Cyan
 Write-Host ""
 
-# 3. ブラウザ自動起動（メインスレッドから直接立ち上げ）
-Write-Host "ブラウザを起動しています (http://localhost:$port)..." -ForegroundColor Green
-try {
-    Start-Process "http://localhost:$port"
-} catch {
-    cmd.exe /c start "" "http://localhost:$port"
+# クリーンアップ処理（終了時にトンネルも確実に停止）
+$cleanup = {
+    if ($tunnelProc -and -not $tunnelProc.HasExited) {
+        try { Stop-Process -Id $tunnelProc.Id -Force -ErrorAction SilentlyContinue } catch { }
+    }
+    Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
-# 4. サーバー待機
-$server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
-$server.Start()
+# 4. ブラウザ自動起動
+if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
+    Write-Host "ブラウザを起動しています (http://localhost:$port)..." -ForegroundColor Green
+    try {
+        Start-Process "http://localhost:$port"
+    } catch {
+        cmd.exe /c start "" "http://localhost:$port"
+    }
+}
+
+# 5. サーバー待機
+try {
+    $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
+    $server.Start()
+} finally {
+    & $cleanup
+}

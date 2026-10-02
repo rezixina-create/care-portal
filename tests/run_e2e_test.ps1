@@ -11,7 +11,7 @@ Write-Host "==========================================================" -Foregro
 
 # 1. サーバー起動
 Write-Host "`n[Step 1] Starting Care Portal Server on port 8888..." -ForegroundColor Yellow
-$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$carePortalDir\server.ps1`"" -PassThru -NoNewWindow
+$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$carePortalDir\server.ps1`"", "-NoBrowser", "-NoTunnel" -PassThru -NoNewWindow
 
 # 待機 (ポート8888が開くまで最大15秒)
 $ready = $false

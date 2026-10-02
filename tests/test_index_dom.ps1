@@ -7,7 +7,7 @@ if (-not (Test-Path $edgePath)) {
 }
 
 # 1. Start Server
-$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$dir\server.ps1`"" -PassThru -NoNewWindow
+$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$dir\server.ps1`"", "-NoBrowser", "-NoTunnel" -PassThru -NoNewWindow
 $ready = $false
 for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep -Milliseconds 500

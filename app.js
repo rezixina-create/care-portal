@@ -227,6 +227,9 @@ class LocalDB {
         this.serverPort = ipData.port || window.location.port || 8888;
         if (ipData.tunnel_url && ipData.tunnel_url.trim() !== "") {
           localStorage.setItem("care_portal_tunnel_url", ipData.tunnel_url.trim());
+        } else {
+          // トンネル起動直後のURL遅延取得に対応（自動リトライ）
+          setTimeout(() => this.retryFetchTunnelUrl(1), 3000);
         }
         this.renderShareModalUrls();
       }
@@ -265,6 +268,24 @@ class LocalDB {
 
     // 5秒ごとのバックグラウンド同期 (他端末からの入力を反映)
     setInterval(() => this.pollServerUpdates(), 5000);
+  }
+
+  async retryFetchTunnelUrl(attempt) {
+    if (attempt > 3) return;
+    try {
+      const res = await fetch('/api/ip');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tunnel_url && data.tunnel_url.trim() !== "") {
+          localStorage.setItem("care_portal_tunnel_url", data.tunnel_url.trim());
+          this.renderShareModalUrls();
+          return;
+        }
+      }
+    } catch (_) {}
+    if (attempt < 3) {
+      setTimeout(() => this.retryFetchTunnelUrl(attempt + 1), 4000);
+    }
   }
 
   async pollServerUpdates() {
@@ -337,65 +358,47 @@ class LocalDB {
     }
     const primaryIp = ipsToShow[0];
     const localUrl = `http://${primaryIp}:${port}`;
-    const localQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent(localUrl);
 
-    // 保存されているCloudflare URL（初期値は学校設定のURL）
+    // トンネルURL（最新取得値 または 保存値）
     let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
-    const cloudQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=140x140&data=" + encodeURIComponent(cloudflareUrl);
+    const isTunnel = Boolean(cloudflareUrl && cloudflareUrl.trim() !== "");
+    const unifiedUrl = isTunnel ? cloudflareUrl.trim() : localUrl;
+    const unifiedQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(unifiedUrl);
 
-    // 1. 【🏠 ご自宅・同一Wi-Fi接続 (今すぐ繋がる・推奨)】
-    const localDiv = document.createElement("div");
-    localDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#f0fdf4; border:2px solid #22c55e; border-radius:10px; padding:14px 16px; margin-bottom:12px; box-shadow:0 2px 6px rgba(34,197,94,0.15);";
-    localDiv.innerHTML = `
-      <div style="flex-shrink:0; text-align:center;">
-        <img src="${localQrUrl}" alt="自宅Wi-Fi接続QRコード" style="width:120px; height:120px; border-radius:8px; border:2px solid #86efac; background:#fff; display:block; padding:4px;">
-        <span style="font-size:11px; color:#15803d; font-weight:bold; margin-top:5px; display:block;">📱 自宅スマホ用</span>
+    // 📱 スマホ・他端末 外部接続用（統一案内 1つに統合）
+    const cardDiv = document.createElement("div");
+    cardDiv.style.cssText = "display:flex; gap:18px; align-items:center; background:#f8fafc; border:2px solid #2563eb; border-radius:12px; padding:16px 18px; box-shadow:0 3px 10px rgba(37,99,235,0.12); flex-wrap:wrap;";
+    cardDiv.innerHTML = `
+      <div style="flex-shrink:0; text-align:center; margin:0 auto;">
+        <img src="${unifiedQrUrl}" alt="統一接続QRコード" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
+        <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">📱 カメラでスキャン</span>
       </div>
-      <div style="flex:1; min-width:0;">
-        <div style="display:inline-flex; align-items:center; gap:6px; background:#16a34a; color:#ffffff; font-size:11px; font-weight:bold; padding:3px 8px; border-radius:4px; margin-bottom:6px;">
-          🏠 ご自宅・施設内Wi-Fi（即時接続・推奨）
+      <div style="flex:1; min-width:260px;">
+        <div style="display:inline-flex; align-items:center; gap:6px; background:#2563eb; color:#ffffff; font-size:11px; font-weight:bold; padding:3px 10px; border-radius:4px; margin-bottom:6px;">
+          🌐 スマホ・他端末 接続用（統一案内）
         </div>
-        <div style="font-size:13px; font-weight:bold; color:#14532d; margin-bottom:4px;">自宅PCと同じWi-Fiにつなぐだけ！</div>
-        <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#15803d; margin-bottom:8px; word-break:break-all; background:#ffffff; padding:6px 10px; border-radius:6px; border:1px solid #bbf7d0;">
-          ${localUrl}
+        <div style="font-size:13.5px; font-weight:bold; color:#1e293b; margin-bottom:4px;">
+          ご自宅Wi-Fi・学校・外出先スマホ(4G/5G) どこからでも接続可能
         </div>
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button class="btn btn-success" style="padding:6px 14px; font-size:13px; font-weight:bold; background:#16a34a; border-color:#16a34a; color:#fff;" onclick="copyShareUrl('${localUrl}')">📋 自宅URLをコピー</button>
-          <a href="${localUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:6px 12px; font-size:13px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
-        </div>
-        <div style="font-size:11.5px; color:#374151; margin-top:6px; line-height:1.4;">
-          ※ スマホをご自宅PCと同じWi-Fi（同一ルーター）につないでこのQRコードを読み取ってください。一発で高速に開けます。
-        </div>
-      </div>
-    `;
-    container.appendChild(localDiv);
-
-    // 2. 【🌐 学校Wi-Fi・外出先用 (Cloudflare Tunnel)】
-    const cloudDiv = document.createElement("div");
-    cloudDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#eff6ff; border:2px solid #3b82f6; border-radius:10px; padding:14px 16px; margin-bottom:12px; box-shadow:0 2px 6px rgba(59,130,246,0.15);";
-    cloudDiv.innerHTML = `
-      <div style="flex-shrink:0; text-align:center;">
-        <img src="${cloudQrUrl}" alt="Cloudflare接続QRコード" style="width:120px; height:120px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
-        <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">📱 学校・外出先用</span>
-      </div>
-      <div style="flex:1; min-width:0;">
-        <div style="display:inline-flex; align-items:center; gap:6px; background:#2563eb; color:#ffffff; font-size:11px; font-weight:bold; padding:3px 8px; border-radius:4px; margin-bottom:6px;">
-          🌐 学校Wi-Fi・外出先 (Cloudflare Tunnel)
-        </div>
-        <div style="font-size:13px; font-weight:bold; color:#1e293b; margin-bottom:4px;">学校PC起動時・クラウド暗号化トンネル</div>
-        <div style="font-family:monospace; font-size:13px; font-weight:bold; color:#1d4ed8; margin-bottom:8px; word-break:break-all; background:#ffffff; padding:6px 10px; border-radius:6px; border:1px solid #bfdbfe;">
-          ${cloudflareUrl}
+        <div style="font-family:monospace; font-size:13px; font-weight:bold; color:#1d4ed8; margin-bottom:8px; word-break:break-all; background:#ffffff; padding:7px 11px; border-radius:6px; border:1px solid #bfdbfe;">
+          ${unifiedUrl}
         </div>
         <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
-          <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold;" onclick="copyShareUrl('${cloudflareUrl}')">📋 学校URLをコピー</button>
-          <button class="btn btn-secondary" style="padding:6px 12px; font-size:12px;" onclick="promptChangeTunnelUrl()">✏️ URL変更</button>
+          <button class="btn btn-primary" style="padding:6px 16px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">📋 接続URLをコピー</button>
+          <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:6px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
+          <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">✏️ URL変更</button>
         </div>
-        <div style="font-size:11.5px; color:#b91c1c; font-weight:bold; margin-top:4px; line-height:1.4;">
-          ⚠️ 注意: 学校PCでCloudflareトンネルが起動している間のみ繋がります。学校PCが終了・スリープしていると「つなげない」と表示されます。
+        <div style="font-size:11.5px; color:#475569; line-height:1.4;">
+          スマホ等のカメラで上記QRコードを読み取るだけで、どこからでもリアルタイムにアクセス・記録できます。
         </div>
+        ${isTunnel ? `
+        <div style="margin-top:8px; padding-top:6px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+          <span>同一Wi-Fi限定 直接アクセス: <code style="color:#334155;">${localUrl}</code></span>
+          <span style="color:#059669; font-weight:bold;">● 暗号化トンネル有効</span>
+        </div>` : ''}
       </div>
     `;
-    container.appendChild(cloudDiv);
+    container.appendChild(cardDiv);
   }
 
   initSeedData() {
@@ -5666,22 +5669,22 @@ function openShareModal() {
 function copyShareUrl(url) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url).then(() => {
-      alert("✅ URLをコピーしました！\n" + url + "\n\n施設内のタブレット（iPad等）のブラウザを開いて貼り付けてください。\n同じデータがリアルタイムで共有されます。");
+      alert("✅ 接続URLをコピーしました！\n" + url + "\n\nスマホやタブレット等のブラウザに貼り付けて開いてください。\nどこからでも同じデータがリアルタイムで共有されます。");
     }).catch(() => {
-      prompt("以下のURLをコピーしてタブレットで開いてください:", url);
+      prompt("以下の接続URLをコピーして開いてください:", url);
     });
   } else {
-    prompt("以下のURLをコピーしてタブレットで開いてください:", url);
+    prompt("以下の接続URLをコピーして開いてください:", url);
   }
 }
 
 function promptChangeTunnelUrl() {
   const current = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
-  const newUrl = prompt("学校PC側で発行された最新のCloudflare Tunnel URLを入力してください:", current);
+  const newUrl = prompt("外部接続用のCloudflare Tunnel URLを入力してください:", current);
   if (newUrl && newUrl.trim() !== "") {
     localStorage.setItem("care_portal_tunnel_url", newUrl.trim());
     if (db) db.renderShareModalUrls();
-    alert("✅ クラウド共有URLとQRコードを更新しました！\n" + newUrl.trim());
+    alert("✅ 接続URLとQRコードを更新しました！\n" + newUrl.trim());
   }
 }
 
