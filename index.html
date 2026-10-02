@@ -471,8 +471,11 @@
             <tbody></tbody>
           </table>
           <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
-            <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位を選択。再度タップで選択解除できます。全て入れ込んだら右のボタンで一括確定します。</span>
-            <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()">🌙 体位変換・夜間巡視を一括確定 (個人記録へ転記)</button>
+            <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位を選択。再度タップで選択解除できます。</span>
+            <div style="display:flex; gap:10px;">
+              <button class="btn btn-outline" style="border-color:#fca5a5; color:#dc2626; font-size:12px; padding:6px 12px;" onclick="clearAllNightTurnsForDate()">🗑️ 本日のチェックをすべて解除</button>
+              <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()">🌙 体位変換・夜間巡視を一括確定 (個人記録へ転記)</button>
+            </div>
           </div>
         </div>
 

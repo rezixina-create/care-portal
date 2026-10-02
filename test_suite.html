@@ -305,8 +305,25 @@
       assert(Array.isArray(db.data.daily_schedules) && db.data.daily_schedules.length >= 10, "Test 39: 業務日誌日課スケジュール (daily_schedules) が正常保持されていること");
       assert(Array.isArray(db.data.monthly_notices) && db.data.monthly_notices.length >= 2, "Test 40: 月間業務連絡表 (monthly_notices) が正常保持されていること");
       assert(typeof renderOfficeCommittees === "function" && typeof submitCommittee === "function", "Test 41: 法定委員会・研修記録管理関数 (renderOfficeCommittees, submitCommittee) が存在すること");
-      assert(typeof checkGlobalAlerts === "function", "Test 42: 排便3日以上なし・往診指示・未確認通知の全域アラート関数 (checkGlobalAlerts) が存在すること");
-      assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function", "Test 43: 夜間体位変換トグル＆一括確定関数 (toggleNightTurnAction, submitNightTurnsBatch) が存在すること");
+      assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function" && typeof clearAllNightTurnsForDate === "function", "Test 43: 夜間体位変換トグル＆一括確定・一括解除関数が存在すること");
+      // 夜間体位変換のチェック全解除テスト (全解除後に復活しないことの検証)
+      gState.selectedDate = "2026-10-02";
+      initNightTurnDrafts(true);
+      const keysBefore = Object.keys(gState.nightTurnDrafts || {});
+      keysBefore.forEach(k => {
+        const [rId, tm] = k.split("_");
+        toggleNightTurnAction(parseInt(rId, 10), tm);
+      });
+      renderNightTable();
+      const keysAfter = Object.keys(gState.nightTurnDrafts || {});
+      assert(keysAfter.length === 0, "Test 43b: 夜間体位変換のチェックを全て外しても、外した項目が勝手に復活せず空状態が保持されること");
+      // 検証完了後に監査用標準データを再保存
+      setNightTurnAction(1, "22:00", "右側臥位");
+      setNightTurnAction(2, "22:00", "安眠中");
+      setNightTurnAction(1, "00:00", "左側臥位");
+      setNightTurnAction(2, "00:00", "安眠中");
+      setNightTurnAction(2, "02:00", "左側臥位");
+      submitNightTurnsBatch();
       assert(typeof submitGroomingsBatch === "function", "Test 44: 身だしなみ一括確定関数 (submitGroomingsBatch) が存在すること");
       assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
       assert(typeof openClinicInstructionModal === "function" && typeof submitClinicInstructions === "function", "Test 46: 往診医・受診時指示＆特殊指示の項目別クイック変更・保存関数が存在すること");

@@ -2940,9 +2940,14 @@ function saveMed(resId, slot) {
 }
 
 // 7. 夜勤体位変換 ➔ トグル解除 ＆ 一括確定 (個人記録自動転記)
-gState.nightTurnDrafts = {};
+gState.nightTurnDate = null;
+gState.nightTurnDrafts = null;
 
-function initNightTurnDrafts() {
+function initNightTurnDrafts(force) {
+  if (!force && gState.nightTurnDate === gState.selectedDate && gState.nightTurnDrafts !== null) {
+    return;
+  }
+  gState.nightTurnDate = gState.selectedDate;
   gState.nightTurnDrafts = {};
   const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
   turns.forEach(t => {
@@ -2952,8 +2957,13 @@ function initNightTurnDrafts() {
 
 function setNightTurnAction(resId, time, action) {
   const key = `${resId}_${time}`;
+  if (!gState.nightTurnDrafts) gState.nightTurnDrafts = {};
   if (!action) {
     delete gState.nightTurnDrafts[key];
+    if (db.data.turns) {
+      db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
+      db.save();
+    }
   } else {
     gState.nightTurnDrafts[key] = action;
   }
@@ -2962,8 +2972,26 @@ function setNightTurnAction(resId, time, action) {
 
 function toggleNightTurnAction(resId, time) {
   const key = `${resId}_${time}`;
-  delete gState.nightTurnDrafts[key];
+  if (gState.nightTurnDrafts) {
+    delete gState.nightTurnDrafts[key];
+  }
+  // 確定済みのデータからも即座に削除・永続保存（解除したものが復活するのを完全防止）
+  if (db.data.turns) {
+    db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
+    db.save();
+  }
   renderNightTable();
+}
+
+function clearAllNightTurnsForDate() {
+  if (!confirm(`${gState.selectedDate} の夜間体位変換・巡視チェックを全て解除しますか？`)) return;
+  gState.nightTurnDrafts = {};
+  if (db.data.turns) {
+    db.data.turns = db.data.turns.filter(t => t.date !== gState.selectedDate);
+    db.save();
+  }
+  renderNightTable();
+  alert(`${gState.selectedDate} の体位変換チェックをすべて解除しました。`);
 }
 
 function submitNightTurnsBatch() {
@@ -2973,24 +3001,26 @@ function submitNightTurnsBatch() {
 
   const resActionsMap = {};
 
-  Object.keys(gState.nightTurnDrafts).forEach(key => {
-    const parts = key.split("_");
-    const resId = parseInt(parts[0], 10);
-    const time = parts[1];
-    const action = gState.nightTurnDrafts[key];
-    if (action) {
-      db.data.turns.push({
-        id: Date.now() + Math.floor(Math.random() * 1000),
-        date: gState.selectedDate,
-        time: time,
-        resident_id: resId,
-        action: action,
-        staff_name: staff
-      });
-      if (!resActionsMap[resId]) resActionsMap[resId] = [];
-      resActionsMap[resId].push(`${time} ${action}`);
-    }
-  });
+  if (gState.nightTurnDrafts) {
+    Object.keys(gState.nightTurnDrafts).forEach(key => {
+      const parts = key.split("_");
+      const resId = parseInt(parts[0], 10);
+      const time = parts[1];
+      const action = gState.nightTurnDrafts[key];
+      if (action) {
+        db.data.turns.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          date: gState.selectedDate,
+          time: time,
+          resident_id: resId,
+          action: action,
+          staff_name: staff
+        });
+        if (!resActionsMap[resId]) resActionsMap[resId] = [];
+        resActionsMap[resId].push(`${time} ${action}`);
+      }
+    });
+  }
 
   const nowTm = new Date().toTimeString().slice(0, 5);
   Object.keys(resActionsMap).forEach(resIdStr => {
@@ -3011,14 +3041,18 @@ function submitNightTurnsBatch() {
   db.save();
   renderNightTable();
   loadDateRecords(gState.selectedDate);
-  alert("体位変換・夜間巡視を一括確定しました！個人記録へも反映されました。");
+  if (Object.keys(resActionsMap).length > 0) {
+    alert("体位変換・夜間巡視を一括確定しました！個人記録へも反映されました。");
+  } else {
+    alert("体位変換・夜間巡視のチェック解除状態を確定・保存しました。");
+  }
 }
 
 function renderNightTable() {
   const tbody = document.querySelector("#nightTable tbody");
   if (!tbody) return;
   tbody.innerHTML = "";
-  if (!gState.nightTurnDrafts || Object.keys(gState.nightTurnDrafts).length === 0) {
+  if (gState.nightTurnDate !== gState.selectedDate || gState.nightTurnDrafts === null) {
     initNightTurnDrafts();
   }
 
