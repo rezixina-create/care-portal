@@ -805,7 +805,7 @@ function checkGlobalAlerts() {
       <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
         <div style="width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span>📑 ⚠️ <strong>【発注・在庫認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様、スタッフからの承認待ち発注が <strong>${pendingOrders.length}件</strong> あります！<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
+            <span>🔔 ⚠️ <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
             <div style="display:flex; gap:6px; align-items:center;">
               <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');">📋 発注台帳を開く</button>
               <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')">✕ 閉じる</button>
@@ -883,10 +883,9 @@ function checkGlobalAlerts() {
       const deficit = Math.max(1, normalStock - item.current_stock);
       alertHtml += `
         <div class="alert-banner alert-danger">
-          <span>⚠️ <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 推奨補充: <strong>+${deficit}${item.unit}</strong>）</span>
+          <span>⚠️ <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">🛒 『${escapeHtml(item.name)}』を追加発注 (推奨+${deficit}${item.unit})</button>
-            <button class="btn btn-success" style="padding:3px 10px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishStock(${item.id})">📦 補充完了 (+${deficit}${item.unit})</button>
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">📝 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}')">✕ 閉じる</button>
           </div>
         </div>
@@ -899,8 +898,7 @@ function checkGlobalAlerts() {
           <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
             <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
             <div style="display:flex; gap:4px;">
-              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">🛒 発注 (+${deficit})</button>
-              <button class="btn btn-success" style="padding:2px 8px; font-size:11px; background:#16a34a; color:#fff;" onclick="quickReplenishStock(${item.id})">📦 補充 (+${deficit})</button>
+              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">📝 発注申請 (+${deficit})</button>
             </div>
           </div>
         `;
@@ -909,19 +907,19 @@ function checkGlobalAlerts() {
       alertHtml += `
         <div class="alert-banner alert-danger">
           <div style="width:100%;">
-            <span>⚠️ <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで補充・追加発注してください）：</span>
+            <span>⚠️ <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
             <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
               ${itemListHtml}
             </div>
           </div>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
-            <button class="btn btn-success" style="padding:3px 10px; font-size:12px; background:#16a34a; color:#fff;" onclick="quickReplenishAllStock()">📦 全品平常時まで一括補充完了</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_all')">✕ 全て閉じる</button>
           </div>
         </div>
       `;
     }
   }
+
 
   // 4. 受診2週前・1週前事前告知 ＆ 往診特殊指示アラート (絶食・薬のみ等)
   gState.residents.forEach(r => {
