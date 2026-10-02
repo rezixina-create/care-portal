@@ -22,3 +22,4 @@ test_persistence_run.html
 cloudflared.exe
 tunnel_url.txt
 data/backup/
+scratch/

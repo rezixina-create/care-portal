@@ -994,5 +994,71 @@ body {
   }
 }
 
+/* シフトセル クイック変更ポップオーバー */
+.shift-cell-popover {
+  position: absolute;
+  z-index: 9999;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18), 0 4px 6px rgba(0, 0, 0, 0.08);
+  padding: 8px 10px;
+  min-width: 260px;
+  animation: popoverFadeIn 0.15s ease-out;
+}
+
+@keyframes popoverFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.shift-popover-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid #f1f5f9;
+  font-size: 12px;
+}
+
+.shift-popover-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 6px;
+}
+
+.shift-popover-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 6px 2px;
+  border-radius: 6px;
+  border: 1px solid #cbd5e1;
+  background: #f8fafc;
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 12px;
+  transition: all 0.12s ease;
+  user-select: none;
+}
+.shift-popover-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+.shift-popover-btn.btn-haya { background: #ffedd5; color: #c2410c; border-color: #fed7aa; }
+.shift-popover-btn.btn-nichi { background: #e0f2fe; color: #0369a1; border-color: #bae6fd; }
+.shift-popover-btn.btn-osoba { background: #ede9fe; color: #6d28d9; border-color: #ddd6fe; }
+.shift-popover-btn.btn-yakan { background: #e0e7ff; color: #3730a3; border-color: #c7d2fe; }
+.shift-popover-btn.btn-ake { background: #cffafe; color: #0e7490; border-color: #a5f3fc; }
+.shift-popover-btn.btn-kyu { background: #fee2e2; color: #b91c1c; border-color: #fecaca; }
+.shift-popover-btn.btn-clear { background: #f1f5f9; color: #64748b; border-color: #e2e8f0; }
+
+.shift-holiday-col {
+  background: #fef2f2 !important;
+  color: #b91c1c !important;
+}
+
 
 

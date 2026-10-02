@@ -264,7 +264,9 @@
 
       // 12. 認印スタンプ機能テスト
       const staffNames = db.data.stamps.map(s => s.name);
-      assert(staffNames.includes("山田") && staffNames.includes("施設長"), "Test 20: 認印スタンプ（職員・施設長）が正常保持されていること");
+      const hasLeader = staffNames.some(n => n.includes("山田"));
+      const hasDirector = staffNames.some(n => n.includes("施設長") || n.includes("木村"));
+      assert(hasLeader && hasDirector, "Test 20: 認印スタンプ（職員・施設長）が正常保持されていること");
 
       // 13. UI タブ切り替え関数の存在と動作確認
       assert(typeof switchPortal === "function", "Test 21: switchPortal (現場 ⇄ 事務所) 関数が存在すること");
@@ -317,31 +319,30 @@
       assert(typeof adjustBelongingQty === "function" && typeof deleteBelonging === "function" && typeof openBelongingModal === "function" && typeof submitBelonging === "function", "Test 53: 私物・持ち込み品台帳の数量増減・編集・削除機能 (adjustBelongingQty, deleteBelonging) が存在すること");
       assert(typeof openEquipmentModal === "function" && typeof submitEquipment === "function" && typeof deleteEquipment === "function" && typeof openFamilyHistoryModal === "function" && typeof submitFamilyHistory === "function", "Test 54: 福祉用具備品追加・解除および緊急連絡先・家族要望・看取り方針変更機能 (submitEquipment, submitFamilyHistory) が存在すること");
 
-      // 18. 月間勤務表・シフト管理 (自動生成・週休2日・夜勤2名・10名体制・同番NG配慮・手動修正) テスト
+      // 18. 月間勤務表・シフト管理 (自動生成・週休2日・夜勤2名・15名体制・同番NG配慮・手動修正) テスト
       assert(typeof generateMonthlyShiftData === "function" && typeof renderShiftTable === "function" && typeof applyShiftCellEdit === "function", "Test 55: 月間勤務表シフト生成・描画・手動修正関数が存在すること");
 
-      // 職員10名体制チェック
+      // 職員15名体制チェック (施設長1, 看護2, 介護10, 事務2)
       const currentStamps = db.data.stamps || [];
-      assert(currentStamps.length >= 10, `Test 56: 職員マスタが健全シフト運用のための10名体制に増員されていること (現在: ${currentStamps.length}名)`);
+      assert(currentStamps.length >= 15, `Test 56: 職員マスタが健全シフト運用のための15名体制 (管理者1・看護2・介護10・事務2) に増員されていること (現在: ${currentStamps.length}名)`);
 
       // 2026-10 シフト生成テスト
       const shiftOct = generateMonthlyShiftData("2026-10");
       assert(shiftOct && typeof shiftOct === "object", "Test 57: 2026年10月の1ヶ月分シフトデータが正常に自動生成されること");
 
-      // 施設長と事務員は日勤のみ＆週休2日
-      const directorShift = shiftOct["施設長"] || {};
-      const tanakaShift = shiftOct["田中"] || {};
-      let dirOnlyDay = true;
-      let tanakaOnlyDay = true;
-      for (let d = 1; d <= 31; d++) {
-        const sD = directorShift[d];
-        const sT = tanakaShift[d];
-        if (sD && sD !== "日" && sD !== "休") dirOnlyDay = false;
-        if (sT && sT !== "日" && sT !== "休") tanakaOnlyDay = false;
-      }
-      assert(dirOnlyDay && tanakaOnlyDay, "Test 58: 施設長および事務員が日勤専従 (平日『日』・土日『休』) であり早・遅・夜に絶対入らないこと");
+      // 施設長・事務員2名・看護師2名は日勤専従＆週休2日 (早・遅・夜に入らない)
+      const dayOnlyStaffNames = ["木村 健一", "田中 慎一", "松本 陽子", "鈴木 美智子", "加藤 由美"];
+      let allDayOnlyCompliant = true;
+      dayOnlyStaffNames.forEach(name => {
+        const staffShift = shiftOct[name] || {};
+        for (let d = 1; d <= 31; d++) {
+          const s = staffShift[d];
+          if (s && s !== "日" && s !== "休") allDayOnlyCompliant = false;
+        }
+      });
+      assert(allDayOnlyCompliant, "Test 58: 施設長 (木村 健一)・事務員2名・看護師2名が日勤専従 (『日』または『休』) であり早・遅・夜に絶対入らないこと");
 
-      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 ✖ 高橋 が同一夜勤に入らない)
+      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 健太 ✖ 高橋 直樹 が同一夜勤に入らない)
       let allDaysTwoNights = true;
       let ngPairRespected = true;
       for (let d = 1; d <= 31; d++) {
@@ -350,17 +351,37 @@
           if (shiftOct[staffName][d] === "夜") nightStaff.push(staffName);
         });
         if (nightStaff.length !== 2) allDaysTwoNights = false;
+        if (nightStaff.includes("佐藤 健太") && nightStaff.includes("高橋 直樹")) ngPairRespected = false;
         if (nightStaff.includes("佐藤") && nightStaff.includes("高橋")) ngPairRespected = false;
       }
       assert(allDaysTwoNights, "Test 59: 1ヶ月31日間すべての日に夜勤が確実に『毎日2名体制』で配置されていること");
-      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 ✖ 高橋) が同日の夜勤に重ならないよう自動回避されること");
+      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 健太 ✖ 高橋 直樹) が同日の夜勤に重ならないよう自動回避されること");
 
       // 手動修正テスト
-      gShiftEditingCell = { staffName: "山田", day: 15, yearMonth: "2026-10" };
+      gShiftEditingCell = { staffName: "山田 孝之", day: 15, yearMonth: "2026-10" };
       applyShiftCellEdit("休");
-      assert(db.data.monthly_shifts["2026-10"]["山田"][15] === "休", "Test 61: シフト手動修正 (applyShiftCellEdit) が対象セルに即時反映・保存されること");
+      assert(db.data.monthly_shifts["2026-10"]["山田 孝之"][15] === "休", "Test 61: シフト手動修正 (applyShiftCellEdit) が対象セルに即時反映・保存されること");
 
-      // 18. 総合結果判定
+      // 19. 祝日・年末年始の自動「休（公休）」反映テスト
+      const holOct12 = isHolidayOrYearEnd(2026, 10, 12);
+      const holDec31 = isHolidayOrYearEnd(2026, 12, 31);
+      const holJan1 = isHolidayOrYearEnd(2027, 1, 1);
+      const holJan3 = isHolidayOrYearEnd(2027, 1, 3);
+      assert(holOct12.isHoliday && holOct12.name === "スポーツの日" && holDec31.isHoliday && holDec31.name === "年末休暇" && holJan1.isHoliday && holJan3.isHoliday, "Test 62: isHolidayOrYearEnd による国民の祝日・年末年始 (12/29〜1/3) の正確な自動判定");
+
+      // 施設長・事務員2名が10月12日(祝日・月曜)に確実に「休」であること
+      const kimuraOct12 = shiftOct["木村 健一"] ? shiftOct["木村 健一"][12] : null;
+      const tanakaOct12 = shiftOct["田中 慎一"] ? shiftOct["田中 慎一"][12] : null;
+      const matsumotoOct12 = shiftOct["松本 陽子"] ? shiftOct["松本 陽子"][12] : null;
+      assert(kimuraOct12 === "休" && tanakaOct12 === "休" && matsumotoOct12 === "休", "Test 63: 施設長および事務員2名が祝日 (2026-10-12 スポーツの日) に完全自動で『休』が割り振られていること");
+
+      // 20. セル直下クイック選択ポップオーバー＆ダブルクリック循環切り替えテスト
+      assert(typeof openShiftCellPopover === "function" && typeof closeShiftPopover === "function" && typeof executeShiftCellEdit === "function" && typeof cycleShiftCell === "function", "Test 64: シフトセル即時編集ポップオーバーおよび循環切り替え関数が存在すること");
+      cycleShiftCell("木村 健一", 1);
+      const cycledVal = db.data.monthly_shifts["2026-10"]["木村 健一"][1];
+      assert(cycledVal && ["早", "日", "遅", "夜", "明", "休"].includes(cycledVal), "Test 65: セルダブルクリック (cycleShiftCell) によりシフト記号がダイレクトに循環切り替え・即時保存されること");
+
+      // 21. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

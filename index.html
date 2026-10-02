@@ -1950,7 +1950,7 @@
           <button class="btn btn-outline" style="background:#ede9fe; color:#6d28d9; border:1px solid #ddd6fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('遅')">🌆 遅番 (遅)</button>
           <button class="btn btn-outline" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('夜')">🌙 夜勤 (夜)</button>
           <button class="btn btn-outline" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('明')">🌤️ 明け (明)</button>
-          <button class="btn btn-outline" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('休')">🍵 公休 (休)</button>
+          <button class="btn btn-outline" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('休')">🍵 公休 (休)</button>
         </div>
       </div>
       <div style="display:flex; justify-content:space-between; margin-top:10px;">
@@ -1959,6 +1959,9 @@
       </div>
     </div>
   </div>
+
+  <!-- シフトセル即時変更 クイック選択ポップオーバー -->
+  <div id="shiftCellPopover" class="shift-cell-popover" style="display:none;"></div>
 
   <!-- 特例配慮設定 (同番NG) モーダル -->
   <div class="modal-overlay" id="shiftNgModal" style="display:none;">

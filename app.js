@@ -84,14 +84,46 @@ class LocalDB {
       if (!Array.isArray(d[k])) d[k] = [];
     });
     if (Array.isArray(d.stamps)) {
-      const defaultNewStaff = [
-        { name: "高橋", role: "介護職員" },
-        { name: "伊藤", role: "介護職員" },
-        { name: "渡辺", role: "介護職員" },
-        { name: "中村", role: "介護職員" },
-        { name: "小林", role: "介護職員" }
+      const nameMap = {
+        "施設長": "木村 健一",
+        "木村": "木村 健一",
+        "田中": "田中 慎一",
+        "鈴木": "鈴木 美智子",
+        "山田": "山田 孝之",
+        "佐藤": "佐藤 健太",
+        "高橋": "高橋 直樹",
+        "伊藤": "伊藤 翔太",
+        "渡辺": "渡辺 拓也",
+        "中村": "中村 大輔",
+        "小林": "小林 亮"
+      };
+      // 既存の短縮名をフルネームに置換
+      d.stamps.forEach(s => {
+        const curName = s.name || s;
+        if (nameMap[curName]) {
+          s.name = nameMap[curName];
+        }
+      });
+
+      // 15名フルネーム体制の定義
+      const fullStaffDefaults = [
+        { name: "木村 健一", role: "管理者" },
+        { name: "鈴木 美智子", role: "主任看護師" },
+        { name: "加藤 由美", role: "看護師" },
+        { name: "山田 孝之", role: "介護リーダー" },
+        { name: "佐藤 健太", role: "介護職員" },
+        { name: "高橋 直樹", role: "介護職員" },
+        { name: "伊藤 翔太", role: "介護職員" },
+        { name: "渡辺 拓也", role: "介護職員" },
+        { name: "中村 大輔", role: "介護職員" },
+        { name: "小林 亮", role: "介護職員" },
+        { name: "斉藤 翼", role: "介護職員" },
+        { name: "吉田 誠", role: "介護職員" },
+        { name: "清水 翔平", role: "介護職員" },
+        { name: "田中 慎一", role: "事務員" },
+        { name: "松本 陽子", role: "事務員" }
       ];
-      defaultNewStaff.forEach(s => {
+      fullStaffDefaults.forEach(s => {
         if (!d.stamps.some(existing => (existing.name || existing) === s.name)) {
           d.stamps.push(s);
         }
@@ -104,8 +136,16 @@ class LocalDB {
     }
     if (!Array.isArray(d.shift_ng_pairs)) {
       d.shift_ng_pairs = [
-        { id: 1, staff1: "佐藤", staff2: "高橋", reason: "相性配慮 (同日夜勤NG)" }
+        { id: 1, staff1: "佐藤 健太", staff2: "高橋 直樹", reason: "相性配慮 (同日夜勤NG)" }
       ];
+    } else {
+      // 既存の短縮名をフルネームに更新
+      d.shift_ng_pairs.forEach(p => {
+        if (p.staff1 === "佐藤") p.staff1 = "佐藤 健太";
+        if (p.staff1 === "高橋") p.staff1 = "高橋 直樹";
+        if (p.staff2 === "佐藤") p.staff2 = "佐藤 健太";
+        if (p.staff2 === "高橋") p.staff2 = "高橋 直樹";
+      });
     }
 
     // 消耗品マスター・アイテム同期＆移行 (手袋S/L追加、尿取りパッド名称統一、ワイドパッド追加)
@@ -425,16 +465,21 @@ class LocalDB {
         { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
       ],
       stamps: [
-        { name: "施設長", role: "管理者" },
-        { name: "田中", role: "事務員" },
-        { name: "鈴木", role: "看護師" },
-        { name: "山田", role: "介護リーダー" },
-        { name: "佐藤", role: "介護職員" },
-        { name: "高橋", role: "介護職員" },
-        { name: "伊藤", role: "介護職員" },
-        { name: "渡辺", role: "介護職員" },
-        { name: "中村", role: "介護職員" },
-        { name: "小林", role: "介護職員" }
+        { name: "木村 健一", role: "管理者" },
+        { name: "鈴木 美智子", role: "主任看護師" },
+        { name: "加藤 由美", role: "看護師" },
+        { name: "山田 孝之", role: "介護リーダー" },
+        { name: "佐藤 健太", role: "介護職員" },
+        { name: "高橋 直樹", role: "介護職員" },
+        { name: "伊藤 翔太", role: "介護職員" },
+        { name: "渡辺 拓也", role: "介護職員" },
+        { name: "中村 大輔", role: "介護職員" },
+        { name: "小林 亮", role: "介護職員" },
+        { name: "斉藤 翼", role: "介護職員" },
+        { name: "吉田 誠", role: "介護職員" },
+        { name: "清水 翔平", role: "介護職員" },
+        { name: "田中 慎一", role: "事務員" },
+        { name: "松本 陽子", role: "事務員" }
       ],
       templates: [
         { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
@@ -825,7 +870,7 @@ function checkGlobalAlerts() {
       <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
         <div style="width:100%;">
           <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-            <span>🔔 ⚠️ <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）様：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
+            <span>🔔 ⚠️ <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
             <div style="display:flex; gap:6px; align-items:center;">
               <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');">📋 発注台帳を開く</button>
               <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')">✕ 閉じる</button>
@@ -6050,6 +6095,76 @@ function generateMonthlyShiftAction() {
   alert(`✅ ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（週休2日）\n・公休：全員週休2日配分`);
 }
 
+// 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
+function isHolidayOrYearEnd(year, month, day) {
+  // 年末年始休暇: 12月29日〜12月31日、1月1日〜1月3日
+  if (month === 12 && day >= 29) return { isHoliday: true, name: "年末休暇" };
+  if (month === 1 && day <= 3) return { isHoliday: true, name: (day === 1 ? "元日" : "年始休暇") };
+
+  // 春分・秋分の計算 (2000年〜2099年)
+  const getVernalEquinox = y => Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+  const getAutumnEquinox = y => Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+
+  // ハッピーマンデー (第N月曜日の日付)
+  const getNthMonday = (y, m, n) => {
+    const firstDow = new Date(y, m - 1, 1).getDay();
+    const firstMonday = (firstDow <= 1) ? (1 - firstDow + 1) : (8 - firstDow + 1);
+    return firstMonday + (n - 1) * 7;
+  };
+
+  let name = null;
+
+  if (month === 1) {
+    if (day === 1) name = "元日";
+    else if (day === getNthMonday(year, 1, 2)) name = "成人の日";
+  } else if (month === 2) {
+    if (day === 11) name = "建国記念の日";
+    else if (day === 23) name = "天皇誕生日";
+    else if (day === 24 && new Date(year, 1, 23).getDay() === 0) name = "振替休日";
+  } else if (month === 3) {
+    const ve = getVernalEquinox(year);
+    if (day === ve) name = "春分の日";
+    else if (day === ve + 1 && new Date(year, 2, ve).getDay() === 0) name = "振替休日";
+  } else if (month === 4) {
+    if (day === 29) name = "昭和の日";
+    else if (day === 30 && new Date(year, 3, 29).getDay() === 0) name = "振替休日";
+  } else if (month === 5) {
+    if (day === 3) name = "憲法記念日";
+    else if (day === 4) name = "みどりの日";
+    else if (day === 5) name = "こどもの日";
+    else if (day === 6) {
+      const d3 = new Date(year, 4, 3).getDay();
+      const d4 = new Date(year, 4, 4).getDay();
+      const d5 = new Date(year, 4, 5).getDay();
+      if (d3 === 0 || d4 === 0 || d5 === 0) name = "振替休日";
+    }
+  } else if (month === 7) {
+    if (day === getNthMonday(year, 7, 3)) name = "海の日";
+  } else if (month === 8) {
+    if (day === 11) name = "山の日";
+    else if (day === 12 && new Date(year, 7, 11).getDay() === 0) name = "振替休日";
+  } else if (month === 9) {
+    const respectDay = getNthMonday(year, 9, 3);
+    const ae = getAutumnEquinox(year);
+    if (day === respectDay) name = "敬老の日";
+    else if (day === ae) name = "秋分の日";
+    else if (day === ae + 1 && new Date(year, 8, ae).getDay() === 0) name = "振替休日";
+    else if (respectDay + 2 === ae && day === respectDay + 1) name = "国民の休日";
+  } else if (month === 10) {
+    if (day === getNthMonday(year, 10, 2)) name = "スポーツの日";
+  } else if (month === 11) {
+    if (day === 3) name = "文化の日";
+    else if (day === 4 && new Date(year, 10, 3).getDay() === 0) name = "振替休日";
+    else if (day === 23) name = "勤労感謝の日";
+    else if (day === 24 && new Date(year, 10, 23).getDay() === 0) name = "振替休日";
+  }
+
+  if (name) {
+    return { isHoliday: true, name: name };
+  }
+  return { isHoliday: false, name: null };
+}
+
 function generateMonthlyShiftData(yearMonth) {
   if (!yearMonth) yearMonth = getShiftYearMonth();
   const [yearStr, monthStr] = yearMonth.split("-");
@@ -6057,16 +6172,17 @@ function generateMonthlyShiftData(yearMonth) {
   const month = parseInt(monthStr, 10);
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  // 1. スタッフ分類 (10名体制)
+  // 1. スタッフ分類 (15名体制: 管理者1, 看護2, 介護10, 事務2)
   const allStamps = sortStaffList(db.data.stamps || []);
   const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
 
-  const isDirector = s => (s.role && (s.role.includes("施設長") || s.role.includes("管理者"))) || s.name === "施設長";
-  const isOffice = s => (s.role && s.role.includes("事務")) || s.name === "田中";
-  const isNurse = s => (s.role && s.role.includes("看護")) || s.name === "鈴木";
+  const isDirector = s => (s.role && (s.role.includes("施設長") || s.role.includes("管理者"))) || s.name.includes("施設長") || s.name.includes("木村");
+  const isOffice = s => (s.role && s.role.includes("事務")) || s.name.includes("田中") || s.name.includes("松本");
+  const isNurse = s => (s.role && s.role.includes("看護")) || s.name.includes("鈴木") || s.name.includes("加藤");
 
-  const directorsAndOffice = staffList.filter(s => isDirector(s) || isOffice(s));
-  const nurses = staffList.filter(s => isNurse(s));
+  const directors = staffList.filter(s => isDirector(s));
+  const officeStaff = staffList.filter(s => isOffice(s) && !isDirector(s));
+  const nurses = staffList.filter(s => isNurse(s) && !isDirector(s));
   const careStaff = staffList.filter(s => !isDirector(s) && !isOffice(s) && !isNurse(s));
 
   // NGペアチェック関数
@@ -6083,11 +6199,12 @@ function generateMonthlyShiftData(yearMonth) {
     shiftData[s.name] = {};
   });
 
-  // 2. 施設長・事務員: 日勤専従 ＆ 週休2日 (土日公休)
-  directorsAndOffice.forEach(s => {
+  // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+  directors.forEach(s => {
     for (let d = 1; d <= daysInMonth; d++) {
       const dow = new Date(year, month - 1, d).getDay();
-      if (dow === 0 || dow === 6) {
+      const hol = isHolidayOrYearEnd(year, month, d);
+      if (dow === 0 || dow === 6 || hol.isHoliday) {
         shiftData[s.name][d] = "休";
       } else {
         shiftData[s.name][d] = "日";
@@ -6095,11 +6212,12 @@ function generateMonthlyShiftData(yearMonth) {
     }
   });
 
-  // 3. 看護師 (鈴木): 日勤専従 ＆ 週休2日 (日・水公休)
-  nurses.forEach(s => {
+  // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+  officeStaff.forEach((s) => {
     for (let d = 1; d <= daysInMonth; d++) {
       const dow = new Date(year, month - 1, d).getDay();
-      if (dow === 0 || dow === 3) {
+      const hol = isHolidayOrYearEnd(year, month, d);
+      if (dow === 0 || dow === 6 || hol.isHoliday) {
         shiftData[s.name][d] = "休";
       } else {
         shiftData[s.name][d] = "日";
@@ -6107,7 +6225,19 @@ function generateMonthlyShiftData(yearMonth) {
     }
   });
 
-  // 4. 介護職員: 毎日2名夜勤、連夜勤不可、特例配慮(同番NG)、週休2日、早遅日均等
+  // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置)
+  nurses.forEach((s, idx) => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (idx === 0) {
+        shiftData[s.name][d] = (dow === 0 || dow === 3) ? "休" : "日";
+      } else {
+        shiftData[s.name][d] = (dow === 4 || dow === 6) ? "休" : "日";
+      }
+    }
+  });
+
+  // 5. 介護職員 (10名体制): 毎日2名夜勤、連夜勤不可、特例配慮(同番NG)、週休2日、早遅日均等
   if (careStaff.length > 0) {
     const careNames = careStaff.map(s => s.name);
     const nightCount = {};
@@ -6261,15 +6391,17 @@ function renderShiftTable(yearMonth) {
     <thead>
       <tr>
         <th rowspan="2" style="position:sticky; left:0; z-index:4; background:#1e3a8a; color:#fff; width:130px; min-width:130px; border:1px solid #3b82f6;">職員氏名</th>
-        <th rowspan="2" style="background:#1e3a8a; color:#fff; width:75px; min-width:75px; border:1px solid #3b82f6;">役職</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; width:80px; min-width:80px; border:1px solid #3b82f6;">役職</th>
   `;
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dow = new Date(year, month - 1, d).getDay();
+    const hol = isHolidayOrYearEnd(year, month, d);
     const isSat = dow === 6;
-    const isSun = dow === 0;
+    const isSun = dow === 0 || hol.isHoliday;
     const bg = isSun ? "#ef4444" : (isSat ? "#2563eb" : "#3b82f6");
-    theadHtml += `<th style="background:${bg}; color:#fff; padding:4px 2px; min-width:32px; border:1px solid rgba(255,255,255,0.3); font-weight:bold;">${d}</th>`;
+    const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
+    theadHtml += `<th style="background:${bg}; color:#fff; padding:4px 2px; min-width:32px; border:1px solid rgba(255,255,255,0.3); font-weight:bold;" ${titleAttr}>${d}</th>`;
   }
 
   theadHtml += `
@@ -6282,11 +6414,14 @@ function renderShiftTable(yearMonth) {
 
   for (let d = 1; d <= daysInMonth; d++) {
     const dow = new Date(year, month - 1, d).getDay();
+    const hol = isHolidayOrYearEnd(year, month, d);
     const isSat = dow === 6;
-    const isSun = dow === 0;
+    const isSun = dow === 0 || hol.isHoliday;
     const bg = isSun ? "#fee2e2" : (isSat ? "#dbeafe" : "#f1f5f9");
     const color = isSun ? "#b91c1c" : (isSat ? "#1d4ed8" : "#475569");
-    theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:11px; font-weight:bold; border:1px solid #cbd5e1;">${dowNames[dow]}</th>`;
+    const dowLabel = hol.isHoliday ? (hol.name.length <= 3 ? hol.name : "祝") : dowNames[dow];
+    const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
+    theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:10.5px; font-weight:bold; border:1px solid #cbd5e1;" ${titleAttr}>${dowLabel}</th>`;
   }
 
   theadHtml += `
@@ -6318,7 +6453,7 @@ function renderShiftTable(yearMonth) {
     tbodyHtml += `
       <tr>
         <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#1e293b; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
-          ${st.name} 様
+          ${escapeHtml(st.name)}
         </td>
         <td style="border:1px solid #cbd5e1; padding:4px 2px; white-space:nowrap;">
           <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
@@ -6328,20 +6463,22 @@ function renderShiftTable(yearMonth) {
     for (let d = 1; d <= daysInMonth; d++) {
       const sym = staffShifts[d] || "";
       const dow = new Date(year, month - 1, d).getDay();
+      const hol = isHolidayOrYearEnd(year, month, d);
       const isSat = dow === 6;
-      const isSun = dow === 0;
+      const isSun = dow === 0 || hol.isHoliday;
 
       let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
       let badgeClass = "";
-      if (sym === "早") { badgeClass = "shift-badge shift-badge-early"; workDays++; dailyDayCount[d]++; }
-      else if (sym === "日") { badgeClass = "shift-badge shift-badge-day"; workDays++; dailyDayCount[d]++; }
-      else if (sym === "遅") { badgeClass = "shift-badge shift-badge-late"; workDays++; dailyDayCount[d]++; }
-      else if (sym === "夜") { badgeClass = "shift-badge shift-badge-night"; workDays++; nightDays++; dailyNightCount[d]++; }
-      else if (sym === "明") { badgeClass = "shift-badge shift-badge-dawn"; workDays++; }
-      else if (sym === "休") { badgeClass = "shift-badge shift-badge-holiday"; holidays++; dailyHolidayCount[d]++; }
+      if (sym === "早") { badgeClass = "shift-badge shift-haya"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "日") { badgeClass = "shift-badge shift-nichi"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "遅") { badgeClass = "shift-badge shift-osoba"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "夜") { badgeClass = "shift-badge shift-yakan"; workDays++; nightDays++; dailyNightCount[d]++; }
+      else if (sym === "明") { badgeClass = "shift-badge shift-ake"; workDays++; }
+      else if (sym === "休") { badgeClass = "shift-badge shift-kyu"; holidays++; dailyHolidayCount[d]++; }
 
+      const safeName = escapeHtml(st.name);
       tbodyHtml += `
-        <td class="shift-cell" style="background:${cellBg}; border:1px solid #e2e8f0; padding:3px 2px; cursor:pointer;" onclick="openShiftCellModal('${st.name}', ${d})" title="${st.name} ${month}月${d}日: クリックして修正">
+        <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: クリックして即時変更">
           ${sym ? `<span class="${badgeClass}">${sym}</span>` : `<span style="color:#cbd5e1;">-</span>`}
         </td>
       `;
@@ -6421,7 +6558,111 @@ function renderShiftTable(yearMonth) {
   table.innerHTML = theadHtml + tbodyHtml + tfootHtml;
 }
 
-// 手動セル編集モーダル
+// クイック変更ポップオーバー (セル直下でワンクリック変更)
+function openShiftCellPopover(event, staffName, day, currentSymbol) {
+  if (event) event.stopPropagation();
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dow = new Date(year, month - 1, day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, day);
+
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+
+  let popover = document.getElementById("shiftCellPopover");
+  if (!popover) {
+    popover = document.createElement("div");
+    popover.id = "shiftCellPopover";
+    popover.className = "shift-cell-popover";
+    document.body.appendChild(popover);
+  }
+
+  const rect = event ? event.currentTarget.getBoundingClientRect() : { top: 200, bottom: 230, left: 200 };
+  const dateInfo = hol.isHoliday ? `${month}/${day}(${dowNames[dow]}・${hol.name})` : `${month}/${day}(${dowNames[dow]})`;
+
+  popover.innerHTML = `
+    <div class="shift-popover-header">
+      <div>
+        <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
+        <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+      </div>
+      <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+    </div>
+    <div class="shift-popover-grid">
+      <button class="shift-popover-btn btn-haya" onclick="executeShiftCellEdit('早')">🌅 早番</button>
+      <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
+      <button class="shift-popover-btn btn-osoba" onclick="executeShiftCellEdit('遅')">🌆 遅番</button>
+      <button class="shift-popover-btn btn-yakan" onclick="executeShiftCellEdit('夜')">🌙 夜勤</button>
+      <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')">🌤️ 明け</button>
+      <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
+      <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
+    </div>
+    <div style="margin-top:6px; text-align:right;">
+      <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細モーダルで編集</a>
+    </div>
+  `;
+
+  // 画面位置の調整 (画面外はみ出し防止)
+  let top = rect.bottom + window.scrollY + 6;
+  let left = rect.left + window.scrollX - 60;
+  if (left < 10) left = 10;
+  if (left + 270 > window.innerWidth) left = window.innerWidth - 280;
+  if (rect.bottom + 150 > window.innerHeight) {
+    top = rect.top + window.scrollY - 140;
+  }
+
+  popover.style.top = `${top}px`;
+  popover.style.left = `${left}px`;
+  popover.style.display = "block";
+}
+
+function closeShiftPopover() {
+  const p = document.getElementById("shiftCellPopover");
+  if (p) p.style.display = "none";
+}
+
+function executeShiftCellEdit(symbol) {
+  applyShiftCellEdit(symbol);
+  closeShiftPopover();
+}
+
+// ダブルクリックで循環切り替え (日 → 早 → 遅 → 夜 → 明 → 休 → 日)
+function cycleShiftCell(staffName, day) {
+  const ym = getShiftYearMonth();
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  if (!db.data.monthly_shifts[ym]) db.data.monthly_shifts[ym] = {};
+  if (!db.data.monthly_shifts[ym][staffName]) db.data.monthly_shifts[ym][staffName] = {};
+
+  const cur = db.data.monthly_shifts[ym][staffName][day] || "";
+  const cycleMap = {
+    "": "日",
+    "日": "早",
+    "早": "遅",
+    "遅": "夜",
+    "夜": "明",
+    "明": "休",
+    "休": "日"
+  };
+  const nextSym = cycleMap[cur] || "日";
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+  applyShiftCellEdit(nextSym);
+}
+
+// ポップオーバー外側クリックで閉じるリスナー
+if (typeof window !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const popover = document.getElementById("shiftCellPopover");
+    if (popover && popover.style.display !== "none") {
+      if (!popover.contains(e.target) && !e.target.closest(".shift-cell")) {
+        popover.style.display = "none";
+      }
+    }
+  });
+}
+
+// 手動セル編集モーダル (全ボタン選択可能・専従ガイド付き)
 function openShiftCellModal(staffName, day) {
   const ym = getShiftYearMonth();
   const [yearStr, monthStr] = ym.split("-");
@@ -6429,38 +6670,37 @@ function openShiftCellModal(staffName, day) {
   const month = parseInt(monthStr, 10);
   const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
   const dow = new Date(year, month - 1, day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, day);
 
   gShiftEditingCell = { staffName, day, yearMonth: ym };
 
   const targetText = document.getElementById("shiftEditTargetText");
   if (targetText) {
-    targetText.textContent = `${staffName} 様 - ${month}月${day}日(${dowNames[dow]})`;
+    const dateLabel = hol.isHoliday ? `${month}月${day}日(${dowNames[dow]}・${hol.name})` : `${month}月${day}日(${dowNames[dow]})`;
+    targetText.textContent = `${staffName} - ${dateLabel}`;
   }
 
-  // 職種に応じた制御
+  // 職種に応じたガイド表示 (ボタンは自由に選択可能)
   const staff = (db.data.stamps || []).find(s => (s.name || s) === staffName);
   const role = staff && staff.role ? staff.role : "";
-  const isDirectorOrOffice = role.includes("施設長") || role.includes("管理者") || role.includes("事務") || staffName === "施設長" || staffName === "田中";
+  const isDayOnlyRole = role.includes("施設長") || role.includes("管理者") || role.includes("事務") || role.includes("看護") || staffName.includes("木村") || staffName.includes("田中") || staffName.includes("松本") || staffName.includes("鈴木") || staffName.includes("加藤");
 
   const notice = document.getElementById("shiftEditRoleNotice");
+  if (isDayOnlyRole) {
+    if (notice) notice.textContent = "💡 施設長・事務員・看護師は基本的に日勤専従（土日祝・年末年始休み）です。";
+  } else {
+    if (notice) notice.textContent = "";
+  }
+
+  // 全ボタンを表示状態に保つ
   const btnEarly = document.querySelector("#shiftEditButtonsContainer button:nth-child(1)");
   const btnLate = document.querySelector("#shiftEditButtonsContainer button:nth-child(3)");
   const btnNight = document.querySelector("#shiftEditButtonsContainer button:nth-child(4)");
   const btnDawn = document.querySelector("#shiftEditButtonsContainer button:nth-child(5)");
-
-  if (isDirectorOrOffice) {
-    if (notice) notice.textContent = "※施設長・事務員は日勤専従のため、日勤または公休のみ選択可能です。";
-    if (btnEarly) btnEarly.style.display = "none";
-    if (btnLate) btnLate.style.display = "none";
-    if (btnNight) btnNight.style.display = "none";
-    if (btnDawn) btnDawn.style.display = "none";
-  } else {
-    if (notice) notice.textContent = "";
-    if (btnEarly) btnEarly.style.display = "inline-block";
-    if (btnLate) btnLate.style.display = "inline-block";
-    if (btnNight) btnNight.style.display = "inline-block";
-    if (btnDawn) btnDawn.style.display = "inline-block";
-  }
+  if (btnEarly) btnEarly.style.display = "inline-block";
+  if (btnLate) btnLate.style.display = "inline-block";
+  if (btnNight) btnNight.style.display = "inline-block";
+  if (btnDawn) btnDawn.style.display = "inline-block";
 
   const modal = document.getElementById("shiftEditModal");
   if (modal) modal.style.display = "flex";
@@ -6530,10 +6770,10 @@ function renderShiftNgList() {
     html += `
       <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
         <div>
-          <strong style="color:#1e293b;">${p.staff1} 様</strong> 
+          <strong style="color:#1e293b;">${escapeHtml(p.staff1)}</strong> 
           <span style="color:#dc2626; font-weight:bold; margin:0 4px;">✖</span> 
-          <strong style="color:#1e293b;">${p.staff2} 様</strong>
-          <span style="color:#64748b; font-size:11.5px; margin-left:8px;">(${p.reason || '相性配慮'})</span>
+          <strong style="color:#1e293b;">${escapeHtml(p.staff2)}</strong>
+          <span style="color:#64748b; font-size:11.5px; margin-left:8px;">(${escapeHtml(p.reason || '相性配慮')})</span>
         </div>
         <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftNgPair(${p.id})">削除</button>
       </li>
