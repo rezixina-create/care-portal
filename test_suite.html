@@ -288,6 +288,8 @@
       assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function", "Test 43: 夜間体位変換トグル＆一括確定関数 (toggleNightTurnAction, submitNightTurnsBatch) が存在すること");
       assert(typeof submitGroomingsBatch === "function", "Test 44: 身だしなみ一括確定関数 (submitGroomingsBatch) が存在すること");
       assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
+      assert(typeof openClinicInstructionModal === "function" && typeof submitClinicInstructions === "function", "Test 46: 往診医・受診時指示＆特殊指示の項目別クイック変更・保存関数が存在すること");
+      assert(typeof openCarePlanModal === "function" && typeof openBodyConditionModal === "function", "Test 47: 基本方針・身体状況の項目別クイック変更関数が存在すること");
 
       // 18. 総合結果判定
       log("====================================================");

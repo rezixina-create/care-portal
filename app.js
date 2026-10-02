@@ -192,21 +192,27 @@ class LocalDB {
       const res = await fetch('/api/data');
       if (!res.ok) return;
       const text = await res.text();
-      if (!text || text.trim() === "" || text === "{}" || text === this.lastSavedJson) return;
+      if (!text || text.trim() === "" || text === "{}") return;
 
       const serverData = JSON.parse(text);
-      if (serverData && serverData.residents) {
-        this.data = this.ensureDefaultArrays(serverData);
-        this.lastSavedJson = JSON.stringify(this.data);
-        try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
-        this.updateSyncBadge(true);
+      if (!serverData || !serverData.residents) return;
 
-        // 職員が編集中でない場合に限りビューを更新
-        const activeTag = document.activeElement ? document.activeElement.tagName : "";
-        if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
-          if (typeof reloadStateFromDb === 'function') {
-            reloadStateFromDb();
-          }
+      const normalizedJson = JSON.stringify(serverData);
+      if (normalizedJson === this.lastSavedJson) {
+        this.updateSyncBadge(true);
+        return;
+      }
+
+      this.data = this.ensureDefaultArrays(serverData);
+      this.lastSavedJson = normalizedJson;
+      try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
+      this.updateSyncBadge(true);
+
+      // 職員が編集中でない場合に限りビューを更新
+      const activeTag = document.activeElement ? document.activeElement.tagName : "";
+      if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
+        if (typeof reloadStateFromDb === 'function') {
+          reloadStateFromDb();
         }
       }
     } catch (e) {
@@ -578,7 +584,7 @@ function isCurrentStaffAdmin() {
 function checkGlobalAlerts() {
   const container = document.getElementById("alertsContainer");
   if (!container) return;
-  container.innerHTML = "";
+  let alertHtml = "";
   const today = new Date();
   const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
 
@@ -598,7 +604,7 @@ function checkGlobalAlerts() {
   });
   if (nextMonthBirthdays.length > 0) {
     const list = nextMonthBirthdays.map(b => `${b.room}号室 ${b.name} 様 (${b.date})`).join(", ");
-    container.innerHTML += `
+    alertHtml += `
       <div class="alert-banner alert-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
         <span>🎂 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
       </div>
@@ -611,7 +617,7 @@ function checkGlobalAlerts() {
       const expDate = new Date(item.expiry_date);
       const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
       if (diffDays > 0 && diffDays <= 14) {
-        container.innerHTML += `
+        alertHtml += `
           <div class="alert-banner alert-warning">
             <span>🥫 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
           </div>
@@ -624,7 +630,7 @@ function checkGlobalAlerts() {
   const lowStockItems = (gState.inventory || []).filter(i => i.current_stock <= i.safety_stock);
   if (lowStockItems.length > 0) {
     const names = lowStockItems.map(i => `${i.name} (残${i.current_stock}${i.unit}/基準${i.safety_stock})`).join(", ");
-    container.innerHTML += `
+    alertHtml += `
       <div class="alert-banner alert-danger">
         <span>⚠️ 【要発注アラート】以下の消耗品の補充が必要です：${names}</span>
         <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px;" onclick="switchPortal('office'); switchOfficeTab('orders'); openOrderModal();">発注申請へ</button>
@@ -641,7 +647,7 @@ function checkGlobalAlerts() {
       
       if (diffDays === 0 || r.next_clinic_date === todayStr) {
         // 当日往診
-        container.innerHTML += `
+        alertHtml += `
           <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
             <span>🩺 <strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
           </div>
@@ -649,7 +655,7 @@ function checkGlobalAlerts() {
       } else if (diffDays > 0 && diffDays <= 14) {
         const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
         const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
-        container.innerHTML += `
+        alertHtml += `
           <div class="alert-banner ${alertType}">
             <span>🏥 ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
           </div>
@@ -663,23 +669,20 @@ function checkGlobalAlerts() {
   const excretions = db.data.excretions || [];
   gState.residents.forEach(r => {
     if (r.status !== "在所") return;
-    // stool_amount が「なし」以外の最新レコードを探す
     const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
     let daysNoStool = 0;
     if (resExcs.length > 0) {
-      // 日付降順ソート
       resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
       const latestDateStr = resExcs[0].date;
       const latestDate = new Date(latestDateStr);
       const curDate = new Date(todayStr);
       daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
     } else {
-      // 排便記録が過去に全くない場合は3日以上とみなす
       daysNoStool = 3;
     }
 
     if (daysNoStool >= 3) {
-      container.innerHTML += `
+      alertHtml += `
         <div class="alert-banner alert-danger" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
           <span>🚽 ⚠️ <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
           <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
@@ -695,7 +698,7 @@ function checkGlobalAlerts() {
   if (currentStaff && monthlyNotices.length > 0) {
     const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
     if (unconfirmed.length > 0) {
-      container.innerHTML += `
+      alertHtml += `
         <div class="alert-banner alert-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
           <span>📢 ⚠️ <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
           <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
@@ -717,11 +720,15 @@ function checkGlobalAlerts() {
   });
   if (expiringResidents.length > 0) {
     const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
-    container.innerHTML += `
+    alertHtml += `
       <div class="alert-banner alert-warning">
         <span>📋 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
       </div>
     `;
+  }
+
+  if (container.innerHTML !== alertHtml) {
+    container.innerHTML = alertHtml;
   }
 }
 
@@ -958,24 +965,34 @@ function renderResidentDetail() {
     <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🎯 基本方針 ＆ ケアプラン目標・見守り注意</span>
-        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openCarePlanModal(${r.id})">✏️ 変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
       </summary>
       <div style="padding:12px;">
         ${r.sensor_alert ? `
-          <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px;">
-            ${escapeHtml(r.sensor_alert)}
+          <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+            <span>${escapeHtml(r.sensor_alert)}</span>
+            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px; color:#dc2626;" onclick="openCarePlanModal(${r.id})">変更</button>
           </div>
         ` : ''}
-        <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px;">
-          <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
-          <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
+        <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
+            <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">変更</button>
         </div>
         ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
-          <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e;">
-            <strong>⚠️ 設定済バイタル注意基準:</strong>
-            ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
-            ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
-            ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
+          <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong>⚠️ 設定済バイタル注意基準:</strong>
+              ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
+              ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
+              ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
+            </div>
+            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">基準値変更</button>
           </div>
         ` : ''}
       </div>
@@ -985,7 +1002,10 @@ function renderResidentDetail() {
     <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
-        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openBodyConditionModal(${r.id})">✏️ 変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
       </summary>
       <div style="padding:12px;">
         <div style="margin-bottom:10px;">
@@ -1005,17 +1025,36 @@ function renderResidentDetail() {
     <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
       <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
         <span>🏥 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
-        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.stopPropagation(); openClinicInstructionModal(${r.id})">✏️ 受診指示を変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
       </summary>
       <div style="padding:12px;">
-        ${r.clinic_special_notes ? `
-          <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px; margin-bottom:10px; color:#991b1b; font-weight:bold; font-size:13px;">
-            ⚠️ 【往診・受診 特殊指示】 ${escapeHtml(r.clinic_special_notes)}
+        <!-- 特殊指示ブロック -->
+        <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px;">
+          <div style="color:#991b1b; font-weight:bold; font-size:13px;">
+            ⚠️ 【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
           </div>
-        ` : ''}
-        <div style="font-size:13px;">
-          <div><strong>🩺 医師の指示内容:</strong> ${escapeHtml(r.dr_instructions || "定期採血・血圧コントロール")}</div>
-          <div style="font-size:12px; color:#2563eb; margin-top:4px;"><strong>次回受診・往診予定日:</strong> ${r.next_clinic_date || "未定"}</div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'special')">✏️ 特殊指示を変更</button>
+        </div>
+
+        <!-- 医師の指示内容 (受診時コメント) -->
+        <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f8fafc; padding:8px 10px; border-radius:6px;">
+          <div>
+            <strong>🩺 医師の指示内容 (受診時コメント):</strong>
+            <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '定期採血・血圧コントロール')}</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'instructions')">✏️ 指示内容を変更</button>
+        </div>
+
+        <!-- 次回予定日 -->
+        <div style="font-size:13px; display:flex; justify-content:space-between; align-items:center; background:#f0f9ff; padding:8px 10px; border-radius:6px;">
+          <div>
+            <strong style="color:#0369a1;">📅 次回受診・往診予定日:</strong>
+            <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${r.next_clinic_date || '未定'}</span>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'date')">✏️ 予定日を変更</button>
         </div>
       </div>
     </details>
@@ -4584,6 +4623,154 @@ function submitResidentForm() {
   checkGlobalAlerts();
 
   alert(editId ? `「${name} 様」の登録情報を更新しました！` : `新規利用者「${name} 様」を登録しました！`);
+}
+
+// ==========================================
+// 🏥 往診医・受診時指示＆特殊指示 項目別クイック編集機能
+// ==========================================
+function insertQuickSpecialNote(text) {
+  const input = document.getElementById("quickClinicSpecialNotes");
+  if (!input) return;
+  if (!input.value) {
+    input.value = text;
+  } else if (!input.value.includes(text)) {
+    input.value = input.value + "、" + text;
+  }
+}
+
+function openClinicInstructionModal(resId, focusField = 'all') {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const titleEl = document.getElementById("clinicModalTitle");
+  if (titleEl) titleEl.textContent = `🏥 往診医・受診時指示 ＆ 特殊指示の変更 (${r.name} 様)`;
+  document.getElementById("clinicResidentId").value = r.id;
+  document.getElementById("quickClinicSpecialNotes").value = r.clinic_special_notes || "";
+  document.getElementById("quickDrInstructions").value = r.dr_instructions || "";
+  document.getElementById("quickNextClinicDate").value = r.next_clinic_date || "";
+
+  document.getElementById("clinicInstructionModal").style.display = "flex";
+
+  setTimeout(() => {
+    if (focusField === 'special') {
+      document.getElementById("quickClinicSpecialNotes")?.focus();
+    } else if (focusField === 'instructions') {
+      document.getElementById("quickDrInstructions")?.focus();
+    } else if (focusField === 'date') {
+      document.getElementById("quickNextClinicDate")?.focus();
+    }
+  }, 100);
+}
+
+function submitClinicInstructions() {
+  const id = parseInt(document.getElementById("clinicResidentId").value, 10);
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const specialNotes = document.getElementById("quickClinicSpecialNotes").value.trim();
+  const drInstructions = document.getElementById("quickDrInstructions").value.trim();
+  const nextClinicDate = document.getElementById("quickNextClinicDate").value;
+
+  r.clinic_special_notes = specialNotes;
+  r.dr_instructions = drInstructions;
+  r.next_clinic_date = nextClinicDate;
+
+  // 介護記録にも往診・受診指示変更の記録を自動記録（変更履歴の保持）
+  const staff = (document.getElementById("currentStaff")?.value) || "看護師";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+  if (!db.data.care_records) db.data.care_records = [];
+  db.data.care_records.unshift({
+    id: Date.now(),
+    resident_id: r.id,
+    category: "受診",
+    recorded_at: nowStr,
+    content: `【往診・受診指示変更】医師指示: ${drInstructions || '特記なし'} / 特殊指示: ${specialNotes || 'なし'} / 次回予定: ${nextClinicDate || '未定'}`,
+    staff_name: staff
+  });
+
+  db.save();
+  closeModal("clinicInstructionModal");
+  renderResidentDetail();
+  checkGlobalAlerts();
+  alert(`${r.name} 様の受診時指示および特殊指示を保存しました！個人記録へも変更履歴を自動転記しました。`);
+}
+
+// ==========================================
+// 🎯 基本方針・見守り注意 クイック編集機能
+// ==========================================
+function openCarePlanModal(resId) {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const titleEl = document.getElementById("carePlanModalTitle");
+  if (titleEl) titleEl.textContent = `🎯 基本方針 ＆ ケアプラン目標の変更 (${r.name} 様)`;
+  document.getElementById("carePlanResidentId").value = r.id;
+  document.getElementById("quickCarePlanGoal").value = r.care_plan_goal || "";
+  document.getElementById("quickSensorAlert").value = r.sensor_alert || "";
+  document.getElementById("quickBpHMax").value = r.bp_high_max || "";
+  document.getElementById("quickBpHMin").value = r.bp_high_min || "";
+  document.getElementById("quickTempMax").value = r.temp_max || "";
+  document.getElementById("quickSpo2Min").value = r.spo2_min || "";
+
+  document.getElementById("carePlanModal").style.display = "flex";
+}
+
+function submitCarePlanModal() {
+  const id = parseInt(document.getElementById("carePlanResidentId").value, 10);
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  r.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
+  r.sensor_alert = document.getElementById("quickSensorAlert").value.trim();
+  r.bp_high_max = document.getElementById("quickBpHMax").value ? parseInt(document.getElementById("quickBpHMax").value, 10) : null;
+  r.bp_high_min = document.getElementById("quickBpHMin").value ? parseInt(document.getElementById("quickBpHMin").value, 10) : null;
+  r.temp_max = document.getElementById("quickTempMax").value ? parseFloat(document.getElementById("quickTempMax").value) : null;
+  r.spo2_min = document.getElementById("quickSpo2Min").value ? parseInt(document.getElementById("quickSpo2Min").value, 10) : null;
+
+  db.save();
+  closeModal("carePlanModal");
+  renderResidentDetail();
+  alert(`${r.name} 様の基本方針・ケアプラン目標・バイタル基準値を更新しました！`);
+}
+
+// ==========================================
+// 🩺 身体状況・食形態 クイック編集機能
+// ==========================================
+function openBodyConditionModal(resId) {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const titleEl = document.getElementById("bodyConditionModalTitle");
+  if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態の変更 (${r.name} 様)`;
+  document.getElementById("bodyConditionResidentId").value = r.id;
+  document.getElementById("quickDiseases").value = r.diseases || "";
+  document.getElementById("quickParalysis").value = r.paralysis || "";
+  document.getElementById("quickAllergies").value = r.allergies || "";
+  document.getElementById("quickDietType").value = r.diet_type || "普通食";
+  document.getElementById("quickOralState").value = r.oral_state || "";
+
+  document.getElementById("bodyConditionModal").style.display = "flex";
+}
+
+function submitBodyConditionModal() {
+  const id = parseInt(document.getElementById("bodyConditionResidentId").value, 10);
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  r.diseases = document.getElementById("quickDiseases").value.trim();
+  r.paralysis = document.getElementById("quickParalysis").value.trim();
+  r.allergies = document.getElementById("quickAllergies").value.trim();
+  r.diet_type = document.getElementById("quickDietType").value;
+  r.oral_state = document.getElementById("quickOralState").value.trim();
+
+  db.save();
+  closeModal("bodyConditionModal");
+  renderResidentDetail();
+  alert(`${r.name} 様の身体状況・食形態を更新しました！`);
 }
 
 // 職員・認印管理

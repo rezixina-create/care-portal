@@ -1711,6 +1711,138 @@
         <button class="btn btn-primary" style="padding:8px 24px;" id="btnExecuteConsume" onclick="executeConsume()">はい、使用する</button>
       </div>
     </div>
+  <!-- 14. 往診医・受診時指示＆特殊指示 項目別クイック編集モーダル -->
+  <div class="modal-overlay" id="clinicInstructionModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3 id="clinicModalTitle">🏥 往診医・受診時指示 ＆ 特殊指示の変更</h3>
+        <button class="modal-close-btn" onclick="closeModal('clinicInstructionModal')">&times;</button>
+      </div>
+      <input type="hidden" id="clinicResidentId">
+      
+      <div class="form-group">
+        <label>⚠️ 往診・受診 特殊指示 (絶食・薬のみ等):</label>
+        <input type="text" id="quickClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、朝薬のみ水分少量で服用可、採血あり">
+        <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('当日朝は絶食 (採血あり)')">＋ 絶食(採血)</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('朝薬のみ水分少量で服用可')">＋ 朝薬のみ水分可</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('往診時レントゲン撮影予定')">＋ レントゲン予定</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px; color:#dc2626;" onclick="document.getElementById('quickClinicSpecialNotes').value=''">クリア</button>
+        </div>
+      </div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label>🩺 医師の指示内容 (受診時コメント):</label>
+        <textarea id="quickDrInstructions" class="form-control" rows="3" placeholder="医師からの指示、処方変更、注意点などを記入"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top:12px;">
+        <label>📅 次回受診・往診予定日:</label>
+        <input type="date" id="quickNextClinicDate" class="form-control">
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('clinicInstructionModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitClinicInstructions()">受診指示を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 15. 基本方針・見守り注意 項目別クイック編集モーダル -->
+  <div class="modal-overlay" id="carePlanModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3 id="carePlanModalTitle">🎯 基本方針 ＆ ケアプラン目標の変更</h3>
+        <button class="modal-close-btn" onclick="closeModal('carePlanModal')">&times;</button>
+      </div>
+      <input type="hidden" id="carePlanResidentId">
+
+      <div class="form-group">
+        <label>🎯 ケアプラン目標・注意事項:</label>
+        <textarea id="quickCarePlanGoal" class="form-control" rows="2" placeholder="例: 安全な日常生活の維持・転倒予防"></textarea>
+      </div>
+
+      <div class="form-group" style="margin-top:10px;">
+        <label>⚠️ 離床センサー・見守り注意:</label>
+        <input type="text" id="quickSensorAlert" class="form-control" placeholder="例: ⚠️ 離床センサーマット使用中 (ベッド脇)">
+      </div>
+
+      <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
+        <label style="font-weight:bold; font-size:13px; color:#1e293b;">個別バイタル注意基準値:</label>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
+          <div>
+            <label style="font-size:12px;">最高血圧 上限 (mmHg):</label>
+            <input type="number" id="quickBpHMax" class="form-control" placeholder="150">
+          </div>
+          <div>
+            <label style="font-size:12px;">最高血圧 下限 (mmHg):</label>
+            <input type="number" id="quickBpHMin" class="form-control" placeholder="90">
+          </div>
+          <div>
+            <label style="font-size:12px;">体温 上限 (℃):</label>
+            <input type="number" step="0.1" id="quickTempMax" class="form-control" placeholder="37.5">
+          </div>
+          <div>
+            <label style="font-size:12px;">SpO2 下限 (%):</label>
+            <input type="number" id="quickSpo2Min" class="form-control" placeholder="93">
+          </div>
+        </div>
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('carePlanModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitCarePlanModal()">基本方針を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 16. 身体状況・食形態・口腔状態 項目別クイック編集モーダル -->
+  <div class="modal-overlay" id="bodyConditionModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3 id="bodyConditionModalTitle">🩺 身体状況 ＆ 食形態・口腔状態の変更</h3>
+        <button class="modal-close-btn" onclick="closeModal('bodyConditionModal')">&times;</button>
+      </div>
+      <input type="hidden" id="bodyConditionResidentId">
+
+      <div class="form-group">
+        <label>病歴・既往歴 (カンマ区切り):</label>
+        <input type="text" id="quickDiseases" class="form-control" placeholder="例: 脳梗塞後遺症, 高血圧">
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+        <div class="form-group">
+          <label>身体・麻痺:</label>
+          <input type="text" id="quickParalysis" class="form-control" placeholder="例: 右片麻痺">
+        </div>
+        <div class="form-group">
+          <label>アレルギー:</label>
+          <input type="text" id="quickAllergies" class="form-control" placeholder="例: 卵, エビ, なし">
+        </div>
+      </div>
+
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
+        <div class="form-group">
+          <label>食形態:</label>
+          <select id="quickDietType" class="form-control">
+            <option value="普通食">普通食</option>
+            <option value="一口大">一口大</option>
+            <option value="刻み食">刻み食</option>
+            <option value="極刻み食">極刻み食</option>
+            <option value="ペースト・とろみ">ペースト・とろみ</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label>口腔状態:</label>
+          <input type="text" id="quickOralState" class="form-control" placeholder="例: 上下義歯, 残歯あり">
+        </div>
+      </div>
+
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('bodyConditionModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitBodyConditionModal()">身体状況を保存</button>
+      </div>
+    </div>
   </div>
 
   <script src="app.js"></script>

@@ -141,7 +141,6 @@ body {
   justify-content: space-between;
   font-size: 14px;
   font-weight: bold;
-  animation: fadeIn 0.3s ease;
 }
 
 .alert-danger {
