@@ -4,12 +4,12 @@ Start-Sleep -Seconds 3
 
 try {
     Write-Host "--- Testing GET /api/data ---"
-    $res = Invoke-RestMethod -Uri "http://localhost:8000/api/data" -TimeoutSec 3 -UseBasicParsing
+    $res = Invoke-RestMethod -Uri "http://localhost:8888/api/data" -TimeoutSec 3 -UseBasicParsing
     Write-Host "Residents count: $($res.residents.Count)"
     Write-Host "Photos count: $($res.photos.Count)"
     foreach ($p in $res.photos) {
         Write-Host "  - (Resident $($p.resident_id)) [$($p.category)] $($p.title) -> $($p.url)"
-        $img = Invoke-WebRequest -Uri "http://localhost:8000/$($p.url)" -TimeoutSec 3 -UseBasicParsing
+        $img = Invoke-WebRequest -Uri "http://localhost:8888/$($p.url)" -TimeoutSec 3 -UseBasicParsing
         if ($img.StatusCode -ne 200) {
             throw "Failed to download $($p.url): $($img.StatusCode)"
         }

@@ -28,6 +28,15 @@
     window.prompt = function(msg, def) { console.log("[MOCK PROMPT]", msg); return def || ""; };
     window.print = function() { console.log("[MOCK PRINT]"); };
 
+    // テスト中の本番DB破壊防止: /api/save を安全にモック
+    const origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+      if (typeof url === 'string' && url.includes('/api/save')) {
+        return Promise.resolve(new Response(JSON.stringify({success: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+      }
+      return origFetch.apply(this, arguments);
+    };
+
     window.onerror = function(msg, url, line, col, err) {
       console.error("[GLOBAL ERROR]", msg, line, col);
       const summary = document.getElementById("testSummary");
@@ -51,6 +60,7 @@
   <div id="sandbox" style="display:none;">
     <select id="currentStaff"><option value="山田">山田</option></select>
     <div id="residentsStrip"></div>
+    <div id="residentCountLabel"></div>
     <div id="residentDetailCard"></div>
     <div id="recordTargetResidentText"></div>
     <div id="fsResidentBadge"></div>
@@ -58,7 +68,10 @@
     <div id="fsQuickTemplatesList"></div>
     <div id="alertsContainer"></div>
     <div id="calendarGrid"></div>
-    <div id="currentMonthLabel"></div>
+    <div id="calCurrentMonthLabel"></div>
+    <div id="calDaysRow"></div>
+    <div id="notebookList"></div>
+    <div id="hankoStampArea"></div>
     <div id="recordCategory"><option value="介護記録">介護記録</option></div>
     <input type="datetime-local" id="recordCustomTime">
     <textarea id="recordContent"></textarea>
@@ -256,7 +269,7 @@
       assert(typeof openFullscreenRecord === "function" && typeof closeFullscreenRecord === "function", "Test 32: 全画面集中エディタ開閉関数 (open/closeFullscreenRecord) が存在すること");
       assert(typeof syncFromFullscreen === "function" && typeof submitCareRecordFromFullscreen === "function", "Test 33: 全画面エディタ双方向同期・保存関数が存在すること");
       assert(typeof printSelectedDateRecords === "function", "Test 34: 本日の記録一覧の日報書類形式印刷関数 (printSelectedDateRecords) が存在すること");
-      assert(typeof escapeHtml === "function" && escapeHtml("<script>'test'&</script>") === "&lt;script&gt;&#039;test&#039;&amp;&lt;/script&gt;", "Test 35: HTMLエスケープ関数 (escapeHtml) がXSSと特殊記号を正常エスケープすること");
+      assert(typeof escapeHtml === "function" && escapeHtml("<scr" + "ipt>'test'&</scr" + "ipt>") === "&lt;script&gt;&#039;test&#039;&amp;&lt;/script&gt;", "Test 35: HTMLエスケープ関数 (escapeHtml) がXSSと特殊記号を正常エスケープすること");
 
       // B5文字数カウンター計算値の確認
       const area = document.getElementById("recordContent");

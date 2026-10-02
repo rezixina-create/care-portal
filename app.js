@@ -48,7 +48,7 @@ class LocalDB {
     this.isServerMode = window.location.protocol.startsWith("http");
     this.data = this.loadLocal();
     this.serverIPs = [];
-    this.serverPort = window.location.port || 8000;
+    this.serverPort = window.location.port || 8888;
     this.lastSavedJson = JSON.stringify(this.data);
 
     if (this.isServerMode) {
@@ -126,7 +126,7 @@ class LocalDB {
       if (resIp.ok) {
         const ipData = await resIp.json();
         this.serverIPs = ipData.ips || [];
-        this.serverPort = ipData.port || window.location.port || 8000;
+        this.serverPort = ipData.port || window.location.port || 8888;
         this.renderShareModalUrls();
       }
     } catch (e) {}
@@ -248,7 +248,7 @@ class LocalDB {
     container.appendChild(qrDiv);
 
     // 2. ローカルWi-Fi / LAN直接接続（自宅や同一LAN用・予備）
-    const port = this.serverPort || 8000;
+    const port = this.serverPort || 8888;
     let ipsToShow = [...this.serverIPs];
     const currentHost = window.location.hostname;
     if (currentHost && currentHost !== "localhost" && currentHost !== "127.0.0.1" && !ipsToShow.includes(currentHost)) {
@@ -687,7 +687,7 @@ function switchCareTab(tab) {
 function renderCalendar() {
   const monthLabel = document.getElementById("calCurrentMonthLabel");
   const [year, month] = gState.currentMonth.split("-");
-  monthLabel.textContent = `${year}年${parseInt(month)}月`;
+  if (monthLabel) monthLabel.textContent = `${year}年${parseInt(month)}月`;
 
   const recordedDates = new Set();
   (db.data.care_records || []).forEach(r => {
@@ -700,6 +700,7 @@ function renderCalendar() {
   (db.data.notebooks || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
 
   const daysRow = document.getElementById("calDaysRow");
+  if (!daysRow) return;
   daysRow.innerHTML = "";
   const daysInMonth = new Date(year, month, 0).getDate();
   const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
@@ -765,7 +766,8 @@ function loadDateRecords(dt) {
 function renderResidentsStrip() {
   const strip = document.getElementById("residentsStrip");
   strip.innerHTML = "";
-  document.getElementById("residentCountLabel").textContent = `登録利用者: ${gState.residents.length}名`;
+  const countLabel = document.getElementById("residentCountLabel");
+  if (countLabel) countLabel.textContent = `登録利用者: ${gState.residents.length}名`;
 
   gState.residents.forEach(r => {
     const card = document.createElement("div");
@@ -2491,6 +2493,7 @@ function submitVisitation() {
 // 13. 連絡帳 ＆ 【認】名前スタンプ (時間なし)
 function renderNotebook() {
   const list = document.getElementById("notebookList");
+  if (!list) return;
   list.innerHTML = "";
   const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
 
@@ -2525,6 +2528,7 @@ function renderNotebook() {
   }
 
   const stampArea = document.getElementById("hankoStampArea");
+  if (!stampArea) return;
   stampArea.innerHTML = "";
   const stamps = (db.data.notebook_stamps || []).filter(s => s.date === gState.selectedDate).map(s => s.staff_name);
   if (stamps.length === 0) {

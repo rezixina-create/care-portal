@@ -10,14 +10,14 @@ Write-Host "  Care Portal E2E Real Browser Test (Cycle 1)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. サーバー起動
-Write-Host "`n[Step 1] Starting Care Portal Server on port 8000..." -ForegroundColor Yellow
+Write-Host "`n[Step 1] Starting Care Portal Server on port 8888..." -ForegroundColor Yellow
 $serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$carePortalDir\server.ps1`"" -PassThru -NoNewWindow
 
-# 待機 (ポート8000が開くまで最大10秒)
+# 待機 (ポート8888が開くまで最大15秒)
 $ready = $false
-for ($i = 0; $i -lt 20; $i++) {
+for ($i = 0; $i -lt 30; $i++) {
     Start-Sleep -Milliseconds 500
-    $conn = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
+    $conn = Get-NetTCPConnection -LocalPort 8888 -State Listen -ErrorAction SilentlyContinue
     if ($conn) {
         $ready = $true
         break
@@ -25,16 +25,16 @@ for ($i = 0; $i -lt 20; $i++) {
 }
 
 if (-not $ready) {
-    Write-Host "[FAIL] Server failed to start on port 8000" -ForegroundColor Red
+    Write-Host "[FAIL] Server failed to start on port 8888" -ForegroundColor Red
     if ($serverProcess) { Stop-Process -Id $serverProcess.Id -Force }
     exit 1
 }
 
-Write-Host "  [PASS] Server is listening on http://127.0.0.1:8000" -ForegroundColor Green
+Write-Host "  [PASS] Server is listening on http://127.0.0.1:8888" -ForegroundColor Green
 
 # 2. Edge ヘッドレスで test_suite.html を実行
 Write-Host "`n[Step 2] Running Test Suite via Headless Edge..." -ForegroundColor Yellow
-$testUrl = "http://127.0.0.1:8000/test_suite.html"
+$testUrl = "http://127.0.0.1:8888/test_suite.html"
 $outHtml = "$PSScriptRoot\e2e_result.html"
 if (Test-Path $outHtml) { Remove-Item $outHtml -Force }
 
@@ -46,8 +46,8 @@ Write-Host "`n[Step 3] Stopping Server..." -ForegroundColor Yellow
 if ($serverProcess) {
     Stop-Process -Id $serverProcess.Id -Force -ErrorAction SilentlyContinue
 }
-# ポート8000を確実に解放
-$tcp = Get-NetTCPConnection -LocalPort 8000 -ErrorAction SilentlyContinue
+# ポート8888を確実に解放
+$tcp = Get-NetTCPConnection -LocalPort 8888 -ErrorAction SilentlyContinue
 if ($tcp) {
     Stop-Process -Id $tcp.OwningProcess -Force -ErrorAction SilentlyContinue
 }

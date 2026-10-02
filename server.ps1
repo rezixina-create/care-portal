@@ -2,11 +2,11 @@
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Stop"
 $ScriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
-$port = 8000
+$port = 8888
 
 # 0. タブレット・他端末接続用ファイアウォール自動確認 (初回のみ設定確認)
 try {
-    $fwRule = Get-NetFirewallRule -DisplayName "CarePortal_Port8000" -ErrorAction SilentlyContinue
+    $fwRule = Get-NetFirewallRule -DisplayName "CarePortal_Port8888" -ErrorAction SilentlyContinue
     if (-not $fwRule) {
         Write-Host "======================================================================" -ForegroundColor Cyan
         Write-Host "  【初回セットアップ】タブレット・他端末接続の設定" -ForegroundColor Yellow
@@ -16,14 +16,14 @@ try {
         Write-Host "  画面に許可ダイアログが表示されたら「はい」を押してください..." -ForegroundColor Green
         Write-Host ""
         try {
-            $p = Start-Process "netsh" -ArgumentList 'advfirewall firewall add rule name="CarePortal_Port8000" dir=in action=allow protocol=TCP localport=8000 profile=any' -Verb RunAs -Wait -PassThru -ErrorAction Stop
+            $p = Start-Process "netsh" -ArgumentList 'advfirewall firewall add rule name="CarePortal_Port8888" dir=in action=allow protocol=TCP localport=8888 profile=any' -Verb RunAs -Wait -PassThru -ErrorAction Stop
         } catch {
             Write-Host "  ※ファイアウォール設定はスキップされました（このPC単体での利用は可能です）。" -ForegroundColor Gray
         }
     }
 } catch { }
 
-# 1. すでにポート8000が稼働中か確認 (二重起動の防止)
+# 1. すでにポート8888が稼働中か確認 (二重起動の防止)
 $isPortInUse = $false
 try {
     $tcpConn = Get-NetTCPConnection -LocalPort $port -State Listen -ErrorAction SilentlyContinue

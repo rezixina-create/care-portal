@@ -17,7 +17,7 @@ from datetime import datetime, date, timedelta
 from http.server import HTTPServer, SimpleHTTPRequestHandler
 import urllib.parse
 
-PORT = 8000
+PORT = 8888
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATIC_DIR = os.path.join(BASE_DIR, "static")
 DB_PATH = os.path.join(BASE_DIR, "care_portal.db")

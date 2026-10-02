@@ -48,7 +48,7 @@ class LocalDB {
     this.isServerMode = window.location.protocol.startsWith("http");
     this.data = this.loadLocal();
     this.serverIPs = [];
-    this.serverPort = window.location.port || 8000;
+    this.serverPort = window.location.port || 8888;
     this.lastSavedJson = JSON.stringify(this.data);
 
     if (this.isServerMode) {
@@ -126,7 +126,7 @@ class LocalDB {
       if (resIp.ok) {
         const ipData = await resIp.json();
         this.serverIPs = ipData.ips || [];
-        this.serverPort = ipData.port || window.location.port || 8000;
+        this.serverPort = ipData.port || window.location.port || 8888;
         this.renderShareModalUrls();
       }
     } catch (e) {}
@@ -218,7 +218,7 @@ class LocalDB {
     container.innerHTML = "";
 
     const currentHost = window.location.hostname;
-    const port = this.serverPort || 8000;
+    const port = this.serverPort || 8888;
 
     let ipsToShow = [...this.serverIPs];
     if (currentHost && currentHost !== "localhost" && currentHost !== "127.0.0.1" && !ipsToShow.includes(currentHost)) {
