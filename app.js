@@ -84,7 +84,28 @@ class LocalDB {
       if (!Array.isArray(d[k])) d[k] = [];
     });
     if (Array.isArray(d.stamps)) {
+      const defaultNewStaff = [
+        { name: "高橋", role: "介護職員" },
+        { name: "伊藤", role: "介護職員" },
+        { name: "渡辺", role: "介護職員" },
+        { name: "中村", role: "介護職員" },
+        { name: "小林", role: "介護職員" }
+      ];
+      defaultNewStaff.forEach(s => {
+        if (!d.stamps.some(existing => (existing.name || existing) === s.name)) {
+          d.stamps.push(s);
+        }
+      });
       d.stamps = sortStaffList(d.stamps);
+    }
+
+    if (!d.monthly_shifts || typeof d.monthly_shifts !== "object") {
+      d.monthly_shifts = {};
+    }
+    if (!Array.isArray(d.shift_ng_pairs)) {
+      d.shift_ng_pairs = [
+        { id: 1, staff1: "佐藤", staff2: "高橋", reason: "相性配慮 (同日夜勤NG)" }
+      ];
     }
 
     // 消耗品マスター・アイテム同期＆移行 (手袋S/L追加、尿取りパッド名称統一、ワイドパッド追加)
@@ -405,10 +426,15 @@ class LocalDB {
       ],
       stamps: [
         { name: "施設長", role: "管理者" },
-        { name: "山田", role: "介護リーダー" },
+        { name: "田中", role: "事務員" },
         { name: "鈴木", role: "看護師" },
+        { name: "山田", role: "介護リーダー" },
         { name: "佐藤", role: "介護職員" },
-        { name: "田中", role: "事務員" }
+        { name: "高橋", role: "介護職員" },
+        { name: "伊藤", role: "介護職員" },
+        { name: "渡辺", role: "介護職員" },
+        { name: "中村", role: "介護職員" },
+        { name: "小林", role: "介護職員" }
       ],
       templates: [
         { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
@@ -531,6 +557,7 @@ let gState = {
   activePortal: "care",
   activeCareTab: "record",
   activeOfficeTab: "inventory",
+  currentShiftMonth: new Date().toISOString().slice(0, 7),
   recordScope: "today",
   dismissedAlerts: []
 };
@@ -3923,6 +3950,7 @@ function loadOfficeData() {
   renderOfficeSuppliers();
   renderOfficeBillingSelect();
   renderOfficeDepositTable();
+  renderShiftTable(gState.currentShiftMonth || "2026-10");
   renderOfficeVehicleLogs();
   renderOfficeFireDrills();
   renderOfficeCommittees();
@@ -3955,7 +3983,12 @@ function switchOfficeTab(tab) {
     if (el) el.style.display = "none";
   });
   const target = document.getElementById(tabMap[tab]);
-  if (target) target.style.display = "block";
+  if (target) {
+    target.style.display = "block";
+    if (tab === "shift") {
+      renderShiftTable(gState.currentShiftMonth || "2026-10");
+    }
+  }
 }
 
 // 在庫一覧 ＆ 棚卸し実数合わせ
@@ -5957,4 +5990,601 @@ function openLightbox(src, caption) {
   img.src = src;
   if (cap) cap.textContent = caption || "";
   modal.style.display = "flex";
+}
+
+// ==========================================
+// 7. 月間勤務表・シフト管理 (自動生成・手動修正・特例配慮・週休2日・夜勤2名)
+// ==========================================
+
+let gShiftEditingCell = { staffName: null, day: null, yearMonth: null };
+
+function getShiftYearMonth() {
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel && sel.value) {
+    gState.currentShiftMonth = sel.value;
+    return sel.value;
+  }
+  const defaultYm = gState.currentShiftMonth || new Date().toISOString().slice(0, 7);
+  gState.currentShiftMonth = defaultYm;
+  if (sel) sel.value = defaultYm;
+  return defaultYm;
+}
+
+function changeShiftMonth(delta) {
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  let y = parseInt(yearStr, 10);
+  let m = parseInt(monthStr, 10) + delta;
+  if (m < 1) {
+    m = 12;
+    y--;
+  } else if (m > 12) {
+    m = 1;
+    y++;
+  }
+  const newYm = `${y}-${String(m).padStart(2, '0')}`;
+  gState.currentShiftMonth = newYm;
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel) sel.value = newYm;
+  renderShiftTable(newYm);
+}
+
+function onShiftMonthChange() {
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel && sel.value) {
+    gState.currentShiftMonth = sel.value;
+    renderShiftTable(sel.value);
+  }
+}
+
+function generateMonthlyShiftAction() {
+  const ym = getShiftYearMonth();
+  const [y, m] = ym.split("-");
+  if (db.data.monthly_shifts && db.data.monthly_shifts[ym]) {
+    if (!confirm(`${y}年${parseInt(m, 10)}月の勤務表シフトを再生成しますか？\n（手動修正された内容もリセットされます）`)) {
+      return;
+    }
+  }
+  generateMonthlyShiftData(ym);
+  renderShiftTable(ym);
+  alert(`✅ ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（週休2日）\n・公休：全員週休2日配分`);
+}
+
+function generateMonthlyShiftData(yearMonth) {
+  if (!yearMonth) yearMonth = getShiftYearMonth();
+  const [yearStr, monthStr] = yearMonth.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  // 1. スタッフ分類 (10名体制)
+  const allStamps = sortStaffList(db.data.stamps || []);
+  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+  const isDirector = s => (s.role && (s.role.includes("施設長") || s.role.includes("管理者"))) || s.name === "施設長";
+  const isOffice = s => (s.role && s.role.includes("事務")) || s.name === "田中";
+  const isNurse = s => (s.role && s.role.includes("看護")) || s.name === "鈴木";
+
+  const directorsAndOffice = staffList.filter(s => isDirector(s) || isOffice(s));
+  const nurses = staffList.filter(s => isNurse(s));
+  const careStaff = staffList.filter(s => !isDirector(s) && !isOffice(s) && !isNurse(s));
+
+  // NGペアチェック関数
+  const ngPairs = db.data.shift_ng_pairs || [];
+  const isNgPair = (name1, name2) => {
+    return ngPairs.some(p => 
+      (p.staff1 === name1 && p.staff2 === name2) || 
+      (p.staff1 === name2 && p.staff2 === name1)
+    );
+  };
+
+  const shiftData = {};
+  staffList.forEach(s => {
+    shiftData[s.name] = {};
+  });
+
+  // 2. 施設長・事務員: 日勤専従 ＆ 週休2日 (土日公休)
+  directorsAndOffice.forEach(s => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (dow === 0 || dow === 6) {
+        shiftData[s.name][d] = "休";
+      } else {
+        shiftData[s.name][d] = "日";
+      }
+    }
+  });
+
+  // 3. 看護師 (鈴木): 日勤専従 ＆ 週休2日 (日・水公休)
+  nurses.forEach(s => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (dow === 0 || dow === 3) {
+        shiftData[s.name][d] = "休";
+      } else {
+        shiftData[s.name][d] = "日";
+      }
+    }
+  });
+
+  // 4. 介護職員: 毎日2名夜勤、連夜勤不可、特例配慮(同番NG)、週休2日、早遅日均等
+  if (careStaff.length > 0) {
+    const careNames = careStaff.map(s => s.name);
+    const nightCount = {};
+    careNames.forEach(n => nightCount[n] = 0);
+
+    // 月間公休目標 (週休2日 = 約8〜9日)
+    const targetHolidays = Math.floor(daysInMonth / 7) * 2 + (daysInMonth % 7 >= 5 ? 1 : 0);
+    const holidayCount = {};
+    careNames.forEach(n => holidayCount[n] = 0);
+
+    // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
+    for (let d = 1; d <= daysInMonth; d++) {
+      // 候補者: 前日夜勤でない人（前日夜勤＝当日明のため夜勤不可）
+      const candidates = careNames.filter(name => {
+        if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+        return true;
+      });
+
+      // 夜勤回数が少なく、前々日夜勤でない人を優先
+      candidates.sort((a, b) => {
+        const countDiff = nightCount[a] - nightCount[b];
+        if (countDiff !== 0) return countDiff;
+        const aPrev2 = (d > 2 && shiftData[a][d - 2] === "夜") ? 1 : 0;
+        const bPrev2 = (d > 2 && shiftData[b][d - 2] === "夜") ? 1 : 0;
+        if (aPrev2 !== bPrev2) return aPrev2 - bPrev2;
+        return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
+      });
+
+      // 特例配慮(NGペア)を回避する2名を選出
+      let selectedPair = null;
+      for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+          const c1 = candidates[i];
+          const c2 = candidates[j];
+          if (!isNgPair(c1, c2)) {
+            selectedPair = [c1, c2];
+            break;
+          }
+        }
+        if (selectedPair) break;
+      }
+
+      if (!selectedPair) {
+        selectedPair = [candidates[0], candidates[1] || candidates[0]];
+      }
+
+      // 夜勤と翌日の「明」を付与
+      selectedPair.forEach(n => {
+        shiftData[n][d] = "夜";
+        nightCount[n]++;
+        if (d + 1 <= daysInMonth) {
+          shiftData[n][d + 1] = "明";
+        }
+      });
+    }
+
+    // Step B: 週休2日 (公休「休」) の配分
+    // 夜勤明けの翌日を優先して「休」とする
+    for (let d = 1; d <= daysInMonth; d++) {
+      careNames.forEach(n => {
+        if (!shiftData[n][d]) {
+          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays) {
+            shiftData[n][d] = "休";
+            holidayCount[n]++;
+          }
+        }
+      });
+    }
+
+    // 週ごとのブロックで公休をバランス良く配分
+    const totalBlocks = Math.ceil(daysInMonth / 7);
+    for (let b = 0; b < totalBlocks; b++) {
+      const sDay = b * 7 + 1;
+      const eDay = Math.min((b + 1) * 7, daysInMonth);
+      careNames.forEach(n => {
+        if (holidayCount[n] < targetHolidays) {
+          for (let d = sDay; d <= eDay; d++) {
+            if (!shiftData[n][d]) {
+              shiftData[n][d] = "休";
+              holidayCount[n]++;
+              if (holidayCount[n] >= targetHolidays) break;
+            }
+          }
+        }
+      });
+    }
+
+    // 目標未達の場合は空きセルに公休を補填
+    careNames.forEach(n => {
+      while (holidayCount[n] < targetHolidays) {
+        let ok = false;
+        for (let d = 1; d <= daysInMonth; d++) {
+          if (!shiftData[n][d]) {
+            shiftData[n][d] = "休";
+            holidayCount[n]++;
+            ok = true;
+            break;
+          }
+        }
+        if (!ok) break;
+      }
+    });
+
+    // Step C: 残りの空き日に日中勤務 (早・遅・日) をバランス良く割り当て
+    const dayShiftTypes = ["早", "遅", "日"];
+    for (let d = 1; d <= daysInMonth; d++) {
+      let shiftTypeIdx = (d * 2) % 3;
+      careNames.forEach(n => {
+        if (!shiftData[n][d]) {
+          shiftData[n][d] = dayShiftTypes[shiftTypeIdx % 3];
+          shiftTypeIdx++;
+        }
+      });
+    }
+  }
+
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  db.data.monthly_shifts[yearMonth] = shiftData;
+  db.save();
+  return shiftData;
+}
+
+function renderShiftTable(yearMonth) {
+  const ym = yearMonth || getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  // シフトデータが存在しなければ自動生成
+  if (!db.data.monthly_shifts || !db.data.monthly_shifts[ym]) {
+    generateMonthlyShiftData(ym);
+  }
+  const shiftData = db.data.monthly_shifts[ym] || {};
+
+  const table = document.getElementById("shiftMatrixTable");
+  if (!table) return;
+
+  const allStamps = sortStaffList(db.data.stamps || []);
+  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+  // 日別統計用
+  const dailyNightCount = new Array(daysInMonth + 1).fill(0);
+  const dailyDayCount = new Array(daysInMonth + 1).fill(0);
+  const dailyHolidayCount = new Array(daysInMonth + 1).fill(0);
+
+  // 1. ヘッダー生成
+  let theadHtml = `
+    <thead>
+      <tr>
+        <th rowspan="2" style="position:sticky; left:0; z-index:4; background:#1e3a8a; color:#fff; width:130px; min-width:130px; border:1px solid #3b82f6;">職員氏名</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; width:75px; min-width:75px; border:1px solid #3b82f6;">役職</th>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    const isSat = dow === 6;
+    const isSun = dow === 0;
+    const bg = isSun ? "#ef4444" : (isSat ? "#2563eb" : "#3b82f6");
+    theadHtml += `<th style="background:${bg}; color:#fff; padding:4px 2px; min-width:32px; border:1px solid rgba(255,255,255,0.3); font-weight:bold;">${d}</th>`;
+  }
+
+  theadHtml += `
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="出勤日数">出勤</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="夜勤回数">夜勤</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="公休日数">公休</th>
+      </tr>
+      <tr>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    const isSat = dow === 6;
+    const isSun = dow === 0;
+    const bg = isSun ? "#fee2e2" : (isSat ? "#dbeafe" : "#f1f5f9");
+    const color = isSun ? "#b91c1c" : (isSat ? "#1d4ed8" : "#475569");
+    theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:11px; font-weight:bold; border:1px solid #cbd5e1;">${dowNames[dow]}</th>`;
+  }
+
+  theadHtml += `
+      </tr>
+    </thead>
+  `;
+
+  // 2. ボディ行（各職員）生成
+  let tbodyHtml = "<tbody>";
+
+  staffList.forEach(st => {
+    const staffShifts = shiftData[st.name] || {};
+    let workDays = 0;
+    let nightDays = 0;
+    let holidays = 0;
+
+    let roleColor = "#64748b";
+    let roleBg = "#f1f5f9";
+    if (st.role.includes("施設長") || st.role.includes("管理者")) {
+      roleColor = "#92400e"; roleBg = "#fef3c7";
+    } else if (st.role.includes("事務")) {
+      roleColor = "#065f46"; roleBg = "#d1fae5";
+    } else if (st.role.includes("看護")) {
+      roleColor = "#0369a1"; roleBg = "#e0f2fe";
+    } else if (st.role.includes("リーダー")) {
+      roleColor = "#6d28d9"; roleBg = "#ede9fe";
+    }
+
+    tbodyHtml += `
+      <tr>
+        <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#1e293b; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
+          ${st.name} 様
+        </td>
+        <td style="border:1px solid #cbd5e1; padding:4px 2px; white-space:nowrap;">
+          <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
+        </td>
+    `;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const sym = staffShifts[d] || "";
+      const dow = new Date(year, month - 1, d).getDay();
+      const isSat = dow === 6;
+      const isSun = dow === 0;
+
+      let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
+      let badgeClass = "";
+      if (sym === "早") { badgeClass = "shift-badge shift-badge-early"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "日") { badgeClass = "shift-badge shift-badge-day"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "遅") { badgeClass = "shift-badge shift-badge-late"; workDays++; dailyDayCount[d]++; }
+      else if (sym === "夜") { badgeClass = "shift-badge shift-badge-night"; workDays++; nightDays++; dailyNightCount[d]++; }
+      else if (sym === "明") { badgeClass = "shift-badge shift-badge-dawn"; workDays++; }
+      else if (sym === "休") { badgeClass = "shift-badge shift-badge-holiday"; holidays++; dailyHolidayCount[d]++; }
+
+      tbodyHtml += `
+        <td class="shift-cell" style="background:${cellBg}; border:1px solid #e2e8f0; padding:3px 2px; cursor:pointer;" onclick="openShiftCellModal('${st.name}', ${d})" title="${st.name} ${month}月${d}日: クリックして修正">
+          ${sym ? `<span class="${badgeClass}">${sym}</span>` : `<span style="color:#cbd5e1;">-</span>`}
+        </td>
+      `;
+    }
+
+    tbodyHtml += `
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#1e293b; background:#f8fafc;">${workDays}</td>
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#3730a3; background:#f8fafc;">${nightDays}</td>
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#b91c1c; background:#f8fafc;">${holidays}</td>
+      </tr>
+    `;
+  });
+
+  tbodyHtml += "</tbody>";
+
+  // 3. フッター集計行 (🌙夜勤2名チェック、☀️日中人数、🍵公休人数)
+  let tfootHtml = `
+    <tfoot>
+      <!-- 夜勤人数チェック行 -->
+      <tr style="background:#e0e7ff; font-weight:bold; border-top:2px solid #6366f1;">
+        <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:6px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
+          🌙 夜勤体制 (基準: 2名)
+        </td>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyNightCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:13px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:13px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold;";
+    }
+    tfootHtml += `<td style="border:1px solid #c7d2fe; padding:4px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 日中体制人数行 -->
+      <tr style="background:#f1f5f9; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
+          ☀️ 日中勤務 (早/遅/日)
+        </td>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyDayCount[d];
+    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:4px 2px; color:#0369a1;">${cnt}</td>`;
+  }
+
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">日中配置</td>
+      </tr>
+
+      <!-- 公休人数行 -->
+      <tr style="background:#fef2f2; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:6px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
+          🍵 公休人数 (週休2日)
+        </td>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyHolidayCount[d];
+    tfootHtml += `<td style="border:1px solid #fecaca; padding:4px 2px; color:#b91c1c;">${cnt}</td>`;
+  }
+
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fecaca; color:#991b1b; font-size:11px;">公休合計</td>
+      </tr>
+    </tfoot>
+  `;
+
+  table.innerHTML = theadHtml + tbodyHtml + tfootHtml;
+}
+
+// 手動セル編集モーダル
+function openShiftCellModal(staffName, day) {
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dow = new Date(year, month - 1, day).getDay();
+
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+
+  const targetText = document.getElementById("shiftEditTargetText");
+  if (targetText) {
+    targetText.textContent = `${staffName} 様 - ${month}月${day}日(${dowNames[dow]})`;
+  }
+
+  // 職種に応じた制御
+  const staff = (db.data.stamps || []).find(s => (s.name || s) === staffName);
+  const role = staff && staff.role ? staff.role : "";
+  const isDirectorOrOffice = role.includes("施設長") || role.includes("管理者") || role.includes("事務") || staffName === "施設長" || staffName === "田中";
+
+  const notice = document.getElementById("shiftEditRoleNotice");
+  const btnEarly = document.querySelector("#shiftEditButtonsContainer button:nth-child(1)");
+  const btnLate = document.querySelector("#shiftEditButtonsContainer button:nth-child(3)");
+  const btnNight = document.querySelector("#shiftEditButtonsContainer button:nth-child(4)");
+  const btnDawn = document.querySelector("#shiftEditButtonsContainer button:nth-child(5)");
+
+  if (isDirectorOrOffice) {
+    if (notice) notice.textContent = "※施設長・事務員は日勤専従のため、日勤または公休のみ選択可能です。";
+    if (btnEarly) btnEarly.style.display = "none";
+    if (btnLate) btnLate.style.display = "none";
+    if (btnNight) btnNight.style.display = "none";
+    if (btnDawn) btnDawn.style.display = "none";
+  } else {
+    if (notice) notice.textContent = "";
+    if (btnEarly) btnEarly.style.display = "inline-block";
+    if (btnLate) btnLate.style.display = "inline-block";
+    if (btnNight) btnNight.style.display = "inline-block";
+    if (btnDawn) btnDawn.style.display = "inline-block";
+  }
+
+  const modal = document.getElementById("shiftEditModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function applyShiftCellEdit(symbol) {
+  const { staffName, day, yearMonth } = gShiftEditingCell;
+  if (!staffName || !day || !yearMonth) return;
+
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  if (!db.data.monthly_shifts[yearMonth]) db.data.monthly_shifts[yearMonth] = {};
+  if (!db.data.monthly_shifts[yearMonth][staffName]) db.data.monthly_shifts[yearMonth][staffName] = {};
+
+  db.data.monthly_shifts[yearMonth][staffName][day] = symbol;
+
+  // 夜勤に手動変更した場合、翌日が当月内であれば「明」にする連動アシスト
+  if (symbol === "夜") {
+    const [yStr, mStr] = yearMonth.split("-");
+    const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
+    if (day + 1 <= daysInMonth) {
+      const curNext = db.data.monthly_shifts[yearMonth][staffName][day + 1];
+      if (!curNext || curNext === "日" || curNext === "早" || curNext === "遅") {
+        db.data.monthly_shifts[yearMonth][staffName][day + 1] = "明";
+      }
+    }
+  }
+
+  db.save();
+  closeModal("shiftEditModal");
+  renderShiftTable(yearMonth);
+}
+
+// 特例配慮設定 (同番NG) モーダル
+function openShiftNgModal() {
+  const stamps = sortStaffList(db.data.stamps || []);
+  const staffList = stamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+  const sel1 = document.getElementById("shiftNgStaff1");
+  const sel2 = document.getElementById("shiftNgStaff2");
+
+  if (sel1 && sel2) {
+    const optionsHtml = staffList.map(s => `<option value="${s.name}">${s.name} (${s.role || '介護職員'})</option>`).join("");
+    sel1.innerHTML = optionsHtml;
+    sel2.innerHTML = optionsHtml;
+    if (staffList.length > 1) {
+      sel2.selectedIndex = 1;
+    }
+  }
+
+  renderShiftNgList();
+  const modal = document.getElementById("shiftNgModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function renderShiftNgList() {
+  const container = document.getElementById("shiftNgPairList");
+  if (!container) return;
+
+  const pairs = db.data.shift_ng_pairs || [];
+  if (pairs.length === 0) {
+    container.innerHTML = `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">登録された配慮ペアはありません。</div>`;
+    return;
+  }
+
+  let html = `<ul style="list-style:none; padding:0; margin:0;">`;
+  pairs.forEach(p => {
+    html += `
+      <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+        <div>
+          <strong style="color:#1e293b;">${p.staff1} 様</strong> 
+          <span style="color:#dc2626; font-weight:bold; margin:0 4px;">✖</span> 
+          <strong style="color:#1e293b;">${p.staff2} 様</strong>
+          <span style="color:#64748b; font-size:11.5px; margin-left:8px;">(${p.reason || '相性配慮'})</span>
+        </div>
+        <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftNgPair(${p.id})">削除</button>
+      </li>
+    `;
+  });
+  html += `</ul>`;
+  container.innerHTML = html;
+}
+
+function submitShiftNgPair() {
+  const sel1 = document.getElementById("shiftNgStaff1");
+  const sel2 = document.getElementById("shiftNgStaff2");
+  const reasonInput = document.getElementById("shiftNgReason");
+
+  if (!sel1 || !sel2) return;
+  const s1 = sel1.value;
+  const s2 = sel2.value;
+  const reason = reasonInput ? (reasonInput.value.trim() || "相性配慮 (同日夜勤NG)") : "相性配慮 (同日夜勤NG)";
+
+  if (s1 === s2) {
+    alert("異なる職員を選択してください。");
+    return;
+  }
+
+  if (!Array.isArray(db.data.shift_ng_pairs)) db.data.shift_ng_pairs = [];
+
+  const exists = db.data.shift_ng_pairs.some(p => 
+    (p.staff1 === s1 && p.staff2 === s2) || 
+    (p.staff1 === s2 && p.staff2 === s1)
+  );
+
+  if (exists) {
+    alert("このペアは既に登録されています。");
+    return;
+  }
+
+  db.data.shift_ng_pairs.push({
+    id: Date.now(),
+    staff1: s1,
+    staff2: s2,
+    reason: reason
+  });
+
+  db.save();
+  renderShiftNgList();
+  if (reasonInput) reasonInput.value = "";
+}
+
+function deleteShiftNgPair(id) {
+  if (!confirm("この配慮ルールを削除しますか？")) return;
+  db.data.shift_ng_pairs = (db.data.shift_ng_pairs || []).filter(p => p.id !== id);
+  db.save();
+  renderShiftNgList();
 }

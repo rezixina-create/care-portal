@@ -836,24 +836,46 @@
           </table>
         </div>
 
-        <!-- 7. 勤務表・シフト管理 (年月の変更履歴・A4印刷) -->
+        <!-- 7. 勤務表・シフト管理 (1ヶ月自動生成・手動修正・特例配慮・A4印刷) -->
         <div id="tabOfficeShift" style="display:none;" class="panel-card">
-          <div class="panel-title">
-            <span>📅 勤務表・シフト管理 (変更履歴保存・A4印刷対応)</span>
-            <button class="btn btn-secondary" onclick="window.print()">🖨️ シフト表をA4印刷</button>
+          <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+            <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+              <span style="font-size:16px; font-weight:bold; color:#1e3a8a;">📅 月間勤務表・シフト管理</span>
+              <div style="display:flex; align-items:center; gap:4px;">
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:12px;" onclick="changeShiftMonth(-1)">◀ 前月</button>
+                <input type="month" id="shiftMonthSelector" class="form-control" style="width:140px; padding:3px 8px; font-size:13px; font-weight:bold;" onchange="onShiftMonthChange()">
+                <button class="btn btn-outline" style="padding:4px 8px; font-size:12px;" onclick="changeShiftMonth(1)">次月 ▶</button>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px; flex-wrap:wrap;">
+              <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="generateMonthlyShiftAction()">✨ 1ヶ月シフト自動生成</button>
+              <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#f8fafc;" onclick="openShiftNgModal()">👥 特例配慮設定 (同番NG)</button>
+              <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="window.print()">🖨️ A4横 印刷</button>
+            </div>
           </div>
-          <table class="data-table" id="shiftTable">
-            <thead>
-              <tr><th>職員名</th><th>役職</th><th>シフト種別 (本日)</th><th>備考</th></tr>
-            </thead>
-            <tbody>
-              <tr><td>施設長</td><td>管理者</td><td>日勤・巡視 (08:30〜17:30)</td><td>施設統括・緊急対応</td></tr>
-              <tr><td>山田</td><td>介護リーダー</td><td>早番 (07:00〜16:00)</td><td>フロア統括・見守り</td></tr>
-              <tr><td>鈴木</td><td>看護師</td><td>日勤 (09:00〜18:00)</td><td>バイタル・処置担当</td></tr>
-              <tr><td>佐藤</td><td>介護職員</td><td>日勤 (08:30〜17:30)</td><td>入浴介助担当</td></tr>
-              <tr><td>田中</td><td>事務員</td><td>遅番 (10:00〜19:00)</td><td>窓口・送迎</td></tr>
-            </tbody>
-          </table>
+
+          <!-- 凡例 ＆ 操作案内 -->
+          <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border:1px solid #e2e8f0; padding:8px 12px; border-radius:8px; margin-bottom:12px; flex-wrap:wrap; gap:8px; font-size:12px;">
+            <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+              <span style="font-weight:bold; color:#334155;">【シフト凡例】</span>
+              <span class="shift-badge-legend" style="background:#ffedd5; color:#c2410c; border:1px solid #fed7aa; padding:2px 6px; border-radius:4px; font-weight:bold;">早 早番</span>
+              <span class="shift-badge-legend" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:2px 6px; border-radius:4px; font-weight:bold;">日 日勤</span>
+              <span class="shift-badge-legend" style="background:#ede9fe; color:#6d28d9; border:1px solid #ddd6fe; padding:2px 6px; border-radius:4px; font-weight:bold;">遅 遅番</span>
+              <span class="shift-badge-legend" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 6px; border-radius:4px; font-weight:bold;">夜 夜勤 (毎日2名)</span>
+              <span class="shift-badge-legend" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; padding:2px 6px; border-radius:4px; font-weight:bold;">明 明け</span>
+              <span class="shift-badge-legend" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; padding:2px 6px; border-radius:4px; font-weight:bold;">休 公休 (週休2日)</span>
+            </div>
+            <div style="color:#64748b; font-size:11.5px; font-weight:500;">
+              💡 各セルをクリックして手動でシフトを変更・修正できます。
+            </div>
+          </div>
+
+          <!-- 勤務表マトリクステーブル -->
+          <div style="overflow-x:auto; max-width:100%; border:1px solid #cbd5e1; border-radius:8px; background:#ffffff;">
+            <table class="data-table shift-matrix-table" id="shiftMatrixTable" style="margin:0; border-collapse:collapse; min-width:1150px; text-align:center; font-size:12px;">
+              <!-- JSで動的生成 -->
+            </table>
+          </div>
         </div>
 
         <!-- 8. 車両運行管理簿 (メーターkm・運転者・目的・鍵管理) -->
@@ -1908,6 +1930,71 @@
       <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
         <button class="btn btn-secondary" onclick="closeModal('bodyConditionModal')">キャンセル</button>
         <button class="btn btn-primary" onclick="submitBodyConditionModal()">身体状況を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- シフトセル手動修正 モーダル -->
+  <div class="modal-overlay" id="shiftEditModal" style="display:none;">
+    <div class="modal-card" style="max-width:380px;">
+      <div class="modal-header">
+        <h4 style="margin:0; color:#1e3a8a;">✏️ シフト手動変更</h4>
+        <button class="modal-close-btn" onclick="closeModal('shiftEditModal')">&times;</button>
+      </div>
+      <div style="padding:14px 0; text-align:center;">
+        <p id="shiftEditTargetText" style="font-size:14px; font-weight:bold; color:#1e293b; margin-bottom:6px;"></p>
+        <p id="shiftEditRoleNotice" style="font-size:11.5px; color:#64748b; margin-bottom:14px; min-height:16px;"></p>
+        <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;" id="shiftEditButtonsContainer">
+          <button class="btn btn-outline" style="background:#ffedd5; color:#c2410c; border:1px solid #fed7aa; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('早')">🌅 早番 (早)</button>
+          <button class="btn btn-outline" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('日')">☀️ 日勤 (日)</button>
+          <button class="btn btn-outline" style="background:#ede9fe; color:#6d28d9; border:1px solid #ddd6fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('遅')">🌆 遅番 (遅)</button>
+          <button class="btn btn-outline" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('夜')">🌙 夜勤 (夜)</button>
+          <button class="btn btn-outline" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('明')">🌤️ 明け (明)</button>
+          <button class="btn btn-outline" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('休')">🍵 公休 (休)</button>
+        </div>
+      </div>
+      <div style="display:flex; justify-content:space-between; margin-top:10px;">
+        <button class="btn btn-danger" style="font-size:12px; padding:4px 10px;" onclick="applyShiftCellEdit('')">クリア</button>
+        <button class="btn btn-secondary" onclick="closeModal('shiftEditModal')">キャンセル</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 特例配慮設定 (同番NG) モーダル -->
+  <div class="modal-overlay" id="shiftNgModal" style="display:none;">
+    <div class="modal-card" style="max-width:520px;">
+      <div class="modal-header">
+        <h4 style="margin:0; color:#1e3a8a;">👥 特例配慮設定 (同番ペアNG)</h4>
+        <button class="modal-close-btn" onclick="closeModal('shiftNgModal')">&times;</button>
+      </div>
+      <div style="padding:14px 0;">
+        <p style="font-size:13px; color:#475569; margin-bottom:12px; line-height:1.5;">
+          同じ日の夜勤ペアなどに一緒に入れない配慮ルールを設定できます。<br>
+          1ヶ月シフトの自動生成時に、この2名が同じ夜勤に重ならないよう自動回避します。
+        </p>
+
+        <!-- 新規登録フォーム -->
+        <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:16px;">
+          <div style="font-weight:bold; font-size:13px; margin-bottom:8px; color:#1e293b;">＋ 新しい配慮ペアを登録</div>
+          <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+            <select id="shiftNgStaff1" class="form-control" style="flex:1; min-width:120px; font-size:13px;"></select>
+            <span style="font-weight:bold; color:#dc2626;">✖ と ✖</span>
+            <select id="shiftNgStaff2" class="form-control" style="flex:1; min-width:120px; font-size:13px;"></select>
+          </div>
+          <div style="display:flex; gap:8px; align-items:center;">
+            <input type="text" id="shiftNgReason" class="form-control" style="flex:1; font-size:12px;" placeholder="理由・配慮メモ (例: 相性配慮・新人指導等)">
+            <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="submitShiftNgPair()">登録</button>
+          </div>
+        </div>
+
+        <!-- 登録済み一覧 -->
+        <div style="font-weight:bold; font-size:13px; margin-bottom:8px; color:#1e293b;">登録中の配慮ルール一覧:</div>
+        <div id="shiftNgPairList" style="max-height:200px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:#ffffff;">
+          <!-- JSで自動描画 -->
+        </div>
+      </div>
+      <div style="margin-top:14px; display:flex; justify-content:flex-end;">
+        <button class="btn btn-secondary" onclick="closeModal('shiftNgModal')">閉じる</button>
       </div>
     </div>
   </div>

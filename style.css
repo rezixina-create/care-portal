@@ -920,5 +920,79 @@ body {
   padding: 16px;
 }
 
+/* 7. 月間勤務表・シフト管理 スタイル */
+.shift-matrix-table th,
+.shift-matrix-table td {
+  padding: 5px 3px !important;
+  vertical-align: middle !important;
+  border: 1px solid #cbd5e1 !important;
+  font-size: 11.5px;
+  line-height: 1.2;
+}
+
+.shift-staff-col {
+  position: sticky;
+  left: 0;
+  background: #f8fafc;
+  z-index: 2;
+  font-weight: bold;
+  text-align: left !important;
+  padding-left: 8px !important;
+  white-space: nowrap;
+  box-shadow: 2px 0 4px rgba(0, 0, 0, 0.05);
+}
+
+.shift-cell {
+  cursor: pointer;
+  transition: background 0.15s ease;
+  user-select: none;
+  min-width: 28px;
+  max-width: 32px;
+}
+.shift-cell:hover {
+  background: #fef08a !important;
+  box-shadow: inset 0 0 0 1px #eab308;
+}
+
+.shift-sat {
+  background: #eff6ff !important;
+  color: #1d4ed8;
+}
+.shift-sun {
+  background: #fff1f2 !important;
+  color: #b91c1c;
+}
+
+.shift-badge {
+  display: inline-block;
+  width: 22px;
+  height: 22px;
+  line-height: 22px;
+  text-align: center;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.shift-haya { background: #ffedd5; color: #c2410c; border: 1px solid #fed7aa; }
+.shift-nichi { background: #e0f2fe; color: #0369a1; border: 1px solid #bae6fd; }
+.shift-osoba { background: #ede9fe; color: #6d28d9; border: 1px solid #ddd6fe; }
+.shift-yakan { background: #e0e7ff; color: #3730a3; border: 1px solid #c7d2fe; }
+.shift-ake { background: #cffafe; color: #0e7490; border: 1px solid #a5f3fc; }
+.shift-kyu { background: #fee2e2; color: #b91c1c; border: 1px solid #fecaca; }
+
+.shift-count-row {
+  background: #f8fafc;
+  font-weight: bold;
+  font-size: 11px;
+}
+
+@media print {
+  @page {
+    size: A4 landscape;
+    margin: 8mm;
+  }
+}
+
 
 

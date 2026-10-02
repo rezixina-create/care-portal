@@ -98,6 +98,19 @@
       <h3 id="diseaseModalTitle"></h3>
       <div id="diseaseModalContent"></div>
     </div>
+    <input type="month" id="shiftMonthSelector" value="2026-10">
+    <table id="shiftMatrixTable"></table>
+    <div id="shiftEditModal" style="display:none;"></div>
+    <div id="shiftNgModal" style="display:none;"></div>
+    <div id="shiftEditTargetText"></div>
+    <div id="shiftEditRoleNotice"></div>
+    <div id="shiftEditButtonsContainer">
+      <button></button><button></button><button></button><button></button><button></button><button></button>
+    </div>
+    <select id="shiftNgStaff1"></select>
+    <select id="shiftNgStaff2"></select>
+    <input id="shiftNgReason">
+    <div id="shiftNgPairList"></div>
   </div>
 
   <script src="app.js"></script>
@@ -303,6 +316,49 @@
       assert(typeof approveOrder === "function" && typeof isCurrentStaffAdmin === "function", "Test 52: 発注申請の個別目視確認・承認機能 (approveOrder) が存在すること (誤認防止・一括承認排除)");
       assert(typeof adjustBelongingQty === "function" && typeof deleteBelonging === "function" && typeof openBelongingModal === "function" && typeof submitBelonging === "function", "Test 53: 私物・持ち込み品台帳の数量増減・編集・削除機能 (adjustBelongingQty, deleteBelonging) が存在すること");
       assert(typeof openEquipmentModal === "function" && typeof submitEquipment === "function" && typeof deleteEquipment === "function" && typeof openFamilyHistoryModal === "function" && typeof submitFamilyHistory === "function", "Test 54: 福祉用具備品追加・解除および緊急連絡先・家族要望・看取り方針変更機能 (submitEquipment, submitFamilyHistory) が存在すること");
+
+      // 18. 月間勤務表・シフト管理 (自動生成・週休2日・夜勤2名・10名体制・同番NG配慮・手動修正) テスト
+      assert(typeof generateMonthlyShiftData === "function" && typeof renderShiftTable === "function" && typeof applyShiftCellEdit === "function", "Test 55: 月間勤務表シフト生成・描画・手動修正関数が存在すること");
+
+      // 職員10名体制チェック
+      const currentStamps = db.data.stamps || [];
+      assert(currentStamps.length >= 10, `Test 56: 職員マスタが健全シフト運用のための10名体制に増員されていること (現在: ${currentStamps.length}名)`);
+
+      // 2026-10 シフト生成テスト
+      const shiftOct = generateMonthlyShiftData("2026-10");
+      assert(shiftOct && typeof shiftOct === "object", "Test 57: 2026年10月の1ヶ月分シフトデータが正常に自動生成されること");
+
+      // 施設長と事務員は日勤のみ＆週休2日
+      const directorShift = shiftOct["施設長"] || {};
+      const tanakaShift = shiftOct["田中"] || {};
+      let dirOnlyDay = true;
+      let tanakaOnlyDay = true;
+      for (let d = 1; d <= 31; d++) {
+        const sD = directorShift[d];
+        const sT = tanakaShift[d];
+        if (sD && sD !== "日" && sD !== "休") dirOnlyDay = false;
+        if (sT && sT !== "日" && sT !== "休") tanakaOnlyDay = false;
+      }
+      assert(dirOnlyDay && tanakaOnlyDay, "Test 58: 施設長および事務員が日勤専従 (平日『日』・土日『休』) であり早・遅・夜に絶対入らないこと");
+
+      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 ✖ 高橋 が同一夜勤に入らない)
+      let allDaysTwoNights = true;
+      let ngPairRespected = true;
+      for (let d = 1; d <= 31; d++) {
+        let nightStaff = [];
+        Object.keys(shiftOct).forEach(staffName => {
+          if (shiftOct[staffName][d] === "夜") nightStaff.push(staffName);
+        });
+        if (nightStaff.length !== 2) allDaysTwoNights = false;
+        if (nightStaff.includes("佐藤") && nightStaff.includes("高橋")) ngPairRespected = false;
+      }
+      assert(allDaysTwoNights, "Test 59: 1ヶ月31日間すべての日に夜勤が確実に『毎日2名体制』で配置されていること");
+      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 ✖ 高橋) が同日の夜勤に重ならないよう自動回避されること");
+
+      // 手動修正テスト
+      gShiftEditingCell = { staffName: "山田", day: 15, yearMonth: "2026-10" };
+      applyShiftCellEdit("休");
+      assert(db.data.monthly_shifts["2026-10"]["山田"][15] === "休", "Test 61: シフト手動修正 (applyShiftCellEdit) が対象セルに即時反映・保存されること");
 
       // 18. 総合結果判定
       log("====================================================");
