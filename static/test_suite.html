@@ -58,6 +58,7 @@
 
   <!-- テスト用ダミーDOM環境 (app.js が必要とする主要要素) -->
   <div id="sandbox" style="display:none;">
+    <div id="todayShiftBar"></div>
     <select id="currentStaff"><option value="山田">山田</option></select>
     <div id="residentsStrip"></div>
     <div id="residentCountLabel"></div>
@@ -464,7 +465,20 @@
       const isRevertedHope = (db.data.shift_hope_offs || []).some(h => h.staff_name === testHopeStaff && h.day === testHopeDay);
       assert(!isRevertedHope, "Test 72: toggleShiftHopeOff による希望休のワンタップ解除が正常に動作すること");
 
-      // 24. 総合結果判定
+      // 24. 本日の勤務体制バー＆フロア勤務体制動的連動テスト
+      assert(typeof getDailyShiftRoster === "function" && typeof renderTodayShiftBar === "function", "Test 73: 勤務体制連動関数 (getDailyShiftRoster, renderTodayShiftBar) が存在すること");
+
+      const rosterOct3 = getDailyShiftRoster("2026-10-03");
+      const hasRosterStructure = rosterOct3 && rosterOct3.early.length === 2 && rosterOct3.dayCare.length === 2 && rosterOct3.late.length === 2 && rosterOct3.night.length === 2 && rosterOct3.dawn.length === 2;
+      assert(hasRosterStructure, "Test 74: getDailyShiftRoster が対象日の早出2名・日勤2名・遅出2名・夜勤2名・明け2名を月間シフト表から完全連動抽出すること");
+
+      renderTodayShiftBar("2026-10-03");
+      const shiftBarEl = document.getElementById("todayShiftBar");
+      const barText = shiftBarEl ? shiftBarEl.textContent : "";
+      const isShiftBarLinked = barText.includes("早出") && barText.includes("日勤") && barText.includes("遅出") && barText.includes("夜勤") && barText.includes("明け");
+      assert(isShiftBarLinked, "Test 75: 本日の勤務体制バー (#todayShiftBar) が静的ダミーから実際のシフト表データと完全連動し描画されること");
+
+      // 25. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

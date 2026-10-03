@@ -247,6 +247,12 @@
  const isHopeModalClosed = hopeModal && win.getComputedStyle(hopeModal).display === "none";
  report("希望休モーダルが正常に閉じられること", isHopeModalClosed);
 
+ // 14. 本日の勤務体制バーの動的連動確認
+ const todayBar = doc.getElementById("todayShiftBar");
+ const todayBarText = todayBar ? todayBar.textContent : "";
+ const hasDynamicShiftContent = todayBarText.includes("早出") && todayBarText.includes("日勤") && todayBarText.includes("夜勤");
+ report("本日の勤務体制バーがシフト表と動的連動し早出・日勤・夜勤等が表示されること", hasDynamicShiftContent, todayBarText.slice(0, 60));
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

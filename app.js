@@ -1907,6 +1907,7 @@ function selectDate(dt) {
 }
 
 function loadDateRecords(dt) {
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar(dt);
  renderSelectedDateRecords();
  renderNotebook();
  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
@@ -3585,12 +3586,30 @@ function renderDailyJournal() {
  });
  const tokukanCount = dayRecords.filter(r => r.category === "特変").length;
 
- const shiftText = (document.getElementById("todayShiftBar") ? document.getElementById("todayShiftBar").innerText : "").replace(" 本日の勤務体制:", "").trim();
+ const roster = (typeof getDailyShiftRoster === "function") ? getDailyShiftRoster(gState.selectedDate) : null;
+ let shiftSummaryText = "";
+ let journalDateTitle = "本日のフロア勤務体制:";
+ if (roster) {
+  let dirT = "木村";
+  if (roster.director.length > 0) {
+   const dir = roster.director[0];
+   dirT = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;
+  }
+  const nurseT = roster.nurse.length > 0 ? roster.nurse.map(n => n.shortName).join("・") : "(オンコール)";
+  const officeT = roster.office.length > 0 ? roster.office.map(o => o.shortName).join("・") : "(公休)";
+  const fmt = l => l.length > 0 ? l.map(s => s.displayName).join("・") : "-";
+  shiftSummaryText = `管理者: ${dirT} | 看護: ${nurseT} | 早出: ${fmt(roster.early)} | 日勤: ${fmt(roster.dayCare)} | 遅出: ${fmt(roster.late)} | 夜勤: ${fmt(roster.night)} | 明け: ${fmt(roster.dawn)} | 事務: ${officeT}`;
+  journalDateTitle = `【${roster.month}月${roster.day}日】フロア勤務体制（勤務表連動）:`;
+ } else {
+  const shiftText = (document.getElementById("todayShiftBar") ? document.getElementById("todayShiftBar").innerText : "").replace(" 本日の勤務体制:", "").trim();
+  shiftSummaryText = shiftText || "管理者: 木村 | 看護: 鈴木 | 介護体制確認中";
+  journalDateTitle = "本日のフロア勤務体制:";
+ }
 
  summaryBar.innerHTML = `
- <div style="display:flex; flex-direction:column; gap:4px;">
- <div style="font-size:13px; color:#1e40af; font-weight:bold;"> 本日のフロア勤務体制:</div>
- <div style="font-size:13px; color:#334155;">${escapeHtml(shiftText || '管理者: 施設長 | リーダー: 山田 | 看護: 鈴木 | 介護: 佐藤 | 事務: 田中')}</div>
+ <div style="display:flex; flex-direction:column; gap:4px; max-width:65%;">
+ <div style="font-size:13px; color:#1e40af; font-weight:bold;"> ${journalDateTitle}</div>
+ <div style="font-size:12.5px; color:#1e293b; line-height:1.5;">${escapeHtml(shiftSummaryText)}</div>
  </div>
  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
  <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
@@ -3735,6 +3754,33 @@ function printDailyJournal() {
  const nowStr = new Date().toLocaleString("ja-JP");
  const facilityName = (db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
 
+ const roster = (typeof getDailyShiftRoster === "function") ? getDailyShiftRoster(gState.selectedDate) : null;
+ let printRosterHtml = "";
+ if (roster) {
+  let dirT = "木村";
+  if (roster.director.length > 0) {
+   const dir = roster.director[0];
+   dirT = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;
+  }
+  const nurseT = roster.nurse.length > 0 ? roster.nurse.map(n => n.shortName).join("・") : "(オンコール)";
+  const officeT = roster.office.length > 0 ? roster.office.map(o => o.shortName).join("・") : "(公休)";
+  const fmt = l => l.length > 0 ? l.map(s => s.displayName).join("・") : "-";
+
+  printRosterHtml = `
+  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:4px; padding:6px 12px; margin-bottom:14px; font-size:11px; color:#1e293b;">
+   <strong style="color:#1e40af;">【本日の勤務体制】</strong>
+   <span>管理者: ${escapeHtml(dirT)}</span> | 
+   <span>看護: ${escapeHtml(nurseT)}</span> | 
+   <span>早出: ${escapeHtml(fmt(roster.early))}</span> | 
+   <span>日勤: ${escapeHtml(fmt(roster.dayCare))}</span> | 
+   <span>遅出: ${escapeHtml(fmt(roster.late))}</span> | 
+   <span>夜勤: ${escapeHtml(fmt(roster.night))}</span> | 
+   <span>明け: ${escapeHtml(fmt(roster.dawn))}</span> | 
+   <span>事務: ${escapeHtml(officeT)}</span>
+  </div>
+  `;
+ }
+
  let summaryTableRows = gState.residents.map(r => {
  const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
  const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
@@ -3794,6 +3840,8 @@ ${escapeHtml(r.content || '')}
  <div>出力者: ${escapeHtml(staffName)}</div>
  </div>
  </div>
+
+ ${printRosterHtml}
 
  <h3 style="font-size:14px; margin:12px 0 6px 0; color:#1e3a8a;">1. フロア全体 ケア実施サマリー表</h3>
  <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
@@ -8284,6 +8332,8 @@ function generateMonthlyShiftData(yearMonth) {
  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
  db.data.monthly_shifts[yearMonth] = shiftData;
  db.save();
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
+ if (typeof renderDailyJournal === "function" && gState.activeCareTab === "daily_journal") renderDailyJournal();
  return shiftData;
 }
 
@@ -8865,6 +8915,8 @@ function applyShiftCellEdit(symbol) {
  closeModal("shiftEditModal");
  closeShiftPopover();
  renderShiftTable(yearMonth);
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
+ if (typeof renderDailyJournal === "function" && gState.activeCareTab === "daily_journal") renderDailyJournal();
 }
 
 // 特例配慮設定 (同番NG) モーダル
@@ -9088,6 +9140,7 @@ function submitShiftHopeOff() {
  if (reasonInput) reasonInput.value = "";
  renderShiftHopeList();
  renderShiftTable(ym);
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
 }
 
 function deleteShiftHopeOff(id) {
@@ -9097,6 +9150,7 @@ function deleteShiftHopeOff(id) {
  db.save();
  renderShiftHopeList();
  renderShiftTable(ym);
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
 }
 
 function toggleShiftHopeOff(staffName, day) {
@@ -9126,6 +9180,7 @@ function toggleShiftHopeOff(staffName, day) {
  db.save();
  closeShiftPopover();
  renderShiftTable(ym);
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
 }
 
 function applyHopeOffsAndRegenerate() {
@@ -9139,6 +9194,167 @@ function applyHopeOffsAndRegenerate() {
  renderShiftTable(ym);
  renderShiftHopeList();
  alert(`${y}年${parseInt(m, 10)}月の希望休（全${hopeCount}件）を全て優先公休「休」として反映し、勤務表シフトを再生成しました！`);
+}
+
+// 勤務体制（月間シフト表・職種・希望休と完全自動連動）
+function getDailyShiftRoster(targetDateStr) {
+ const today = new Date();
+ const todayStr = `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`;
+ const targetDate = targetDateStr || gState.selectedDate || todayStr;
+ const [yStr, mStr, dStr] = targetDate.split("-");
+ const ym = `${yStr}-${mStr}`;
+ const day = parseInt(dStr, 10);
+
+ if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+ if (!db.data.monthly_shifts[ym] || Object.keys(db.data.monthly_shifts[ym]).length === 0) {
+  generateMonthlyShiftData(ym);
+ }
+ const monthShifts = db.data.monthly_shifts[ym] || {};
+
+ const allStamps = sortStaffList(db.data.stamps || []);
+
+ const roster = {
+  dateStr: targetDate,
+  year: parseInt(yStr, 10),
+  month: parseInt(mStr, 10),
+  day: day,
+  isToday: (targetDate === todayStr),
+  director: [],
+  nurse: [],
+  office: [],
+  early: [],
+  dayCare: [],
+  late: [],
+  night: [],
+  dawn: [],
+  off: [],
+  hopeOffs: []
+ };
+
+ const todayHopes = (db.data.shift_hope_offs || []).filter(h => h.year_month === ym && parseInt(h.day, 10) === day);
+ roster.hopeOffs = todayHopes;
+
+ allStamps.forEach(s => {
+  const name = typeof s === "string" ? s : s.name;
+  const role = typeof s === "string" ? "介護職員" : (s.role || "職員");
+  const cat = getStaffRoleCategory(name);
+  const shift = monthShifts[name] ? monthShifts[name][day] : "";
+  const shortName = name.split(" ")[0] || name;
+  const isLeader = role.includes("リーダー");
+  const isHope = todayHopes.some(h => h.staff_name === name);
+  const hopeReason = (todayHopes.find(h => h.staff_name === name) || {}).reason || "";
+
+  const staffInfo = {
+   name,
+   shortName,
+   displayName: isLeader ? `${shortName}(L)` : shortName,
+   role,
+   category: cat,
+   shift,
+   isLeader,
+   isHope,
+   hopeReason
+  };
+
+  if (cat === "director") {
+   roster.director.push(staffInfo);
+  } else if (cat === "nurse") {
+   if (shift === "日") {
+    roster.nurse.push(staffInfo);
+   }
+  } else if (cat === "office") {
+   if (shift === "日") {
+    roster.office.push(staffInfo);
+   }
+  } else if (cat === "care") {
+   if (shift === "早") roster.early.push(staffInfo);
+   else if (shift === "日") roster.dayCare.push(staffInfo);
+   else if (shift === "遅") roster.late.push(staffInfo);
+   else if (shift === "夜") roster.night.push(staffInfo);
+   else if (shift === "明") roster.dawn.push(staffInfo);
+   else if (shift === "休") roster.off.push(staffInfo);
+  }
+ });
+
+ return roster;
+}
+
+function renderTodayShiftBar(targetDateStr) {
+ const bar = document.getElementById("todayShiftBar");
+ if (!bar) return;
+
+ const roster = getDailyShiftRoster(targetDateStr);
+
+ // 管理者テキスト
+ let directorText = "木村";
+ if (roster.director.length > 0) {
+  const dir = roster.director[0];
+  directorText = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;
+ }
+
+ // 看護師テキスト
+ const nurseNames = roster.nurse.map(n => n.shortName);
+ const nurseText = nurseNames.length > 0 ? nurseNames.join("・") : "(オンコール)";
+
+ // 事務テキスト
+ const officeNames = roster.office.map(o => o.shortName);
+ const officeText = officeNames.length > 0 ? officeNames.join("・") : "(公休)";
+
+ // 介護フロア体制テキスト
+ const formatStaffList = list => list.length > 0 ? list.map(s => s.displayName).join("・") : "-";
+
+ const earlyText = formatStaffList(roster.early);
+ const dayCareText = formatStaffList(roster.dayCare);
+ const lateText = formatStaffList(roster.late);
+ const nightText = formatStaffList(roster.night);
+ const dawnText = formatStaffList(roster.dawn);
+
+ // 希望休の言及
+ let hopeOffBadge = "";
+ if (roster.hopeOffs.length > 0) {
+  const hopeNames = roster.hopeOffs.map(h => (h.staff_name.split(" ")[0] || h.staff_name)).join("・");
+  hopeOffBadge = `<span style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; border-radius:4px; padding:1px 6px; font-size:11px;" title="希望休取得: ${roster.hopeOffs.map(h => h.staff_name + '(' + (h.reason || '申請') + ')').join(', ')}">希望休: ${hopeNames}</span>`;
+ }
+
+ const dateLabel = roster.isToday ? `本日 (${roster.month}/${roster.day})` : `${roster.month}月${roster.day}日 (選択日)`;
+
+ bar.innerHTML = `
+  <div style="display:flex; align-items:center; gap:8px;">
+   <strong style="color:#1e40af; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" onclick="switchPortal('office'); switchOfficeTab('shifts');" title="クリックで勤務表（シフト表）を開く">
+    [勤務体制: ${dateLabel}]
+   </strong>
+  </div>
+  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12.5px;">
+   <span><span style="color:#64748b; font-size:11px;">管理者:</span> <strong>${escapeHtml(directorText)}</strong></span>
+   <span><span style="color:#64748b; font-size:11px;">看護:</span> <strong>${escapeHtml(nurseText)}</strong></span>
+   <span><span style="color:#64748b; font-size:11px;">事務:</span> <strong>${escapeHtml(officeText)}</strong></span>
+   <span style="color:#cbd5e1;">|</span>
+   <span style="display:inline-flex; align-items:center; gap:3px;">
+    <span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">早出</span>
+    <strong style="color:#0f172a;">${escapeHtml(earlyText)}</strong>
+   </span>
+   <span style="display:inline-flex; align-items:center; gap:3px;">
+    <span style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">日勤</span>
+    <strong style="color:#0f172a;">${escapeHtml(dayCareText)}</strong>
+   </span>
+   <span style="display:inline-flex; align-items:center; gap:3px;">
+    <span style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">遅出</span>
+    <strong style="color:#0f172a;">${escapeHtml(lateText)}</strong>
+   </span>
+   <span style="display:inline-flex; align-items:center; gap:3px;">
+    <span style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">夜勤</span>
+    <strong style="color:#0f172a;">${escapeHtml(nightText)}</strong>
+   </span>
+   <span style="display:inline-flex; align-items:center; gap:3px;">
+    <span style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">明け</span>
+    <strong style="color:#0f172a;">${escapeHtml(dawnText)}</strong>
+   </span>
+   ${hopeOffBadge}
+  </div>
+  <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; margin-left:auto; color:#2563eb; border-color:#93c5fd; background:#eff6ff; cursor:pointer;" onclick="switchPortal('office'); switchOfficeTab('shifts');" title="月間勤務表シフトを開きます">
+   勤務表シフトを開く
+  </button>
+ `;
 }
 
 // グローバル関数公開 (インラインonclick等の即時呼出保証)
@@ -9178,4 +9394,6 @@ if (typeof window !== "undefined") {
   window.deleteShiftHopeOff = deleteShiftHopeOff;
   window.toggleShiftHopeOff = toggleShiftHopeOff;
   window.applyHopeOffsAndRegenerate = applyHopeOffsAndRegenerate;
+  window.getDailyShiftRoster = getDailyShiftRoster;
+  window.renderTodayShiftBar = renderTodayShiftBar;
 }
