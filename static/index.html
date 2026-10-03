@@ -160,23 +160,42 @@
                 <div class="templates-list" id="quickTemplatesList"></div>
               </div>
 
-              <div class="form-group" style="display:flex; gap:12px; margin-top:12px;">
-                <div style="flex:1;">
-                  <label>区分:</label>
-                  <select id="recordCategory" class="form-control">
-                    <option value="介護記録">介護記録 (日報・総合記録)</option>
-                    <option value="バイタル">バイタル</option>
-                    <option value="特変">特変 (いつもと違う)</option>
-                    <option value="食事">食事・水分</option>
-                    <option value="排泄">排泄</option>
-                    <option value="入浴・処置">入浴・処置</option>
-                    <option value="頓服服用">頓服服用</option>
-                    <option value="巡視">巡視</option>
-                  </select>
+              <div class="form-group" style="margin-top:12px;">
+                <label style="font-weight:bold; font-size:13px; color:#1e293b; display:flex; align-items:center; justify-content:space-between;">
+                  <span>🏷️ 記録区分（ワンタップ選択 または ドロップダウン）:</span>
+                  <span style="font-size:11.5px; color:#64748b; font-weight:normal;">日誌・カルテに色別タグで表示されます</span>
+                </label>
+                <!-- ワンタップ区分ボタンバー -->
+                <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:5px; margin-bottom:8px;" id="categoryQuickButtons">
+                  <button type="button" class="btn btn-category active" data-cat="介護" onclick="selectRecordCategory('介護')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #bfdbfe; background:#2563eb; color:#ffffff; font-weight:bold;">［介護］日常ケア・日報</button>
+                  <button type="button" class="btn btn-category" data-cat="特変" onclick="selectRecordCategory('特変')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #fca5a5; background:#fff; color:#991b1b; font-weight:bold;">🚨［特変］体調不良・受傷</button>
+                  <button type="button" class="btn btn-category" data-cat="連絡" onclick="selectRecordCategory('連絡')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #fde047; background:#fff; color:#854d0e; font-weight:bold;">📞［連絡］病院・家族・申送り</button>
+                  <button type="button" class="btn btn-category" data-cat="看護" onclick="selectRecordCategory('看護')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #bbf7d0; background:#fff; color:#166534; font-weight:bold;">🩺［看護］処置・観察</button>
+                  <button type="button" class="btn btn-category" data-cat="リハビリ" onclick="selectRecordCategory('リハビリ')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #ddd6fe; background:#fff; color:#6b21a8; font-weight:bold;">🚶［リハビリ］起立・歩行</button>
+                  <button type="button" class="btn btn-category" data-cat="家族" onclick="selectRecordCategory('家族')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #fed7aa; background:#fff; color:#c2410c; font-weight:bold;">👪［家族］面会・要望</button>
+                  <button type="button" class="btn btn-category" data-cat="巡視" onclick="selectRecordCategory('巡視')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #cbd5e1; background:#fff; color:#475569;">🌙［巡視］夜間安眠</button>
                 </div>
-                <div style="flex:1;">
-                  <label>記録時間:</label>
-                  <input type="datetime-local" id="recordCustomTime" class="form-control">
+
+                <div style="display:flex; gap:12px;">
+                  <div style="flex:1;">
+                    <select id="recordCategory" class="form-control" onchange="syncCategoryButtons()">
+                      <option value="介護">介護 (日常ケア・様子・日報)</option>
+                      <option value="特変">🚨 特変 (いつもと違う・体調不良・受傷)</option>
+                      <option value="連絡">📞 連絡 (病院連絡・家族連絡・申送り)</option>
+                      <option value="看護">🩺 看護 (医療処置・病状観察)</option>
+                      <option value="リハビリ">🚶 リハビリ (起立・歩行・機能訓練)</option>
+                      <option value="家族">👪 家族 (面会・電話・相談)</option>
+                      <option value="巡視">🌙 巡視 (夜間巡回・安眠確認)</option>
+                      <option value="バイタル">バイタル</option>
+                      <option value="食事">食事・水分</option>
+                      <option value="排泄">排泄</option>
+                      <option value="入浴・処置">入浴・処置</option>
+                      <option value="頓服服用">頓服服用</option>
+                    </select>
+                  </div>
+                  <div style="flex:1;">
+                    <input type="datetime-local" id="recordCustomTime" class="form-control">
+                  </div>
                 </div>
               </div>
 
@@ -262,9 +281,14 @@
 
           <!-- 全入居者の特変・申し送り記録一覧 (個人ケア体位交換等は除外) -->
           <div style="margin-top:16px;">
-            <h4 style="font-size:15px; color:#334155; margin-bottom:10px; display:flex; align-items:center; gap:6px;">
-              <span>📋 本日のフロア特変・申し送り記録一覧</span>
-            </h4>
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+              <h4 style="font-size:15px; color:#334155; margin:0; display:flex; align-items:center; gap:6px;">
+                <span>📋 本日のフロア特変・申し送り・連絡記録一覧</span>
+              </h4>
+              <button class="btn btn-primary" style="font-size:12px; padding:4px 12px; background:#dc2626; color:#fff; font-weight:bold; display:flex; align-items:center; gap:4px;" onclick="openDailyJournalAddRecordModal()">
+                🚨 ＋特変・申送り・連絡を追加
+              </button>
+            </div>
             <div id="dailyJournalRecordsList"></div>
           </div>
 
@@ -2065,6 +2089,87 @@
     </div>
   </div>
 
+  <!-- 業務日誌 特変・申送り・連絡追加 モーダル -->
+  <div class="modal-overlay" id="dailyJournalAddRecordModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h4 style="margin:0; color:#b91c1c; display:flex; align-items:center; gap:6px;">
+          <span>🚨 本日のフロア特変・申送り・連絡の追加</span>
+        </h4>
+        <button class="modal-close-btn" onclick="closeModal('dailyJournalAddRecordModal')">&times;</button>
+      </div>
+      <div style="padding:14px 0;">
+        <p style="font-size:13px; color:#475569; margin-bottom:12px; line-height:1.5;">
+          業務日誌および該当入居者のカルテに記録を同時登録します。<br>
+          「特変」や「連絡」を指定すると、日誌で目立つ色別バッジで表示され、フロア全員へ確実に申し送られます。
+        </p>
+
+        <!-- 対象入居者 -->
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; font-weight:bold; color:#334155;">対象入居者 / フロア:</label>
+          <select id="djmResidentSelect" class="form-control" style="margin-top:3px; font-weight:bold;">
+            <option value="1">101号室 佐藤 健一 様</option>
+            <option value="2">102号室 田中 ヨシ 様</option>
+            <option value="3">103号室 鈴木 一郎 様</option>
+            <option value="4">105号室 高橋 幸子 様</option>
+            <option value="0">【全体・フロア共通】（特定入居者なし）</option>
+          </select>
+        </div>
+
+        <!-- 記録区分（クイックボタン ＆ セレクト） -->
+        <div style="margin-bottom:12px;">
+          <label style="font-size:12px; font-weight:bold; color:#334155; display:flex; justify-content:space-between;">
+            <span>🏷️ 記録区分（ワンタップ選択）:</span>
+            <span style="font-size:11px; color:#64748b; font-weight:normal;">日誌・カルテに色別表示</span>
+          </label>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; margin-bottom:6px;" id="djmCategoryButtons">
+            <button type="button" class="btn btn-category active" data-cat="特変" onclick="selectDailyJournalCategory('特変')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #fca5a5; background:#dc2626; color:#ffffff; font-weight:bold;">🚨［特変］体調不良・受傷</button>
+            <button type="button" class="btn btn-category" data-cat="連絡" onclick="selectDailyJournalCategory('連絡')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #fde047; background:#fff; color:#854d0e; font-weight:bold;">📞［連絡］病院・家族・申送り</button>
+            <button type="button" class="btn btn-category" data-cat="介護" onclick="selectDailyJournalCategory('介護')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #bfdbfe; background:#fff; color:#2563eb; font-weight:bold;">［介護］日常ケア・日報</button>
+            <button type="button" class="btn btn-category" data-cat="看護" onclick="selectDailyJournalCategory('看護')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #bbf7d0; background:#fff; color:#166534; font-weight:bold;">🩺［看護］処置・観察</button>
+            <button type="button" class="btn btn-category" data-cat="リハビリ" onclick="selectDailyJournalCategory('リハビリ')" style="font-size:12px; padding:3px 10px; border-radius:14px; border:1px solid #ddd6fe; background:#fff; color:#6b21a8; font-weight:bold;">🚶［リハビリ］機能訓練</button>
+          </div>
+          <select id="djmCategorySelect" class="form-control" style="display:none;" onchange="syncDailyJournalCategoryButtons()">
+            <option value="特変">特変</option>
+            <option value="連絡">連絡</option>
+            <option value="介護">介護</option>
+            <option value="看護">看護</option>
+            <option value="リハビリ">リハビリ</option>
+          </select>
+        </div>
+
+        <!-- 記録日時 ＆ 記録者 -->
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+          <div>
+            <label style="font-size:12px; font-weight:bold; color:#334155;">記録日時:</label>
+            <input type="datetime-local" id="djmDateTime" class="form-control" style="margin-top:3px;">
+          </div>
+          <div>
+            <label style="font-size:12px; font-weight:bold; color:#334155;">記録者（職員氏名）:</label>
+            <input type="text" id="djmStaff" class="form-control" style="margin-top:3px;">
+          </div>
+        </div>
+
+        <!-- 記録内容 -->
+        <div style="margin-bottom:12px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+            <label style="font-size:12px; font-weight:bold; color:#334155;">記録内容（申し送り本文）:</label>
+            <div style="display:flex; gap:4px;">
+              <button type="button" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" onclick="insertDailyJournalTemplate('特変')">＋特変雛形</button>
+              <button type="button" class="btn btn-outline" style="font-size:11px; padding:2px 6px;" onclick="insertDailyJournalTemplate('連絡')">＋連絡雛形</button>
+            </div>
+          </div>
+          <textarea id="djmContent" class="form-control" rows="4" placeholder="例: 【特変】14:20頃、居室にてふらつきあり。バイタル測定しDr.へ報告。..." style="margin-top:3px; resize:vertical; font-size:13px; line-height:1.5;"></textarea>
+        </div>
+
+        <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('dailyJournalAddRecordModal')">キャンセル</button>
+          <button type="button" class="btn btn-primary" style="background:#dc2626; color:#ffffff; font-weight:bold;" onclick="submitDailyJournalRecordModal()">💾 日誌・カルテに保存して連動</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
   <!-- シフトセル手動修正 モーダル -->
   <div class="modal-overlay" id="shiftEditModal" style="display:none;">
     <div class="modal-card" style="max-width:380px;">
@@ -2133,6 +2238,6 @@
     </div>
   </div>
 
-  <script src="app.js?v=20261003_v6"></script>
+  <script src="app.js?v=20261003_v7"></script>
 </body>
 </html>

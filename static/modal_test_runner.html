@@ -196,6 +196,39 @@
         const isPvModalClosed = pvModal && win.getComputedStyle(pvModal).display === "none";
         report("バイタル・体重モーダルが正常に閉じられること", isPvModalClosed);
 
+        // 11. 記録区分クイック選択ボタンの動作確認
+        const catBtnTokukan = doc.querySelector('#categoryQuickButtons button[data-cat="特変"]');
+        report("記録区分『特変』クイックボタン存在確認", !!catBtnTokukan);
+        if (catBtnTokukan) {
+          catBtnTokukan.click();
+          await new Promise(r => setTimeout(r, 100));
+          const catSelect = doc.getElementById("recordCategory");
+          const isCategorySelected = catSelect && catSelect.value === "特変";
+          const isBtnActive = catBtnTokukan.classList.contains("active");
+          report("記録区分『特変』ボタンクリックでセレクト値とアクティブ状態が連動すること", isCategorySelected && isBtnActive,
+            "セレクト値=" + (catSelect ? catSelect.value : "") + ", active=" + isBtnActive);
+
+          // 介護に戻す
+          win.selectRecordCategory("介護");
+        }
+
+        // 12. 業務日誌 特変・申送り・連絡追加 モーダルの動作確認
+        win.openDailyJournalAddRecordModal("特変");
+        await new Promise(r => setTimeout(r, 200));
+        const djModal = doc.getElementById("dailyJournalAddRecordModal");
+        const isDjModalOpen = djModal && win.getComputedStyle(djModal).display === "flex";
+        report("業務日誌『🚨 ＋特変・申送り・連絡を追加』モーダルが開くこと", isDjModalOpen);
+
+        const djmResidentSelect = doc.getElementById("djmResidentSelect");
+        const djmCategorySelect = doc.getElementById("djmCategorySelect");
+        const djmContent = doc.getElementById("djmContent");
+        report("日誌モーダル内に入居者選択・区分・記録内容が存在すること", !!(djmResidentSelect && djmCategorySelect && djmContent));
+
+        win.closeModal("dailyJournalAddRecordModal");
+        await new Promise(r => setTimeout(r, 100));
+        const isDjModalClosed = djModal && win.getComputedStyle(djModal).display === "none";
+        report("業務日誌モーダルが正常に閉じられること", isDjModalClosed);
+
         const fin = document.createElement("div");
         fin.id = "testComplete";
         document.body.appendChild(fin);

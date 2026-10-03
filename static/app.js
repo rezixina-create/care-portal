@@ -1347,6 +1347,7 @@ window.addEventListener("DOMContentLoaded", () => {
   renderCalendar();
   loadDateRecords(gState.selectedDate);
   checkGlobalAlerts();
+  syncCategoryButtons();
   setupEventListeners();
 });
 
@@ -2644,6 +2645,22 @@ function submitCareRecord() {
   };
 
   db.data.care_records.unshift(newRec);
+
+  // 特変または連絡の場合は、申し送り（連絡帳）へも自動追加
+  if (category === "特変" || category === "連絡") {
+    if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
+    const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+    const resName = res ? `${res.room_no}号室 ${res.name} 様` : "";
+    db.data.notebooks.unshift({
+      id: Date.now() + 1,
+      date: gState.selectedDate,
+      resident_id: gState.selectedResidentId,
+      content: `［${category}］(${resName}) ${content}`,
+      staff_name: staff,
+      status: "未対応"
+    });
+  }
+
   db.save();
 
   document.getElementById("recordContent").value = "";
@@ -2655,6 +2672,74 @@ function submitCareRecord() {
   loadDateRecords(gState.selectedDate);
   renderCalendar();
   alert("介護記録を保存しました！");
+}
+
+// 記録区分（介護・特変・連絡・看護・リハビリ・家族・巡視等）のワンタップ選択
+function selectRecordCategory(cat) {
+  const sel = document.getElementById("recordCategory");
+  if (sel) {
+    sel.value = cat;
+  }
+  syncCategoryButtons();
+
+  // 特変・連絡選択時、本文が空なら即座に雛形をサジェスト＆フォーカス
+  const contentArea = document.getElementById("recordContent");
+  if (contentArea) {
+    if (!contentArea.value.trim()) {
+      if (cat === "特変") {
+        const tm = new Date().toTimeString().slice(0, 5);
+        contentArea.value = `【特変】${tm}頃、`;
+      } else if (cat === "連絡") {
+        contentArea.value = `【連絡】`;
+      } else if (cat === "看護") {
+        contentArea.value = `【看護処置】`;
+      } else if (cat === "リハビリ") {
+        contentArea.value = `【リハビリ】`;
+      }
+    }
+    contentArea.focus();
+    updateRecordCharCount();
+  }
+}
+
+// 区分セレクターボタングループのアクティブ表示同期
+function syncCategoryButtons() {
+  const sel = document.getElementById("recordCategory");
+  if (!sel) return;
+  const currentCat = sel.value;
+
+  const btnContainer = document.getElementById("categoryQuickButtons");
+  if (!btnContainer) return;
+  const buttons = btnContainer.querySelectorAll("button[data-cat]");
+
+  const activeStyles = {
+    "介護": { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" },
+    "特変": { bg: "#dc2626", fg: "#ffffff", border: "#fca5a5" },
+    "連絡": { bg: "#ca8a04", fg: "#ffffff", border: "#fde047" },
+    "看護": { bg: "#16a34a", fg: "#ffffff", border: "#bbf7d0" },
+    "リハビリ": { bg: "#7c3aed", fg: "#ffffff", border: "#ddd6fe" },
+    "家族": { bg: "#ea580c", fg: "#ffffff", border: "#fed7aa" },
+    "巡視": { bg: "#475569", fg: "#ffffff", border: "#cbd5e1" }
+  };
+
+  buttons.forEach(btn => {
+    const bCat = btn.getAttribute("data-cat");
+    if (bCat === currentCat) {
+      btn.classList.add("active");
+      const style = activeStyles[bCat] || { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" };
+      btn.style.background = style.bg;
+      btn.style.color = style.fg;
+      btn.style.borderColor = style.border;
+      btn.style.fontWeight = "bold";
+    } else {
+      btn.classList.remove("active");
+      const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#334155", border: "#cbd5e1" };
+      btn.style.background = "#ffffff";
+      btn.style.color = style.bg;
+      btn.style.borderColor = style.border;
+      btn.style.fontWeight = "bold";
+    }
+  });
 }
 
 // 長文記録の展開・折りたたみ状態管理
@@ -3172,6 +3257,19 @@ function submitPersonalVitalModal() {
   alert("バイタル＆身体測定を保存しました！個人記録と全体タブの両方に連動反映されました。");
 }
 
+// 区分に応じたバッジ装飾スタイル（日誌・個別カルテ共通）
+function getCategoryBadgeStyle(cat) {
+  if (cat === "特変") return "background:#fee2e2; color:#991b1b; font-weight:bold; border:1px solid #fca5a5;";
+  if (cat === "連絡") return "background:#fef9c3; color:#854d0e; font-weight:bold; border:1px solid #fde047;";
+  if (cat === "看護") return "background:#dcfce7; color:#166534; font-weight:bold; border:1px solid #bbf7d0;";
+  if (cat === "リハビリ") return "background:#ede9fe; color:#6b21a8; font-weight:bold; border:1px solid #ddd6fe;";
+  if (cat === "家族") return "background:#ffedd5; color:#c2410c; font-weight:bold; border:1px solid #fed7aa;";
+  if (cat === "巡視") return "background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;";
+  if (cat === "バイタル") return "background:#fef3c7; color:#92400e; border:1px solid #fde68a;";
+  if (cat === "頓服服用") return "background:#f3e8ff; color:#6b21a8; border:1px solid #e9d5ff;";
+  return "background:#e0f2fe; color:#0369a1; border:1px solid #bfdbfe;"; // 介護・デフォルト
+}
+
 // 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
 function renderSelectedDateRecords() {
   const list = document.getElementById("selectedDateRecordsList");
@@ -3243,11 +3341,7 @@ function renderSelectedDateRecords() {
     const item = document.createElement("div");
     item.className = "care-record-card";
 
-    let catBadgeStyle = "background:#e0f2fe; color:#0369a1;";
-    if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
-    else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
-    else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
-    else if (r.category === "連絡") catBadgeStyle = "background:#fef9c3; color:#854d0e; font-weight:bold;";
+    const catBadgeStyle = getCategoryBadgeStyle(r.category);
 
     const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
     const rawContent = r.content || "";
@@ -3514,14 +3608,10 @@ function renderDailyJournal() {
     } else {
       recordsListEl.innerHTML = "";
       allRecords.forEach(r => {
-        const res = gState.residents.find(x => x.id === r.resident_id);
-        const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+        const res = (r.resident_id === 0) ? null : gState.residents.find(x => x.id === r.resident_id);
+        const resName = (r.resident_id === 0) ? "フロア全体・共通" : (res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定");
         const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
-
-        let catBadgeStyle = "background:#e0f2fe; color:#0369a1;";
-        if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
-        else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
-        else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+        const catBadgeStyle = getCategoryBadgeStyle(r.category);
 
         const item = document.createElement("div");
         item.className = "care-record-card";
@@ -3808,6 +3898,184 @@ function deleteDailySchedule(id) {
   db.data.daily_schedules = (db.data.daily_schedules || []).filter(s => s.id !== id);
   db.save();
   renderDailyScheduleTimeline();
+}
+
+// 業務日誌 特変・申送り・連絡追加 モーダル
+function openDailyJournalAddRecordModal(prefillCategory) {
+  const modal = document.getElementById("dailyJournalAddRecordModal");
+  if (!modal) return;
+
+  // 1. 対象利用者セレクトの同期
+  const resSelect = document.getElementById("djmResidentSelect");
+  if (resSelect && Array.isArray(gState.residents)) {
+    let opts = gState.residents.map(r => `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</option>`);
+    opts.push('<option value="0">【全体・フロア共通】（特定入居者なし）</option>');
+    resSelect.innerHTML = opts.join("");
+    if (gState.selectedResidentId) {
+      resSelect.value = String(gState.selectedResidentId);
+    }
+  }
+
+  // 2. 区分初期値
+  const targetCat = prefillCategory || "特変";
+  selectDailyJournalCategory(targetCat);
+
+  // 3. 日時初期値 (現在日時に合わせる)
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const defaultDate = gState.selectedDate || `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
+  const defaultTime = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+  const dtInput = document.getElementById("djmDateTime");
+  if (dtInput) {
+    dtInput.value = `${defaultDate}T${defaultTime}`;
+  }
+
+  // 4. 職員名
+  const staffInput = document.getElementById("djmStaff");
+  const curStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "木村 健一";
+  if (staffInput) {
+    staffInput.value = curStaff;
+  }
+
+  // 5. 本文初期化 & 雛形セット
+  const contentArea = document.getElementById("djmContent");
+  if (contentArea) {
+    contentArea.value = "";
+    insertDailyJournalTemplate(targetCat);
+  }
+
+  modal.style.display = "flex";
+}
+
+function selectDailyJournalCategory(cat) {
+  const sel = document.getElementById("djmCategorySelect");
+  if (sel) sel.value = cat;
+
+  const btnContainer = document.getElementById("djmCategoryButtons");
+  if (!btnContainer) return;
+  const buttons = btnContainer.querySelectorAll("button[data-cat]");
+
+  const activeStyles = {
+    "特変": { bg: "#dc2626", fg: "#ffffff", border: "#fca5a5" },
+    "連絡": { bg: "#ca8a04", fg: "#ffffff", border: "#fde047" },
+    "介護": { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" },
+    "看護": { bg: "#16a34a", fg: "#ffffff", border: "#bbf7d0" },
+    "リハビリ": { bg: "#7c3aed", fg: "#ffffff", border: "#ddd6fe" }
+  };
+
+  buttons.forEach(btn => {
+    const bCat = btn.getAttribute("data-cat");
+    if (bCat === cat) {
+      btn.classList.add("active");
+      const style = activeStyles[bCat] || { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" };
+      btn.style.background = style.bg;
+      btn.style.color = style.fg;
+      btn.style.borderColor = style.border;
+      btn.style.fontWeight = "bold";
+    } else {
+      btn.classList.remove("active");
+      const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#334155", border: "#cbd5e1" };
+      btn.style.background = "#ffffff";
+      btn.style.color = style.bg;
+      btn.style.borderColor = style.border;
+      btn.style.fontWeight = "bold";
+    }
+  });
+}
+
+function syncDailyJournalCategoryButtons() {
+  const sel = document.getElementById("djmCategorySelect");
+  if (sel) selectDailyJournalCategory(sel.value);
+}
+
+function insertDailyJournalTemplate(cat) {
+  const textarea = document.getElementById("djmContent");
+  if (!textarea) return;
+  const now = new Date();
+  const pad = n => String(n).padStart(2, "0");
+  const tm = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
+
+  let tpl = "";
+  if (cat === "特変") {
+    tpl = `【特変】${tm}頃、`;
+  } else if (cat === "連絡") {
+    tpl = `【連絡・申送り】`;
+  } else if (cat === "看護") {
+    tpl = `【看護処置】${tm}実施。`;
+  } else if (cat === "リハビリ") {
+    tpl = `【機能訓練】`;
+  } else if (cat === "介護") {
+    tpl = `【日常ケア・日報】様子良好。`;
+  }
+
+  if (textarea.value.trim() === "" || textarea.value.startsWith("【")) {
+    textarea.value = tpl;
+  } else {
+    textarea.value = tpl + "\n" + textarea.value;
+  }
+  textarea.focus();
+}
+
+function submitDailyJournalRecordModal() {
+  const resSelect = document.getElementById("djmResidentSelect");
+  const catSelect = document.getElementById("djmCategorySelect");
+  const dtInput = document.getElementById("djmDateTime");
+  const staffInput = document.getElementById("djmStaff");
+  const contentArea = document.getElementById("djmContent");
+
+  const content = contentArea ? contentArea.value.trim() : "";
+  if (!content) {
+    alert("記録内容を入力してください。");
+    if (contentArea) contentArea.focus();
+    return;
+  }
+
+  const resId = resSelect ? parseInt(resSelect.value, 10) : 0;
+  const cat = catSelect ? catSelect.value : "特変";
+  const dtVal = (dtInput && dtInput.value) ? dtInput.value : `${gState.selectedDate}T12:00`;
+  const recordedAt = dtVal.replace("T", " ");
+  const dateStr = dtVal.split("T")[0];
+  const staff = (staffInput && staffInput.value.trim()) ? staffInput.value.trim() : "職員";
+
+  if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+
+  // 1. 介護記録テーブルへ追加
+  const newRec = {
+    id: Date.now(),
+    recorded_at: recordedAt,
+    resident_id: resId,
+    category: cat,
+    content: content,
+    staff_name: staff
+  };
+  db.data.care_records.unshift(newRec);
+
+  // 2. 特変または連絡の場合は、申し送り（連絡帳）へも自動追加
+  if (cat === "特変" || cat === "連絡") {
+    if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
+    const resObj = (resId === 0) ? null : gState.residents.find(r => r.id === resId);
+    const resName = (resId === 0) ? "フロア全体" : (resObj ? `${resObj.room_no}号室 ${resObj.name}様` : "");
+    db.data.notebooks.unshift({
+      id: Date.now() + 1,
+      date: dateStr,
+      resident_id: resId,
+      content: `［${cat}］(${resName}) ${content}`,
+      staff_name: staff,
+      status: "未対応"
+    });
+  }
+
+  db.save();
+  closeModal("dailyJournalAddRecordModal");
+
+  // 再描画（日誌・申し送り・個別カルテ・カレンダー）
+  loadDateRecords(dateStr);
+  if (gState.activeCareTab === "daily_journal") {
+    renderDailyJournal();
+  }
+  renderCalendar();
+
+  alert(`［${cat}］記録を登録しました！日誌・カルテ・申し送りに連動反映されました。`);
 }
 
 // 文字検索機能 (何月何日何時の記録か一発検索)
@@ -8598,4 +8866,12 @@ if (typeof window !== "undefined") {
   window.submitPersonalVitalModal = submitPersonalVitalModal;
   window.renderPersonalCalendar = renderPersonalCalendar;
   window.renderPersonalDailySummary = renderPersonalDailySummary;
+  window.getCategoryBadgeStyle = getCategoryBadgeStyle;
+  window.selectRecordCategory = selectRecordCategory;
+  window.syncCategoryButtons = syncCategoryButtons;
+  window.openDailyJournalAddRecordModal = openDailyJournalAddRecordModal;
+  window.selectDailyJournalCategory = selectDailyJournalCategory;
+  window.syncDailyJournalCategoryButtons = syncDailyJournalCategoryButtons;
+  window.insertDailyJournalTemplate = insertDailyJournalTemplate;
+  window.submitDailyJournalRecordModal = submitDailyJournalRecordModal;
 }
