@@ -119,6 +119,33 @@
     <select id="shiftNgStaff2"></select>
     <input id="shiftNgReason">
     <div id="shiftNgPairList"></div>
+    <button id="btnHeaderStaffManage"></button>
+    <button id="btnSetInitialPin"></button>
+    <div id="officeAdminSecurityRow"></div>
+    <div id="staffPinAuthModal" style="display:none;">
+      <div id="staffPinAuthTitle"></div>
+      <div id="staffPinAuthDesc"></div>
+      <div id="staffPinError"></div>
+      <div id="staffPinKeypad"></div>
+      <div id="pinDot0"></div><div id="pinDot1"></div><div id="pinDot2"></div><div id="pinDot3"></div>
+    </div>
+    <div id="initialPinModal" style="display:none;">
+      <input id="initialPinStaffName">
+      <input id="initialPinCurrent">
+      <input id="initialPinNew">
+      <input id="initialPinConfirm">
+    </div>
+    <div id="tabOfficeBackup" style="display:none;"></div>
+    <div id="tabOfficeStaffAuth" style="display:none;"></div>
+    <table id="staffAuthTable"><tbody></tbody></table>
+    <select id="staffAuthTargetSelect"></select>
+    <div id="staffAuthRuleNotice"></div>
+    <div id="staffAuthApproverRow"></div>
+    <select id="staffAuthApproverSelect"></select>
+    <input id="staffAuthCurrentPin">
+    <input id="staffAuthApproverPin">
+    <input id="staffAuthNewPin">
+    <input id="staffAuthConfirmPin">
   </div>
 
   <script src="app.js"></script>
@@ -493,7 +520,28 @@
       assert(isBsModalOpen, "Test 77: openBackupStatusModal によりバックアップ状況モーダルが正常に展開されること");
       closeModal("backupStatusModal");
 
-      // 26. 総合結果判定
+      // 26. 職員切り替え4桁PIN認証・ランダムテンキー・権限制御テスト
+      assert(typeof openStaffPinAuthModal === "function" && typeof renderRandomKeypad === "function" && typeof verifyStaffPin === "function", "Test 78: 職員4桁PIN認証およびランダムテンキー関数 (openStaffPinAuthModal, renderRandomKeypad, verifyStaffPin) が存在すること");
+      
+      openStaffPinAuthModal("木村 健一");
+      const keypad = document.getElementById("staffPinKeypad");
+      const keypadButtons = keypad ? keypad.querySelectorAll("button") : [];
+      assert(keypadButtons.length === 10, "Test 79: ランダムテンキーが0から9の10個のシャッフルボタンを正常に生成すること");
+      closeModal("staffPinAuthModal");
+
+      assert(typeof isStaffAdminOrClerk === "function" && typeof updateStaffRoleUI === "function", "Test 80: 職員権限判定およびUI更新関数 (isStaffAdminOrClerk, updateStaffRoleUI) が存在すること");
+      const isAdminKimura = isStaffAdminOrClerk("木村 健一");
+      const isClerkMatsumoto = isStaffAdminOrClerk("松本 陽子");
+      const isCareYamada = isStaffAdminOrClerk("伊藤 翔太");
+      assert(isAdminKimura && isClerkMatsumoto && !isCareYamada, "Test 81: 管理者・事務員ロールのみ正しく認証・識別されること");
+
+      // 27. パスワードリセット・ツーマンルール変更・事務所専用タブテスト
+      assert(typeof resetStaffPin === "function" && typeof submitStaffPinChange === "function" && typeof renderOfficeStaffAuth === "function", "Test 82: パスワード初期化および2名承認変更関数 (resetStaffPin, submitStaffPinChange, renderOfficeStaffAuth) が存在すること");
+      renderOfficeStaffAuth();
+      const staffAuthRows = document.querySelectorAll("#staffAuthTable tbody tr");
+      assert(staffAuthRows.length > 0, "Test 83: 事務所ポータルの職員アカウント・暗証番号管理テーブルが正常に描画されること");
+
+      // 28. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

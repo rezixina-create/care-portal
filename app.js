@@ -1363,8 +1363,10 @@ function updateFacilityNameUI() {
 
 window.addEventListener("DOMContentLoaded", () => {
  updateFacilityNameUI();
+ ensureStaffPinData();
  gState.stamps = sortStaffList(gState.stamps);
  renderStaffSelect();
+ updateStaffRoleUI();
  renderResidentsStrip();
  renderResidentDetail();
  updateRecordTargetBanner();
@@ -1399,10 +1401,56 @@ function renderStaffSelect() {
 }
 
 function onCurrentStaffChange() {
+ const sel = document.getElementById("currentStaff");
+ if (sel && sel.value) {
+ gState.currentStaff = sel.value;
+ }
+ updateStaffRoleUI();
  renderNotebook();
  checkGlobalAlerts();
  if (gState.activePortal === "office" && gState.activeOfficeTab === "orders") {
  renderOfficeOrders();
+ }
+}
+
+// 職員ロール判定（管理者または事務員）
+function isStaffAdminOrClerk(staff) {
+ if (!staff) return false;
+ const staffObj = (gState.stamps || []).find(s => (s.name || s) === staff);
+ const role = staffObj ? (staffObj.role || "") : "";
+ const combined = `${role} ${staff}`.toLowerCase();
+ return combined.includes("管理者") || combined.includes("施設長") || combined.includes("事務") || combined.includes("所長") || combined.includes("ホーム長") || combined.includes("院長") || combined.includes("理事") || combined.includes("事務長");
+}
+
+function isCurrentStaffAdminOrClerk() {
+ const staffSelect = document.getElementById("currentStaff");
+ const staff = (staffSelect ? staffSelect.value : "") || gState.currentStaff || "";
+ return isStaffAdminOrClerk(staff);
+}
+
+// 権限に応じたUI表示切替 (＋職員管理ボタン、初期設定ボタン、事務所管理タブ)
+function updateStaffRoleUI() {
+ const isAdminOrClerk = isCurrentStaffAdminOrClerk();
+ 
+ // 1. ＋職員管理ボタン (管理者・事務員のみ)
+ const btnStaffManage = document.getElementById("btnHeaderStaffManage");
+ if (btnStaffManage) {
+ btnStaffManage.style.display = isAdminOrClerk ? "inline-block" : "none";
+ }
+
+ // 2. 現在選択職員の暗証番号初回設定ボタン
+ const currentStaffName = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "";
+ const currentStaffObj = (gState.stamps || []).find(s => (s.name || s) === currentStaffName);
+ const isInitial = currentStaffObj ? ((currentStaffObj.pin || "0000") === "0000" || currentStaffObj.is_initial_pin !== false) : false;
+ const btnInitial = document.getElementById("btnSetInitialPin");
+ if (btnInitial) {
+ btnInitial.style.display = isInitial ? "inline-block" : "none";
+ }
+
+ // 3. 事務所ポータルの管理者専用サブタブ行
+ const adminRow = document.getElementById("officeAdminSecurityRow");
+ if (adminRow) {
+ adminRow.style.display = isAdminOrClerk ? "flex" : "none";
  }
 }
 
@@ -1527,6 +1575,31 @@ function checkGlobalAlerts() {
  let alertHtml = "";
  const today = new Date();
  const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
+
+ // 0.0 【管理者・事務員専用：初期パスワード未変更セキュリティ警告】
+ const isAdminOrClerk = isCurrentStaffAdminOrClerk();
+ if (isAdminOrClerk && !isAlertDismissed('initial_pin_warning')) {
+ const unconfigured = (gState.stamps || []).filter(s => {
+ const pin = s.pin || "0000";
+ return pin === "0000" || s.is_initial_pin !== false;
+ });
+ if (unconfigured.length > 0) {
+ const staffNames = unconfigured.map(s => escapeHtml(s.name || s)).join("、");
+ alertHtml += `
+ <div class="alert-banner alert-warning" style="background:#fef2f2; border-left:5px solid #dc2626; color:#991b1b;">
+ <div style="width:100%;">
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
+ <div style="display:flex; gap:6px; align-items:center;">
+ <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('initial_pin_warning')">閉じる</button>
+ </div>
+ </div>
+ </div>
+ </div>
+ `;
+ }
+ }
 
  // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
  const isAdmin = isCurrentStaffAdmin();
@@ -5716,6 +5789,14 @@ function loadOfficeData() {
 }
 
 function switchOfficeTab(tab) {
+ if (tab === "backup" || tab === "staff_auth") {
+ if (!isCurrentStaffAdminOrClerk()) {
+ alert("このタブは管理者および事務員のみアクセス可能です。");
+ switchOfficeTab("inventory");
+ return;
+ }
+ }
+
  gState.activeOfficeTab = tab;
  const tabs = document.querySelectorAll("#portalOfficeSection .sub-tab-btn");
  tabs.forEach(btn => {
@@ -5731,7 +5812,8 @@ function switchOfficeTab(tab) {
  suppliers: "tabOfficeSuppliers", billing: "tabOfficeBilling", deposit: "tabOfficeDeposit",
  shift: "tabOfficeShift", vehicle: "tabOfficeVehicle", vaccine: "tabOfficeVaccine",
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
- incidents: "tabOfficeIncidents"
+ incidents: "tabOfficeIncidents",
+ backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -5743,6 +5825,10 @@ function switchOfficeTab(tab) {
  target.style.display = "block";
  if (tab === "shift") {
  renderShiftTable(gState.currentShiftMonth || "2026-10");
+ } else if (tab === "backup") {
+ renderOfficeBackup();
+ } else if (tab === "staff_auth") {
+ renderOfficeStaffAuth();
  }
  }
 }
@@ -7213,6 +7299,10 @@ function submitBodyConditionModal() {
 
 // 職員・認印管理
 function openStaffModal() {
+ if (!isCurrentStaffAdminOrClerk()) {
+ alert("職員管理は管理者または事務員のみ操作可能です。");
+ return;
+ }
  document.getElementById("newStaffName").value = "";
  document.getElementById("newStaffRole").value = "";
  renderStaffModalList();
@@ -7292,7 +7382,7 @@ function submitNewStaffStamp() {
  return;
  }
 
- gState.stamps.push({ name: name, role: role });
+ gState.stamps.push({ name: name, role: role, pin: "0000", is_initial_pin: true });
  // 役職・序列順（偉い人順）に自動整列
  gState.stamps = sortStaffList(gState.stamps);
  db.data.stamps = gState.stamps;
@@ -7600,6 +7690,8 @@ function reloadStateFromDb() {
  gState.inventory = db.data.inventory;
  gState.suppliers = db.data.suppliers;
  gState.stamps = db.data.stamps;
+ ensureStaffPinData();
+ updateStaffRoleUI();
  gState.templates = db.data.templates;
  gState.recreations = db.data.recreations;
  gState.emergencySupplies = db.data.emergency_supplies;
@@ -9427,6 +9519,367 @@ function downloadBackupJson() {
  }
 }
 
+// 職員暗証番号初期化・整合性確保
+function ensureStaffPinData() {
+ if (!gState.stamps || !Array.isArray(gState.stamps)) return;
+ let modified = false;
+ gState.stamps.forEach(s => {
+ if (typeof s === "object" && s !== null) {
+ if (!s.pin) {
+ s.pin = "0000";
+ modified = true;
+ }
+ if (typeof s.is_initial_pin === "undefined") {
+ s.is_initial_pin = (s.pin === "0000");
+ modified = true;
+ }
+ }
+ });
+ if (modified && typeof db !== "undefined" && db.data) {
+ db.data.stamps = gState.stamps;
+ }
+}
+
+// 職員セレクト変更トリガー (4桁PIN認証へ誘導)
+let gAuthTargetStaff = "";
+let gEnteredPin = "";
+
+function onStaffSelectChange(sel) {
+ const targetStaff = sel.value;
+ if (!targetStaff) return;
+ const currentStaff = gState.currentStaff || "";
+ if (targetStaff === currentStaff) return;
+
+ // 認証完了までセレクト表示を元の職員に戻す
+ if (currentStaff) {
+ sel.value = currentStaff;
+ }
+ openStaffPinAuthModal(targetStaff);
+}
+
+function openStaffPinAuthModal(targetStaff) {
+ gAuthTargetStaff = targetStaff;
+ gEnteredPin = "";
+ const modal = document.getElementById("staffPinAuthModal");
+ if (!modal) return;
+
+ const title = document.getElementById("staffPinAuthTitle");
+ if (title) title.textContent = `職員認証: 【${targetStaff}】`;
+ const desc = document.getElementById("staffPinAuthDesc");
+ if (desc) desc.textContent = "暗証番号（数字4桁）を入力してください (初期値: 0000)";
+ const err = document.getElementById("staffPinError");
+ if (err) err.textContent = "";
+
+ updatePinDots();
+ renderRandomKeypad();
+ modal.style.display = "flex";
+}
+
+// ランダム配置テンキー (毎回0〜9の数字位置をシャッフル)
+function renderRandomKeypad() {
+ const container = document.getElementById("staffPinKeypad");
+ if (!container) return;
+ container.innerHTML = "";
+
+ const nums = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9];
+ for (let i = nums.length - 1; i > 0; i--) {
+ const j = Math.floor(Math.random() * (i + 1));
+ [nums[i], nums[j]] = [nums[j], nums[i]];
+ }
+
+ nums.forEach(n => {
+ const btn = document.createElement("button");
+ btn.type = "button";
+ btn.className = "btn btn-outline pin-key-btn";
+ btn.style.cssText = "font-size:18px; font-weight:bold; padding:12px 0; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer;";
+ btn.textContent = String(n);
+ btn.onclick = () => onPinKeyPress(String(n));
+ container.appendChild(btn);
+ });
+}
+
+function onPinKeyPress(digit) {
+ if (gEnteredPin.length >= 4) return;
+ gEnteredPin += digit;
+ updatePinDots();
+ if (gEnteredPin.length === 4) {
+ setTimeout(verifyStaffPin, 100);
+ }
+}
+
+function backspaceStaffPin() {
+ if (gEnteredPin.length > 0) {
+ gEnteredPin = gEnteredPin.slice(0, -1);
+ updatePinDots();
+ }
+}
+
+function cancelStaffPinAuth() {
+ closeModal("staffPinAuthModal");
+ const sel = document.getElementById("currentStaff");
+ if (sel && gState.currentStaff) {
+ sel.value = gState.currentStaff;
+ }
+ gEnteredPin = "";
+}
+
+function updatePinDots() {
+ for (let i = 0; i < 4; i++) {
+ const dot = document.getElementById(`pinDot${i}`);
+ if (dot) {
+ if (i < gEnteredPin.length) {
+ dot.style.background = "#2563eb";
+ dot.style.borderColor = "#1d4ed8";
+ } else {
+ dot.style.background = "#ffffff";
+ dot.style.borderColor = "#94a3b8";
+ }
+ }
+ }
+}
+
+function verifyStaffPin() {
+ const staffObj = (gState.stamps || []).find(s => (s.name || s) === gAuthTargetStaff);
+ const correctPin = staffObj && staffObj.pin ? staffObj.pin : "0000";
+ if (gEnteredPin === correctPin) {
+ gState.currentStaff = gAuthTargetStaff;
+ const sel = document.getElementById("currentStaff");
+ if (sel) sel.value = gAuthTargetStaff;
+ closeModal("staffPinAuthModal");
+ onCurrentStaffChange();
+ gEnteredPin = "";
+ } else {
+ const err = document.getElementById("staffPinError");
+ if (err) err.textContent = "暗証番号が一致しません (初期値: 0000)";
+ gEnteredPin = "";
+ updatePinDots();
+ renderRandomKeypad();
+ }
+}
+
+// 職員自己暗証番号変更 (初回設定用)
+function openInitialPinModal() {
+ const currentStaff = gState.currentStaff || (document.getElementById("currentStaff")?.value) || "";
+ const modal = document.getElementById("initialPinModal");
+ if (!modal) return;
+ const nameInput = document.getElementById("initialPinStaffName");
+ if (nameInput) nameInput.value = currentStaff;
+ const curInput = document.getElementById("initialPinCurrent");
+ if (curInput) curInput.value = "";
+ const newInput = document.getElementById("initialPinNew");
+ if (newInput) newInput.value = "";
+ const confInput = document.getElementById("initialPinConfirm");
+ if (confInput) confInput.value = "";
+ modal.style.display = "flex";
+}
+
+function submitInitialPinModal() {
+ const staffName = document.getElementById("initialPinStaffName")?.value || "";
+ const curPin = (document.getElementById("initialPinCurrent")?.value || "").trim();
+ const newPin = (document.getElementById("initialPinNew")?.value || "").trim();
+ const confPin = (document.getElementById("initialPinConfirm")?.value || "").trim();
+
+ const staffObj = (gState.stamps || []).find(s => (s.name || s) === staffName);
+ if (!staffObj) {
+ alert("職員が見つかりません。");
+ return;
+ }
+ const realCurrent = staffObj.pin || "0000";
+ if (curPin !== realCurrent) {
+ alert("現在の暗証番号が一致しません。");
+ return;
+ }
+ if (!/^\d{4}$/.test(newPin)) {
+ alert("新しい暗証番号は数字4桁で入力してください。");
+ return;
+ }
+ if (newPin !== confPin) {
+ alert("新しい暗証番号と確認入力が一致しません。");
+ return;
+ }
+
+ staffObj.pin = newPin;
+ staffObj.is_initial_pin = false;
+ if (typeof db !== "undefined" && db.data) {
+ db.data.stamps = gState.stamps;
+ db.save();
+ }
+ closeModal("initialPinModal");
+ updateStaffRoleUI();
+ checkGlobalAlerts();
+ alert(`【${staffName}】の暗証番号を更新しました。次回から新しい暗証番号をご使用ください。`);
+}
+
+// 事務所ポータル：データ保管・バックアップ表示
+function renderOfficeBackup() {
+ const notice = document.getElementById("officeBackupNotice");
+ if (notice) notice.textContent = "";
+}
+
+// 事務所ポータル：職員アカウント・暗証番号管理
+function renderOfficeStaffAuth() {
+ const tbody = document.querySelector("#staffAuthTable tbody");
+ if (!tbody) return;
+ tbody.innerHTML = "";
+
+ const stamps = sortStaffList(gState.stamps || []);
+ stamps.forEach(s => {
+ const isInit = (s.pin || "0000") === "0000" || s.is_initial_pin !== false;
+ const tr = document.createElement("tr");
+ tr.innerHTML = `
+ <td><strong>${escapeHtml(s.name)}</strong></td>
+ <td><span style="font-size:12px; color:#475569;">${escapeHtml(s.role || "職員")}</span></td>
+ <td>
+ ${isInit 
+ ? '<span class="badge" style="background:#fee2e2; color:#991b1b; padding:2px 6px; font-size:11.5px;">初期値(0000) 要変更</span>'
+ : '<span class="badge" style="background:#dcfce7; color:#166534; padding:2px 6px; font-size:11.5px;">設定済み</span>'}
+ </td>
+ <td>
+ <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;" onclick="resetStaffPin('${escapeHtml(s.name)}')">0000に初期化</button>
+ </td>
+ `;
+ tbody.appendChild(tr);
+ });
+
+ const targetSel = document.getElementById("staffAuthTargetSelect");
+ if (targetSel) {
+ targetSel.innerHTML = "";
+ stamps.forEach(s => {
+ const opt = document.createElement("option");
+ opt.value = s.name;
+ opt.textContent = `${s.name} (${s.role || "職員"})`;
+ targetSel.appendChild(opt);
+ });
+ onStaffAuthTargetChange();
+ }
+}
+
+function onStaffAuthTargetChange() {
+ const targetSel = document.getElementById("staffAuthTargetSelect");
+ if (!targetSel) return;
+ const targetName = targetSel.value;
+ const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
+ const isInit = targetObj ? ((targetObj.pin || "0000") === "0000" || targetObj.is_initial_pin !== false) : true;
+
+ const ruleNotice = document.getElementById("staffAuthRuleNotice");
+ const approverRow = document.getElementById("staffAuthApproverRow");
+ const approverSel = document.getElementById("staffAuthApproverSelect");
+
+ if (isInit) {
+ if (ruleNotice) {
+ ruleNotice.style.background = "#eff6ff";
+ ruleNotice.style.color = "#1d4ed8";
+ ruleNotice.textContent = "※ 【初回設定】対象職員は初期設定(0000)のため、本人の認証（現在の0000）のみで変更できます。";
+ }
+ if (approverRow) approverRow.style.display = "none";
+ } else {
+ if (ruleNotice) {
+ ruleNotice.style.background = "#fef2f2";
+ ruleNotice.style.color = "#991b1b";
+ ruleNotice.textContent = "※ 【2名承認】対象職員は暗証番号設定済みのため、管理者または事務員の承認（ツーマンルール）が必要です。";
+ }
+ if (approverRow) {
+ approverRow.style.display = "block";
+ if (approverSel) {
+ approverSel.innerHTML = "";
+ const approvers = (gState.stamps || []).filter(s => {
+ return isStaffAdminOrClerk(s.name) && s.name !== targetName;
+ });
+ approvers.forEach(a => {
+ const opt = document.createElement("option");
+ opt.value = a.name;
+ opt.textContent = `${a.name} (${a.role || "管理者・事務"})`;
+ approverSel.appendChild(opt);
+ });
+ }
+ }
+ }
+}
+
+function resetStaffPin(staffName) {
+ if (!confirm(`【${staffName}】の暗証番号を初期値「0000」に初期化（リセット）しますか？\nリセット後は本人が初回設定を行えるようになります。`)) {
+ return;
+ }
+ const staffObj = (gState.stamps || []).find(s => (s.name || s) === staffName);
+ if (!staffObj) return;
+ staffObj.pin = "0000";
+ staffObj.is_initial_pin = true;
+ if (typeof db !== "undefined" && db.data) {
+ db.data.stamps = gState.stamps;
+ db.save();
+ }
+ renderOfficeStaffAuth();
+ updateStaffRoleUI();
+ checkGlobalAlerts();
+ alert(`【${staffName}】の暗証番号を「0000」に初期化しました。`);
+}
+
+function submitStaffPinChange() {
+ const targetSel = document.getElementById("staffAuthTargetSelect");
+ const targetName = targetSel ? targetSel.value : "";
+ const curPin = (document.getElementById("staffAuthCurrentPin")?.value || "").trim();
+ const newPin = (document.getElementById("staffAuthNewPin")?.value || "").trim();
+ const confPin = (document.getElementById("staffAuthConfirmPin")?.value || "").trim();
+
+ const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
+ if (!targetObj) {
+ alert("対象職員が選択されていません。");
+ return;
+ }
+ const realCurrent = targetObj.pin || "0000";
+ const isInit = realCurrent === "0000" || targetObj.is_initial_pin !== false;
+
+ if (curPin !== realCurrent) {
+ alert("対象職員の現在の暗証番号が正しくありません。");
+ return;
+ }
+ if (!/^\d{4}$/.test(newPin)) {
+ alert("新しい暗証番号は数字4桁で入力してください。");
+ return;
+ }
+ if (newPin !== confPin) {
+ alert("新しい暗証番号と確認入力が一致しません。");
+ return;
+ }
+
+ if (!isInit) {
+ const approverSel = document.getElementById("staffAuthApproverSelect");
+ const approverName = approverSel ? approverSel.value : "";
+ const approverPin = (document.getElementById("staffAuthApproverPin")?.value || "").trim();
+ if (!approverName) {
+ alert("承認者（管理者または別の事務員）を選択してください。");
+ return;
+ }
+ const approverObj = (gState.stamps || []).find(s => (s.name || s) === approverName);
+ const realApproverPin = approverObj ? (approverObj.pin || "0000") : "0000";
+ if (approverPin !== realApproverPin) {
+ alert("承認者の暗証番号が正しくありません（ツーマンルール認証失敗）。");
+ return;
+ }
+ }
+
+ targetObj.pin = newPin;
+ targetObj.is_initial_pin = false;
+ if (typeof db !== "undefined" && db.data) {
+ db.data.stamps = gState.stamps;
+ db.save();
+ }
+
+ const cPinEl = document.getElementById("staffAuthCurrentPin");
+ if (cPinEl) cPinEl.value = "";
+ const nPinEl = document.getElementById("staffAuthNewPin");
+ if (nPinEl) nPinEl.value = "";
+ const cfPinEl = document.getElementById("staffAuthConfirmPin");
+ if (cfPinEl) cfPinEl.value = "";
+ const apPinEl = document.getElementById("staffAuthApproverPin");
+ if (apPinEl) apPinEl.value = "";
+
+ renderOfficeStaffAuth();
+ updateStaffRoleUI();
+ checkGlobalAlerts();
+ alert(`【${targetName}】の暗証番号を正式に更新しました。`);
+}
+
 // グローバル関数公開 (インラインonclick等の即時呼出保証)
 if (typeof window !== "undefined") {
  window.openClinicInstructionModal = openClinicInstructionModal;
@@ -9458,15 +9911,33 @@ if (typeof window !== "undefined") {
  window.syncDailyJournalCategoryButtons = syncDailyJournalCategoryButtons;
  window.insertDailyJournalTemplate = insertDailyJournalTemplate;
  window.submitDailyJournalRecordModal = submitDailyJournalRecordModal;
-  window.openShiftHopeModal = openShiftHopeModal;
-  window.renderShiftHopeList = renderShiftHopeList;
-  window.submitShiftHopeOff = submitShiftHopeOff;
-  window.deleteShiftHopeOff = deleteShiftHopeOff;
-  window.toggleShiftHopeOff = toggleShiftHopeOff;
-  window.applyHopeOffsAndRegenerate = applyHopeOffsAndRegenerate;
-  window.getDailyShiftRoster = getDailyShiftRoster;
-  window.renderTodayShiftBar = renderTodayShiftBar;
-  window.openBackupStatusModal = openBackupStatusModal;
-  window.triggerManualBackup = triggerManualBackup;
-  window.downloadBackupJson = downloadBackupJson;
+ window.openShiftHopeModal = openShiftHopeModal;
+ window.renderShiftHopeList = renderShiftHopeList;
+ window.submitShiftHopeOff = submitShiftHopeOff;
+ window.deleteShiftHopeOff = deleteShiftHopeOff;
+ window.toggleShiftHopeOff = toggleShiftHopeOff;
+ window.applyHopeOffsAndRegenerate = applyHopeOffsAndRegenerate;
+ window.getDailyShiftRoster = getDailyShiftRoster;
+ window.renderTodayShiftBar = renderTodayShiftBar;
+ window.openBackupStatusModal = openBackupStatusModal;
+ window.triggerManualBackup = triggerManualBackup;
+ window.downloadBackupJson = downloadBackupJson;
+ window.isStaffAdminOrClerk = isStaffAdminOrClerk;
+ window.isCurrentStaffAdminOrClerk = isCurrentStaffAdminOrClerk;
+ window.updateStaffRoleUI = updateStaffRoleUI;
+ window.ensureStaffPinData = ensureStaffPinData;
+ window.onStaffSelectChange = onStaffSelectChange;
+ window.openStaffPinAuthModal = openStaffPinAuthModal;
+ window.renderRandomKeypad = renderRandomKeypad;
+ window.onPinKeyPress = onPinKeyPress;
+ window.backspaceStaffPin = backspaceStaffPin;
+ window.cancelStaffPinAuth = cancelStaffPinAuth;
+ window.verifyStaffPin = verifyStaffPin;
+ window.openInitialPinModal = openInitialPinModal;
+ window.submitInitialPinModal = submitInitialPinModal;
+ window.renderOfficeBackup = renderOfficeBackup;
+ window.renderOfficeStaffAuth = renderOfficeStaffAuth;
+ window.onStaffAuthTargetChange = onStaffAuthTargetChange;
+ window.resetStaffPin = resetStaffPin;
+ window.submitStaffPinChange = submitStaffPinChange;
 }

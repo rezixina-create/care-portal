@@ -265,6 +265,34 @@
  const isBModalClosed = bModal && win.getComputedStyle(bModal).display === "none";
  report("自動バックアップ稼働状況モーダルが正常に閉じられること", isBModalClosed);
 
+ // 16. 職員切り替え4桁PIN認証・ランダムテンキーモーダルの動作確認
+ win.openStaffPinAuthModal("木村 健一");
+ await new Promise(r => setTimeout(r, 200));
+ const spaModal = doc.getElementById("staffPinAuthModal");
+ const isSpaModalOpen = spaModal && win.getComputedStyle(spaModal).display === "flex";
+ report("職員4桁PIN認証モーダルが開くこと", isSpaModalOpen);
+
+ const keypad = doc.getElementById("staffPinKeypad");
+ const keypadButtons = keypad ? keypad.querySelectorAll("button") : [];
+ report("ランダムテンキーに0〜9のシャッフルボタンが10個生成されること", keypadButtons.length === 10);
+
+ win.closeModal("staffPinAuthModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isSpaModalClosed = spaModal && win.getComputedStyle(spaModal).display === "none";
+ report("職員4桁PIN認証モーダルが正常に閉じられること", isSpaModalClosed);
+
+ // 17. 職員自己暗証番号設定モーダルの動作確認
+ win.openInitialPinModal();
+ await new Promise(r => setTimeout(r, 200));
+ const ipModal = doc.getElementById("initialPinModal");
+ const isIpModalOpen = ipModal && win.getComputedStyle(ipModal).display === "flex";
+ report("職員自己暗証番号設定モーダルが開くこと", isIpModalOpen);
+
+ win.closeModal("initialPinModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isIpModalClosed = ipModal && win.getComputedStyle(ipModal).display === "none";
+ report("職員自己暗証番号設定モーダルが正常に閉じられること", isIpModalClosed);
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

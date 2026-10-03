@@ -20,10 +20,11 @@
  </div>
  <div class="header-controls">
  <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()">接続案内</button>
- <div class="staff-selector">
+ <div class="staff-selector" style="display:flex; align-items:center; gap:6px;">
  <label for="currentStaff">担当職員:</label>
- <select id="currentStaff" onchange="onCurrentStaffChange()"></select>
- <button class="btn btn-secondary" style="padding:4px 10px; font-size:12px;" onclick="openStaffModal()">＋ 職員管理</button>
+ <select id="currentStaff" onchange="onStaffSelectChange(this)"></select>
+ <button class="btn btn-outline" id="btnSetInitialPin" style="display:none; padding:3px 8px; font-size:11px; background:#fff7ed; color:#c2410c; border:1px solid #fdba74;" onclick="openInitialPinModal()" title="初期暗証番号(0000)を変更">暗証番号設定</button>
+ <button class="btn btn-secondary" id="btnHeaderStaffManage" style="padding:4px 10px; font-size:12px;" onclick="openStaffModal()">＋ 職員管理</button>
  </div>
  </div>
  </header>
@@ -718,6 +719,13 @@
  <button class="sub-tab-btn" onclick="switchOfficeTab('committee')"> 委員会・研修</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('complaint')"> 苦情受付簿</button>
  </div>
+
+ <!-- 管理者・事務専用 -->
+ <div id="officeAdminSecurityRow" style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0; margin-top:6px;">
+ <span style="font-size:12px; font-weight:bold; color:#065f46; background:#ecfdf5; padding:3px 8px; border-radius:4px; white-space:nowrap;">【管理者・事務専用】</span>
+ <button class="sub-tab-btn" id="subTabBackup" onclick="switchOfficeTab('backup')"> データ保管・バックアップ</button>
+ <button class="sub-tab-btn" id="subTabStaffAuth" onclick="switchOfficeTab('staff_auth')"> 職員アカウント・暗証番号管理</button>
+ </div>
  </div>
 
  <!-- 事務所タブ内コンテンツ -->
@@ -1025,6 +1033,130 @@
  </thead>
  <tbody></tbody>
  </table>
+ </div>
+
+ <!-- 14. データ保管・バックアップ管理（管理者・事務専用） -->
+ <div id="tabOfficeBackup" style="display:none;" class="panel-card">
+ <div class="panel-title" style="color:#065f46; border-bottom:2px solid #10b981;">
+ <span> データ保管・バックアップ管理（管理者・事務専用）</span>
+ </div>
+ <p style="font-size:13px; color:#475569; margin:8px 0 16px 0;">
+ 施設内PCや外部メディアへのデータ保管、親機マスターへの即時同期、他端末接続管理を行います。<br>
+ 個人情報を含む全データを取り扱うため、管理者および事務員のみが操作可能です。
+ </p>
+ <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; flex-direction:column; justify-content:space-between;">
+ <div>
+ <div style="font-weight:bold; font-size:15px; color:#1e40af; margin-bottom:6px;">【USB・手元PCへ外部保存】</div>
+ <p style="font-size:12.5px; color:#64748b; line-height:1.5; margin-bottom:12px;">
+ 施設外のUSBメモリやお手元のPCへ、入居者カルテ・日誌・全ケア記録・勤務表などの全データを100%丸ごとJSONファイル形式でダウンロード保存します。
+ </p>
+ </div>
+ <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#2563eb; border-color:#1d4ed8;" onclick="downloadBackupJson()">
+ バックアップJSONを端末にダウンロード (保存)
+ </button>
+ </div>
+
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; flex-direction:column; justify-content:space-between;">
+ <div>
+ <div style="font-weight:bold; font-size:15px; color:#065f46; margin-bottom:6px;">【親機PCマスターへ即時同期】</div>
+ <p style="font-size:12.5px; color:#64748b; line-height:1.5; margin-bottom:12px;">
+ 施設内親機PCのマスターデータベースおよび世代別保管庫（data/backup/）へ、現在の最新データをスレッドセーフで手動即時保存します。
+ </p>
+ </div>
+ <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#059669; border-color:#047857;" onclick="triggerManualBackup()">
+ 今すぐ親機PCに同期保存
+ </button>
+ </div>
+
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; flex-direction:column; justify-content:space-between;">
+ <div>
+ <div style="font-weight:bold; font-size:15px; color:#7c3aed; margin-bottom:6px;">【他端末接続・QRコード案内】</div>
+ <p style="font-size:12.5px; color:#64748b; line-height:1.5; margin-bottom:12px;">
+ 外出先のスマホや他フロアのタブレットから暗号化接続するためのCloudflare Tunnel URLおよび接続用QRコードを確認・コピーします。
+ </p>
+ </div>
+ <button class="btn btn-secondary" style="width:100%; padding:9px 0; font-size:13px; background:#f5f3ff; color:#6d28d9; border:1px solid #c4b5fd;" onclick="openShareModal()">
+ 接続案内ダイアログを開く
+ </button>
+ </div>
+ <div id="officeBackupNotice" style="margin-top:14px; font-size:13px; color:#059669; font-weight:bold; text-align:center;"></div>
+ </div>
+ </div>
+
+ <!-- 15. 職員アカウント・暗証番号管理（管理者・事務専用） -->
+ <div id="tabOfficeStaffAuth" style="display:none;" class="panel-card">
+ <div class="panel-title" style="color:#1e3a8a; border-bottom:2px solid #2563eb;">
+ <span> 職員アカウント・暗証番号管理（管理者・事務専用）</span>
+ </div>
+ <p style="font-size:13px; color:#475569; margin:8px 0 14px 0;">
+ 職員の4桁暗証番号の初期化（リセット）や、2名承認（ツーマンルール）による暗証番号変更を行います。
+ </p>
+
+ <!-- 職員一覧テーブル -->
+ <div style="margin-bottom:24px;">
+ <div style="font-weight:bold; font-size:14px; color:#1e293b; margin-bottom:8px;">職員アカウント一覧 ＆ 暗証番号ステータス</div>
+ <table class="data-table" id="staffAuthTable">
+ <thead>
+ <tr>
+ <th>職員名</th>
+ <th>役職</th>
+ <th>状態</th>
+ <th>初期化操作</th>
+ </tr>
+ </thead>
+ <tbody></tbody>
+ </table>
+ </div>
+
+ <!-- 暗証番号変更フォーム (2名承認 / 初回設定) -->
+ <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:16px; max-width:640px;">
+ <div style="font-weight:bold; font-size:14px; color:#1e3a8a; margin-bottom:8px;">暗証番号の変更・更新（2名承認または初回設定）</div>
+ <div id="staffAuthRuleNotice" style="font-size:12.5px; padding:8px 12px; border-radius:6px; background:#eff6ff; color:#1d4ed8; margin-bottom:14px;">
+ ※ 対象者を選択してください。初期値(0000)の場合は本人のみ、既設定の場合は2名承認（ツーマンルール）が必要です。
+ </div>
+
+ <div style="display:flex; flex-direction:column; gap:12px;">
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">変更対象の職員:</label>
+ <select id="staffAuthTargetSelect" class="form-control" style="width:100%; font-size:13px;" onchange="onStaffAuthTargetChange()"></select>
+ </div>
+
+ <div id="staffAuthTargetPinRow">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">対象職員の現在の暗証番号 (数字4桁):</label>
+ <input type="password" id="staffAuthCurrentPin" class="form-control" style="width:160px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+
+ <div id="staffAuthApproverRow" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px;">
+ <div style="font-weight:bold; font-size:12.5px; color:#991b1b; margin-bottom:6px;">【承認者の認証（ツーマンルール）】</div>
+ <div style="display:flex; gap:12px; flex-wrap:wrap;">
+ <div style="flex:1; min-width:160px;">
+ <label style="font-size:11.5px; color:#475569; display:block; margin-bottom:2px;">承認者 (管理者または別の事務員):</label>
+ <select id="staffAuthApproverSelect" class="form-control" style="width:100%; font-size:13px;"></select>
+ </div>
+ <div style="width:150px;">
+ <label style="font-size:11.5px; color:#475569; display:block; margin-bottom:2px;">承認者の暗証番号:</label>
+ <input type="password" id="staffAuthApproverPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ </div>
+ </div>
+
+ <div style="display:flex; gap:12px; flex-wrap:wrap;">
+ <div style="flex:1; min-width:140px;">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (数字4桁):</label>
+ <input type="password" id="staffAuthNewPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ <div style="flex:1; min-width:140px;">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (確認再入力):</label>
+ <input type="password" id="staffAuthConfirmPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ </div>
+
+ <div style="margin-top:8px;">
+ <button class="btn btn-primary" style="padding:8px 18px; font-size:13px;" onclick="submitStaffPinChange()">暗証番号を正式変更する</button>
+ </div>
+ </div>
+ </div>
  </div>
 
  </div>
@@ -2341,6 +2473,74 @@
  </div>
  </div>
 
- <script src="app.js?v=20261003_v7"></script>
+ <!-- 職員切り替え4桁PIN認証 ＆ ランダムテンキー モーダル -->
+ <div class="modal-overlay" id="staffPinAuthModal" style="display:none; z-index:99999;">
+ <div class="modal-card" style="max-width:380px; text-align:center; padding:24px 20px;">
+ <div style="font-size:16px; font-weight:bold; color:#1e3a8a; margin-bottom:4px;" id="staffPinAuthTitle">職員切り替え認証</div>
+ <div style="font-size:12px; color:#64748b; margin-bottom:14px;" id="staffPinAuthDesc">暗証番号（数字4桁）を入力してください (初期値: 0000)</div>
+
+ <!-- PIN Mask Dots -->
+ <div id="staffPinDisplay" style="display:flex; justify-content:center; gap:12px; margin-bottom:14px;">
+ <div class="pin-dot" id="pinDot0" style="width:20px; height:20px; border-radius:50%; border:2px solid #94a3b8; background:#ffffff;"></div>
+ <div class="pin-dot" id="pinDot1" style="width:20px; height:20px; border-radius:50%; border:2px solid #94a3b8; background:#ffffff;"></div>
+ <div class="pin-dot" id="pinDot2" style="width:20px; height:20px; border-radius:50%; border:2px solid #94a3b8; background:#ffffff;"></div>
+ <div class="pin-dot" id="pinDot3" style="width:20px; height:20px; border-radius:50%; border:2px solid #94a3b8; background:#ffffff;"></div>
+ </div>
+ <div id="staffPinError" style="font-size:12px; color:#dc2626; font-weight:bold; min-height:18px; margin-bottom:8px;"></div>
+
+ <!-- Random Keypad (Shuffled 0-9) -->
+ <div id="staffPinKeypad" style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; max-width:280px; margin:0 auto 16px auto;">
+ <!-- JSで動的に0〜9のシャッフルボタンを生成 -->
+ </div>
+
+ <!-- Actions: Backspace & Cancel -->
+ <div style="display:flex; gap:10px; justify-content:center; max-width:280px; margin:0 auto;">
+ <button type="button" class="btn btn-secondary" style="flex:1; padding:8px 0; font-size:13px;" onclick="cancelStaffPinAuth()">キャンセル</button>
+ <button type="button" class="btn btn-secondary" style="flex:1; padding:8px 0; font-size:13px; background:#f1f5f9;" onclick="backspaceStaffPin()">1文字消去</button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 職員自己暗証番号変更 (初回設定用) モーダル -->
+ <div class="modal-overlay" id="initialPinModal" style="display:none; z-index:99999;">
+ <div class="modal-card" style="max-width:420px; padding:22px;">
+ <div class="modal-header">
+ <h4 style="margin:0; color:#1e3a8a;" id="initialPinModalTitle"> 暗証番号の設定・変更</h4>
+ <button class="modal-close-btn" onclick="closeModal('initialPinModal')">&times;</button>
+ </div>
+ <div style="padding:14px 0;">
+ <p style="font-size:13px; color:#475569; margin-bottom:14px; line-height:1.5;">
+ 現在選択中の職員の暗証番号を設定・変更します。<br>
+ 初期値(0000)の場合は、本人のみで新しい4桁暗証番号を登録できます。
+ </p>
+ <div style="display:flex; flex-direction:column; gap:12px;">
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">対象職員:</label>
+ <input type="text" id="initialPinStaffName" class="form-control" style="width:100%; font-size:13px; background:#f8fafc;" readonly>
+ </div>
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">現在の暗証番号 (初期値: 0000):</label>
+ <input type="password" id="initialPinCurrent" class="form-control" style="width:140px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ <div style="display:flex; gap:10px; flex-wrap:wrap;">
+ <div style="flex:1; min-width:130px;">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (数字4桁):</label>
+ <input type="password" id="initialPinNew" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ <div style="flex:1; min-width:130px;">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (確認):</label>
+ <input type="password" id="initialPinConfirm" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ </div>
+ </div>
+ </div>
+ <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
+ <button class="btn btn-secondary" onclick="closeModal('initialPinModal')">閉じる</button>
+ <button class="btn btn-primary" onclick="submitInitialPinModal()">暗証番号を保存する</button>
+ </div>
+ </div>
+ </div>
+
+ <script src="app.js?v=20261003_v8"></script>
 </body>
 </html>
