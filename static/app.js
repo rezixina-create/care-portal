@@ -607,7 +607,7 @@ let gState = {
   dismissedAlerts: []
 };
 
-// 病歴ガイド辞書
+// 高齢者施設 現場ケア辞書 (30大主要疾患・症候群)
 const DISEASE_GUIDE = {
   "糖尿病": {
     symptoms: "【高血糖時】強い口渇・頻尿・倦怠感・ぼんやりする。【低血糖時】冷や汗・動悸・手指の震え・急な脱力感・生あくび・ふらつき。",
@@ -658,8 +658,184 @@ const DISEASE_GUIDE = {
     symptoms: "もの忘れ、見当識障害（時間・場所の誤認）、夕暮れ症候群（夕方の焦燥・不穏）、帰宅願望、徘徊リスク。",
     care_points: "【現場介護の実践ケア】①否定や叱責をせず、本人の不安・気持ちに共感して傾聴する。②急な行動変更を避け、穏やかに『〜しましょうね』と具体的に声をかける。③日中に適度な覚醒と日光浴・レクを行い、昼夜逆転を予防。④離床センサー・見守り体制の確認。",
     emergency: "【看護師・医師への報告基準】急激なせん妄・意識レベル低下、極度の興奮・パニック、食事・水分の完全拒否が続く場合は、脱水や感染症（尿路感染等）の二次症状の可能性があるため看護師へ報告。"
+  },
+  "骨折（大腿骨・圧迫骨折）": {
+    symptoms: "患部の強い痛み、起立・歩行不能、患肢の短縮や外旋（外側を向く）、体動時の顔のゆがみ。",
+    care_points: "【現場介護の実践ケア】①安静と免荷（体重をかけない介助）。②ベッド上での良肢位保持（クッションによる患部保護）。③体位変換時の無理な牽引・捻転の回避。④痛みに配慮した声かけ。",
+    emergency: "【看護師・医師への報告基準】激痛の増悪、患部の著しい腫脹・熱感、神経麻痺（足指が動かない）時は直ちに看護師・往診医へ連絡。"
+  },
+  "慢性腎不全（CKD・透析）": {
+    symptoms: "全身倦怠感、食欲不振、浮腫（足・顔面）、皮膚の乾燥・かゆみ、貧血によるふらつき。",
+    care_points: "【現場介護の実践ケア】①水分・塩分・カリウム・リンの摂取指示の厳守（間食に注意）。②シャント肢での血圧測定・圧迫・重い荷物の把持は厳禁。③皮膚の保清と保湿ローション塗布。",
+    emergency: "【看護師・医師への報告基準】呼吸困難、強い吐き気、不整脈、意識障害、シャント部の拍動停止（ザーザー音がしない）時は直ちに看護師・主治医へ緊急連絡。"
+  },
+  "慢性閉塞性肺疾患 (COPD・喘息)": {
+    symptoms: "労作時の息切れ、慢性的な咳・痰、喘鳴（ゼーゼー音）、口すぼめ呼吸。",
+    care_points: "【現場介護の実践ケア】①動作時は急がせず、深呼吸（鼻から吸って口から長く吐く）を促す。②在宅酸素療法（HOT）中はカニューラのズレ・折れ曲がり・流量設定を毎時確認。③禁煙・感染予防（手洗い・加湿）。",
+    emergency: "【看護師・医師への報告基準】SpO2 90%以下への急低下、唇や爪のチアノーゼ（紫色）、強い呼吸困難・会話困難時は座位を保ち酸素吸入を確認のうえ看護師・医師へ連絡。"
+  },
+  "不整脈・心房細動": {
+    symptoms: "動悸、脈の乱れ（脈が飛ぶ・不規則）、めまい、立ちくらみ、失神、胸の違和感。",
+    care_points: "【現場介護の実践ケア】①バイタル測定時に検脈（1分間の整・不整の確認）。②抗凝固薬（血液サラサラの薬）服用中は皮下出血（青あざ）や歯肉出血に注意し転倒を徹底予防。",
+    emergency: "【看護師・医師への報告基準】突然の意識消失、脈拍120以上または45以下の極端な徐脈、胸痛、ふらつきを伴う激しい動悸時は安静にし直ちに看護師・医師へ連絡。"
+  },
+  "白内障・緑内障（視覚障害）": {
+    symptoms: "視力低下、目のかすみ、視野狭窄（見えない範囲がある）、まぶしさ、段差の踏み外し。",
+    care_points: "【現場介護の実践ケア】①居室・廊下の照度確保、足元の障害物・コード類の徹底排除。②食事の配膳位置を時計の針（クロックポジション）で声かけ説明。③介助時は必ず声かけをしてから触れる。",
+    emergency: "【看護師・医師への報告基準】急激な眼痛、激しい頭痛、吐き気、急な視野消失は急性緑内障発作の疑い。失明のリスクがあるため直ちに眼科受診・看護師へ報告。"
+  },
+  "老人性難聴": {
+    symptoms: "呼びかけへの無反応、聞き返しが多い、テレビの音量が大きい、会話への参加減少。",
+    care_points: "【現場介護の実践ケア】①正面から視線を合わせ、口元を見せながら低めの落ち着いた声ではっきりと話す。②補聴器の使用確認・電池チェック。③身振り手振りや筆談・文字ボードの活用。",
+    emergency: "【看護師・医師への報告基準】耳だれ（耳漏）、耳の激しい痛み、急激な片耳の聞こえの悪化（突発性難聴疑い）時は看護師へ報告。"
+  },
+  "狭心症・心筋梗塞既往": {
+    symptoms: "胸部圧迫感（締め付けられるような痛み）、左肩や顎への放散痛、冷や汗、息切れ。",
+    care_points: "【現場介護の実践ケア】①急な寒冷刺激（入浴時の脱衣所・トイレ）を避け室温管理。②興奮・強いストレス・過労の予防。③発作時の指示薬（ニトロペン舌下錠など）の保管場所確認。",
+    emergency: "【看護師・医師への報告基準】15分以上続く強い胸痛、冷や汗、顔面蒼白、ニトロ使用後も治まらない痛みは急性心筋梗塞の疑い。直ちに救急要請・看護師連絡。"
+  },
+  "変形性関節症・リウマチ": {
+    symptoms: "膝や股関節、手指の関節痛、朝のこわばり、関節の変形、歩行時の疼痛・跛行。",
+    care_points: "【現場介護の実践ケア】①関節を冷やさず保温（膝当て・ブランケット）。②立ち上がり時・移乗時の手すり把持誘導。③無理な正座や深い屈曲動作を避ける。④杖や歩行器の適切な使用支援。",
+    emergency: "【看護師・医師への報告基準】関節の急激な熱感・腫脹・激痛、体重をかけられないほどの激しい疼痛増悪時は看護師へ報告。"
+  },
+  "脊柱管狭窄症・腰痛症": {
+    symptoms: "腰痛、臀部から下肢へのしびれ・痛み、間欠性跛行（少し歩くと痛むが前かがみで休むと楽になる）。",
+    care_points: "【現場介護の実践ケア】①歩行時はシルバーカーや歩行器などの前傾姿勢での移動を支援。②重い物の持ち上げや長時間の直立を避ける。③ベッドからの起き上がり時は横向きを経由する。",
+    emergency: "【看護師・医師への報告基準】両足の急激な麻痺、排尿・排便障害（失禁や尿閉）が出現した場合は重篤な神経圧迫の疑い。直ちに看護師・医師へ連絡。"
+  },
+  "慢性便秘症・イレウス注意": {
+    symptoms: "排便停止、腹部膨満感（お腹の張り）、腹痛、嘔吐、げっぷの増加、食欲不振。",
+    care_points: "【現場介護の実践ケア】①排便日・便形状・量の記録徹底（3日以上排便なし時は要注意）。②水分補給の促進、朝食後のトイレ誘導。③処方された緩下剤の適切な服用支援。",
+    emergency: "【看護師・医師への報告基準】激しい腹痛、嘔吐（特に便臭のある嘔吐）、排ガス（おなら）停止、高度な腹部膨満時は腸閉塞（イレウス）の疑い。直ちに絶飲食とし看護師・往診医へ連絡。"
+  },
+  "逆流性食道炎・胃潰瘍": {
+    symptoms: "胸焼け、呑酸（酸っぱいものが上がってくる）、食後の胃痛、吐き気、黒色便（タール便）。",
+    care_points: "【現場介護の実践ケア】①食後すぐに横にならず、最低30分は座位または背上げ（ギャッジアップ）を保つ。②早食い・食べ過ぎ・脂っこい食事を避ける。③就寝時の頭部挙上。",
+    emergency: "【看護師・医師への報告基準】吐血（コーヒー残渣様）、黒色便（タール便）、激しいみぞおちの痛みがある時は消化管出血の疑い。直ちに看護師へ連絡。"
+  },
+  "脂質異常症（高脂血症）": {
+    symptoms: "自覚症状はほとんどない。動脈硬化を進行させ心筋梗塞や脳梗塞の原因となる。",
+    care_points: "【現場介護の実践ケア】①施設給食の摂取バランスの維持（油もの・糖分の過剰間食の制限）。②適度な日常運動（体操・散歩レク）。③定期的な採血・処方薬の内服確認。",
+    emergency: "【看護師・医師への報告基準】急な胸痛や片麻痺など血管障害のサインが見られた場合は直ちに救急対応・看護師連絡。"
+  },
+  "尿路感染症・尿道カテーテル": {
+    symptoms: "37.5℃以上の発熱、悪寒・戦慄（震え）、尿のにごり・血尿・異臭、排尿痛、不穏。",
+    care_points: "【現場介護の実践ケア】①十分な水分補給（尿量を保ち菌を流す）。②陰部の保清（オムツ交換時の清拭・シャワー浴）。③バルーン留置中は蓄尿バッグを膀胱より下に保ち逆流を防止。",
+    emergency: "【看護師・医師への報告基準】高熱（38℃以上）、激しい震え（悪寒戦慄）、尿の強い混濁や血尿、カテーテルの閉塞・尿量激減時は腎盂腎炎・敗血症の恐れあり。直ちに看護師・医師へ連絡。"
+  },
+  "前立腺肥大症": {
+    symptoms: "頻尿（特に夜間）、尿が出にくい（排尿開始の遅れ）、残尿感、尿意切迫感。",
+    care_points: "【現場介護の実践ケア】①夜間のトイレ誘導計画（転倒予防）。②排便管理（便秘による尿道圧迫防止）。③体を冷やさない保温。",
+    emergency: "【看護師・医師への報告基準】強い尿意があるのに全く尿が出ない（急性尿閉）、下腹部の強い張り・激痛時は導尿が必要となるため直ちに看護師へ連絡。"
+  },
+  "褥瘡（床ずれ）・皮膚剥離": {
+    symptoms: "骨突出部（仙骨・踵・大転子等）の発赤・水疱・びらん、皮膚の裂傷（スキンテア）。",
+    care_points: "【現場介護の実践ケア】①定期的な体位変換（除圧）。②ベッド背上げ時の背抜き・圧抜き介助。③皮膚の清潔・保湿ケア。④衣服・車椅子の摩擦・ずれの防止。",
+    emergency: "【看護師・医師への報告基準】皮膚の開放創、悪臭を伴う浸出液、創部の拡大、周囲の発熱・発赤時は感染や深部褥瘡の恐れ。直ちに看護師へ処置要請。"
+  },
+  "帯状疱疹": {
+    symptoms: "身体の片側にピリピリとした神経痛、帯状に現れる赤い発疹・小水疱、微熱。",
+    care_points: "【現場介護の実践ケア】①水疱を破らないよう愛護的に保護（摩擦を避ける）。②患部を冷やさず保温。③免疫低下時の兆候のため十分な休息と栄養を支援。",
+    emergency: "【看護師・医師への報告基準】顔面や眼の周囲の発疹（角膜障害の恐れ）、激しい神経痛、発熱時は早期の抗ウイルス薬投与が必要。直ちに看護師・医師へ連絡。"
+  },
+  "痛風（高尿酸血症）": {
+    symptoms: "足の親指の付け根などの関節の突然の激痛、赤く腫れる（痛風発作）。",
+    care_points: "【現場介護の実践ケア】①十分な水分摂取（尿酸排泄）。②発作患部に毛布や靴下が触れないよう保護。③アルコールやプリン体の多い食品を制限。",
+    emergency: "【看護師・医師への報告基準】関節の激しい腫脹・熱感・耐えがたい激痛時は痛風発作の疑い。患部を高くして冷やし、無理に歩かせず看護師へ連絡。"
+  },
+  "てんかん・痙攣発作": {
+    symptoms: "突然の意識消失、手足の強直・間代性痙攣（ガクガク震える）、眼球上転、口から泡を吹く。",
+    care_points: "【現場介護の実践ケア】①周囲の危険物（家具・硬い物）を遠ざけ頭部を保護。②衣服の襟元を緩め、吐瀉物による窒息を防ぐため顔を横に向ける。③無理に押さえつけたり口に物を噛ませない。",
+    emergency: "【看護師・医師への報告基準】発作が5分以上続く、連続して発作が起きる、発作後に意識が戻らない、頭部を強打した時は直ちに救急要請・看護師連絡。"
+  },
+  "老年期うつ・適応障害": {
+    symptoms: "気力の低下、不眠、食欲不振、悲観的な発言、身体の不調の強い訴え（心気症）。",
+    care_points: "【現場介護の実践ケア】①無理に励ましたり焦らせたりせず、本人の辛さに共感し穏やかに寄り添う。②小さな日常の喜びや安心できる時間を共有。③安全配慮と見守り。",
+    emergency: "【看護師・医師への報告基準】死を口にする、極端な絶食・水分拒否、強い焦燥感が見られる場合は速やかに看護師・往診医・ご家族へ情報共有。"
+  },
+  "悪性腫瘍（緩和ケア・ターミナル）": {
+    symptoms: "全身倦怠感、疼痛（痛み）、食欲低下、体重減少、浮腫、呼吸苦。",
+    care_points: "【現場介護の実践ケア】①痛みの少ない安楽な体位の工夫（クッション調整）。②本人の希望・好みを尊重した食事・水分ケア。③尊厳を守る丁寧な声かけとスキンシップ。",
+    emergency: "【看護師・医師への報告基準】痛みの急激な増悪、呼吸困難、意識の混濁、終末期徴候（下顎呼吸・尿量減少）時は看取り方針（ACP）に基づき直ちに看護師・往診医・ご家族へ連絡。"
   }
 };
+
+// 病歴・既往歴のスマート解決関数（カスタム設定・完全一致・部分一致・同義語照合）
+function resolveDiseaseGuide(diseaseName) {
+  const name = (diseaseName || "").trim();
+  if (!name) return null;
+
+  // 1. 施設独自のカスタムガイドがあれば最優先
+  if (db && db.data && db.data.custom_disease_guides && db.data.custom_disease_guides[name]) {
+    return { guide: db.data.custom_disease_guides[name], matchedName: name, isCustom: true };
+  }
+
+  // 2. 完全一致
+  if (DISEASE_GUIDE[name]) {
+    return { guide: DISEASE_GUIDE[name], matchedName: name, isCustom: false };
+  }
+
+  // 3. 部分一致（名称を含む・含まれる）
+  const lower = name.toLowerCase();
+  for (const [key, val] of Object.entries(DISEASE_GUIDE)) {
+    if (lower.includes(key.toLowerCase()) || key.toLowerCase().includes(lower)) {
+      return { guide: val, matchedName: key, isCustom: false };
+    }
+  }
+
+  // 4. 同義語・類語照合辞書
+  const SYNONYMS = [
+    { patterns: ["認知症", "アルツハイマー", "レビー", "血管性認知", "ピック", "長谷川", "物忘れ", "もの忘れ"], target: "認知症" },
+    { patterns: ["心不全", "心疾患", "うっ血性"], target: "心不全" },
+    { patterns: ["糖尿病", "高血糖", "低血糖", "インスリン", "dm", "血糖"], target: "糖尿病" },
+    { patterns: ["高血圧", "血圧症", "ht", "高血圧症"], target: "高血圧" },
+    { patterns: ["肺炎", "誤嚥", "誤嚥性"], target: "誤嚥性肺炎" },
+    { patterns: ["脳梗塞", "脳出血", "脳卒中", "くも膜下", "クモ膜下", "片麻痺", "脳血管"], target: "脳梗塞後遺症" },
+    { patterns: ["パーキンソン", "振戦", "固縮"], target: "パーキンソン病" },
+    { patterns: ["骨粗鬆", "骨粗しょう", "骨脆弱"], target: "骨粗鬆症" },
+    { patterns: ["骨折", "大腿骨", "圧迫骨折", "骨折後"], target: "骨折（大腿骨・圧迫骨折）" },
+    { patterns: ["腎不全", "人工透析", "ckd", "透析"], target: "慢性腎不全（CKD・透析）" },
+    { patterns: ["copd", "肺気腫", "喘息", "気管支喘息", "hot", "在宅酸素"], target: "慢性閉塞性肺疾患 (COPD・喘息)" },
+    { patterns: ["不整脈", "心房細動", "ペースメーカー", "期外収縮"], target: "不整脈・心房細動" },
+    { patterns: ["白内障", "緑内障", "黄斑", "視力低下", "視覚障害", "盲目"], target: "白内障・緑内障（視覚障害）" },
+    { patterns: ["難聴", "補聴器", "耳が遠い"], target: "老人性難聴" },
+    { patterns: ["狭心症", "心筋梗塞", "虚血性心疾患", "ニトロ"], target: "狭心症・心筋梗塞既往" },
+    { patterns: ["関節症", "変形性膝関節症", "膝痛", "リウマチ", "関節痛"], target: "変形性関節症・リウマチ" },
+    { patterns: ["狭窄症", "脊柱管", "腰痛", "坐骨神経痛", "ヘルニア"], target: "脊柱管狭窄症・腰痛症" },
+    { patterns: ["便秘", "慢性便秘", "下剤", "イレウス", "腸閉塞"], target: "慢性便秘症・イレウス注意" },
+    { patterns: ["食道炎", "逆流性", "胃潰瘍", "十二指腸潰瘍", "胃炎"], target: "逆流性食道炎・胃潰瘍" },
+    { patterns: ["脂質", "高脂血症", "コレステロール"], target: "脂質異常症（高脂血症）" },
+    { patterns: ["尿路感染", "膀胱炎", "腎盂腎炎", "バルーン", "カテーテル"], target: "尿路感染症・尿道カテーテル" },
+    { patterns: ["前立腺", "排尿困難", "頻尿", "尿閉"], target: "前立腺肥大症" },
+    { patterns: ["褥瘡", "床ずれ", "スキンテア", "皮膚剥離", "皮膚トラブル"], target: "褥瘡（床ずれ）・皮膚剥離" },
+    { patterns: ["帯状疱疹", "ヘルペス"], target: "帯状疱疹" },
+    { patterns: ["痛風", "尿酸"], target: "痛風（高尿酸血症）" },
+    { patterns: ["てんかん", "痙攣", "けいれん", "発作"], target: "てんかん・痙攣発作" },
+    { patterns: ["うつ", "鬱", "抑うつ", "不安症"], target: "老年期うつ・適応障害" },
+    { patterns: ["がん", "悪性腫瘍", "癌", "ターミナル", "緩和ケア"], target: "悪性腫瘍（緩和ケア・ターミナル）" }
+  ];
+
+  for (const item of SYNONYMS) {
+    if (item.patterns.some(p => lower.includes(p.toLowerCase()))) {
+      if (DISEASE_GUIDE[item.target]) {
+        return { guide: DISEASE_GUIDE[item.target], matchedName: item.target, isCustom: false };
+      }
+    }
+  }
+
+  // 5. 該当なし（標準の現場観察ガイド）
+  return {
+    guide: {
+      symptoms: "日々のバイタル・顔色・呼吸状態・食欲・活気・歩行の安定性を観察してください。",
+      care_points: "【現場介護の実践ケア】無理のない動作介助、定期的な水分補給、安全な移乗・転倒見守り、規則正しい生活リズムの維持。",
+      emergency: "【看護師・医師への報告基準】意識障害、普段と違う言動、激しい痛み、37.5℃以上の発熱、呼吸苦がみられた場合は直ちに安静を保ち看護師または医師へ連絡。"
+    },
+    matchedName: name,
+    isCustom: false,
+    isFallback: true
+  };
+}
 
 function editFacilityName() {
   const currentName = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
@@ -1537,17 +1713,30 @@ function renderResidentDetail() {
   `;
 }
 
-// 病歴ガイド モーダル (現場実践・看護連携マニュアル)
+// 病歴ガイド モーダル (現場実践・看護連携マニュアル＆施設独自編集対応)
 function openDiseaseGuide(diseaseName) {
-  const guide = DISEASE_GUIDE[diseaseName] || {
+  const name = (diseaseName || "").trim();
+  const res = resolveDiseaseGuide(name);
+  const guide = res ? res.guide : {
     symptoms: "日々のバイタル・顔色・呼吸状態・食欲・活気を観察してください。",
     care_points: "【現場介護の実践ケア】無理のない動作介助、水分補給、規則正しい生活リズムの維持、転倒予防の見守り。",
     emergency: "【看護師・医師への報告基準】意識障害、激しい痛み、37.5℃以上の高熱時は直ちに安静を保ち看護師または医師へ連絡。"
   };
+  const matchedName = res ? res.matchedName : name;
+  const isCustom = res ? res.isCustom : false;
+  const isFallback = res ? res.isFallback : false;
 
   const titleEl = document.getElementById("diseaseModalTitle");
   if (titleEl) {
-    titleEl.textContent = `🩺 【${diseaseName}】 現場ケアガイド ＆ 観察ポイント`;
+    let subInfo = "";
+    if (isCustom) {
+      subInfo = `<span style="font-size:12px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;">🏢 施設独自設定</span>`;
+    } else if (matchedName && matchedName !== name) {
+      subInfo = `<span style="font-size:12px; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;">🔍 関連参照: ${escapeHtml(matchedName)}</span>`;
+    } else if (isFallback) {
+      subInfo = `<span style="font-size:12px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;">📋 基本見守り基準</span>`;
+    }
+    titleEl.innerHTML = `🩺 【${escapeHtml(name)}】 現場ケアガイド ＆ 観察ポイント ${subInfo}`;
   }
 
   const contentEl = document.getElementById("diseaseModalContent");
@@ -1561,28 +1750,51 @@ function openDiseaseGuide(diseaseName) {
         <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🔍 主な症状 ＆ 現場での観察サイン:</span>
         </h4>
-        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;">${escapeHtml(guide.symptoms)}</p>
+        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${escapeHtml(guide.symptoms)}</p>
       </div>
 
       <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:12px;">
         <h4 style="font-size:13.5px; color:#166534; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🤝 現場介護職員ができる具体的ケア・見守り:</span>
         </h4>
-        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;">${escapeHtml(guide.care_points)}</p>
+        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;" id="dispGuideCare">${escapeHtml(guide.care_points)}</p>
       </div>
 
-      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:8px; padding:12px;">
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:8px; padding:12px; margin-bottom:12px;">
         <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🚨 看護師・医師への報告基準 (医療連携ライン):</span>
         </h4>
-        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;">${escapeHtml(guide.emergency)}</p>
+        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;" id="dispGuideEmergency">${escapeHtml(guide.emergency)}</p>
       </div>
 
-      <div style="margin-top:10px; font-size:11.5px; color:#64748b; text-align:right;">
-        ※主治医・往診医からの個別指示がある場合は「🏥 往診医・受診時指示」が最優先されます。
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+        <div style="display:flex; gap:8px;">
+          <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#1e40af; border-color:#bfdbfe; background:#eff6ff;" onclick="toggleCustomDiseaseEdit(true)">
+            ✏️ この病気の現場ケアを編集・追加
+          </button>
+          ${isCustom ? `
+            <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#dc2626; border-color:#fecaca;" onclick="resetCustomDiseaseGuide('${escapeHtml(name)}')">
+              🔄 標準辞書に戻す
+            </button>
+          ` : ''}
+        </div>
+        <span style="font-size:11.5px; color:#64748b;">※主治医指示が最優先されます</span>
       </div>
     `;
   }
+
+  // 静的編集フォーム初期化
+  toggleCustomDiseaseEdit(false);
+  const nameInp = document.getElementById("editGuideDiseaseName");
+  if (nameInp) nameInp.value = name;
+  const editTitle = document.getElementById("diseaseCustomEditTitle");
+  if (editTitle) editTitle.textContent = `✏️ 【${name}】の施設独自ケアガイドを編集・保存`;
+  const symInp = document.getElementById("editGuideSymptoms");
+  if (symInp) symInp.value = guide.symptoms;
+  const careInp = document.getElementById("editGuideCare");
+  if (careInp) careInp.value = guide.care_points;
+  const emgInp = document.getElementById("editGuideEmergency");
+  if (emgInp) emgInp.value = guide.emergency;
 
   const btnSearch = document.getElementById("btnSearchDiseaseRecords");
   if (btnSearch) {
@@ -1590,12 +1802,49 @@ function openDiseaseGuide(diseaseName) {
       closeModal("diseaseModal");
       const searchInp = document.getElementById("searchInput");
       if (searchInp) {
-        searchInp.value = diseaseName;
+        searchInp.value = name;
         doSearch();
       }
     };
   }
   document.getElementById("diseaseModal").style.display = "flex";
+}
+
+function toggleCustomDiseaseEdit(show) {
+  const el = document.getElementById("diseaseCustomEditArea");
+  if (el) el.style.display = show ? "block" : "none";
+}
+
+function saveCustomDiseaseGuide() {
+  const name = (document.getElementById("editGuideDiseaseName")?.value || "").trim();
+  if (!name) return;
+  const symptoms = (document.getElementById("editGuideSymptoms")?.value || "").trim();
+  const care = (document.getElementById("editGuideCare")?.value || "").trim();
+  const emergency = (document.getElementById("editGuideEmergency")?.value || "").trim();
+
+  if (!db.data) db.data = {};
+  if (!db.data.custom_disease_guides) db.data.custom_disease_guides = {};
+
+  db.data.custom_disease_guides[name] = {
+    symptoms: symptoms || "日々のバイタル・顔色を観察。",
+    care_points: care || "現場での安全な見守り。",
+    emergency: emergency || "異変時は看護師・医師へ連絡。"
+  };
+
+  db.save();
+  alert(`【${name}】の現場ケアガイドを施設独自データとして保存しました！\n次回から自動で呼び出されます。`);
+  openDiseaseGuide(name);
+}
+
+function resetCustomDiseaseGuide(diseaseName) {
+  if (confirm(`【${diseaseName}】の現場ケアガイドを標準辞書の初期値に戻しますか？`)) {
+    if (db.data && db.data.custom_disease_guides && db.data.custom_disease_guides[diseaseName]) {
+      delete db.data.custom_disease_guides[diseaseName];
+      db.save();
+      alert(`【${diseaseName}】の現場ケアガイドを標準辞書の初期値に戻しました。`);
+      openDiseaseGuide(diseaseName);
+    }
+  }
 }
 
 // 対象利用者バナーの更新

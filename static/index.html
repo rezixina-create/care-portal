@@ -1020,6 +1020,29 @@
         <button class="modal-close-btn" onclick="closeModal('diseaseModal')">×</button>
       </div>
       <div id="diseaseModalContent"></div>
+
+      <!-- 施設独自のガイド編集エリア (普段は非表示) -->
+      <div id="diseaseCustomEditArea" style="display:none; background:#f8fafc; border:1px solid #94a3b8; border-radius:8px; padding:12px; margin-top:12px;">
+        <h4 id="diseaseCustomEditTitle" style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:8px;">✏️ 施設独自ケアガイドを編集・保存</h4>
+        <input type="hidden" id="editGuideDiseaseName">
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11.5px; font-weight:bold; color:#475569;">主な症状・観察サイン:</label>
+          <textarea id="editGuideSymptoms" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11.5px; font-weight:bold; color:#166534;">現場介護職員ができる具体的ケア・見守り:</label>
+          <textarea id="editGuideCare" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
+        </div>
+        <div style="margin-bottom:8px;">
+          <label style="font-size:11.5px; font-weight:bold; color:#991b1b;">看護師・医師への報告基準:</label>
+          <textarea id="editGuideEmergency" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
+        </div>
+        <div style="display:flex; justify-content:flex-end; gap:8px;">
+          <button class="btn btn-secondary" style="font-size:11px; padding:3px 10px;" onclick="toggleCustomDiseaseEdit(false)">閉じる</button>
+          <button class="btn btn-primary" style="font-size:11px; padding:3px 12px;" onclick="saveCustomDiseaseGuide()">保存する</button>
+        </div>
+      </div>
+
       <div style="margin-top:20px; display:flex; justify-content:space-between;">
         <button class="btn btn-primary" id="btnSearchDiseaseRecords">この病気の過去記録を抽出</button>
         <button class="btn btn-secondary" onclick="closeModal('diseaseModal')">閉じる</button>
