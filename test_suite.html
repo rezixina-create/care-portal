@@ -339,9 +339,9 @@
       // 18. 月間勤務表・シフト管理 (自動生成・週休2日・夜勤2名・15名体制・同番NG配慮・手動修正) テスト
       assert(typeof generateMonthlyShiftData === "function" && typeof renderShiftTable === "function" && typeof applyShiftCellEdit === "function", "Test 55: 月間勤務表シフト生成・描画・手動修正関数が存在すること");
 
-      // 職員15名体制チェック (施設長1, 看護2, 介護10, 事務2)
+      // 職員19名体制チェック (施設長1, 看護2, 介護14, 事務2)
       const currentStamps = db.data.stamps || [];
-      assert(currentStamps.length >= 15, `Test 56: 職員マスタが健全シフト運用のための15名体制 (管理者1・看護2・介護10・事務2) に増員されていること (現在: ${currentStamps.length}名)`);
+      assert(currentStamps.length >= 19, `Test 56: 職員マスタが健全シフト運用のための19名体制 (管理者1・看護2・介護14・事務2) に増員されていること (現在: ${currentStamps.length}名)`);
 
       // 2026-10 シフト生成テスト
       const shiftOct = generateMonthlyShiftData("2026-10");
@@ -374,10 +374,43 @@
       assert(allDaysTwoNights, "Test 59: 1ヶ月31日間すべての日に夜勤が確実に『毎日2名体制』で配置されていること");
       assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 健太 ✖ 高橋 直樹) が同日の夜勤に重ならないよう自動回避されること");
 
+      // 21. 介護職員 (看護師・事務・施設長を除く) で毎日「日勤2・早出2・遅出2・夜勤2・明け2」完全配置テスト (全31日間)
+      let allDaysAllTwoCompliant = true;
+      let mismatchDetails = [];
+      const careStaffList = (db.data.stamps || []).filter(s => getStaffRoleCategory(s.name) === "care").map(s => s.name);
+      for (let d = 1; d <= 31; d++) {
+        let earlyCount = 0;
+        let lateCount = 0;
+        let dayCount = 0;
+        let nightCount = 0;
+        let akeCount = 0;
+        let offCount = 0;
+        careStaffList.forEach(staffName => {
+          const sym = shiftOct[staffName] && shiftOct[staffName][d];
+          if (sym === "早") earlyCount++;
+          else if (sym === "遅") lateCount++;
+          else if (sym === "日") dayCount++;
+          else if (sym === "夜") nightCount++;
+          else if (sym === "明") akeCount++;
+          else if (sym === "休") offCount++;
+        });
+        if (earlyCount !== 2 || lateCount !== 2 || dayCount !== 2 || nightCount !== 2 || akeCount !== 2 || offCount !== 4) {
+          allDaysAllTwoCompliant = false;
+          mismatchDetails.push(`Day ${d}: 早=${earlyCount}, 遅=${lateCount}, 日=${dayCount}, 夜=${nightCount}, 明=${akeCount}, 休=${offCount}`);
+        }
+      }
+      if (mismatchDetails.length > 0) {
+        log(`[Test 66 Mismatches]: ${mismatchDetails.slice(0, 5).join(" | ")}`);
+      }
+      assert(allDaysAllTwoCompliant, "Test 66: 看護師・事務・施設長を除く介護職員で毎日『日勤2名・早出2名・遅出2名・夜勤2名・明け2名 (公休4名)』と全て2名体制で完全配置されていること");
+
       // 手動修正テスト
+      const origYamada15 = shiftOct["山田 孝之"] ? shiftOct["山田 孝之"][15] : "日";
       gShiftEditingCell = { staffName: "山田 孝之", day: 15, yearMonth: "2026-10" };
       applyShiftCellEdit("休");
       assert(db.data.monthly_shifts["2026-10"]["山田 孝之"][15] === "休", "Test 61: シフト手動修正 (applyShiftCellEdit) が対象セルに即時反映・保存されること");
+      // 検証完了後に元の値へ安全復元
+      applyShiftCellEdit(origYamada15);
 
       // 19. 祝日・年末年始の自動「休（公休）」反映テスト
       const holOct12 = isHolidayOrYearEnd(2026, 10, 12);
@@ -397,21 +430,6 @@
       cycleShiftCell("木村 健一", 1);
       const cycledVal = db.data.monthly_shifts["2026-10"]["木村 健一"][1];
       assert(cycledVal === "日" || cycledVal === "休", "Test 65: 施設長および事務員へのダブルクリック (cycleShiftCell) では『日 ⇄ 休』のみ安全にトグルし夜勤等への誤変更を完全防止すること");
-
-      // 21. 早出1名・遅出1名 毎日完全配置テスト (全31日間)
-      let allDaysOneEarly = true;
-      let allDaysOneLate = true;
-      for (let d = 1; d <= 31; d++) {
-        let earlyCount = 0;
-        let lateCount = 0;
-        Object.keys(shiftOct).forEach(staffName => {
-          if (shiftOct[staffName][d] === "早") earlyCount++;
-          if (shiftOct[staffName][d] === "遅") lateCount++;
-        });
-        if (earlyCount !== 1) allDaysOneEarly = false;
-        if (lateCount !== 1) allDaysOneLate = false;
-      }
-      assert(allDaysOneEarly && allDaysOneLate, "Test 66: 1ヶ月31日間すべての日に早出が必ず『毎日1名』、遅出が必ず『毎日1名』厳密に配置されていること");
 
       // 22. 職種制約ガードテスト (事務員・施設長・看護師への夜勤・早・遅設定の拒絶)
       gShiftEditingCell = { staffName: "田中 慎一", day: 10, yearMonth: "2026-10" };

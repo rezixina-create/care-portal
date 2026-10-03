@@ -12,17 +12,25 @@ $serverProc = Start-Process powershell -ArgumentList "-ExecutionPolicy Bypass -F
 
 Start-Sleep -Seconds 2
 
-# Verify server is responding
-$client = New-Object System.Net.Sockets.TcpClient
-$asyncResult = $client.BeginConnect("127.0.0.1", 8888, $null, $null)
-$success = $asyncResult.AsyncWaitHandle.WaitOne(3000)
-if (-not $success) {
-    Write-Host "[FAIL] Server is not listening" -ForegroundColor Red
-    Stop-Process -Id $serverProc.Id -Force
+# Verify server is responding with HTTP 200
+$serverReady = $false
+for ($i = 0; $i -lt 20; $i++) {
+    try {
+        $resp = Invoke-WebRequest -Uri "http://127.0.0.1:8888" -UseBasicParsing -TimeoutSec 1 -ErrorAction Stop
+        if ($resp.StatusCode -eq 200) {
+            $serverReady = $true
+            break
+        }
+    } catch {
+        Start-Sleep -Milliseconds 500
+    }
+}
+if (-not $serverReady) {
+    Write-Host "[FAIL] Server is not responding on port 8888" -ForegroundColor Red
+    if ($serverProc) { Stop-Process -Id $serverProc.Id -Force -ErrorAction SilentlyContinue }
     exit 1
 }
-$client.Close()
-Write-Host "[PASS] Server is listening" -ForegroundColor Green
+Write-Host "[PASS] Server is listening and responding (HTTP 200)" -ForegroundColor Green
 
 # 2. Browser path (Edge or Chrome)
 $browserPaths = @(

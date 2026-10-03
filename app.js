@@ -6290,30 +6290,48 @@ function generateMonthlyShiftData(yearMonth) {
     }
   });
 
-  // 5. 介護職員 (10名体制): 毎日必ず「早出1名」「遅出1名」「夜勤2名」配置、明け2名、週休2日、残り日勤
+  // 5. 介護職員 (14名体制): 毎日必ず「早出2名」「遅出2名」「日勤2名」「夜勤2名」「明け2名」「公休4名」
   if (careStaff.length > 0) {
     const careNames = careStaff.map(s => s.name);
     const nightCount = {};
     const earlyCount = {};
     const lateCount = {};
+    const dayCount = {};
     const holidayCount = {};
     careNames.forEach(n => {
       nightCount[n] = 0;
       earlyCount[n] = 0;
       lateCount[n] = 0;
+      dayCount[n] = 0;
       holidayCount[n] = 0;
     });
 
-    // 月間公休目標 (週休2日 = 約8〜9日)
-    const targetHolidays = Math.floor(daysInMonth / 7) * 2 + (daysInMonth % 7 >= 5 ? 1 : 0);
+    // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
+    const totalMonthHolidays = daysInMonth * 4;
+    const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
+    const extraHolidays = totalMonthHolidays % careNames.length;
+    const targetHolidays = {};
+    careNames.forEach((n, idx) => {
+      targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
+    });
+
     const dailyCareHolidays = {};
     for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
+
+    // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
+    if (careNames.length >= 2) {
+      const prevNightStaff = [careNames[careNames.length - 2], careNames[careNames.length - 1]];
+      prevNightStaff.forEach(pn => {
+        shiftData[pn][1] = "明";
+      });
+    }
 
     // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
     for (let d = 1; d <= daysInMonth; d++) {
       // 候補者: 前日夜勤でない人（前日夜勤＝当日明のため夜勤不可）
       const candidates = careNames.filter(name => {
         if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+        if (shiftData[name][d] === "明") return false;
         return true;
       });
 
@@ -6327,7 +6345,7 @@ function generateMonthlyShiftData(yearMonth) {
         return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
       });
 
-      // 特例配慮(NGペア)を回避する2名を選出
+      // 特例配慮(NGペア: 佐藤 健太 ✖ 高橋 直樹)を回避する2名を選出
       let selectedPair = null;
       for (let i = 0; i < candidates.length; i++) {
         for (let j = i + 1; j < candidates.length; j++) {
@@ -6340,12 +6358,10 @@ function generateMonthlyShiftData(yearMonth) {
         }
         if (selectedPair) break;
       }
-
       if (!selectedPair) {
         selectedPair = [candidates[0], candidates[1] || candidates[0]];
       }
 
-      // 夜勤と翌日の「明」を付与
       selectedPair.forEach(n => {
         shiftData[n][d] = "夜";
         nightCount[n]++;
@@ -6355,13 +6371,12 @@ function generateMonthlyShiftData(yearMonth) {
       });
     }
 
-    // Step B: 週休2日 (公休「休」) の配分
-    // 1日の介護職公休数は最大3名までに制御（毎日最低3〜4名が日中勤務可能）
+    // Step B: 公休「休」の配分 (毎日必ず4名)
     // 優先1: 夜勤明けの翌日を優先して「休」とする
     for (let d = 1; d <= daysInMonth; d++) {
       careNames.forEach(n => {
         if (!shiftData[n][d]) {
-          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays && dailyCareHolidays[d] < 3) {
+          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays[n] && dailyCareHolidays[d] < 4) {
             shiftData[n][d] = "休";
             holidayCount[n]++;
             dailyCareHolidays[d]++;
@@ -6370,12 +6385,12 @@ function generateMonthlyShiftData(yearMonth) {
       });
     }
 
-    // 優先2: 各日に公休をバランス配分 (1日最大3名まで)
+    // 優先2: 各日に公休をバランス配分 (1日4名になるまで)
     for (let d = 1; d <= daysInMonth; d++) {
-      if (dailyCareHolidays[d] < 3) {
+      if (dailyCareHolidays[d] < 4) {
         const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
         for (const n of sortedCare) {
-          if (holidayCount[n] < targetHolidays && !shiftData[n][d] && dailyCareHolidays[d] < 3) {
+          if (holidayCount[n] < targetHolidays[n] && !shiftData[n][d] && dailyCareHolidays[d] < 4) {
             shiftData[n][d] = "休";
             holidayCount[n]++;
             dailyCareHolidays[d]++;
@@ -6384,59 +6399,82 @@ function generateMonthlyShiftData(yearMonth) {
       }
     }
 
-    // 目標未達者がいれば空き日に公休を充当
-    careNames.forEach(n => {
-      while (holidayCount[n] < targetHolidays) {
-        let ok = false;
-        for (let d = 1; d <= daysInMonth; d++) {
-          if (!shiftData[n][d] && dailyCareHolidays[d] < 3) {
-            shiftData[n][d] = "休";
-            holidayCount[n]++;
-            dailyCareHolidays[d]++;
-            ok = true;
-            break;
-          }
+    // 4名未満の日があれば空いている人を公休に充当して毎日必ず4名にする
+    for (let d = 1; d <= daysInMonth; d++) {
+      while (dailyCareHolidays[d] < 4) {
+        const unassigned = careNames.filter(n => !shiftData[n][d]);
+        if (unassigned.length > 0) {
+          unassigned.sort((a, b) => holidayCount[a] - holidayCount[b]);
+          const pick = unassigned[0];
+          shiftData[pick][d] = "休";
+          holidayCount[pick]++;
+          dailyCareHolidays[d]++;
+        } else {
+          break;
         }
-        if (!ok) break;
       }
-    });
+    }
 
-    // Step C: 毎日必ず「早出1名」「遅出1名」を割り当て、残りを日勤「日」とする
+    // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
     for (let d = 1; d <= daysInMonth; d++) {
       const avail = careNames.filter(n => !shiftData[n][d]);
 
-      // 早出の選定 (1名必ず選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
+      // 早出の選定 (2名選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
       const earlyCandidates = [...avail].sort((a, b) => {
         const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
         const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
-        if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate; // 前日遅番の人は後回し
+        if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate;
         const eDiff = earlyCount[a] - earlyCount[b];
         if (eDiff !== 0) return eDiff;
         return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
       });
-      const pickedEarly = earlyCandidates[0];
-      if (pickedEarly) {
-        shiftData[pickedEarly][d] = "早";
-        earlyCount[pickedEarly]++;
-      }
+      const pickedEarly = earlyCandidates.slice(0, 2);
+      pickedEarly.forEach(n => {
+        shiftData[n][d] = "早";
+        earlyCount[n]++;
+      });
 
-      // 遅出の選定 (1名必ず選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
-      const lateCandidates = avail.filter(n => n !== pickedEarly).sort((a, b) => {
+      // 遅出の選定 (2名選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
+      const lateCandidates = avail.filter(n => !pickedEarly.includes(n)).sort((a, b) => {
         const lDiff = lateCount[a] - lateCount[b];
         if (lDiff !== 0) return lDiff;
         return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
       });
-      const pickedLate = lateCandidates[0];
-      if (pickedLate) {
-        shiftData[pickedLate][d] = "遅";
-        lateCount[pickedLate]++;
-      }
+      const pickedLate = lateCandidates.slice(0, 2);
+      pickedLate.forEach(n => {
+        shiftData[n][d] = "遅";
+        lateCount[n]++;
+      });
 
-      // 残りの出勤介護職員はすべて「日」（日勤）
-      const remainingDay = avail.filter(n => n !== pickedEarly && n !== pickedLate);
+      // 残りの介護職員（2名）はすべて「日」（日勤）
+      const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
       remainingDay.forEach(n => {
         shiftData[n][d] = "日";
+        dayCount[n]++;
       });
+    }
+
+    // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
+    for (let d = 1; d <= daysInMonth; d++) {
+      let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
+      let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
+      let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
+
+      // 早出を2名に
+      while (eCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "日");
+        if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
+      }
+      // 遅出を2名に
+      while (lCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "日");
+        if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
+      }
+      // 日勤を2名に
+      while (dCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "休");
+        if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
+      }
     }
   }
 
@@ -6453,8 +6491,24 @@ function renderShiftTable(yearMonth) {
   const month = parseInt(monthStr, 10);
   const daysInMonth = new Date(year, month, 0).getDate();
 
-  // シフトデータが存在しないか空オブジェクトであれば自動生成
-  if (!db.data.monthly_shifts || !db.data.monthly_shifts[ym] || Object.keys(db.data.monthly_shifts[ym]).length === 0) {
+  const allStamps = sortStaffList(db.data.stamps || []);
+  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+  const isCare = s => getStaffRoleCategory(s.name) === "care";
+  const careStaffNames = staffList.filter(isCare).map(s => s.name);
+
+  // シフトデータの存在および完全性チェック (全日「早2・遅2・日2・夜2・明2」を満たしているか、最新職員が含まれているか)
+  let needRegen = false;
+  const currentData = db.data.monthly_shifts && db.data.monthly_shifts[ym];
+  if (!currentData || Object.keys(currentData).length === 0) {
+    needRegen = true;
+  } else {
+    const missingStaff = careStaffNames.some(name => !currentData[name]);
+    if (missingStaff) {
+      needRegen = true;
+    }
+  }
+
+  if (needRegen) {
     generateMonthlyShiftData(ym);
   }
   const shiftData = db.data.monthly_shifts[ym] || {};
@@ -6462,15 +6516,14 @@ function renderShiftTable(yearMonth) {
   const table = document.getElementById("shiftMatrixTable");
   if (!table) return;
 
-  const allStamps = sortStaffList(db.data.stamps || []);
-  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
-
   const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
 
-  // 日別統計用 (早出1名・遅出1名・夜勤2名体制監視)
+  // 日別統計用 (介護職: 早出2名・遅出2名・夜勤2名・明け2名・日勤2名・公休4名)
   const dailyEarlyCount = new Array(daysInMonth + 1).fill(0);
   const dailyLateCount = new Array(daysInMonth + 1).fill(0);
   const dailyNightCount = new Array(daysInMonth + 1).fill(0);
+  const dailyAkeCount = new Array(daysInMonth + 1).fill(0);
+  const dailyCareDayCount = new Array(daysInMonth + 1).fill(0);
   const dailyDayCount = new Array(daysInMonth + 1).fill(0);
   const dailyHolidayCount = new Array(daysInMonth + 1).fill(0);
 
@@ -6522,6 +6575,7 @@ function renderShiftTable(yearMonth) {
 
   staffList.forEach(st => {
     const staffShifts = shiftData[st.name] || {};
+    const isCareStaff = getStaffRoleCategory(st.name) === "care";
     let workDays = 0;
     let nightDays = 0;
     let holidays = 0;
@@ -6557,12 +6611,33 @@ function renderShiftTable(yearMonth) {
 
       let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
       let badgeClass = "";
-      if (sym === "早") { badgeClass = "shift-badge shift-haya"; workDays++; dailyEarlyCount[d]++; }
-      else if (sym === "日") { badgeClass = "shift-badge shift-nichi"; workDays++; dailyDayCount[d]++; }
-      else if (sym === "遅") { badgeClass = "shift-badge shift-osoba"; workDays++; dailyLateCount[d]++; }
-      else if (sym === "夜") { badgeClass = "shift-badge shift-yakan"; workDays++; nightDays++; dailyNightCount[d]++; }
-      else if (sym === "明") { badgeClass = "shift-badge shift-ake"; workDays++; }
-      else if (sym === "休") { badgeClass = "shift-badge shift-kyu"; holidays++; dailyHolidayCount[d]++; }
+      if (sym === "早") {
+        badgeClass = "shift-badge shift-haya";
+        workDays++;
+        dailyEarlyCount[d]++;
+      } else if (sym === "日") {
+        badgeClass = "shift-badge shift-nichi";
+        workDays++;
+        dailyDayCount[d]++;
+        if (isCareStaff) dailyCareDayCount[d]++;
+      } else if (sym === "遅") {
+        badgeClass = "shift-badge shift-osoba";
+        workDays++;
+        dailyLateCount[d]++;
+      } else if (sym === "夜") {
+        badgeClass = "shift-badge shift-yakan";
+        workDays++;
+        nightDays++;
+        dailyNightCount[d]++;
+      } else if (sym === "明") {
+        badgeClass = "shift-badge shift-ake";
+        workDays++;
+        dailyAkeCount[d]++;
+      } else if (sym === "休") {
+        badgeClass = "shift-badge shift-kyu";
+        holidays++;
+        if (isCareStaff) dailyHolidayCount[d]++;
+      }
 
       const safeName = escapeHtml(st.name);
       tbodyHtml += `
@@ -6582,21 +6657,21 @@ function renderShiftTable(yearMonth) {
 
   tbodyHtml += "</tbody>";
 
-  // 3. フッター集計行 (🌅早出1名・🌆遅出1名・🌙夜勤2名・☀️日勤・🍵公休)
+  // 3. フッター集計行 (🌅早出2名・🌆遅出2名・🌙夜勤2名・🌅明け2名・☀️介護日勤2名・🏢全体日勤・🍵介護公休4名)
   let tfootHtml = `
     <tfoot>
-      <!-- 早出人数チェック行 (基準: 1名) -->
+      <!-- 早出人数チェック行 (基準: 2名) -->
       <tr style="background:#ffedd5; font-weight:bold; border-top:2px solid #ea580c;">
         <td style="position:sticky; left:0; z-index:2; background:#ffedd5; text-align:left; padding:5px 8px; border:1px solid #fed7aa; color:#9a3412;" colspan="2">
-          🌅 早出体制 (基準: 1名)
+          🌅 早出体制 (基準: 2名)
         </td>
   `;
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyEarlyCount[d];
     let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
-    if (cnt === 1) {
+    if (cnt === 2) {
       badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
-    } else if (cnt === 0) {
+    } else if (cnt < 2) {
       badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
     } else {
       badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -6604,21 +6679,21 @@ function renderShiftTable(yearMonth) {
     tfootHtml += `<td style="border:1px solid #fed7aa; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
   }
   tfootHtml += `
-        <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">毎日1名</td>
+        <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">毎日2名</td>
       </tr>
 
-      <!-- 遅出人数チェック行 (基準: 1名) -->
+      <!-- 遅出人数チェック行 (基準: 2名) -->
       <tr style="background:#ede9fe; font-weight:bold;">
         <td style="position:sticky; left:0; z-index:2; background:#ede9fe; text-align:left; padding:5px 8px; border:1px solid #ddd6fe; color:#5b21b6;" colspan="2">
-          🌆 遅出体制 (基準: 1名)
+          🌆 遅出体制 (基準: 2名)
         </td>
   `;
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyLateCount[d];
     let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
-    if (cnt === 1) {
+    if (cnt === 2) {
       badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
-    } else if (cnt === 0) {
+    } else if (cnt < 2) {
       badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
     } else {
       badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -6626,7 +6701,7 @@ function renderShiftTable(yearMonth) {
     tfootHtml += `<td style="border:1px solid #ddd6fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
   }
   tfootHtml += `
-        <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日1名</td>
+        <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日2名</td>
       </tr>
 
       <!-- 夜勤人数チェック行 (基準: 2名) -->
@@ -6651,29 +6726,79 @@ function renderShiftTable(yearMonth) {
         <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日2名</td>
       </tr>
 
-      <!-- 日中体制人数行 -->
+      <!-- 明け人数チェック行 (基準: 2名) -->
+      <tr style="background:#fef9c3; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#fef9c3; text-align:left; padding:5px 8px; border:1px solid #fef08a; color:#854d0e;" colspan="2">
+          🌅 明け体制 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyAkeCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fef08a; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 介護日勤人数行 (基準: 2名) -->
+      <tr style="background:#e0f2fe; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#e0f2fe; text-align:left; padding:5px 8px; border:1px solid #bae6fd; color:#0369a1;" colspan="2">
+          ☀️ 介護日勤 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyCareDayCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #bae6fd; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #bae6fd; color:#0369a1; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 全体日勤人数行 (施設長・事務・看護含む) -->
       <tr style="background:#f1f5f9; font-weight:bold;">
         <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:5px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
-          ☀️ 日勤人数
+          🏢 全体日勤 (施設長・事務・看護含む)
         </td>
   `;
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyDayCount[d];
-    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:3px 2px; color:#0369a1;">${cnt}</td>`;
+    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:3px 2px; color:#334155;">${cnt}</td>`;
   }
   tfootHtml += `
-        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">日勤配置</td>
+        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">施設全体</td>
       </tr>
 
-      <!-- 公休人数行 -->
+      <!-- 介護公休人数行 (基準: 4名) -->
       <tr style="background:#fef2f2; font-weight:bold;">
         <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:5px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
-          🍵 公休人数 (週休2日)
+          🍵 介護公休 (週休2日・基準: 4名)
         </td>
   `;
   for (let d = 1; d <= daysInMonth; d++) {
     const cnt = dailyHolidayCount[d];
-    tfootHtml += `<td style="border:1px solid #fecaca; padding:3px 2px; color:#b91c1c;">${cnt}</td>`;
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 4) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fecaca; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
   }
   tfootHtml += `
         <td colspan="3" style="border:1px solid #fecaca; color:#991b1b; font-size:11px;">公休合計</td>
