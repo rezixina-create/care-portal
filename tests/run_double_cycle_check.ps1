@@ -70,6 +70,20 @@ for ($cycle = 1; $cycle -le 2; $cycle++) {
 
     Cleanup-Port8888
 
+    # 4. test_all_change_modals.ps1 (Real Headless Browser Click & Modal Display)
+    Write-Host "`n[Cycle $cycle - Step 4] Running test_all_change_modals.ps1 (Real Browser Click & Display)..." -ForegroundColor Cyan
+    $res4 = & powershell.exe -ExecutionPolicy Bypass -File "$PSScriptRoot\test_all_change_modals.ps1" 2>&1
+    $out4 = $res4 -join "`n"
+    if ($LASTEXITCODE -ne 0 -or $out4 -notmatch "PERFECT PASS") {
+        Write-Host "[FAIL] test_all_change_modals.ps1 failed in Cycle $cycle!" -ForegroundColor Red
+        Write-Host $out4
+        $cycleErrors[$cycle - 1]++
+    } else {
+        Write-Host "  [CYCLE $cycle - PASS] All modal click and display tests passed cleanly!" -ForegroundColor Green
+    }
+
+    Cleanup-Port8888
+
     if ($cycleErrors[$cycle - 1] -eq 0) {
         Write-Host "`n>>> CYCLE $cycle COMPLETE: 100% PERFECT PASS (0 Errors)" -ForegroundColor Green
     } else {

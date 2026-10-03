@@ -1468,7 +1468,7 @@ function renderResidentDetail() {
   const stampClass = r.policy_stamp === "看取り" ? "policy-mitori" : "policy-kyukyu";
   const diseasesList = (r.diseases || "").split(",").map(d => d.trim()).filter(Boolean);
   const diseaseTags = diseasesList.map(d => `
-    <span class="disease-tag" onclick="openDiseaseGuide('${d}')">🩺 ${d}</span>
+    <span class="disease-tag" style="cursor:pointer;" onclick="event.preventDefault(); event.stopPropagation(); openDiseaseGuide(this.getAttribute('data-disease')); return false;" data-disease="${escapeHtml(d)}">🩺 ${escapeHtml(d)}</span>
   `).join("");
 
   // 私物行リスト
@@ -1479,16 +1479,16 @@ function renderResidentDetail() {
       <td><strong>${escapeHtml(b.item_name || '-')}</strong></td>
       <td>
         <div style="display:inline-flex; align-items:center; gap:4px;">
-          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ減らす（劣化・破棄時）" onclick="adjustBelongingQty(${b.id}, -1)">−</button>
+          <button type="button" class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ減らす（劣化・破棄時）" onclick="adjustBelongingQty(${b.id}, -1)">−</button>
           <span style="color:#0284c7; font-weight:bold; min-width:32px; text-align:center;">${escapeHtml(b.quantity || '1')}</span>
-          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ増やす（追加持参時）" onclick="adjustBelongingQty(${b.id}, 1)">＋</button>
+          <button type="button" class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ増やす（追加持参時）" onclick="adjustBelongingQty(${b.id}, 1)">＋</button>
         </div>
       </td>
       <td>${b.marked ? '✓ 記名済' : '<span style="color:#dc2626;">未確認</span>'}</td>
       <td style="color:#64748b;">${escapeHtml(b.notes || '-')}</td>
       <td style="white-space:nowrap;">
-        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})">✏️ 編集</button>
-        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">🗑️ 削除</button>
+        <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})">✏️ 編集</button>
+        <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">🗑️ 削除</button>
       </td>
     </tr>
   `).join("");
@@ -1498,7 +1498,7 @@ function renderResidentDetail() {
   let equipmentsHtml = equipments.map(eq => `
     <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; font-size:12px; margin-right:6px; margin-bottom:4px; display:inline-flex; align-items:center; gap:6px;">
       <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(eq.ownership_type || '施設備品')})</span>
-      <button style="border:none; background:none; color:#0369a1; cursor:pointer; font-size:13px; font-weight:bold; padding:0 2px;" title="使用解除・返却" onclick="deleteEquipment(${eq.id})">✕</button>
+      <button type="button" style="border:none; background:none; color:#0369a1; cursor:pointer; font-size:13px; font-weight:bold; padding:0 2px;" title="使用解除・返却" onclick="deleteEquipment(${eq.id})">✕</button>
     </span>
   `).join("");
 
@@ -1521,7 +1521,7 @@ function renderResidentDetail() {
             <option value="入院中" ${r.status==='入院中'?'selected':''}>入院中</option>
             <option value="外泊中" ${r.status==='外泊中'?'selected':''}>外泊中</option>
           </select>
-          <button class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})">✏️ 編集</button>
+          <button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})">✏️ 編集</button>
         </div>
       </div>
     </div>
@@ -1531,7 +1531,7 @@ function renderResidentDetail() {
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🎯 基本方針 ＆ ケアプラン目標・見守り注意</span>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openCarePlanModal(${r.id})">✏️ 変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">✏️ 変更</button>
           <span style="font-size:11px; color:#64748b;">(開閉)</span>
         </div>
       </summary>
@@ -1539,7 +1539,7 @@ function renderResidentDetail() {
         ${r.sensor_alert ? `
           <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
             <span>${escapeHtml(r.sensor_alert)}</span>
-            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px; color:#dc2626;" onclick="openCarePlanModal(${r.id})">変更</button>
+            <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px; color:#dc2626;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}, 'sensor'); return false;">変更</button>
           </div>
         ` : ''}
         <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start;">
@@ -1547,7 +1547,7 @@ function renderResidentDetail() {
             <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
             <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
           </div>
-          <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">変更</button>
         </div>
         ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
           <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e; display:flex; justify-content:space-between; align-items:center;">
@@ -1557,7 +1557,7 @@ function renderResidentDetail() {
               ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
               ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
             </div>
-            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">基準値変更</button>
+            <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">基準値変更</button>
           </div>
         ` : ''}
       </div>
@@ -1568,13 +1568,16 @@ function renderResidentDetail() {
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}); return false;">✏️ 変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">✏️ 変更</button>
           <span style="font-size:11px; color:#64748b;">(開閉)</span>
         </div>
       </summary>
       <div style="padding:12px;">
         <div style="margin-bottom:10px;">
-          <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで現場対応ガイド表示):</div>
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <div style="font-size:12px; font-weight:bold; color:var(--text-muted);">病歴・既往歴 (タップで現場対応ガイド表示):</div>
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">✏️ 病歴を変更</button>
+          </div>
           <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
         </div>
         
@@ -1588,7 +1591,7 @@ function renderResidentDetail() {
           </div>
           <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
             <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
-            <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="openBodyConditionModal(${r.id})">
+            <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
               ✏️ 身体状況・食形態を変更
             </button>
           </div>
@@ -1601,7 +1604,7 @@ function renderResidentDetail() {
       <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
         <span>🏥 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.stopPropagation(); openClinicInstructionModal(${r.id})">✏️ 受診指示を変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'all'); return false;">✏️ 受診指示を変更</button>
           <span style="font-size:11px; color:#64748b;">(開閉)</span>
         </div>
       </summary>
@@ -1611,7 +1614,7 @@ function renderResidentDetail() {
           <div style="color:#991b1b; font-weight:bold; font-size:13px;">
             ⚠️ 【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
           </div>
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'special')">✏️ 特殊指示を変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'special'); return false;">✏️ 特殊指示を変更</button>
         </div>
 
         <!-- 医師の指示内容 (受診時コメント) -->
@@ -1620,7 +1623,7 @@ function renderResidentDetail() {
             <strong>🩺 医師の指示内容 (受診時コメント):</strong>
             <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '定期採血・血圧コントロール')}</div>
           </div>
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'instructions')">✏️ 指示内容を変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'instructions'); return false;">✏️ 指示内容を変更</button>
         </div>
 
         <!-- 次回予定日 -->
@@ -1629,7 +1632,7 @@ function renderResidentDetail() {
             <strong style="color:#0369a1;">📅 次回受診・往診予定日:</strong>
             <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${r.next_clinic_date || '未定'}</span>
           </div>
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'date')">✏️ 予定日を変更</button>
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'date'); return false;">✏️ 予定日を変更</button>
         </div>
       </div>
     </details>
@@ -5593,33 +5596,48 @@ function insertQuickSpecialNote(text) {
 }
 
 function openClinicInstructionModal(resId, focusField = 'all') {
-  const id = resId || gState.selectedResidentId;
-  const r = gState.residents.find(x => x.id === id);
-  if (!r) return;
+  const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+  if (!r) {
+    console.warn("[openClinicInstructionModal] Resident not found:", resId, gState.selectedResidentId);
+    return;
+  }
 
   const titleEl = document.getElementById("clinicModalTitle");
   if (titleEl) titleEl.textContent = `🏥 往診医・受診時指示 ＆ 特殊指示の変更 (${r.name} 様)`;
-  document.getElementById("clinicResidentId").value = r.id;
-  document.getElementById("quickClinicSpecialNotes").value = r.clinic_special_notes || "";
-  document.getElementById("quickDrInstructions").value = r.dr_instructions || "";
-  document.getElementById("quickNextClinicDate").value = r.next_clinic_date || "";
+  const idEl = document.getElementById("clinicResidentId");
+  if (idEl) idEl.value = r.id;
+  const specEl = document.getElementById("quickClinicSpecialNotes");
+  if (specEl) specEl.value = r.clinic_special_notes || "";
+  const drEl = document.getElementById("quickDrInstructions");
+  if (drEl) drEl.value = r.dr_instructions || "";
+  const dateEl = document.getElementById("quickNextClinicDate");
+  if (dateEl) dateEl.value = r.next_clinic_date || "";
 
-  document.getElementById("clinicInstructionModal").style.display = "flex";
+  const modal = document.getElementById("clinicInstructionModal");
+  if (modal) {
+    modal.style.display = "flex";
+    modal.style.zIndex = "2500";
+  }
 
   setTimeout(() => {
-    if (focusField === 'special') {
-      document.getElementById("quickClinicSpecialNotes")?.focus();
-    } else if (focusField === 'instructions') {
-      document.getElementById("quickDrInstructions")?.focus();
-    } else if (focusField === 'date') {
-      document.getElementById("quickNextClinicDate")?.focus();
+    if (focusField === 'special' && specEl) {
+      specEl.focus();
+      specEl.select?.();
+    } else if (focusField === 'instructions' && drEl) {
+      drEl.focus();
+      drEl.select?.();
+    } else if (focusField === 'date' && dateEl) {
+      dateEl.focus();
     }
   }, 100);
 }
 
 function submitClinicInstructions() {
-  const id = parseInt(document.getElementById("clinicResidentId").value, 10);
-  const r = gState.residents.find(x => x.id === id);
+  const idEl = document.getElementById("clinicResidentId");
+  if (!idEl) return;
+  const id = parseInt(idEl.value, 10);
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === id) : null;
   if (!r) return;
 
   const specialNotes = document.getElementById("quickClinicSpecialNotes").value.trim();
@@ -5654,27 +5672,52 @@ function submitClinicInstructions() {
 // ==========================================
 // 🎯 基本方針・見守り注意 クイック編集機能
 // ==========================================
-function openCarePlanModal(resId) {
-  const id = resId || gState.selectedResidentId;
-  const r = gState.residents.find(x => x.id === id);
-  if (!r) return;
+function openCarePlanModal(resId, focusField = '') {
+  const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+  if (!r) {
+    console.warn("[openCarePlanModal] Resident not found:", resId, gState.selectedResidentId);
+    return;
+  }
 
   const titleEl = document.getElementById("carePlanModalTitle");
   if (titleEl) titleEl.textContent = `🎯 基本方針 ＆ ケアプラン目標の変更 (${r.name} 様)`;
-  document.getElementById("carePlanResidentId").value = r.id;
-  document.getElementById("quickCarePlanGoal").value = r.care_plan_goal || "";
-  document.getElementById("quickSensorAlert").value = r.sensor_alert || "";
-  document.getElementById("quickBpHMax").value = r.bp_high_max || "";
-  document.getElementById("quickBpHMin").value = r.bp_high_min || "";
-  document.getElementById("quickTempMax").value = r.temp_max || "";
-  document.getElementById("quickSpo2Min").value = r.spo2_min || "";
+  const idEl = document.getElementById("carePlanResidentId");
+  if (idEl) idEl.value = r.id;
+  const goalEl = document.getElementById("quickCarePlanGoal");
+  if (goalEl) goalEl.value = r.care_plan_goal || "";
+  const sensorEl = document.getElementById("quickSensorAlert");
+  if (sensorEl) sensorEl.value = r.sensor_alert || "";
+  const bphMaxEl = document.getElementById("quickBpHMax");
+  if (bphMaxEl) bphMaxEl.value = r.bp_high_max || "";
+  const bphMinEl = document.getElementById("quickBpHMin");
+  if (bphMinEl) bphMinEl.value = r.bp_high_min || "";
+  const tempEl = document.getElementById("quickTempMax");
+  if (tempEl) tempEl.value = r.temp_max || "";
+  const spo2El = document.getElementById("quickSpo2Min");
+  if (spo2El) spo2El.value = r.spo2_min || "";
 
-  document.getElementById("carePlanModal").style.display = "flex";
+  const modal = document.getElementById("carePlanModal");
+  if (modal) {
+    modal.style.display = "flex";
+    modal.style.zIndex = "2500";
+  }
+
+  setTimeout(() => {
+    if (focusField === 'sensor' && sensorEl) {
+      sensorEl.focus();
+      sensorEl.select?.();
+    } else if (goalEl) {
+      goalEl.focus();
+    }
+  }, 100);
 }
 
 function submitCarePlanModal() {
-  const id = parseInt(document.getElementById("carePlanResidentId").value, 10);
-  const r = gState.residents.find(x => x.id === id);
+  const idEl = document.getElementById("carePlanResidentId");
+  if (!idEl) return;
+  const id = parseInt(idEl.value, 10);
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === id) : null;
   if (!r) return;
 
   r.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
@@ -5693,13 +5736,16 @@ function submitCarePlanModal() {
 // ==========================================
 // 🩺 身体状況・食形態 クイック編集機能
 // ==========================================
-function openBodyConditionModal(resId) {
-  const id = resId || gState.selectedResidentId;
-  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
-  if (!r) return;
+function openBodyConditionModal(resId, focusField = '') {
+  const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+  if (!r) {
+    console.warn("[openBodyConditionModal] Resident not found:", resId, gState.selectedResidentId);
+    return;
+  }
 
   const titleEl = document.getElementById("bodyConditionModalTitle");
-  if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態の変更 (${r.name} 様)`;
+  if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態・病歴の変更 (${r.name} 様)`;
   
   const idEl = document.getElementById("bodyConditionResidentId");
   if (idEl) idEl.value = r.id;
@@ -5738,14 +5784,32 @@ function openBodyConditionModal(resId) {
   if (oralEl) oralEl.value = r.oral_state || "";
 
   const modal = document.getElementById("bodyConditionModal");
-  if (modal) modal.style.display = "flex";
+  if (modal) {
+    modal.style.display = "flex";
+    modal.style.zIndex = "2500";
+  }
+
+  setTimeout(() => {
+    if (focusField === 'diseases' && disEl) {
+      disEl.focus();
+      disEl.select?.();
+    } else if (focusField === 'paralysis' && parEl) {
+      parEl.focus();
+      parEl.select?.();
+    } else if (focusField === 'allergies' && algEl) {
+      algEl.focus();
+      algEl.select?.();
+    } else if (disEl) {
+      disEl.focus();
+    }
+  }, 100);
 }
 
 function submitBodyConditionModal() {
   const idEl = document.getElementById("bodyConditionResidentId");
   if (!idEl) return;
   const id = parseInt(idEl.value, 10);
-  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
+  const r = gState.residents ? gState.residents.find(x => Number(x.id) === id) : null;
   if (!r) return;
 
   const disEl = document.getElementById("quickDiseases");
@@ -5763,7 +5827,7 @@ function submitBodyConditionModal() {
   db.save();
   closeModal("bodyConditionModal");
   renderResidentDetail();
-  alert(`${r.name} 様の身体状況・食形態を更新しました！`);
+  alert(`${r.name} 様の身体状況・食形態・病歴を更新しました！`);
 }
 
 // 職員・認印管理
@@ -7466,4 +7530,18 @@ function deleteShiftNgPair(id) {
   db.data.shift_ng_pairs = (db.data.shift_ng_pairs || []).filter(p => p.id !== id);
   db.save();
   renderShiftNgList();
+}
+
+// グローバル関数公開 (インラインonclick等の即時呼出保証)
+if (typeof window !== "undefined") {
+  window.openClinicInstructionModal = openClinicInstructionModal;
+  window.submitClinicInstructions = submitClinicInstructions;
+  window.openCarePlanModal = openCarePlanModal;
+  window.submitCarePlanModal = submitCarePlanModal;
+  window.openBodyConditionModal = openBodyConditionModal;
+  window.submitBodyConditionModal = submitBodyConditionModal;
+  window.openDiseaseGuide = openDiseaseGuide;
+  window.toggleCustomDiseaseEdit = toggleCustomDiseaseEdit;
+  window.saveCustomDiseaseGuide = saveCustomDiseaseGuide;
+  window.resetCustomDiseaseGuide = resetCustomDiseaseGuide;
 }

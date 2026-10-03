@@ -299,6 +299,9 @@ namespace CarePortal
             string headers = "HTTP/1.1 " + statusCode + " " + statusMsg + "\r\n" +
                              "Content-Type: " + contentType + "\r\n" +
                              "Content-Length: " + body.Length + "\r\n" +
+                             "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
+                             "Pragma: no-cache\r\n" +
+                             "Expires: 0\r\n" +
                              "Connection: close\r\n" +
                              "Access-Control-Allow-Origin: *\r\n" +
                              "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
@@ -317,6 +320,9 @@ namespace CarePortal
             string headers = "HTTP/1.1 " + statusCode + " " + statusMsg + "\r\n" +
                              "Content-Type: " + contentType + "\r\n" +
                              "Content-Length: " + body.Length + "\r\n" +
+                             "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
+                             "Pragma: no-cache\r\n" +
+                             "Expires: 0\r\n" +
                              "Connection: close\r\n\r\n";
             byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
             stream.Write(headerBytes, 0, headerBytes.Length);

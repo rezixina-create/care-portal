@@ -1,0 +1,128 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>Modal Click Verification</title>
+  <style>
+    body { font-family: sans-serif; padding: 20px; }
+    .test-pass { color: green; font-weight: bold; margin: 4px 0; }
+    .test-fail { color: red; font-weight: bold; margin: 4px 0; }
+  </style>
+</head>
+<body>
+  <h1>Modal Verification</h1>
+  <div id="results"></div>
+  <iframe id="appFrame" src="http://127.0.0.1:8888/" style="width:1200px; height:800px; border:1px solid #ccc;"></iframe>
+  <script>
+    const resultsEl = document.getElementById("results");
+    function report(name, pass, detail) {
+      const d = document.createElement("div");
+      d.className = pass ? "test-pass" : "test-fail";
+      d.textContent = (pass ? "[PASS] " : "[FAIL] ") + name + (detail ? ": " + detail : "");
+      resultsEl.appendChild(d);
+    }
+
+    const frame = document.getElementById("appFrame");
+    frame.onload = async () => {
+      await new Promise(r => setTimeout(r, 1500));
+      const doc = frame.contentDocument || frame.contentWindow.document;
+      const win = frame.contentWindow;
+
+      try {
+        win.selectResident(1);
+        await new Promise(r => setTimeout(r, 400));
+
+        // 1. 特殊指示を変更ボタン
+        const btnSpecial = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("特殊指示を変更"));
+        report("特殊指示変更ボタン存在確認", !!btnSpecial);
+        if (btnSpecial) {
+          btnSpecial.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("clinicInstructionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("特殊指示変更ボタン クリックでモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("clinicInstructionModal");
+        }
+
+        // 2. 指示内容を変更ボタン
+        const btnInstructions = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("指示内容を変更"));
+        report("指示内容変更ボタン存在確認", !!btnInstructions);
+        if (btnInstructions) {
+          btnInstructions.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("clinicInstructionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("指示内容変更ボタン クリックでモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("clinicInstructionModal");
+        }
+
+        // 3. 予定日を変更ボタン
+        const btnDate = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("予定日を変更"));
+        report("予定日変更ボタン存在確認", !!btnDate);
+        if (btnDate) {
+          btnDate.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("clinicInstructionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("予定日変更ボタン クリックでモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("clinicInstructionModal");
+        }
+
+        // 4. 受診指示を変更ボタン (サマリー見出し横)
+        const btnClinicSummary = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("受診指示を変更"));
+        report("受診指示変更(サマリー)ボタン存在確認", !!btnClinicSummary);
+        if (btnClinicSummary) {
+          btnClinicSummary.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("clinicInstructionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("受診指示変更(サマリー)ボタン クリックでモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("clinicInstructionModal");
+        }
+
+        // 5. 身体状況・食形態を変更ボタン
+        const btnBody = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("身体状況・食形態を変更"));
+        report("身体状況・食形態変更ボタン存在確認", !!btnBody);
+        if (btnBody) {
+          btnBody.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("bodyConditionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("身体状況・食形態変更ボタン クリックでモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("bodyConditionModal");
+        }
+
+        // 6. 病歴を変更ボタン
+        const btnDiseaseEdit = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("病歴を変更"));
+        report("病歴変更ボタン存在確認", !!btnDiseaseEdit);
+        if (btnDiseaseEdit) {
+          btnDiseaseEdit.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("bodyConditionModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("病歴変更ボタン クリックで身体状況・病歴モーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("bodyConditionModal");
+        }
+
+        // 7. 病歴タグクリック
+        const tag = doc.querySelector(".disease-tag");
+        report("病歴タグ存在確認", !!tag);
+        if (tag) {
+          tag.click();
+          await new Promise(r => setTimeout(r, 200));
+          const m = doc.getElementById("diseaseModal");
+          const isOpen = m && win.getComputedStyle(m).display === "flex";
+          report("病歴タグ クリックで病歴ガイドモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+          win.closeModal("diseaseModal");
+        }
+
+        const fin = document.createElement("div");
+        fin.id = "testComplete";
+        document.body.appendChild(fin);
+      } catch (err) {
+        report("テスト実行例外", false, err.message);
+      }
+    };
+  </script>
+</body>
+</html>
