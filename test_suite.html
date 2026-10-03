@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -40,7 +40,7 @@
     window.onerror = function(msg, url, line, col, err) {
       console.error("[GLOBAL ERROR]", msg, line, col);
       const summary = document.getElementById("testSummary");
-      if (summary) summary.innerHTML = `<span style="color:red;">❌ Global Error: ${msg} at line ${line}:${col}</span>`;
+      if (summary) summary.innerHTML = `<span style="color:red;">[FAIL] Global Error: ${msg} at line ${line}:${col}</span>`;
       const logEl = document.getElementById("testLog");
       if (logEl) {
         const d = document.createElement("div");
@@ -52,7 +52,7 @@
   </script>
 </head>
 <body style="padding: 20px;">
-  <h1>🧪 介護施設統合ポータル 全36項目・全機能自動検証テスト</h1>
+  <h1>[検証] 介護施設統合ポータル 全36項目・全機能自動検証テスト</h1>
   <div id="testSummary" style="font-size: 18px; margin: 10px 0; font-weight: bold;">テスト待機中...</div>
   <div id="testLog"></div>
 
@@ -359,7 +359,7 @@
       });
       assert(allDayOnlyCompliant, "Test 58: 施設長 (木村 健一)・事務員2名・看護師2名が日勤専従 (『日』または『休』) であり早・遅・夜に絶対入らないこと");
 
-      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 健太 ✖ 高橋 直樹 が同一夜勤に入らない)
+      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 健太 × 高橋 直樹 が同一夜勤に入らない)
       let allDaysTwoNights = true;
       let ngPairRespected = true;
       for (let d = 1; d <= 31; d++) {
@@ -372,7 +372,7 @@
         if (nightStaff.includes("佐藤") && nightStaff.includes("高橋")) ngPairRespected = false;
       }
       assert(allDaysTwoNights, "Test 59: 1ヶ月31日間すべての日に夜勤が確実に『毎日2名体制』で配置されていること");
-      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 健太 ✖ 高橋 直樹) が同日の夜勤に重ならないよう自動回避されること");
+      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 健太 × 高橋 直樹) が同日の夜勤に重ならないよう自動回避されること");
 
       // 21. 介護職員 (看護師・事務・施設長を除く) で毎日「日勤2・早出2・遅出2・夜勤2・明け2」完全配置テスト (全31日間)
       let allDaysAllTwoCompliant = true;
@@ -444,9 +444,9 @@
 
       const summary = document.getElementById("testSummary");
       if (failCount === 0) {
-        summary.innerHTML = `<span style="color:#16a34a;">✅ 全 ${passCount} 項目 すべて合格 (ALL PASS)! バグ・例外なし</span>`;
+        summary.innerHTML = `<span style="color:#16a34a;">[PASS] 全 ${passCount} 項目 すべて合格 (ALL PASS)! バグ・例外なし</span>`;
       } else {
-        summary.innerHTML = `<span style="color:#dc2626;">❌ ${failCount} 件のテストが失敗しました</span>`;
+        summary.innerHTML = `<span style="color:#dc2626;">[FAIL] ${failCount} 件のテストが失敗しました</span>`;
       }
 
       window.TEST_COMPLETED = true;

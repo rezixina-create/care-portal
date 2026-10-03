@@ -182,9 +182,20 @@ namespace CarePortal
 
                     if (urlPath == "/api/ip")
                     {
+                        string tPath = Path.Combine(_baseDir, "tunnel_url.txt");
+                        if (method == "POST")
+                        {
+                            string newTUrl = Encoding.UTF8.GetString(bodyBytes).Trim();
+                            if (!string.IsNullOrEmpty(newTUrl))
+                            {
+                                try { File.WriteAllText(tPath, newTUrl, Encoding.UTF8); } catch { }
+                            }
+                            SendJsonResponse(stream, 200, "{\"success\":true}");
+                            return;
+                        }
+
                         List<string> ips = GetIPs();
                         string tUrl = "";
-                        string tPath = Path.Combine(_baseDir, "tunnel_url.txt");
                         if (File.Exists(tPath))
                         {
                             try { tUrl = File.ReadAllText(tPath).Trim(); } catch { }
@@ -418,12 +429,12 @@ if (Test-Path $tunnelUrlFile) {
     try { $latestTunnelUrl = (Get-Content $tunnelUrlFile -Raw -ErrorAction SilentlyContinue).Trim() } catch { }
 }
 if ($latestTunnelUrl) {
-    Write-Host " [📱 スマホ・他端末 外部接続用 (統一案内URL)]:" -ForegroundColor Green
+    Write-Host " [スマホ・他端末 外部接続用 (統一案内URL)]:" -ForegroundColor Green
     Write-Host "   $latestTunnelUrl" -ForegroundColor Yellow -BackgroundColor Black
     Write-Host "   ※ 自宅Wi-Fi・学校・外出先スマホ(4G/5G)どこからでもこのURLで繋がります。" -ForegroundColor Gray
 } else {
-    Write-Host " [📱 外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
-    Write-Host "   バックグラウンドで接続準備中... (画面右上の「📱接続案内」に自動反映されます)" -ForegroundColor Gray
+    Write-Host " [外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
+    Write-Host "   バックグラウンドで接続準備中... (画面右上の「接続案内」に自動反映されます)" -ForegroundColor Gray
 }
 Write-Host ""
 Write-Host " [Tablet (同一Wi-Fi / LAN直接アクセス用)]:" -ForegroundColor White

@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -28,10 +28,19 @@
     window.prompt = function(msg, def) { console.log("[MOCK PROMPT]", msg); return def || ""; };
     window.print = function() { console.log("[MOCK PRINT]"); };
 
+    // テスト中の本番DB破壊防止: /api/save を安全にモック
+    const origFetch = window.fetch;
+    window.fetch = function(url, opts) {
+      if (typeof url === 'string' && url.includes('/api/save')) {
+        return Promise.resolve(new Response(JSON.stringify({success: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+      }
+      return origFetch.apply(this, arguments);
+    };
+
     window.onerror = function(msg, url, line, col, err) {
       console.error("[GLOBAL ERROR]", msg, line, col);
       const summary = document.getElementById("testSummary");
-      if (summary) summary.innerHTML = `<span style="color:red;">❌ Global Error: ${msg} at line ${line}:${col}</span>`;
+      if (summary) summary.innerHTML = `<span style="color:red;">[FAIL] Global Error: ${msg} at line ${line}:${col}</span>`;
       const logEl = document.getElementById("testLog");
       if (logEl) {
         const d = document.createElement("div");
@@ -43,7 +52,7 @@
   </script>
 </head>
 <body style="padding: 20px;">
-  <h1>🧪 介護施設統合ポータル 全36項目・全機能自動検証テスト</h1>
+  <h1>[検証] 介護施設統合ポータル 全36項目・全機能自動検証テスト</h1>
   <div id="testSummary" style="font-size: 18px; margin: 10px 0; font-weight: bold;">テスト待機中...</div>
   <div id="testLog"></div>
 
@@ -51,6 +60,7 @@
   <div id="sandbox" style="display:none;">
     <select id="currentStaff"><option value="山田">山田</option></select>
     <div id="residentsStrip"></div>
+    <div id="residentCountLabel"></div>
     <div id="residentDetailCard"></div>
     <div id="recordTargetResidentText"></div>
     <div id="fsResidentBadge"></div>
@@ -58,7 +68,10 @@
     <div id="fsQuickTemplatesList"></div>
     <div id="alertsContainer"></div>
     <div id="calendarGrid"></div>
-    <div id="currentMonthLabel"></div>
+    <div id="calCurrentMonthLabel"></div>
+    <div id="calDaysRow"></div>
+    <div id="notebookList"></div>
+    <div id="hankoStampArea"></div>
     <div id="recordCategory"><option value="介護記録">介護記録</option></div>
     <input type="datetime-local" id="recordCustomTime">
     <textarea id="recordContent"></textarea>
@@ -85,6 +98,19 @@
       <h3 id="diseaseModalTitle"></h3>
       <div id="diseaseModalContent"></div>
     </div>
+    <input type="month" id="shiftMonthSelector" value="2026-10">
+    <table id="shiftMatrixTable"></table>
+    <div id="shiftEditModal" style="display:none;"></div>
+    <div id="shiftNgModal" style="display:none;"></div>
+    <div id="shiftEditTargetText"></div>
+    <div id="shiftEditRoleNotice"></div>
+    <div id="shiftEditButtonsContainer">
+      <button></button><button></button><button></button><button></button><button></button><button></button>
+    </div>
+    <select id="shiftNgStaff1"></select>
+    <select id="shiftNgStaff2"></select>
+    <input id="shiftNgReason">
+    <div id="shiftNgPairList"></div>
   </div>
 
   <script src="app.js"></script>
@@ -191,8 +217,14 @@
       assert(db.data.incidents.length === incidentInitialCount + 1, "Test 13: 事故・ヒヤリハット報告書の保存が正常");
 
       // 9. 消耗品在庫管理・自動出庫テスト
-      const initialPaperDiaper = (db.data.inventory || []).find(i => i.item_name.includes("紙パンツ"));
+      const initialPaperDiaper = (db.data.inventory || []).find(i => (i.name || i.item_name || "").includes("パンツ"));
       assert(initialPaperDiaper && initialPaperDiaper.current_stock > 0, "Test 14: 消耗品マスターおよび初期在庫が正常保持されていること");
+      const hasGloveS = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 S");
+      const hasGloveL = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 L");
+      const hasWidePad = (db.data.inventory || []).some(i => i.name === "ワイドパッド");
+      const hasOldPad = (db.data.inventory || []).some(i => i.name === "尿取りパッド 4回分");
+      const hasNewPad = (db.data.inventory || []).some(i => i.name === "尿取りパッド");
+      assert(hasGloveS && hasGloveL && hasWidePad && !hasOldPad && hasNewPad, "Test 14b: 手袋S/L・ワイドパッド追加および尿取りパッド名称変更が正常保持されていること");
 
       // 10. クラウド同期/サーバー通信ロジックテスト
       assert(typeof db.save === "function", "Test 15: db.save() 関数が存在すること");
@@ -232,7 +264,9 @@
 
       // 12. 認印スタンプ機能テスト
       const staffNames = db.data.stamps.map(s => s.name);
-      assert(staffNames.includes("山田") && staffNames.includes("施設長"), "Test 20: 認印スタンプ（職員・施設長）が正常保持されていること");
+      const hasLeader = staffNames.some(n => n.includes("山田"));
+      const hasDirector = staffNames.some(n => n.includes("施設長") || n.includes("木村"));
+      assert(hasLeader && hasDirector, "Test 20: 認印スタンプ（職員・施設長）が正常保持されていること");
 
       // 13. UI タブ切り替え関数の存在と動作確認
       assert(typeof switchPortal === "function", "Test 21: switchPortal (現場 ⇄ 事務所) 関数が存在すること");
@@ -256,7 +290,7 @@
       assert(typeof openFullscreenRecord === "function" && typeof closeFullscreenRecord === "function", "Test 32: 全画面集中エディタ開閉関数 (open/closeFullscreenRecord) が存在すること");
       assert(typeof syncFromFullscreen === "function" && typeof submitCareRecordFromFullscreen === "function", "Test 33: 全画面エディタ双方向同期・保存関数が存在すること");
       assert(typeof printSelectedDateRecords === "function", "Test 34: 本日の記録一覧の日報書類形式印刷関数 (printSelectedDateRecords) が存在すること");
-      assert(typeof escapeHtml === "function" && escapeHtml("<script>'test'&</script>") === "&lt;script&gt;&#039;test&#039;&amp;&lt;/script&gt;", "Test 35: HTMLエスケープ関数 (escapeHtml) がXSSと特殊記号を正常エスケープすること");
+      assert(typeof escapeHtml === "function" && escapeHtml("<scr" + "ipt>'test'&</scr" + "ipt>") === "&lt;script&gt;&#039;test&#039;&amp;&lt;/script&gt;", "Test 35: HTMLエスケープ関数 (escapeHtml) がXSSと特殊記号を正常エスケープすること");
 
       // B5文字数カウンター計算値の確認
       const area = document.getElementById("recordContent");
@@ -265,16 +299,154 @@
       const badgeText = document.getElementById("recordB5Badge").textContent;
       assert(badgeText.includes("B5用紙1枚適量"), "Test 36: B5目安判定ゲージが850文字で『B5用紙1枚適量』と判定されること");
 
-      // 17. 総合結果判定
+      // 17. 新改善要件（全16項目関連）の機能・関数完全性テスト
+      assert(typeof isCurrentStaffAdmin === "function", "Test 37: 管理者認証判定関数 (isCurrentStaffAdmin) が存在すること");
+      assert(typeof renderWeightChart === "function", "Test 38: 月次体重表 1年間SVG折れ線グラフ描画関数 (renderWeightChart) が存在すること");
+      assert(Array.isArray(db.data.daily_schedules) && db.data.daily_schedules.length >= 10, "Test 39: 業務日誌日課スケジュール (daily_schedules) が正常保持されていること");
+      assert(Array.isArray(db.data.monthly_notices) && db.data.monthly_notices.length >= 2, "Test 40: 月間業務連絡表 (monthly_notices) が正常保持されていること");
+      assert(typeof renderOfficeCommittees === "function" && typeof submitCommittee === "function", "Test 41: 法定委員会・研修記録管理関数 (renderOfficeCommittees, submitCommittee) が存在すること");
+      assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function" && typeof clearAllNightTurnsForDate === "function", "Test 43: 夜間体位変換トグル＆一括確定・一括解除関数が存在すること");
+      // 夜間体位変換のチェック全解除テスト (全解除後に復活しないことの検証)
+      gState.selectedDate = "2026-10-02";
+      initNightTurnDrafts(true);
+      const keysBefore = Object.keys(gState.nightTurnDrafts || {});
+      keysBefore.forEach(k => {
+        const [rId, tm] = k.split("_");
+        toggleNightTurnAction(parseInt(rId, 10), tm);
+      });
+      renderNightTable();
+      const keysAfter = Object.keys(gState.nightTurnDrafts || {});
+      assert(keysAfter.length === 0, "Test 43b: 夜間体位変換のチェックを全て外しても、外した項目が勝手に復活せず空状態が保持されること");
+      // 検証完了後に監査用標準データを再保存
+      setNightTurnAction(1, "22:00", "右側臥位");
+      setNightTurnAction(2, "22:00", "安眠中");
+      setNightTurnAction(1, "00:00", "左側臥位");
+      setNightTurnAction(2, "00:00", "安眠中");
+      setNightTurnAction(2, "02:00", "左側臥位");
+      submitNightTurnsBatch();
+      assert(typeof submitGroomingsBatch === "function", "Test 44: 身だしなみ一括確定関数 (submitGroomingsBatch) が存在すること");
+      assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
+      assert(typeof openClinicInstructionModal === "function" && typeof submitClinicInstructions === "function", "Test 46: 往診医・受診時指示＆特殊指示の項目別クイック変更・保存関数が存在すること");
+      assert(typeof openCarePlanModal === "function" && typeof openBodyConditionModal === "function", "Test 47: 基本方針・身体状況の項目別クイック変更関数が存在すること");
+      assert(typeof dismissAlert === "function" && typeof isAlertDismissed === "function", "Test 48: アラート完了・非表示ディスミス関数 (dismissAlert) が存在すること");
+      assert(typeof quickReplenishStock === "function" && typeof quickReplenishAllStock === "function", "Test 49: 在庫補充関数 (quickReplenishStock, quickReplenishAllStock) が内部保持されていること");
+      assert(typeof confirmAllMonthlyNoticesForStaff === "function", "Test 50: 月間連絡一括確認完了関数 (confirmAllMonthlyNoticesForStaff) が存在すること");
+      assert(typeof adjustOrderQty === "function" && typeof setOrderQtyToNormalDeficit === "function", "Test 51: 発注数量の平常時自動算出＆上下調整機能 (adjustOrderQty, setOrderQtyToNormalDeficit) が存在すること");
+      assert(typeof approveOrder === "function" && typeof isCurrentStaffAdmin === "function", "Test 52: 発注申請の個別目視確認・承認機能 (approveOrder) が存在すること (誤認防止・一括承認排除)");
+      assert(typeof adjustBelongingQty === "function" && typeof deleteBelonging === "function" && typeof openBelongingModal === "function" && typeof submitBelonging === "function", "Test 53: 私物・持ち込み品台帳の数量増減・編集・削除機能 (adjustBelongingQty, deleteBelonging) が存在すること");
+      assert(typeof openEquipmentModal === "function" && typeof submitEquipment === "function" && typeof deleteEquipment === "function" && typeof openFamilyHistoryModal === "function" && typeof submitFamilyHistory === "function", "Test 54: 福祉用具備品追加・解除および緊急連絡先・家族要望・看取り方針変更機能 (submitEquipment, submitFamilyHistory) が存在すること");
+
+      // 18. 月間勤務表・シフト管理 (自動生成・週休2日・夜勤2名・15名体制・同番NG配慮・手動修正) テスト
+      assert(typeof generateMonthlyShiftData === "function" && typeof renderShiftTable === "function" && typeof applyShiftCellEdit === "function", "Test 55: 月間勤務表シフト生成・描画・手動修正関数が存在すること");
+
+      // 職員19名体制チェック (施設長1, 看護2, 介護14, 事務2)
+      const currentStamps = db.data.stamps || [];
+      assert(currentStamps.length >= 19, `Test 56: 職員マスタが健全シフト運用のための19名体制 (管理者1・看護2・介護14・事務2) に増員されていること (現在: ${currentStamps.length}名)`);
+
+      // 2026-10 シフト生成テスト
+      const shiftOct = generateMonthlyShiftData("2026-10");
+      assert(shiftOct && typeof shiftOct === "object", "Test 57: 2026年10月の1ヶ月分シフトデータが正常に自動生成されること");
+
+      // 施設長・事務員2名・看護師2名は日勤専従＆週休2日 (早・遅・夜に入らない)
+      const dayOnlyStaffNames = ["木村 健一", "田中 慎一", "松本 陽子", "鈴木 美智子", "加藤 由美"];
+      let allDayOnlyCompliant = true;
+      dayOnlyStaffNames.forEach(name => {
+        const staffShift = shiftOct[name] || {};
+        for (let d = 1; d <= 31; d++) {
+          const s = staffShift[d];
+          if (s && s !== "日" && s !== "休") allDayOnlyCompliant = false;
+        }
+      });
+      assert(allDayOnlyCompliant, "Test 58: 施設長 (木村 健一)・事務員2名・看護師2名が日勤専従 (『日』または『休』) であり早・遅・夜に絶対入らないこと");
+
+      // 毎日必ず夜勤2名 ＆ 同番NG配慮 (佐藤 健太 × 高橋 直樹 が同一夜勤に入らない)
+      let allDaysTwoNights = true;
+      let ngPairRespected = true;
+      for (let d = 1; d <= 31; d++) {
+        let nightStaff = [];
+        Object.keys(shiftOct).forEach(staffName => {
+          if (shiftOct[staffName][d] === "夜") nightStaff.push(staffName);
+        });
+        if (nightStaff.length !== 2) allDaysTwoNights = false;
+        if (nightStaff.includes("佐藤 健太") && nightStaff.includes("高橋 直樹")) ngPairRespected = false;
+        if (nightStaff.includes("佐藤") && nightStaff.includes("高橋")) ngPairRespected = false;
+      }
+      assert(allDaysTwoNights, "Test 59: 1ヶ月31日間すべての日に夜勤が確実に『毎日2名体制』で配置されていること");
+      assert(ngPairRespected, "Test 60: 特例配慮設定 (同番NGペア: 佐藤 健太 × 高橋 直樹) が同日の夜勤に重ならないよう自動回避されること");
+
+      // 21. 介護職員 (看護師・事務・施設長を除く) で毎日「日勤2・早出2・遅出2・夜勤2・明け2」完全配置テスト (全31日間)
+      let allDaysAllTwoCompliant = true;
+      let mismatchDetails = [];
+      const careStaffList = (db.data.stamps || []).filter(s => getStaffRoleCategory(s.name) === "care").map(s => s.name);
+      for (let d = 1; d <= 31; d++) {
+        let earlyCount = 0;
+        let lateCount = 0;
+        let dayCount = 0;
+        let nightCount = 0;
+        let akeCount = 0;
+        let offCount = 0;
+        careStaffList.forEach(staffName => {
+          const sym = shiftOct[staffName] && shiftOct[staffName][d];
+          if (sym === "早") earlyCount++;
+          else if (sym === "遅") lateCount++;
+          else if (sym === "日") dayCount++;
+          else if (sym === "夜") nightCount++;
+          else if (sym === "明") akeCount++;
+          else if (sym === "休") offCount++;
+        });
+        if (earlyCount !== 2 || lateCount !== 2 || dayCount !== 2 || nightCount !== 2 || akeCount !== 2 || offCount !== 4) {
+          allDaysAllTwoCompliant = false;
+          mismatchDetails.push(`Day ${d}: 早=${earlyCount}, 遅=${lateCount}, 日=${dayCount}, 夜=${nightCount}, 明=${akeCount}, 休=${offCount}`);
+        }
+      }
+      if (mismatchDetails.length > 0) {
+        log(`[Test 66 Mismatches]: ${mismatchDetails.slice(0, 5).join(" | ")}`);
+      }
+      assert(allDaysAllTwoCompliant, "Test 66: 看護師・事務・施設長を除く介護職員で毎日『日勤2名・早出2名・遅出2名・夜勤2名・明け2名 (公休4名)』と全て2名体制で完全配置されていること");
+
+      // 手動修正テスト
+      const origYamada15 = shiftOct["山田 孝之"] ? shiftOct["山田 孝之"][15] : "日";
+      gShiftEditingCell = { staffName: "山田 孝之", day: 15, yearMonth: "2026-10" };
+      applyShiftCellEdit("休");
+      assert(db.data.monthly_shifts["2026-10"]["山田 孝之"][15] === "休", "Test 61: シフト手動修正 (applyShiftCellEdit) が対象セルに即時反映・保存されること");
+      // 検証完了後に元の値へ安全復元
+      applyShiftCellEdit(origYamada15);
+
+      // 19. 祝日・年末年始の自動「休（公休）」反映テスト
+      const holOct12 = isHolidayOrYearEnd(2026, 10, 12);
+      const holDec31 = isHolidayOrYearEnd(2026, 12, 31);
+      const holJan1 = isHolidayOrYearEnd(2027, 1, 1);
+      const holJan3 = isHolidayOrYearEnd(2027, 1, 3);
+      assert(holOct12.isHoliday && holOct12.name === "スポーツの日" && holDec31.isHoliday && holDec31.name === "年末休暇" && holJan1.isHoliday && holJan3.isHoliday, "Test 62: isHolidayOrYearEnd による国民の祝日・年末年始 (12/29〜1/3) の正確な自動判定");
+
+      // 施設長・事務員2名が10月12日(祝日・月曜)に確実に「休」であること
+      const kimuraOct12 = shiftOct["木村 健一"] ? shiftOct["木村 健一"][12] : null;
+      const tanakaOct12 = shiftOct["田中 慎一"] ? shiftOct["田中 慎一"][12] : null;
+      const matsumotoOct12 = shiftOct["松本 陽子"] ? shiftOct["松本 陽子"][12] : null;
+      assert(kimuraOct12 === "休" && tanakaOct12 === "休" && matsumotoOct12 === "休", "Test 63: 施設長および事務員2名が祝日 (2026-10-12 スポーツの日) に完全自動で『休』が割り振られていること");
+
+      // 20. セル直下クイック選択ポップオーバー＆ダブルクリック循環切り替えテスト
+      assert(typeof openShiftCellPopover === "function" && typeof closeShiftPopover === "function" && typeof executeShiftCellEdit === "function" && typeof cycleShiftCell === "function" && typeof getStaffRoleCategory === "function", "Test 64: シフトセル即時編集ポップオーバー・循環切り替え・職種カテゴリ判定関数が存在すること");
+      cycleShiftCell("木村 健一", 1);
+      const cycledVal = db.data.monthly_shifts["2026-10"]["木村 健一"][1];
+      assert(cycledVal === "日" || cycledVal === "休", "Test 65: 施設長および事務員へのダブルクリック (cycleShiftCell) では『日 ⇄ 休』のみ安全にトグルし夜勤等への誤変更を完全防止すること");
+
+      // 22. 職種制約ガードテスト (事務員・施設長・看護師への夜勤・早・遅設定の拒絶)
+      gShiftEditingCell = { staffName: "田中 慎一", day: 10, yearMonth: "2026-10" };
+      const originalTanakaShift = db.data.monthly_shifts["2026-10"]["田中 慎一"][10];
+      applyShiftCellEdit("夜"); // 事務員への夜勤設定を試行
+      assert(db.data.monthly_shifts["2026-10"]["田中 慎一"][10] === originalTanakaShift, "Test 67: 事務員・施設長・看護師に対する夜勤 (夜) や早出・遅出への手動変更が職種制約ガードにより安全にブロックされること");
+
+      // 23. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
 
       const summary = document.getElementById("testSummary");
       if (failCount === 0) {
-        summary.innerHTML = `<span style="color:#16a34a;">✅ 全 ${passCount} 項目 すべて合格 (ALL PASS)! バグ・例外なし</span>`;
+        summary.innerHTML = `<span style="color:#16a34a;">[PASS] 全 ${passCount} 項目 すべて合格 (ALL PASS)! バグ・例外なし</span>`;
       } else {
-        summary.innerHTML = `<span style="color:#dc2626;">❌ ${failCount} 件のテストが失敗しました</span>`;
+        summary.innerHTML = `<span style="color:#dc2626;">[FAIL] ${failCount} 件のテストが失敗しました</span>`;
       }
 
       window.TEST_COMPLETED = true;

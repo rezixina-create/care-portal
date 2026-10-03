@@ -13,13 +13,13 @@
  <div class="portal-title">
  <span id="facilityTitleSpan" onclick="editFacilityName()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="クリックして施設名を変更">
  <span id="facilityNameDisplay">陽だまりの家</span> 統合ポータル
- <span style="font-size:11px; opacity:0.8; padding:1px 5px; background:rgba(255,255,255,0.25); border-radius:4px; font-weight:normal;">️施設名変更</span>
+ <span style="font-size:11px; opacity:0.8; padding:1px 5px; background:rgba(255,255,255,0.25); border-radius:4px; font-weight:normal;">施設名変更</span>
  </span>
  <span class="badge" id="syncStatusBadge" onclick="openShareModal()" style="cursor:pointer; background:#2563eb;" title="クリックして他端末接続URLを確認"> クラウド共有中</span>
  <span class="badge" id="backupStatusBadge" style="background:#10b981;">自動バックアップ稼働中</span>
  </div>
  <div class="header-controls">
- <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()"> 接続案内</button>
+ <button class="btn btn-outline" style="padding:4px 10px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="openShareModal()">接続案内</button>
  <div class="staff-selector">
  <label for="currentStaff">担当職員:</label>
  <select id="currentStaff" onchange="onCurrentStaffChange()"></select>
@@ -92,27 +92,27 @@
  <!-- 普段使う（日常ケア） -->
  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
  <span style="font-size:12px; font-weight:bold; color:#1e40af; background:#eff6ff; padding:3px 8px; border-radius:4px; white-space:nowrap;">【普段使う】</span>
- <button class="sub-tab-btn active" onclick="switchCareTab('record')"> 個別介護記録</button>
- <button class="sub-tab-btn" onclick="switchCareTab('daily_journal')"> 業務日誌 (一日の記録)</button>
- <button class="sub-tab-btn" onclick="switchCareTab('vitals')">🩺 バイタル</button>
- <button class="sub-tab-btn" onclick="switchCareTab('meal')"> 食事・水分</button>
- <button class="sub-tab-btn" onclick="switchCareTab('excretion')"> 排泄</button>
- <button class="sub-tab-btn" onclick="switchCareTab('med')"> 服薬・点眼</button>
- <button class="sub-tab-btn" onclick="switchCareTab('notebook')"> 連絡帳・申し送り</button>
+ <button class="sub-tab-btn active" onclick="switchCareTab('record')">個別介護記録</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('daily_journal')">業務日誌 (一日の記録)</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('vitals')">バイタル</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('med')">服薬・点眼</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡帳・申し送り</button>
  </div>
 
  <!-- たまに使う（定例・状況別） -->
  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0;">
  <span style="font-size:12px; font-weight:bold; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:4px; white-space:nowrap;">【定例・状況別】</span>
- <button class="sub-tab-btn" onclick="switchCareTab('bath')"> 入浴・塗布薬</button>
- <button class="sub-tab-btn" onclick="switchCareTab('oral')">🪥 口腔ケア</button>
- <button class="sub-tab-btn" onclick="switchCareTab('night')"> 夜勤体位変換</button>
- <button class="sub-tab-btn" onclick="switchCareTab('linen')">️ シーツ交換</button>
- <button class="sub-tab-btn" onclick="switchCareTab('grooming')">️ 身だしなみ</button>
- <button class="sub-tab-btn" onclick="switchCareTab('weight')">️ 月次体重</button>
- <button class="sub-tab-btn" onclick="switchCareTab('visit')"> 面会・荷物</button>
- <button class="sub-tab-btn" onclick="switchCareTab('recreation')"> レク履歴</button>
- <button class="sub-tab-btn" onclick="switchCareTab('consume')"> 物品消費</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('bath')">入浴・塗布薬</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('oral')">口腔ケア</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('night')">夜勤体位変換</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('linen')">シーツ交換</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('grooming')">身だしなみ</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('weight')">月次体重</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('visit')">面会・荷物</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('recreation')">レク履歴</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('consume')">物品消費</button>
  </div>
  </div>
 
@@ -144,7 +144,7 @@
 
  <!-- 対象利用者バナー -->
  <div id="recordTargetResidentBanner" style="background:#eff6ff; border-left:4px solid #2563eb; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-weight:bold; color:#1e40af; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
- <span id="recordTargetResidentText">️ 対象利用者: 選択中</span>
+ <span id="recordTargetResidentText"> 対象利用者: 選択中</span>
  <span style="font-size:12px; font-weight:normal; color:#3b82f6;">※利用者カルテから自動連動</span>
  </div>
 
@@ -162,7 +162,7 @@
 
  <div class="form-group" style="margin-top:12px;">
  <label style="font-weight:bold; font-size:13px; color:#1e293b; display:flex; align-items:center; justify-content:space-between;">
- <span>️ 記録区分（ワンタップ選択 または ドロップダウン）:</span>
+ <span> 記録区分（ワンタップ選択 または ドロップダウン）:</span>
  <span style="font-size:11.5px; color:#64748b; font-weight:normal;">日誌・カルテに色別タグで表示されます</span>
  </label>
  <!-- ワンタップ区分ボタンバー -->
@@ -215,7 +215,7 @@
  <button class="btn btn-primary" style="padding:10px 20px; font-size:15px; font-weight:bold;" onclick="submitCareRecord()"> 保存して記録を追加</button>
  <button class="btn btn-secondary" style="font-size:13px;" onclick="clearRecordForm()">クリア</button>
  </div>
- <button class="btn btn-secondary" style="font-size:13px;" onclick="openIncidentFromRecord()">️ ヒヤリハット・事故報告書を作成</button>
+ <button class="btn btn-secondary" style="font-size:13px;" onclick="openIncidentFromRecord()"> ヒヤリハット・事故報告書を作成</button>
  </div>
  </div>
 
@@ -228,13 +228,13 @@
  </div>
  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
  <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px; background:#2563eb; color:#fff;" onclick="openPersonalVitalModal()">
- 🩺 ＋バイタル・体重を記録/編集
+ ＋バイタル・体重を記録/編集
  </button>
  <button type="button" class="btn btn-secondary" id="btnToggleRecordScope" style="font-size:12px; padding:4px 10px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="toggleRecordScope()">
  年月別過去アーカイブ
  </button>
  <button class="btn btn-secondary" style="font-size:12px; background:#f8fafc; border:1px solid #cbd5e1; display:flex; align-items:center; gap:4px;" onclick="printSelectedDateRecords()">
- ️ この日のカルテを印刷
+  この日のカルテを印刷
  </button>
  </div>
  </div>
@@ -261,7 +261,7 @@
  <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-bottom:2px solid #e2e8f0; padding-bottom:10px;">
  <span id="dailyJournalTitle" style="font-size:17px; font-weight:bold; color:#1e3a8a;"> 施設・フロア 業務日誌 (一日の記録)</span>
  <button class="btn btn-secondary" style="font-size:13px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:flex; align-items:center; gap:6px;" onclick="printDailyJournal()">
- ️ 本日の業務日誌を印刷 (日報形式)
+  本日の業務日誌を印刷 (日報形式)
  </button>
  </div>
 
@@ -304,7 +304,7 @@
  <!-- 2. バイタルチェック表 -->
  <div id="tabCareVitals" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>🩺 バイタルチェック表 (入力すると個人記録・特変は連絡帳へ自動連携)</span>
+ <span>バイタルチェック表 (入力すると個人記録・特変は連絡帳へ自動連携)</span>
  </div>
  <table class="data-table" id="vitalsTable">
  <thead>
@@ -326,7 +326,7 @@
  <!-- 3. 排泄チェック表 (15分刻み・微小中大・水様便) -->
  <div id="tabCareExcretion" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 排泄チェック表 (排便コントロール・量判定ガイド付き)</span>
+ <span>排泄チェック表 (排便コントロール・量判定ガイド付き)</span>
  </div>
  <div style="background:#f8fafc; padding:16px; border-radius:8px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
  <div>
@@ -450,7 +450,7 @@
  <!-- 6. 口腔ケア -->
  <div id="tabCareOral" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>🪥 口腔ケア ＆ 義歯洗浄チェック表</span>
+ <span>口腔ケア ＆ 義歯洗浄チェック表</span>
  </div>
  <table class="data-table" id="oralTable">
  <thead>
@@ -511,7 +511,7 @@
  <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
  <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位を選択。再度タップで選択解除できます。</span>
  <div style="display:flex; gap:10px;">
- <button class="btn btn-outline" style="border-color:#fca5a5; color:#dc2626; font-size:12px; padding:6px 12px;" onclick="clearAllNightTurnsForDate()">️ 本日のチェックをすべて解除</button>
+ <button class="btn btn-outline" style="border-color:#fca5a5; color:#dc2626; font-size:12px; padding:6px 12px;" onclick="clearAllNightTurnsForDate()"> 本日のチェックをすべて解除</button>
  <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()"> 体位変換・夜間巡視を一括確定 (個人記録へ転記)</button>
  </div>
  </div>
@@ -520,7 +520,7 @@
  <!-- 9. 月次体重 -->
  <div id="tabCareWeight" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>️ 月次 体重測定表 (前月比・前々月比増減を自動計算 ＆ 1年間推移グラフ)</span>
+ <span> 月次 体重測定表 (前月比・前々月比増減を自動計算 ＆ 1年間推移グラフ)</span>
  </div>
  <table class="data-table" id="weightTable">
  <thead>
@@ -542,7 +542,7 @@
  <!-- 10. シーツ交換チェック -->
  <div id="tabCareLinen" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>️ シーツ ＆ リネン交換チェック表</span>
+ <span> シーツ ＆ リネン交換チェック表</span>
  </div>
  <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
  <span>選択中の利用者「<strong id="linenResidentName"></strong> 様」:</span>
@@ -560,7 +560,7 @@
  <!-- 11. 身だしなみチェック (爪切り・髭剃り・耳掃除等) -->
  <div id="tabCareGrooming" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>️ 身だしなみチェック表 (爪切り・髭剃り・耳掃除)</span>
+ <span>身だしなみチェック表 (爪切り・髭剃り・耳掃除)</span>
  </div>
  <table class="data-table" id="groomingTable">
  <thead>
@@ -578,7 +578,7 @@
  </table>
  <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
  <span style="font-size:12px; color:#64748b;">※ チェックはクリックでON/OFF切り替え可能。全て入れ込んだら右のボタンで一括確定します。</span>
- <button id="btnSubmitGroomings" class="btn btn-primary" onclick="submitGroomingsBatch()">️ 身だしなみ記録を一括確定 (個人記録へ転記)</button>
+ <button id="btnSubmitGroomings" class="btn btn-primary" onclick="submitGroomingsBatch()">身だしなみ記録を一括確定 (個人記録へ転記)</button>
  </div>
  </div>
 
@@ -707,7 +707,7 @@
  <button class="sub-tab-btn" onclick="switchOfficeTab('deposit')"> 預かり金出納帳</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('vehicle')"> 送迎・公用車運行</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('orders')"> 発注申請</button>
- <button class="sub-tab-btn" onclick="switchOfficeTab('incidents')">️ ヒヤリハット・事故</button>
+ <button class="sub-tab-btn" onclick="switchOfficeTab('incidents')"> ヒヤリハット・事故</button>
  </div>
 
  <!-- たまに使う -->
@@ -719,8 +719,8 @@
  <button class="sub-tab-btn" onclick="switchOfficeTab('suppliers')"> 取引先マスタ</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('vaccine')"> ワクチン管理</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('fire')"> 消防・避難訓練</button>
- <button class="sub-tab-btn" onclick="switchOfficeTab('committee')">️ 委員会・研修</button>
- <button class="sub-tab-btn" onclick="switchOfficeTab('complaint')">️ 苦情受付簿</button>
+ <button class="sub-tab-btn" onclick="switchOfficeTab('committee')"> 委員会・研修</button>
+ <button class="sub-tab-btn" onclick="switchOfficeTab('complaint')"> 苦情受付簿</button>
  </div>
  </div>
 
@@ -809,7 +809,7 @@
  <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
  <label style="font-weight:bold;">利用者を選択:</label>
  <select id="billingResidentSelect" class="form-control" style="width:200px;" onchange="renderBillingDetail()"></select>
- <button class="btn btn-secondary" onclick="window.print()">️ 請求明細書を印刷 (A4)</button>
+ <button class="btn btn-secondary" onclick="window.print()"> 請求明細書を印刷 (A4)</button>
  </div>
  <div id="billingDetailArea"></div>
  </div>
@@ -891,7 +891,7 @@
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="generateMonthlyShiftAction()"> 1ヶ月シフト自動生成</button>
  <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#f8fafc;" onclick="openShiftNgModal()"> 特例配慮設定 (同番NG)</button>
- <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="window.print()">️ A4横 印刷</button>
+ <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="window.print()"> A4横 印刷</button>
  </div>
  </div>
 
@@ -991,7 +991,7 @@
  <!-- 11. 法定委員会・研修記録 -->
  <div id="tabOfficeCommittee" style="display:none;" class="panel-card">
  <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
- <span>️ 法定委員会・研修記録 (虐待防止・感染対策・身体拘束・事故防止)</span>
+ <span> 法定委員会・研修記録 (虐待防止・感染対策・身体拘束・事故防止)</span>
  <button class="btn btn-primary" onclick="openCommitteeModal()">＋ 委員会・研修を登録</button>
  </div>
  <table class="data-table" id="committeeTable">
@@ -1005,7 +1005,7 @@
  <!-- 12. 苦情・ご要望受付簿 -->
  <div id="tabOfficeComplaint" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>️ 苦情・ご要望 受付簿 (家族手書き対応・監査必須義務項目)</span>
+ <span> 苦情・ご要望 受付簿 (家族手書き対応・監査必須義務項目)</span>
  <button class="btn btn-primary" onclick="openComplaintModal()">＋ 苦情・要望を登録</button>
  </div>
  <table class="data-table" id="complaintsTable">
@@ -1019,7 +1019,7 @@
  <!-- 13. ヒヤリハット ＆ 事故報告書 -->
  <div id="tabOfficeIncidents" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span>️ ヒヤリハット ＆ 事故報告書 一覧 (独立修正可能)</span>
+ <span> ヒヤリハット ＆ 事故報告書 一覧 (独立修正可能)</span>
  </div>
  <table class="data-table" id="incidentsTable">
  <thead>
@@ -1054,7 +1054,7 @@
  <div class="modal-overlay" id="diseaseModal" style="display:none;">
  <div class="modal-card">
  <div class="modal-header">
- <h3 id="diseaseModalTitle">🩺 病歴ガイド</h3>
+ <h3 id="diseaseModalTitle">病歴ガイド</h3>
  <button class="modal-close-btn" onclick="closeModal('diseaseModal')">×</button>
  </div>
 
@@ -1077,7 +1077,7 @@
  </div>
  <div id="termDiseaseLinkArea" style="margin-top:8px; display:none;">
  <button type="button" class="btn btn-primary" id="btnJumpToDiseaseGuide" style="font-size:11.5px; padding:3px 10px;">
- 🩺 この病気の現場ケアガイドを開く
+ この病気の現場ケアガイドを開く
  </button>
  </div>
  </div>
@@ -1086,7 +1086,7 @@
 
  <!-- 施設独自のガイド編集エリア (普段は非表示) -->
  <div id="diseaseCustomEditArea" style="display:none; background:#f8fafc; border:1px solid #94a3b8; border-radius:8px; padding:12px; margin-top:12px;">
- <h4 id="diseaseCustomEditTitle" style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:8px;">️ 施設独自ケアガイドを編集・保存</h4>
+ <h4 id="diseaseCustomEditTitle" style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:8px;"> 施設独自ケアガイドを編集・保存</h4>
  <input type="hidden" id="editGuideDiseaseName">
  <div style="margin-bottom:8px;">
  <label style="font-size:11.5px; font-weight:bold; color:#991b1b;"> すぐに看護師・医師へ報告する基準（危険レベル・具体的症状）:</label>
@@ -1233,7 +1233,7 @@
  </div>
  <div class="form-group">
  <label>見守り注意事項・センサー等:</label>
- <input type="text" id="resSensorAlert" class="form-control" placeholder="例: ️ 離床センサーマット使用中 (ベッド脇)">
+ <input type="text" id="resSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中 (ベッド脇)">
  </div>
  <div class="form-group">
  <label>ケアプラン目標・配慮事項:</label>
@@ -1258,14 +1258,14 @@
  </div>
  </div>
  <div style="border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px;">
- <div style="font-size:13px; font-weight:bold; color:#1e40af; margin-bottom:6px;">🩺 往診時 特殊指示 (絶食・薬のみ等 / アラート自動表示):</div>
+ <div style="font-size:13px; font-weight:bold; color:#1e40af; margin-bottom:6px;">往診時 特殊指示 (絶食・薬のみ等 / アラート自動表示):</div>
  <div class="form-group">
  <label>往診・受診 特殊指示 (絶食、薬のみ服用可、採血あり等):</label>
  <input type="text" id="resClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、朝薬のみ水分少量で服用可、採血あり">
  </div>
  </div>
  <div style="border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px;">
- <div style="font-size:13px; font-weight:bold; color:#b91c1c; margin-bottom:6px;">️ 個別バイタル注意基準値 (入力値が外れた際に確認警告表示):</div>
+ <div style="font-size:13px; font-weight:bold; color:#b91c1c; margin-bottom:6px;"> 個別バイタル注意基準値 (入力値が外れた際に確認警告表示):</div>
  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
  <div class="form-group">
  <label style="font-size:12px;">最高血圧上限 (mmHg):</label>
@@ -1394,7 +1394,7 @@
  <div class="modal-overlay" id="complaintModal" style="display:none;">
  <div class="modal-card">
  <div class="modal-header">
- <h3>️ 苦情・ご要望の登録 (手書き・口頭受付対応)</h3>
+ <h3> 苦情・ご要望の登録 (手書き・口頭受付対応)</h3>
  <button class="modal-close-btn" onclick="closeModal('complaintModal')">×</button>
  </div>
  <div class="form-group">
@@ -1428,7 +1428,7 @@
  <div class="modal-overlay" id="incidentModal" style="display:none;">
  <div class="modal-card">
  <div class="modal-header">
- <h3 id="incidentModalTitle">️ ヒヤリハット / 事故報告書 編集</h3>
+ <h3 id="incidentModalTitle"> ヒヤリハット / 事故報告書 編集</h3>
  <button class="modal-close-btn" onclick="closeModal('incidentModal')">×</button>
  </div>
  <input type="hidden" id="incId">
@@ -1573,8 +1573,8 @@
  </select>
  </div>
  <div style="flex:1;">
- <label style="font-weight:bold;">️ 見守り・離床センサー:</label>
- <input type="text" id="fhSensorAlert" class="form-control" placeholder="例: ️ 離床センサーマット使用中">
+ <label style="font-weight:bold;"> 見守り・離床センサー:</label>
+ <input type="text" id="fhSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中">
  </div>
  </div>
 
@@ -1708,7 +1708,7 @@
  </div>
  <div style="display:flex; gap:6px;">
  <button class="btn btn-secondary" style="font-size:12px; padding:5px 10px;" onclick="openPCFolder()" title="PCの実際の保存フォルダをエクスプローラーで開きます">
- ️ PCの保存フォルダを開く
+  PCの保存フォルダを開く
  </button>
  <button class="btn btn-primary" style="font-size:12px; padding:5px 12px; background:#10b981; border-color:#10b981;" onclick="toggleAddPhotoForm()">
  写真・書類の追加
@@ -1769,7 +1769,7 @@
  <div class="modal-overlay" id="committeeModal" style="display:none;">
  <div class="modal-card" style="max-width:560px;">
  <div class="modal-header">
- <h3 id="committeeModalTitle">️ 法定委員会・研修記録の登録</h3>
+ <h3 id="committeeModalTitle"> 法定委員会・研修記録の登録</h3>
  <button class="modal-close-btn" onclick="closeModal('committeeModal')">&times;</button>
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
@@ -1901,7 +1901,7 @@
  <input type="hidden" id="clinicResidentId">
  
  <div class="form-group">
- <label>️ 往診・受診 特殊指示 (絶食・薬のみ等):</label>
+ <label> 往診・受診 特殊指示 (絶食・薬のみ等):</label>
  <input type="text" id="quickClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、朝薬のみ水分少量で服用可、採血あり">
  <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('当日朝は絶食 (採血あり)')">＋ 絶食(採血)</button>
@@ -1912,7 +1912,7 @@
  </div>
 
  <div class="form-group" style="margin-top:12px;">
- <label>🩺 医師の指示内容 (受診時コメント):</label>
+ <label>医師の指示内容 (受診時コメント):</label>
  <textarea id="quickDrInstructions" class="form-control" rows="3" placeholder="医師からの指示、処方変更、注意点などを記入"></textarea>
  </div>
 
@@ -1943,8 +1943,8 @@
  </div>
 
  <div class="form-group" style="margin-top:10px;">
- <label>️ 離床センサー・見守り注意:</label>
- <input type="text" id="quickSensorAlert" class="form-control" placeholder="例: ️ 離床センサーマット使用中 (ベッド脇)">
+ <label> 離床センサー・見守り注意:</label>
+ <input type="text" id="quickSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中 (ベッド脇)">
  </div>
 
  <div style="margin-top:12px; border-top:1px solid #e2e8f0; padding-top:10px;">
@@ -1980,7 +1980,7 @@
  <div class="modal-overlay" id="bodyConditionModal" style="display:none;">
  <div class="modal-card" style="max-width:540px;">
  <div class="modal-header">
- <h3 id="bodyConditionModalTitle">🩺 身体状況 ＆ 食形態・口腔状態の変更</h3>
+ <h3 id="bodyConditionModalTitle">身体状況 ＆ 食形態・口腔状態の変更</h3>
  <button class="modal-close-btn" onclick="closeModal('bodyConditionModal')">&times;</button>
  </div>
  <input type="hidden" id="bodyConditionResidentId">
@@ -2033,7 +2033,7 @@
  <div class="modal-overlay" id="personalVitalModal" style="display:none;">
  <div class="modal-card" style="max-width:520px;">
  <div class="modal-header">
- <h3 id="personalVitalModalTitle">🩺 バイタル ＆ 体重・身体測定を記録・変更</h3>
+ <h3 id="personalVitalModalTitle">バイタル ＆ 体重・身体測定を記録・変更</h3>
  <button class="modal-close-btn" onclick="closeModal('personalVitalModal')">&times;</button>
  </div>
  <div style="padding:14px 0;">
@@ -2119,7 +2119,7 @@
  <!-- 記録区分（クイックボタン ＆ セレクト） -->
  <div style="margin-bottom:12px;">
  <label style="font-size:12px; font-weight:bold; color:#334155; display:flex; justify-content:space-between;">
- <span>️ 記録区分（ワンタップ選択）:</span>
+ <span> 記録区分（ワンタップ選択）:</span>
  <span style="font-size:11px; color:#64748b; font-weight:normal;">日誌・カルテに色別表示</span>
  </label>
  <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:4px; margin-bottom:6px;" id="djmCategoryButtons">
@@ -2174,7 +2174,7 @@
  <div class="modal-overlay" id="shiftEditModal" style="display:none;">
  <div class="modal-card" style="max-width:380px;">
  <div class="modal-header">
- <h4 style="margin:0; color:#1e3a8a;">️ シフト手動変更</h4>
+ <h4 style="margin:0; color:#1e3a8a;"> シフト手動変更</h4>
  <button class="modal-close-btn" onclick="closeModal('shiftEditModal')">&times;</button>
  </div>
  <div style="padding:14px 0; text-align:center;">
@@ -2182,10 +2182,10 @@
  <p id="shiftEditRoleNotice" style="font-size:11.5px; color:#64748b; margin-bottom:14px; min-height:16px;"></p>
  <div style="display:grid; grid-template-columns: repeat(3, 1fr); gap:10px;" id="shiftEditButtonsContainer">
  <button class="btn btn-outline" style="background:#ffedd5; color:#c2410c; border:1px solid #fed7aa; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('早')"> 早番 (早)</button>
- <button class="btn btn-outline" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('日')">️ 日勤 (日)</button>
+ <button class="btn btn-outline" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('日')"> 日勤 (日)</button>
  <button class="btn btn-outline" style="background:#ede9fe; color:#6d28d9; border:1px solid #ddd6fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('遅')"> 遅番 (遅)</button>
  <button class="btn btn-outline" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('夜')"> 夜勤 (夜)</button>
- <button class="btn btn-outline" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('明')">️ 明け (明)</button>
+ <button class="btn btn-outline" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('明')"> 明け (明)</button>
  <button class="btn btn-outline" style="background:#fef2f2; color:#b91c1c; border:1px solid #fecaca; font-weight:bold; padding:8px 4px;" onclick="applyShiftCellEdit('休')"> 公休 (休)</button>
  </div>
  </div>

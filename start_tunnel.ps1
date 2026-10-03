@@ -38,7 +38,7 @@ if ($tunnelUrl) {
     Write-Host "   【外部接続・スマホ用】Cloudflare Tunnel 接続準備完了！" -ForegroundColor Cyan
     Write-Host "======================================================================" -ForegroundColor Green
     Write-Host ""
-    Write-Host " 🌐 外部アクセス・スマホ用 公開URL:" -ForegroundColor White
+    Write-Host " 外部アクセス・スマホ用 公開URL:" -ForegroundColor White
     Write-Host "    $tunnelUrl" -ForegroundColor Yellow -BackgroundColor Black
     Write-Host ""
     Write-Host " ※ スマホの4G/5G回線や外出先、学校Wi-Fiからでもそのまま接続できます！" -ForegroundColor Gray

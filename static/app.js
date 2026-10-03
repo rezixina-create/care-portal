@@ -351,6 +351,25 @@ class LocalDB {
 
  async pollServerUpdates() {
  if (!this.isServerMode) return;
+
+ // トンネル接続先URLの変更検知とQRコード自動更新 (サーバー側のtunnel_url.txtの変更に自動追従)
+ this.pollCycleCount = (this.pollCycleCount || 0) + 1;
+ if (this.pollCycleCount % 2 === 0) {
+ try {
+ const resIp = await fetch('/api/ip');
+ if (resIp.ok) {
+ const ipData = await resIp.json();
+ if (ipData.tunnel_url && ipData.tunnel_url.trim() !== "") {
+ const currentTunnel = localStorage.getItem("care_portal_tunnel_url") || "";
+ if (ipData.tunnel_url.trim() !== currentTunnel) {
+ localStorage.setItem("care_portal_tunnel_url", ipData.tunnel_url.trim());
+ this.renderShareModalUrls();
+ }
+ }
+ }
+ } catch (_) {}
+ }
+
  try {
  const res = await fetch('/api/data');
  if (!res.ok) return;
@@ -392,7 +411,7 @@ class LocalDB {
  badge.style.background = "#2563eb";
  badge.title = "施設内Wi-Fiで他端末とリアルタイム共有中 (クリックで接続URL表示)";
  } else {
- badge.innerHTML = "️ 親機サーバー通信切断";
+ badge.innerHTML = " 親機サーバー通信切断";
  badge.style.background = "#dc2626";
  badge.title = "親機サーバーとの通信が一時途絶しています (ローカル保存中)";
  }
@@ -421,7 +440,7 @@ class LocalDB {
  const localUrl = `http://${primaryIp}:${port}`;
 
  // トンネルURL（最新取得値 または 保存値）
- let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
+ let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || "https://inside-mustang-test-demographic.trycloudflare.com";
  const isTunnel = Boolean(cloudflareUrl && cloudflareUrl.trim() !== "");
  const unifiedUrl = isTunnel ? cloudflareUrl.trim() : localUrl;
  const unifiedQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(unifiedUrl);
@@ -432,16 +451,16 @@ class LocalDB {
  cardDiv.innerHTML = `
  <div style="flex-shrink:0; text-align:center; margin:0 auto;">
  <img src="${unifiedQrUrl}" alt="統一接続QRコード" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
- <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;"> カメラでスキャン</span>
+ <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">カメラでスキャン</span>
  </div>
  <div style="flex:1; min-width:260px;">
  <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1d4ed8; margin-bottom:12px; word-break:break-all; background:#ffffff; padding:8px 12px; border-radius:6px; border:1px solid #bfdbfe;">
  ${unifiedUrl}
  </div>
  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
- <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')"> 接続URLをコピー</button>
- <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:7px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;"> ブラウザで開く</a>
- <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">️ URL変更</button>
+ <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">接続URLをコピー</button>
+ <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:7px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">ブラウザで開く</a>
+ <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">URL変更</button>
  </div>
  ${isTunnel ? `
  <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
@@ -459,9 +478,9 @@ class LocalDB {
 
  const seed = {
  residents: [
- { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: "️ 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (左側からの介助推奨)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
- { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: "️ ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
- { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: "️ 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+ { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (左側からの介助推奨)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
+ { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
+ { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
  { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
  ],
  stamps: [
@@ -608,7 +627,7 @@ let gState = {
 };
 
 // ======================================================================
-// 🩺 現場介護向け 医療・症状・ケア専門用語 やさしい解説辞書
+// 現場介護向け 医療・症状・ケア専門用語 やさしい解説辞書
 // ======================================================================
 const MEDICAL_TERMS_DICTIONARY = {
  // 呼吸・循環器
@@ -661,7 +680,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "SpO2",
  ruby: "えすぴーおーつー",
  meaning: "パルスオキシメーターで指先等から測定する『動脈血酸素飽和度』。",
- urgency: "️ 93%未満は要注意・90%以下は即報告",
+ urgency: " 93%未満は要注意・90%以下は即報告",
  urgencyType: "danger",
  checkPoint: "正常値は96〜99%です。普段より3%以上低下、または93%未満のときは直ちに看護師へ報告。測定時は指先の冷えや血流不良がないかも確認します。",
  isDisease: false
@@ -670,7 +689,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "HOT",
  ruby: "ほっと (ざいたくさんそりょうほう)",
  meaning: "在宅酸素療法。機械やボンベから鼻カニューラを通して持続的に酸素を吸入する治療。",
- urgency: "ℹ️ 現場ケア知識・火気厳禁",
+ urgency: "ℹ 現場ケア知識・火気厳禁",
  urgencyType: "info",
  checkPoint: "カニューラが鼻から外れていないか、チューブが折れ曲がっていないか毎時確認。周囲2m以内は火気厳禁です。流量変更は介護職では行わず看護師へ伝えます。",
  isDisease: false
@@ -679,7 +698,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "在宅酸素療法",
  ruby: "ざいたくさんそりょうほう",
  meaning: "機械やボンベから鼻カニューラを通して持続的に酸素を吸入する治療（HOT）。",
- urgency: "ℹ️ 現場ケア知識・火気厳禁",
+ urgency: "ℹ 現場ケア知識・火気厳禁",
  urgencyType: "info",
  checkPoint: "カニューラのズレ・チューブの折れ曲がり・流量設定を毎時確認します。火気厳禁を徹底してください。",
  isDisease: false
@@ -715,7 +734,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "不整脈",
  ruby: "ふせいみゃく",
  meaning: "心臓の拍動リズムが不規則になったり、脈が極端に速い（頻脈）・遅い（徐脈）状態。",
- urgency: "️ めまい・動悸・胸痛伴う時は即報告",
+ urgency: " めまい・動悸・胸痛伴う時は即報告",
  urgencyType: "warning",
  checkPoint: "検脈でリズムがバラバラ、または安静時脈拍が120以上または45以下の場合は直ちに看護師へ連絡。ふらつき・転倒に厳重警戒してください。",
  isDisease: false
@@ -744,7 +763,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "片麻痺",
  ruby: "かたまひ",
  meaning: "身体の左右どちらか半分（右手と右足、または左手と左足）に力が入らない状態。",
- urgency: "️ 急な悪化・新規出現は即報告 (脳梗塞疑い)",
+ urgency: " 急な悪化・新規出現は即報告 (脳梗塞疑い)",
  urgencyType: "danger",
  checkPoint: "普段より急に力が入らなくなった、腕が上がらない、顔の半分が下がっている場合は脳血管障害の再発疑い。直ちに看護師・救急要請します。日常ケアは健側から介助します。",
  isDisease: false
@@ -789,7 +808,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "せん妄",
  ruby: "せんもう",
  meaning: "脱水・感染症・環境変化等で、数時間〜数日の間に急に時間や場所がわからなくなり幻覚や興奮が起きる一時的な意識障害。",
- urgency: "️ 看護師へ報告 (原因疾患の探索)",
+ urgency: " 看護師へ報告 (原因疾患の探索)",
  urgencyType: "warning",
  checkPoint: "認知症の悪化に見えますが、発熱・尿路感染・脱水・便秘・薬剤副作用が原因であることが多いです。体温測定・水分摂取確認を行い看護師へ報告します。",
  isDisease: false
@@ -798,7 +817,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "半側空間無視",
  ruby: "はんそくくうかんむし",
  meaning: "脳の損傷により、麻痺側（多くは左側）にある人や物、配膳された食事に気づかなくなる障害。",
- urgency: "ℹ️ 現場ケア知識",
+ urgency: "ℹ 現場ケア知識",
  urgencyType: "info",
  checkPoint: "本人は見えていない自覚がありません。声かけや食事の配膳は気づきやすい側（健側）から行い、麻痺側にある食事や障害物へ優しく注意を促します。",
  isDisease: false
@@ -807,7 +826,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "感情失禁",
  ruby: "かんじょうしっきん",
  meaning: "脳血管障害などの後遺症で、些細な刺激や理由もないのに急に泣いたり大笑いしたりする症状。",
- urgency: "ℹ️ 現場ケア知識",
+ urgency: "ℹ 現場ケア知識",
  urgencyType: "info",
  checkPoint: "本人の意思でコントロールできません。動揺せず『大丈夫ですよ』と落ち着いた声かけをし、背中を優しくさすって安心感を促します。",
  isDisease: false
@@ -827,7 +846,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "振戦",
  ruby: "しんせん",
  meaning: "手や指、足、顎などが自分の意思と無関係に細かくリズミカルに震える症状。",
- urgency: "️ 低血糖の震えは即報告 / パーキンソン症状は観察",
+ urgency: " 低血糖の震えは即報告 / パーキンソン症状は観察",
  urgencyType: "warning",
  checkPoint: "冷汗や脱力を伴う場合は低血糖の疑い（即報告）。安静時に手をもみほぐすように震える場合はパーキンソン病の症状で、内服時間通りに服薬できているか確認します。",
  isDisease: false
@@ -836,7 +855,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "筋固縮",
  ruby: "きんこしゅく",
  meaning: "他人が関節を曲げ伸ばししようとした際、筋肉が鉛の管のように硬く抵抗する症状。",
- urgency: "ℹ️ 現場ケア知識",
+ urgency: "ℹ 現場ケア知識",
  urgencyType: "info",
  checkPoint: "移乗や更衣の際に無理に力を入れて引っ張ると骨折や筋損傷の原因になります。ゆっくりと本人の動きに合わせて優しく介助します。",
  isDisease: false
@@ -854,7 +873,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "突進現象",
  ruby: "とっしんげんしょう",
  meaning: "歩き始めると前傾姿勢のまま小刻みに足が加速し、自分の意思で止まれなくなる症状。",
- urgency: "️ 転倒高リスク (見守り必須)",
+ urgency: " 転倒高リスク (見守り必須)",
  urgencyType: "warning",
  checkPoint: "壁や物に激突して重傷を負うリスクがあります。歩行時は必ず前方・側方に付き添い、止まる際は正面から肩を優しく支えて制動します。",
  isDisease: false
@@ -892,7 +911,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "爪白癬",
  ruby: "つめはくせん",
  meaning: "爪の水虫。爪が白濁・肥厚して脆くなる真菌感染症。",
- urgency: "ℹ️ 現場ケア知識 (足病変チェック)",
+ urgency: "ℹ 現場ケア知識 (足病変チェック)",
  urgencyType: "info",
  checkPoint: "糖尿病の利用者は足の感覚が鈍く、爪の割れや靴擦れから細菌が入り足壊疽（切断）に繋がることがあります。入浴時に足先の傷や赤みがないか必ず観察します。",
  isDisease: false
@@ -901,7 +920,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "シャント",
  ruby: "しゃんと",
  meaning: "人工透析のために、手術で腕の動脈と静脈を直接つなぎ合わせて血流を増やした血管。",
- urgency: "️ 圧迫厳禁 / 拍動停止時は即報告",
+ urgency: " 圧迫厳禁 / 拍動停止時は即報告",
  urgencyType: "warning",
  checkPoint: "シャントがある腕での血圧測定、採血、腕枕、重い荷物の把持、腕時計・ゴムバンドの装着は厳禁。耳を近づけて『ザーザー』という血流音が聞こえるか確認します。",
  isDisease: false
@@ -921,7 +940,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "圧迫骨折",
  ruby: "あっぱくこっせつ",
  meaning: "骨粗鬆症で弱くなった背骨が、尻もちやくしゃみ等の軽微な衝撃でつぶれる骨折。",
- urgency: "️ 腰背部の急な激痛は即報告",
+ urgency: " 腰背部の急な激痛は即報告",
  urgencyType: "warning",
  checkPoint: "『起き上がるときに腰や背中が激痛で動けない』と訴えたら無理に立たせず、横向きで膝を曲げて丸くなる姿勢で安静を保ち、看護師へ報告します。",
  isDisease: false
@@ -957,7 +976,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "褥瘡",
  ruby: "じょくそう (とこづれ)",
  meaning: "寝たきり等で骨の出っ張り部分が長時間圧迫され、皮膚の血流が途絶えて組織が壊死する傷。",
- urgency: "️ 赤み・水疱発見時は即報告",
+ urgency: " 赤み・水疱発見時は即報告",
  urgencyType: "warning",
  checkPoint: "仙骨部（お尻中央）やかかと、大転子（腰横）の皮膚に『赤み（除圧しても消えない赤色）』を発見したら初期段階。2時間毎の体位変換とクッション除圧を徹底します。",
  isDisease: false
@@ -966,7 +985,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "脱水",
  ruby: "だっすい",
  meaning: "体内の水分や電解質が不足した状態。高齢者は自覚症状なく進行しやすい。",
- urgency: "️ 微熱・活気低下時は即報告",
+ urgency: " 微熱・活気低下時は即報告",
  urgencyType: "warning",
  checkPoint: "口腔内の乾燥、手の甲の皮膚をつまんで戻りが遅い（ツルゴール低下）、微熱、ぼんやりしている、尿の色が濃く量が少ない時は要注意。水分補給と看護師共有を行います。",
  isDisease: false
@@ -977,7 +996,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "糖尿病",
  ruby: "とうにょうびょう",
  meaning: "すい臓から出るインスリンが不足し、血液中のブドウ糖が増え続ける生活習慣病。",
- urgency: "️ 低血糖発作は即報告",
+ urgency: " 低血糖発作は即報告",
  urgencyType: "warning",
  checkPoint: "冷汗・手の震えなどの低血糖、足先の傷、食事の欠食・残食に注意します。",
  isDisease: true
@@ -1004,7 +1023,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "嚥下障害",
  ruby: "えんげしょうがい",
  meaning: "食べ物や水分を噛んで喉へ送り込み、胃へスムーズに飲み込む働きが低下した状態。",
- urgency: "️ むせ・湿性嗄声は要注意",
+ urgency: " むせ・湿性嗄声は要注意",
  urgencyType: "warning",
  checkPoint: "一口量を少なくする、とろみをつける、食事に集中できる環境を整えます。",
  isDisease: true
@@ -1022,7 +1041,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "パーキンソン病",
  ruby: "ぱーきんそんびょう",
  meaning: "脳の神経伝達物質（ドパミン）が減少し、手足の震えや筋肉のこわばり、歩行障害が起きる難病。",
- urgency: "️ 転倒・すくみ足・内服時間厳守",
+ urgency: " 転倒・すくみ足・内服時間厳守",
  urgencyType: "warning",
  checkPoint: "薬の効き目時間によって動ける時間と動けない時間が分かれます。移動時の見守り徹底が大切です。",
  isDisease: true
@@ -1031,7 +1050,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "骨粗鬆症",
  ruby: "こつそしょうしょう",
  meaning: "骨の密度が低下してスカスカになり、わずかな衝撃でも骨折しやすくなる病気。",
- urgency: "️ 転倒予防徹底 / 骨折疑いは即報告",
+ urgency: " 転倒予防徹底 / 骨折疑いは即報告",
  urgencyType: "warning",
  checkPoint: "ベッドからの起き上がりや移乗介助時に腕や足を強く引っ張ったりひねったりしてはいけません。",
  isDisease: true
@@ -1040,7 +1059,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "認知症",
  ruby: "にんちしょう",
  meaning: "脳の病気や障害により、記憶力や判断力が低下して日常生活に支障をきたす状態。",
- urgency: "ℹ️ 傾聴・安心感の提供 / 急変時は報告",
+ urgency: "ℹ 傾聴・安心感の提供 / 急変時は報告",
  urgencyType: "info",
  checkPoint: "否定や説得をせず共感して接します。急なせん妄や興奮は感染症や脱水が原因のことがあります。",
  isDisease: true
@@ -1076,7 +1095,7 @@ const MEDICAL_TERMS_DICTIONARY = {
  term: "慢性腎不全",
  ruby: "まんせいじんふぜん",
  meaning: "腎臓の老廃物排泄や水分調整の機能が何ヶ月・何年もかけて徐々に低下した状態。",
- urgency: "️ 浮腫・呼吸苦・倦怠感時は報告",
+ urgency: " 浮腫・呼吸苦・倦怠感時は報告",
  urgencyType: "warning",
  checkPoint: "水分制限や塩分制限の指示を守る。透析を行っている場合はシャント肢の保護が絶対です。",
  isDisease: true
@@ -1528,7 +1547,7 @@ function checkGlobalAlerts() {
  <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
  <div style="width:100%;">
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <span> ️ <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
+ <span>  <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');"> 発注台帳を開く</button>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')"> 閉じる</button>
@@ -1606,7 +1625,7 @@ function checkGlobalAlerts() {
  const deficit = Math.max(1, normalStock - item.current_stock);
  alertHtml += `
  <div class="alert-banner alert-danger">
- <span>️ <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
+ <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
  <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}')"> 閉じる</button>
@@ -1630,7 +1649,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner alert-danger">
  <div style="width:100%;">
- <span>️ <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
+ <span> <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
  <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
  ${itemListHtml}
  </div>
@@ -1649,7 +1668,7 @@ function checkGlobalAlerts() {
  if (r.next_clinic_date) {
  const clinicDate = new Date(r.next_clinic_date);
  const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
- const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;">️ 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
+ const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;"> 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
  
  if (diffDays === 0 || r.next_clinic_date === todayStr) {
  // 当日往診
@@ -1657,7 +1676,7 @@ function checkGlobalAlerts() {
  if (!isAlertDismissed(todayClinicKey)) {
  alertHtml += `
  <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
- <span>🩺 <strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
+ <span><strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${todayClinicKey}')"> 受診対応完了</button>
@@ -1703,7 +1722,7 @@ function checkGlobalAlerts() {
  if (daysNoStool >= 3) {
  alertHtml += `
  <div class="alert-banner alert-danger" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
- <span> ️ <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
+ <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="dismissAlert('${stoolKey}')"> 処置・対応完了</button>
@@ -1722,7 +1741,7 @@ function checkGlobalAlerts() {
  if (unconfirmed.length > 0 && !isAlertDismissed('monthly_notices_' + currentStaff)) {
  alertHtml += `
  <div class="alert-banner alert-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
- <span> ️ <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
+ <span>  <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#5b21b6;" onclick="confirmAllMonthlyNoticesForStaff()"> 一括確認済にする</button>
@@ -1945,7 +1964,7 @@ function renderResidentDetail() {
  const stampClass = r.policy_stamp === "看取り" ? "policy-mitori" : "policy-kyukyu";
  const diseasesList = (r.diseases || "").split(",").map(d => d.trim()).filter(Boolean);
  const diseaseTags = diseasesList.map(d => `
- <span class="disease-tag" style="cursor:pointer;" onclick="event.preventDefault(); event.stopPropagation(); openDiseaseGuide(this.getAttribute('data-disease')); return false;" data-disease="${escapeHtml(d)}">🩺 ${escapeHtml(d)}</span>
+ <span class="disease-tag" style="cursor:pointer;" onclick="event.preventDefault(); event.stopPropagation(); openDiseaseGuide(this.getAttribute('data-disease')); return false;" data-disease="${escapeHtml(d)}">${escapeHtml(d)}</span>
  `).join("");
 
  // 私物行リスト
@@ -1964,8 +1983,8 @@ function renderResidentDetail() {
  <td>${b.marked ? ' 記名済' : '<span style="color:#dc2626;">未確認</span>'}</td>
  <td style="color:#64748b;">${escapeHtml(b.notes || '-')}</td>
  <td style="white-space:nowrap;">
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})">️ 編集</button>
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">️ 削除</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})"> 編集</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})"> 削除</button>
  </td>
  </tr>
  `).join("");
@@ -1998,7 +2017,7 @@ function renderResidentDetail() {
  <option value="入院中" ${r.status==='入院中'?'selected':''}>入院中</option>
  <option value="外泊中" ${r.status==='外泊中'?'selected':''}>外泊中</option>
  </select>
- <button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})">️ 編集</button>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})"> 編集</button>
  </div>
  </div>
  </div>
@@ -2008,7 +2027,7 @@ function renderResidentDetail() {
  <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
  <span> 基本方針 ＆ ケアプラン目標・見守り注意</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">️ 変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;"> 変更</button>
  <span style="font-size:11px; color:#64748b;">(開閉)</span>
  </div>
  </summary>
@@ -2029,7 +2048,7 @@ function renderResidentDetail() {
  ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
  <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e; display:flex; justify-content:space-between; align-items:center;">
  <div>
- <strong>️ 設定済バイタル注意基準:</strong>
+ <strong> 設定済バイタル注意基準:</strong>
  ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
  ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
  ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
@@ -2043,9 +2062,9 @@ function renderResidentDetail() {
  <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
  <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
- <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
+ <span>身体状況・病歴 ＆ 食形態・口腔状態</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">️ 変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;"> 変更</button>
  <span style="font-size:11px; color:#64748b;">(開閉)</span>
  </div>
  </summary>
@@ -2053,7 +2072,7 @@ function renderResidentDetail() {
  <div style="margin-bottom:10px;">
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
  <div style="font-size:12px; font-weight:bold; color:var(--text-muted);">病歴・既往歴 (タップで現場対応ガイド表示):</div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">️ 病歴を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">病歴を変更</button>
  </div>
  <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
  </div>
@@ -2069,7 +2088,7 @@ function renderResidentDetail() {
  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
  <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
  <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
- ️ 身体状況・食形態を変更
+  身体状況・食形態を変更
  </button>
  </div>
  </div>
@@ -2081,7 +2100,7 @@ function renderResidentDetail() {
  <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
  <span> 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'all'); return false;">️ 受診指示を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'all'); return false;">受診指示を変更</button>
  <span style="font-size:11px; color:#64748b;">(開閉)</span>
  </div>
  </summary>
@@ -2089,18 +2108,18 @@ function renderResidentDetail() {
  <!-- 特殊指示ブロック -->
  <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px;">
  <div style="color:#991b1b; font-weight:bold; font-size:13px;">
- ️ 【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
+  【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'special'); return false;">️ 特殊指示を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'special'); return false;">特殊指示を変更</button>
  </div>
 
  <!-- 医師の指示内容 (受診時コメント) -->
  <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f8fafc; padding:8px 10px; border-radius:6px;">
  <div>
- <strong>🩺 医師の指示内容 (受診時コメント):</strong>
+ <strong>医師の指示内容 (受診時コメント):</strong>
  <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '定期採血・血圧コントロール')}</div>
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'instructions'); return false;">️ 指示内容を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'instructions'); return false;">指示内容を変更</button>
  </div>
 
  <!-- 次回予定日 -->
@@ -2109,7 +2128,7 @@ function renderResidentDetail() {
  <strong style="color:#0369a1;"> 次回受診・往診予定日:</strong>
  <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${r.next_clinic_date || '未定'}</span>
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'date'); return false;">️ 予定日を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'date'); return false;">予定日を変更</button>
  </div>
  </div>
  </details>
@@ -2171,7 +2190,7 @@ function renderResidentDetail() {
  <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
  <span> 緊急連絡先 ＆ 家族の要望・生活歴・こだわり</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openFamilyHistoryModal(${r.id})">️ 変更・更新</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openFamilyHistoryModal(${r.id})"> 変更・更新</button>
  <span style="font-size:11px; color:#64748b;">(開閉)</span>
  </div>
  </summary>
@@ -2181,7 +2200,7 @@ function renderResidentDetail() {
  <div><strong> 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
  <div style="margin-top:6px;"><strong> 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#334155;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
  </div>
- <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#f1f5f9; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})">️ 項目を編集</button>
+ <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#f1f5f9; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})"> 項目を編集</button>
  </div>
  <div style="background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
  <strong> 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
@@ -2194,7 +2213,7 @@ function renderResidentDetail() {
 }
 
 // ======================================================================
-// 🩺 現場介護向け 医療・症状・病名専門用語 アノテーション ＆ やさしい解説表示
+// 現場介護向け 医療・症状・病名専門用語 アノテーション ＆ やさしい解説表示
 // ======================================================================
 function annotateMedicalTerms(text) {
  if (!text || typeof text !== "string") return "";
@@ -2257,7 +2276,7 @@ function openTermExplanation(termKey) {
  btnJump.onclick = () => {
  openDiseaseGuide(info.term);
  };
- btnJump.textContent = `🩺 『${info.term}』の現場ケアガイドを開く`;
+ btnJump.textContent = `『${info.term}』の現場ケアガイドを開く`;
  } else {
  linkArea.style.display = "none";
  }
@@ -2300,7 +2319,7 @@ function openDiseaseGuide(diseaseName) {
  } else if (isFallback) {
  subInfo = `<span style="font-size:12px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 基本見守り基準</span>`;
  }
- titleEl.innerHTML = `🩺 【${escapeHtml(name)}】 現場ケアガイド ＆ 観察ポイント ${subInfo}`;
+ titleEl.innerHTML = `【${escapeHtml(name)}】 現場ケアガイド ＆ 観察ポイント ${subInfo}`;
  }
 
  const contentEl = document.getElementById("diseaseModalContent");
@@ -2333,7 +2352,7 @@ function openDiseaseGuide(diseaseName) {
  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
  <div style="display:flex; gap:8px;">
  <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#1e40af; border-color:#bfdbfe; background:#eff6ff;" onclick="toggleCustomDiseaseEdit(true)">
- ️ この病気の現場ケアを編集・追加
+  この病気の現場ケアを編集・追加
  </button>
  ${isCustom ? `
  <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#dc2626; border-color:#fecaca;" onclick="resetCustomDiseaseGuide('${escapeHtml(name)}')">
@@ -2351,7 +2370,7 @@ function openDiseaseGuide(diseaseName) {
  const nameInp = document.getElementById("editGuideDiseaseName");
  if (nameInp) nameInp.value = name;
  const editTitle = document.getElementById("diseaseCustomEditTitle");
- if (editTitle) editTitle.textContent = `️ 【${name}】の施設独自ケアガイドを編集・保存`;
+ if (editTitle) editTitle.textContent = ` 【${name}】の施設独自ケアガイドを編集・保存`;
  const symInp = document.getElementById("editGuideSymptoms");
  if (symInp) symInp.value = guide.symptoms;
  const careInp = document.getElementById("editGuideCare");
@@ -2416,11 +2435,11 @@ function updateRecordTargetBanner() {
  const fsBadge = document.getElementById("fsResidentBadge");
  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
  if (res) {
- const str = `️ 対象: 【${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様】の介護記録を作成中`;
+ const str = ` 対象: 【${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様】の介護記録を作成中`;
  if (bannerText) bannerText.innerHTML = str;
  if (fsBadge) fsBadge.textContent = `${res.room_no}号室 ${res.name} 様`;
  } else {
- if (bannerText) bannerText.textContent = "️ 対象利用者: 未選択 (上部一覧から選択してください)";
+ if (bannerText) bannerText.textContent = " 対象利用者: 未選択 (上部一覧から選択してください)";
  if (fsBadge) fsBadge.textContent = "対象: 未選択";
  }
 }
@@ -2455,7 +2474,7 @@ function updateRecordCharCount() {
  badgeText = " B5用紙1枚適量 (推奨)";
  badgeBg = "#16a34a";
  } else {
- badgeText = "️ B5用紙1枚超過 (2枚目へ)";
+ badgeText = " B5用紙1枚超過 (2枚目へ)";
  badgeBg = "#d97706";
  }
 
@@ -3062,7 +3081,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <span> 【${dateStr}】 個人記録・身体状況サマリー</span>
  </span>
  <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; color:#2563eb; border-color:#93c5fd; background:#eff6ff;" onclick="openPersonalVitalModal()">
- ️ バイタル・体重を変更/追記
+  バイタル・体重を変更/追記
  </button>
  </div>
 
@@ -3070,7 +3089,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <!-- 1. バイタル & 血圧 & 体重 -->
  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
  <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px; display:flex; justify-content:space-between;">
- <span>🩺 バイタル & 身体測定</span>
+ <span>バイタル & 身体測定</span>
  <span style="font-size:10px; color:#64748b;">${vital ? (vital.time || '') : ''}</span>
  </div>
  <div style="display:flex; flex-direction:column; gap:3px;">
@@ -3078,7 +3097,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <div><span style="font-size:11.5px; color:#64748b;">体温:</span> ${tempHtml}</div>
  <div style="font-size:11.5px; color:#334155;">${pulseSpo2Html}</div>
  <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
- <span style="font-size:11.5px; color:#64748b;">️ 体重:</span> ${weightHtml}
+ <span style="font-size:11.5px; color:#64748b;"> 体重:</span> ${weightHtml}
  </div>
  </div>
  </div>
@@ -3115,7 +3134,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <!-- 4. 服薬 & 口腔ケア -->
  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
  <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
- 服薬確認 ＆ 🪥 口腔ケア
+ 服薬確認 ＆ 口腔ケア
  </div>
  <div style="font-size:11.5px; color:#334155; line-height:1.5;">
  <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
@@ -3514,7 +3533,7 @@ ${escapeHtml(r.content || '')}
  <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:10px; margin-bottom:16px;">
  <div>
- <h1 style="font-size:22px; margin:0; color:#1e3a8a;"> 個別介護記録・カルテ報告書</h1>
+ <h1 style="font-size:22px; margin:0; color:#1e3a8a;">個別介護記録・カルテ報告書</h1>
  <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
  </div>
  <div style="text-align:right; font-size:12px; color:#64748b;">
@@ -4223,7 +4242,7 @@ function saveVital(resId) {
  }
 
  if (warnings.length > 0) {
- const confirmMsg = `️ いつもより数値が外れていますが間違いありませんか？\n\n【${res.name} 様の個別注意設定】\n・${warnings.join("\n・")}\n\nこの数値のまま記録してよろしいですか？`;
+ const confirmMsg = ` いつもより数値が外れていますが間違いありませんか？\n\n【${res.name} 様の個別注意設定】\n・${warnings.join("\n・")}\n\nこの数値のまま記録してよろしいですか？`;
  if (!confirm(confirmMsg)) {
  return; // キャンセルされたら入力修正のため中断
  }
@@ -5153,7 +5172,7 @@ function renderNotebook() {
  card.innerHTML = `
  <div>
  <span style="font-size:12px; font-weight:bold; padding:2px 6px; border-radius:4px; ${nb.status==='未対応'?'background:#fef3c7; color:#92400e;':'background:#dcfce7; color:#166534;'}">
- ${nb.status === '未対応' ? '️ 未対応' : ' 完了'}
+ ${nb.status === '未対応' ? ' 未対応' : ' 完了'}
  </span>
  <span style="font-size:14px; margin-left:8px;">${nb.content}</span>
  <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">記入: ${nb.staff_name} ${nb.resolved_staff ? `/ 対応者: ${nb.resolved_staff}` : ''}</div>
@@ -5190,7 +5209,7 @@ function renderNotebook() {
  if (stampBtn && currentStaff) {
  const isStamped = stamps.includes(currentStaff);
  if (isStamped) {
- stampBtn.textContent = `↩️ ［${currentStaff}］の確認を取り消す`;
+ stampBtn.textContent = `↩ ［${currentStaff}］の確認を取り消す`;
  stampBtn.className = "btn btn-secondary";
  stampBtn.style.color = "#dc2626";
  } else {
@@ -5270,7 +5289,7 @@ function renderMonthlyNotices() {
  if (unconfirmed.length > 0 && alertArea) {
  alertArea.innerHTML = `
  <div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
- ️ ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「 確認済にする」を押してください。
+  ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「 確認済にする」を押してください。
  </div>
  `;
  }
@@ -5689,7 +5708,7 @@ function renderOfficeInventory() {
  <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${i.unit}</td>
  <td>${i.safety_stock} ${i.unit}</td>
  <td>¥${i.unit_price}</td>
- <td>${isLow ? '<span style="color:#dc2626; font-weight:bold;">️ 要発注</span>' : '<span style="color:#16a34a;">正常</span>'}</td>
+ <td>${isLow ? '<span style="color:#dc2626; font-weight:bold;"> 要発注</span>' : '<span style="color:#16a34a;">正常</span>'}</td>
  <td>${i.supplier_name || '-'}</td>
  <td style="display:flex; gap:6px;">
  <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openOrderModalWithItem(${i.id})">発注起案</button>
@@ -5775,7 +5794,7 @@ function renderOfficeEmergencySupplies() {
  <td><strong style="font-size:15px;">${item.quantity}</strong></td>
  <td>${item.unit}</td>
  <td><span style="${isClose?'color:#dc2626; font-weight:bold;':''}">${item.expiry_date}</span></td>
- <td>${isClose ? `<strong style="color:#d97706;">️ あと${diffDays}日 (順次消費推奨)</strong>` : '<span style="color:#16a34a;">正常保管</span>'}</td>
+ <td>${isClose ? `<strong style="color:#d97706;"> あと${diffDays}日 (順次消費推奨)</strong>` : '<span style="color:#16a34a;">正常保管</span>'}</td>
  <td>${item.notes || '-'}</td>
  `;
  tbody.appendChild(tr);
@@ -5997,7 +6016,7 @@ function renderOfficeOrders() {
 
 function approveOrder(id, status) {
  if (!isCurrentStaffAdmin()) {
- alert("️ 発注申請の承認・差戻しは管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
+ alert(" 発注申請の承認・差戻しは管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
  return;
  }
  const staff = document.getElementById("currentStaff").value;
@@ -6790,7 +6809,7 @@ function openEditResidentModal(id) {
  const r = gState.residents.find(x => x.id === id);
  if (!r) return;
 
- document.getElementById("resModalTitle").textContent = `️ 利用者情報の編集 (${r.name} 様)`;
+ document.getElementById("resModalTitle").textContent = ` 利用者情報の編集 (${r.name} 様)`;
  document.getElementById("resEditId").value = r.id;
  document.getElementById("resRoomNo").value = r.room_no || "";
  document.getElementById("resName").value = r.name || "";
@@ -7041,7 +7060,7 @@ function submitCarePlanModal() {
 }
 
 // ==========================================
-// 🩺 身体状況・食形態 クイック編集機能
+// 身体状況・食形態 クイック編集機能
 // ==========================================
 function openBodyConditionModal(resId, focusField = '') {
  const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
@@ -7052,7 +7071,7 @@ function openBodyConditionModal(resId, focusField = '') {
  }
 
  const titleEl = document.getElementById("bodyConditionModalTitle");
- if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態・病歴の変更 (${r.name} 様)`;
+ if (titleEl) titleEl.textContent = `身体状況 ＆ 食形態・口腔状態・病歴の変更 (${r.name} 様)`;
  
  const idEl = document.getElementById("bodyConditionResidentId");
  if (idEl) idEl.value = r.id;
@@ -7467,11 +7486,25 @@ function closeModal(id) {
  }
 }
 
-function openShareModal() {
+async function openShareModal() {
  const modal = document.getElementById("shareModal");
- if (modal) {
- db.renderShareModalUrls();
+ if (!modal) return;
  modal.style.display = "flex";
+ if (db) {
+ db.renderShareModalUrls();
+ try {
+ const res = await fetch('/api/ip');
+ if (res.ok) {
+ const data = await res.json();
+ if (data.tunnel_url && data.tunnel_url.trim() !== "") {
+ const prev = localStorage.getItem("care_portal_tunnel_url") || "";
+ if (prev !== data.tunnel_url.trim()) {
+ localStorage.setItem("care_portal_tunnel_url", data.tunnel_url.trim());
+ db.renderShareModalUrls();
+ }
+ }
+ }
+ } catch (_) {}
  }
 }
 
@@ -7487,13 +7520,21 @@ function copyShareUrl(url) {
  }
 }
 
-function promptChangeTunnelUrl() {
- const current = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
+async function promptChangeTunnelUrl() {
+ const current = localStorage.getItem("care_portal_tunnel_url") || "https://inside-mustang-test-demographic.trycloudflare.com";
  const newUrl = prompt("外部接続用のCloudflare Tunnel URLを入力してください:", current);
  if (newUrl && newUrl.trim() !== "") {
- localStorage.setItem("care_portal_tunnel_url", newUrl.trim());
+ const cleanUrl = newUrl.trim();
+ localStorage.setItem("care_portal_tunnel_url", cleanUrl);
  if (db) db.renderShareModalUrls();
- alert(" 接続URLとQRコードを更新しました！\n" + newUrl.trim());
+ try {
+ await fetch('/api/ip', {
+ method: 'POST',
+ headers: { 'Content-Type': 'text/plain; charset=utf-8' },
+ body: cleanUrl
+ });
+ } catch (_) {}
+ alert("接続URLとQRコードを更新しました！\n" + cleanUrl);
  }
 }
 
@@ -7604,7 +7645,7 @@ function renderPhotoGrid() {
  const safeTitle = (p.title || "").replace(/'/g, "\\'");
  card.innerHTML = `
  <div style="position:relative; width:100%; height:130px; background:#0f172a; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
- <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a3b8; font-size:12px;\\'>️ 画像読込エラー</span>';">
+ <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a3b8; font-size:12px;\\'> 画像読込エラー</span>';">
  <div style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; border-radius:4px;"> 拡大</div>
  </div>
  <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
@@ -7757,7 +7798,7 @@ function openPCFolder() {
  .then(r => r.json())
  .then(data => {
  if (data && data.success) {
- alert("️ PCのエクスプローラーで保存フォルダを開きました。\nファイルを直接追加・確認できます。");
+ alert(" PCのエクスプローラーで保存フォルダを開きました。\nファイルを直接追加・確認できます。");
  } else {
  alert("フォルダ場所:\ncare_portal\\data\\photos\\" + currentPhotoCategory);
  }
@@ -8364,7 +8405,7 @@ function renderShiftTable(yearMonth) {
 
  tbodyHtml += "</tbody>";
 
- // 3. フッター集計行 (早出2名・遅出2名・夜勤2名・明け2名・️介護日勤2名・全体日勤・介護公休4名)
+ // 3. フッター集計行 (早出2名・遅出2名・夜勤2名・明け2名・介護日勤2名・全体日勤・介護公休4名)
  let tfootHtml = `
  <tfoot>
  <!-- 早出人数チェック行 (基準: 2名) -->
@@ -8458,7 +8499,7 @@ function renderShiftTable(yearMonth) {
  <!-- 介護日勤人数行 (基準: 2名) -->
  <tr style="background:#e0f2fe; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#e0f2fe; text-align:left; padding:5px 8px; border:1px solid #bae6fd; color:#0369a1;" colspan="2">
- ️ 介護日勤 (基準: 2名)
+  介護日勤 (基準: 2名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
@@ -8562,12 +8603,12 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <strong>${roleBadgeLabel}</strong><br>日勤または公休のみ選択可能です（夜勤・早遅は自動ガード）
  </div>
  <div class="shift-popover-grid" style="grid-template-columns: 1fr 1fr;">
- <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">️ 日勤</button>
+ <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')"> 日勤</button>
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
  <div style="margin-top:6px; text-align:right;">
- <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">️ 詳細設定</a>
+ <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
  } else {
@@ -8585,15 +8626,15 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  </div>
  <div class="shift-popover-grid">
  <button class="shift-popover-btn btn-haya" onclick="executeShiftCellEdit('早')"> 早番</button>
- <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">️ 日勤</button>
+ <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')"> 日勤</button>
  <button class="shift-popover-btn btn-osoba" onclick="executeShiftCellEdit('遅')"> 遅番</button>
  <button class="shift-popover-btn btn-yakan" onclick="executeShiftCellEdit('夜')"> 夜勤</button>
- <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')">️ 明け</button>
+ <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')"> 明け</button>
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
  <div style="margin-top:6px; text-align:right;">
- <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">️ 詳細設定</a>
+ <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
  }
@@ -8719,7 +8760,7 @@ function applyShiftCellEdit(symbol) {
 
  // 職種制約ガード: 施設長・事務員・看護師は「日」「休」「クリア」以外を厳格に拒絶
  if (roleCategory !== "care" && symbol && symbol !== "日" && symbol !== "休") {
- alert(`️ 【職種制約ガード】\n${staffName} は日勤専従のため、「日勤」または「公休」のみ設定可能です。\n（夜勤・早番・遅番・明けへの誤変更を防止しました）`);
+ alert(` 【職種制約ガード】\n${staffName} は日勤専従のため、「日勤」または「公休」のみ設定可能です。\n（夜勤・早番・遅番・明けへの誤変更を防止しました）`);
  return;
  }
 
