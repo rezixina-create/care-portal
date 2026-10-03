@@ -2709,6 +2709,469 @@ function filterHistoryMonth(ym) {
   renderSelectedDateRecords();
 }
 
+// ======================================================================
+// 👤 個人カルテ専用 月間カレンダー & 統合デイリーサマリー & 連動編集
+// ======================================================================
+
+function getWeekDayJp(dateStr) {
+  if (!dateStr) return "";
+  const days = ["日", "月", "火", "水", "木", "金", "土"];
+  const d = new Date(dateStr + "T00:00:00");
+  return isNaN(d.getDay()) ? "" : days[d.getDay()];
+}
+
+function renderPersonalCalendar() {
+  const container = document.getElementById("personalCalendarContainer");
+  if (!container) return;
+
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  if (!res) {
+    container.innerHTML = "";
+    return;
+  }
+
+  // 表示対象年月 (未設定なら選択中日付の年月、それもなければ今日)
+  const currentYm = gState.personalCalendarYearMonth || (gState.selectedDate ? gState.selectedDate.slice(0, 7) : getTodayStr().slice(0, 7));
+  const [yearStr, monthStr] = currentYm.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10); // 1-12
+
+  // 当月の初日・末日・日数
+  const firstDay = new Date(year, month - 1, 1);
+  const startDayOfWeek = firstDay.getDay(); // 0(日) - 6(土)
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  // カレンダーヘッダー
+  let html = `
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+      <div style="display:flex; align-items:center; gap:6px;">
+        <span style="font-size:13px; font-weight:bold; color:#1e3a8a;">📅 【${escapeHtml(res.name)} 様】の個人記録カレンダー:</span>
+        <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="changePersonalCalendarMonth(-1)">◀ 前月</button>
+        <strong style="font-size:14px; color:#0f172a; min-width:90px; text-align:center;">${year}年 ${month}月</strong>
+        <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="changePersonalCalendarMonth(1)">次月 ▶</button>
+        <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-left:4px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;" onclick="jumpPersonalCalendarToday()">今日</button>
+      </div>
+      <div style="display:flex; gap:10px; align-items:center; font-size:11px; color:#64748b;">
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#2563eb; margin-right:3px;"></span>バイタル</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:3px;"></span>経過記録</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#dc2626; margin-right:3px;"></span>特変</span>
+        <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#d97706; margin-right:3px;"></span>入院中</span>
+      </div>
+    </div>
+  `;
+
+  // カレンダーテーブル
+  html += `
+    <div style="overflow-x:auto;">
+      <table style="width:100%; border-collapse:collapse; text-align:center; font-size:12px; background:#fff; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0;">
+        <thead>
+          <tr style="background:#f1f5f9; color:#475569; font-weight:bold; height:26px;">
+            <th style="color:#dc2626; width:14.28%;">日</th>
+            <th style="width:14.28%;">月</th>
+            <th style="width:14.28%;">火</th>
+            <th style="width:14.28%;">水</th>
+            <th style="width:14.28%;">木</th>
+            <th style="width:14.28%;">金</th>
+            <th style="color:#2563eb; width:14.28%;">土</th>
+          </tr>
+        </thead>
+        <tbody>
+  `;
+
+  let dayCounter = 1;
+  const totalRows = Math.ceil((startDayOfWeek + daysInMonth) / 7);
+
+  for (let r = 0; r < totalRows; r++) {
+    html += `<tr style="height:46px;">`;
+    for (let c = 0; c < 7; c++) {
+      const cellIndex = r * 7 + c;
+      if (cellIndex < startDayOfWeek || dayCounter > daysInMonth) {
+        html += `<td style="background:#f8fafc; border:1px solid #f1f5f9;"></td>`;
+      } else {
+        const curDay = dayCounter;
+        const curDateStr = `${year}-${String(month).padStart(2, "0")}-${String(curDay).padStart(2, "0")}`;
+        const isSelected = curDateStr === gState.selectedDate;
+
+        // 記録判定
+        const hasVital = (db.data.vitals || []).some(v => v.resident_id === res.id && v.date === curDateStr);
+        const dayRecs = (db.data.care_records || []).filter(cr => cr.resident_id === res.id && (cr.recorded_at || cr.record_time || "").startsWith(curDateStr));
+        const recCount = dayRecs.length;
+        const hasTokukan = dayRecs.some(cr => cr.category === "特変");
+        const isHospitalized = (res.status === "入院中" && curDateStr >= (res.hospital_date || "2026-08-25"));
+
+        let cellBg = isSelected ? "#dbeafe" : "#ffffff";
+        let cellBorder = isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0";
+        if (isHospitalized && !isSelected) cellBg = "#fffbeb";
+
+        let dotsHtml = "";
+        if (isHospitalized) {
+          dotsHtml = `<span style="font-size:9.5px; background:#fef3c7; color:#92400e; padding:1px 3px; border-radius:3px; font-weight:bold;">入院中</span>`;
+        } else {
+          if (hasVital) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#2563eb; margin:0 1px;" title="バイタル記録あり"></span>`;
+          if (recCount > 0) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#16a34a; margin:0 1px;" title="介護記録 ${recCount}件"></span>`;
+          if (hasTokukan) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#dc2626; margin:0 1px;" title="特変あり"></span>`;
+        }
+
+        let textColor = c === 0 ? "#dc2626" : (c === 6 ? "#2563eb" : "#1e293b");
+        if (isSelected) textColor = "#1e40af";
+
+        html += `
+          <td onclick="selectPersonalCalendarDate('${curDateStr}')" style="background:${cellBg}; border:${cellBorder}; cursor:pointer; vertical-align:top; padding:4px 2px; transition:background 0.15s;" onmouseover="if(!${isSelected})this.style.background='#f1f5f9';" onmouseout="if(!${isSelected})this.style.background='${cellBg}';">
+            <div style="font-size:12.5px; font-weight:${isSelected ? 'bold' : 'normal'}; color:${textColor};">${curDay}</div>
+            <div style="margin-top:2px; min-height:12px; display:flex; justify-content:center; align-items:center; gap:2px;">
+              ${dotsHtml}
+            </div>
+          </td>
+        `;
+        dayCounter++;
+      }
+    }
+    html += `</tr>`;
+  }
+
+  html += `
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  container.innerHTML = html;
+}
+
+function changePersonalCalendarMonth(delta) {
+  const currentYm = gState.personalCalendarYearMonth || (gState.selectedDate ? gState.selectedDate.slice(0, 7) : getTodayStr().slice(0, 7));
+  const [yearStr, monthStr] = currentYm.split("-");
+  let year = parseInt(yearStr, 10);
+  let month = parseInt(monthStr, 10) + delta;
+
+  if (month < 1) {
+    month = 12;
+    year -= 1;
+  } else if (month > 12) {
+    month = 1;
+    year += 1;
+  }
+
+  gState.personalCalendarYearMonth = `${year}-${String(month).padStart(2, "0")}`;
+  renderPersonalCalendar();
+}
+
+function jumpPersonalCalendarToday() {
+  const today = getTodayStr();
+  gState.personalCalendarYearMonth = today.slice(0, 7);
+  selectPersonalCalendarDate(today);
+}
+
+function selectPersonalCalendarDate(dateStr) {
+  gState.selectedDate = dateStr;
+  gState.recordScope = "daily";
+  gState.personalCalendarYearMonth = dateStr.slice(0, 7);
+
+  renderCalendar(); // 全体上部カレンダー同期
+  renderSelectedDateRecords(); // 個人記録再描画
+  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
+  if (gState.activeCareTab === "vitals") renderVitalsTable();
+  if (gState.activeCareTab === "meal") renderMealsTable();
+  if (gState.activeCareTab === "excretion") renderExcretionTable();
+  if (gState.activeCareTab === "bath") renderBathTable();
+}
+
+// 当日の個人データ集約サマリーカード（血圧、体温、脈拍、SpO2、体重、食事、排泄、入浴、服薬）
+function renderPersonalDailySummary(res, dateStr) {
+  const area = document.getElementById("personalDailySummaryArea");
+  if (!area) return;
+
+  if (!res) {
+    area.innerHTML = "";
+    return;
+  }
+
+  const isHospitalized = (res.status === "入院中" && dateStr >= (res.hospital_date || "2026-08-25"));
+
+  if (isHospitalized) {
+    area.innerHTML = `
+      <div style="background:#fef3c7; border:2px solid #f59e0b; border-radius:8px; padding:12px 16px; margin-bottom:12px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+          <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:22px;">🏥</span>
+            <div>
+              <strong style="font-size:14.5px; color:#92400e;">【入院加療中】 ${escapeHtml(res.hospital_name || 'さくら総合病院')}</strong>
+              <div style="font-size:12px; color:#b45309; margin-top:2px;">
+                理由: <strong>${escapeHtml(res.hospital_reason || '右大腿骨頸部骨折 (術後リハビリ加療中)')}</strong> (入院開始: ${res.hospital_date || '2026-08-25'})
+              </div>
+            </div>
+          </div>
+          <span style="font-size:12px; background:#fff; border:1px solid #d97706; color:#b45309; padding:4px 12px; border-radius:12px; font-weight:bold;">施設外 入院継続</span>
+        </div>
+        <div style="font-size:12px; color:#78350f; margin-top:8px; line-height:1.5; background:rgba(255,255,255,0.7); padding:8px 12px; border-radius:6px;">
+          ※病院にて加療中のため施設内での直接ケアは休止中です。病院連携・病状確認・リハビリ進捗・家族面談・退院受入調整は下記の個別カルテ記録に集約されています。
+        </div>
+      </div>
+    `;
+    return;
+  }
+
+  // 1. バイタル検索
+  const vital = (db.data.vitals || []).find(v => v.resident_id === res.id && v.date === dateStr);
+
+  // 2. 最新・当月の体重検索
+  const weightRecords = (db.data.weight_records || []).filter(w => w.resident_id === res.id).sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+  const exactWeight = weightRecords.find(w => w.date === dateStr);
+  const latestWeight = exactWeight || weightRecords[0] || null;
+
+  // 3. 食事検索
+  const dayMeals = (db.data.meals || []).filter(m => m.resident_id === res.id && m.date === dateStr);
+  const breakfast = dayMeals.find(m => m.meal_type === "朝食");
+  const lunch = dayMeals.find(m => m.meal_type === "昼食");
+  const dinner = dayMeals.find(m => m.meal_type === "夕食");
+  const totalWater = dayMeals.reduce((sum, m) => sum + (m.water_ml || 0), 0);
+
+  // 4. 排泄検索
+  const dayExcretions = (db.data.excretions || []).filter(e => e.resident_id === res.id && e.date === dateStr);
+  const urineCount = dayExcretions.filter(e => e.urine_flag).length;
+  const stoolCount = dayExcretions.filter(e => e.stool_condition && e.stool_condition !== "なし").length;
+  const stoolSample = dayExcretions.find(e => e.stool_condition && e.stool_condition !== "なし");
+
+  // 5. 入浴検索
+  const bath = (db.data.baths || []).find(b => b.resident_id === res.id && b.date === dateStr);
+
+  // 6. 服薬・口腔ケア検索
+  const dayMeds = (db.data.meds || []).filter(m => m.resident_id === res.id && m.date === dateStr);
+  const dayOrals = (db.data.oral_cares || []).filter(o => o.resident_id === res.id && o.date === dateStr);
+
+  // 血圧のハイライトスタイル
+  let bpHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+  if (vital && vital.bp_high !== null && vital.bp_low !== null) {
+    const isHigh = vital.bp_high >= 145 || vital.bp_low >= 90;
+    const bpColor = isHigh ? "#dc2626" : "#1e293b";
+    bpHtml = `<strong style="font-size:15px; color:${bpColor};">${vital.bp_high} / ${vital.bp_low}</strong> <span style="font-size:11px; color:#64748b;">mmHg</span>`;
+  }
+
+  // 体温のハイライトスタイル
+  let tempHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+  if (vital && vital.temperature !== null) {
+    const isFever = vital.temperature >= 37.3;
+    const tempColor = isFever ? "#dc2626" : "#1e293b";
+    tempHtml = `<strong style="font-size:15px; color:${tempColor};">${vital.temperature.toFixed(1)}</strong> <span style="font-size:11px; color:#64748b;">℃</span>`;
+  }
+
+  // 脈拍 & SpO2
+  let pulseSpo2Html = `<span style="color:#94a3b8; font-size:11px;">未測定</span>`;
+  if (vital) {
+    const pStr = vital.pulse ? `脈拍: <strong>${vital.pulse}</strong> bpm` : "";
+    const sStr = vital.spo2 ? `SpO2: <strong>${vital.spo2}</strong> %` : "";
+    pulseSpo2Html = [pStr, sStr].filter(Boolean).join(" | ");
+  }
+
+  // 体重表示
+  let weightHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+  if (latestWeight) {
+    const isExact = exactWeight ? " (本日測定)" : ` [${latestWeight.date.slice(5)}測定]`;
+    weightHtml = `<strong style="font-size:14px; color:#1e293b;">${latestWeight.weight} kg</strong> <span style="font-size:11px; color:#64748b;">(${latestWeight.diff_prev || '±0.0kg'})${isExact}</span>`;
+  }
+
+  area.innerHTML = `
+    <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #f1f5f9; padding-bottom:6px;">
+        <span style="font-size:13.5px; font-weight:bold; color:#1e40af; display:flex; align-items:center; gap:6px;">
+          <span>📋 【${dateStr}】 個人記録・身体状況サマリー</span>
+        </span>
+        <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; color:#2563eb; border-color:#93c5fd; background:#eff6ff;" onclick="openPersonalVitalModal()">
+          ✏️ バイタル・体重を変更/追記
+        </button>
+      </div>
+
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
+        <!-- 1. バイタル & 血圧 & 体重 -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+          <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px; display:flex; justify-content:space-between;">
+            <span>🩺 バイタル & 身体測定</span>
+            <span style="font-size:10px; color:#64748b;">${vital ? (vital.time || '') : ''}</span>
+          </div>
+          <div style="display:flex; flex-direction:column; gap:3px;">
+            <div><span style="font-size:11.5px; color:#64748b;">血圧:</span> ${bpHtml}</div>
+            <div><span style="font-size:11.5px; color:#64748b;">体温:</span> ${tempHtml}</div>
+            <div style="font-size:11.5px; color:#334155;">${pulseSpo2Html}</div>
+            <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
+              <span style="font-size:11.5px; color:#64748b;">⚖️ 体重:</span> ${weightHtml}
+            </div>
+          </div>
+        </div>
+
+        <!-- 2. 食事 & 水分 -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+          <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+            🍚 食事 ＆ 水分摂取
+          </div>
+          <div style="font-size:11.5px; color:#334155; line-height:1.5;">
+            <div>朝: ${breakfast ? `${breakfast.main_dish_ratio}/${breakfast.side_dish_ratio}割 (${breakfast.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
+            <div>昼: ${lunch ? `${lunch.main_dish_ratio}/${lunch.side_dish_ratio}割 (${lunch.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
+            <div>夕: ${dinner ? `${dinner.main_dish_ratio}/${dinner.side_dish_ratio}割 (${dinner.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
+            <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px; color:#1e40af; font-weight:bold;">
+              💧 1日合計水分: ${totalWater} ml
+            </div>
+          </div>
+        </div>
+
+        <!-- 3. 排泄 & 入浴 -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+          <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+            🚽 排泄 ＆ 🛁 入浴
+          </div>
+          <div style="font-size:11.5px; color:#334155; line-height:1.5;">
+            <div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
+            <div style="font-size:11px; color:#64748b;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
+            <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
+              入浴: ${bath ? `<strong style="color:#16a34a;">${bath.bath_type} 実施</strong> (${escapeHtml(bath.ointment_notes || '処置済')})` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. 服薬 & 口腔ケア -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+          <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+            💊 服薬確認 ＆ 🪥 口腔ケア
+          </div>
+          <div style="font-size:11.5px; color:#334155; line-height:1.5;">
+            <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;">✓ 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
+            <div>口腔ケア: ${dayOrals.length > 0 ? `<span style="color:#16a34a; font-weight:bold;">✓ 実施済 (${dayOrals.length}回)</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
+            <div style="font-size:11px; color:#64748b; margin-top:2px;">
+              食形態: ${escapeHtml(res.diet_type || '普通食')}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
+// 個人バイタル・体重編集モーダルのオープン
+function openPersonalVitalModal() {
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  if (!res) {
+    alert("利用者が選択されていません。");
+    return;
+  }
+
+  const dt = gState.selectedDate || getTodayStr();
+
+  document.getElementById("personalVitalModalResidentName").textContent = `${res.room_no}号室 ${res.name} 様`;
+  document.getElementById("personalVitalModalDate").textContent = `${dt} (${getWeekDayJp(dt)})`;
+  document.getElementById("personalVitalDate").value = dt;
+  document.getElementById("personalVitalResidentId").value = res.id;
+
+  // 既存データ事前充填
+  const vital = (db.data.vitals || []).find(v => v.resident_id === res.id && v.date === dt);
+  const weightRec = (db.data.weight_records || []).find(w => w.resident_id === res.id && w.date === dt);
+
+  document.getElementById("pvmTemp").value = (vital && vital.temperature !== null) ? vital.temperature : "";
+  document.getElementById("pvmPulse").value = (vital && vital.pulse !== null) ? vital.pulse : "";
+  document.getElementById("pvmBpHigher").value = (vital && vital.bp_high !== null) ? vital.bp_high : "";
+  document.getElementById("pvmBpLower").value = (vital && vital.bp_low !== null) ? vital.bp_low : "";
+  document.getElementById("pvmSpo2").value = (vital && vital.spo2 !== null) ? vital.spo2 : "";
+  document.getElementById("pvmWeight").value = weightRec ? weightRec.weight : "";
+  document.getElementById("pvmNotes").value = (vital && vital.notes) ? vital.notes : "";
+
+  document.getElementById("personalVitalModal").style.display = "flex";
+}
+
+// 個人バイタル・体重編集モーダルの保存（全体連動）
+function submitPersonalVitalModal() {
+  const resId = parseInt(document.getElementById("personalVitalResidentId").value, 10);
+  const dt = document.getElementById("personalVitalDate").value;
+  const staff = document.getElementById("currentStaff").value || "木村 健一";
+
+  const tempVal = document.getElementById("pvmTemp").value;
+  const pulseVal = document.getElementById("pvmPulse").value;
+  const bpHighVal = document.getElementById("pvmBpHigher").value;
+  const bpLowVal = document.getElementById("pvmBpLower").value;
+  const spo2Val = document.getElementById("pvmSpo2").value;
+  const weightVal = document.getElementById("pvmWeight").value;
+  const notesVal = document.getElementById("pvmNotes").value.trim();
+
+  if (!Array.isArray(db.data.vitals)) db.data.vitals = [];
+  if (!Array.isArray(db.data.weight_records)) db.data.weight_records = [];
+  if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+
+  // バイタル更新または追加
+  const existingVitalIndex = db.data.vitals.findIndex(v => v.resident_id === resId && v.date === dt);
+  const nowTime = new Date().toTimeString().slice(0, 5);
+
+  const vitalObj = {
+    id: existingVitalIndex >= 0 ? db.data.vitals[existingVitalIndex].id : Date.now(),
+    date: dt,
+    time: existingVitalIndex >= 0 ? (db.data.vitals[existingVitalIndex].time || nowTime) : nowTime,
+    resident_id: resId,
+    temperature: tempVal ? parseFloat(tempVal) : null,
+    bp_high: bpHighVal ? parseInt(bpHighVal, 10) : null,
+    bp_low: bpLowVal ? parseInt(bpLowVal, 10) : null,
+    pulse: pulseVal ? parseInt(pulseVal, 10) : null,
+    spo2: spo2Val ? parseInt(spo2Val, 10) : null,
+    is_unusual: (bpHighVal >= 150 || tempVal >= 37.5 || spo2Val <= 92) ? 1 : 0,
+    staff_name: staff,
+    notes: notesVal
+  };
+
+  if (existingVitalIndex >= 0) {
+    db.data.vitals[existingVitalIndex] = vitalObj;
+  } else if (tempVal || bpHighVal || pulseVal || spo2Val) {
+    db.data.vitals.push(vitalObj);
+  }
+
+  // 体重更新または追加
+  if (weightVal) {
+    const wNum = parseFloat(weightVal);
+    const existingWeightIndex = db.data.weight_records.findIndex(w => w.resident_id === resId && w.date === dt);
+    const prevWeightObj = db.data.weight_records
+      .filter(w => w.resident_id === resId && w.date < dt)
+      .sort((a, b) => b.date.localeCompare(a.date))[0];
+
+    let diffStr = "±0.0kg";
+    if (prevWeightObj && prevWeightObj.weight) {
+      const d = (wNum - prevWeightObj.weight).toFixed(1);
+      diffStr = d >= 0 ? `+${d}kg` : `${d}kg`;
+    }
+
+    const weightObj = {
+      id: existingWeightIndex >= 0 ? db.data.weight_records[existingWeightIndex].id : (Date.now() + 5),
+      date: dt,
+      month: dt.slice(0, 7),
+      resident_id: resId,
+      weight: wNum,
+      diff_prev: diffStr,
+      staff_name: staff
+    };
+
+    if (existingWeightIndex >= 0) {
+      db.data.weight_records[existingWeightIndex] = weightObj;
+    } else {
+      db.data.weight_records.push(weightObj);
+    }
+  }
+
+  // 介護経過記録へも連動追加
+  const vitalSummaryText = `【バイタル＆身体測定】体温:${tempVal || '-'}℃, 血圧:${bpHighVal || '-'}/${bpLowVal || '-'}mmHg, 脈拍:${pulseVal || '-'}bpm, SpO2:${spo2Val || '-'}%${weightVal ? `, 体重:${weightVal}kg` : ''}${notesVal ? ` (${notesVal})` : ''}`;
+
+  db.data.care_records.unshift({
+    id: Date.now() + 10,
+    recorded_at: `${dt} ${nowTime}`,
+    resident_id: resId,
+    category: "バイタル",
+    content: vitalSummaryText,
+    staff_name: staff
+  });
+
+  db.save();
+  closeModal("personalVitalModal");
+
+  // 全体連動再描画！
+  loadDateRecords(dt);
+  if (typeof renderWeightTable === "function") renderWeightTable();
+  if (typeof renderWeightChart === "function") renderWeightChart();
+
+  alert("バイタル＆身体測定を保存しました！個人記録と全体タブの両方に連動反映されました。");
+}
+
 // 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
 function renderSelectedDateRecords() {
   const list = document.getElementById("selectedDateRecordsList");
@@ -2717,12 +3180,29 @@ function renderSelectedDateRecords() {
   const res = gState.residents.find(x => x.id === gState.selectedResidentId);
   const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
 
+  const dateBadge = document.getElementById("personalSelectedDateBadge");
+  if (dateBadge) {
+    dateBadge.textContent = `${gState.selectedDate} (${getWeekDayJp(gState.selectedDate)})`;
+  }
+
   const isAllScope = gState.recordScope === "all";
   if (titleEl) {
     titleEl.textContent = isAllScope
       ? `👤 【${resName}】の個別カルテ履歴 (年月別アーカイブ)`
-      : `👤 【${resName}】の個別介護記録 (${gState.selectedDate})`;
+      : `👤 【${resName}】の個人カルテ統合シート`;
   }
+
+  // 1. 個人記録カレンダーを描画
+  renderPersonalCalendar();
+
+  // 2. 当日の個人データ集約サマリーカードを描画（血圧、体温、脈拍、SpO2、体重、食事、排泄、入浴、服薬）
+  if (!isAllScope) {
+    renderPersonalDailySummary(res, gState.selectedDate);
+  } else {
+    const summaryArea = document.getElementById("personalDailySummaryArea");
+    if (summaryArea) summaryArea.innerHTML = "";
+  }
+
   list.innerHTML = "";
 
   // 選択中利用者の記録のみに厳密絞り込み
@@ -8111,4 +8591,11 @@ if (typeof window !== "undefined") {
   window.openTermExplanation = openTermExplanation;
   window.closeTermExplanation = closeTermExplanation;
   window.MEDICAL_TERMS_DICTIONARY = MEDICAL_TERMS_DICTIONARY;
+  window.changePersonalCalendarMonth = changePersonalCalendarMonth;
+  window.jumpPersonalCalendarToday = jumpPersonalCalendarToday;
+  window.selectPersonalCalendarDate = selectPersonalCalendarDate;
+  window.openPersonalVitalModal = openPersonalVitalModal;
+  window.submitPersonalVitalModal = submitPersonalVitalModal;
+  window.renderPersonalCalendar = renderPersonalCalendar;
+  window.renderPersonalDailySummary = renderPersonalDailySummary;
 }
