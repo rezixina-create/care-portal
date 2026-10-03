@@ -610,49 +610,54 @@ let gState = {
 // 病歴ガイド辞書
 const DISEASE_GUIDE = {
   "糖尿病": {
-    symptoms: "高血糖時：口渇、多尿、倦怠感、意識障害。低血糖時：冷や汗、動悸、手指の震え、脱力感、ふらつき、あくび。",
-    care_points: "食事の摂取時間と摂取量の厳守。足の血流障害や壊疽に注意し、入浴時に足先の傷や爪白癬をチェックする。",
-    emergency: "冷や汗・手指の震え・意識混濁などの低血糖発作時は、直ちにブドウ糖（または砂糖水・ジュース）を飲ませ、看護師・医師へ連絡。"
+    symptoms: "【高血糖時】強い口渇・頻尿・倦怠感・ぼんやりする。【低血糖時】冷や汗・動悸・手指の震え・急な脱力感・生あくび・ふらつき。",
+    care_points: "【現場介護の実践ケア】①食事時間と提供量の厳守（欠食・大量残食時は看護師へ共有）。②入浴時に足先の傷・爪白癬・靴擦れの早期発見と保湿ケア。③間食は施設・主治医ルールを厳守。",
+    emergency: "【看護師・医師への報告基準】冷や汗・手指の震え・意識混濁などの低血糖発作時は安静を保ち、直ちに看護師へ連絡（指示に基づきブドウ糖や甘い飲料を摂取）。"
   },
   "心不全": {
-    symptoms: "息切れ、呼吸苦（起座呼吸）、動悸、下肢の浮腫、急激な体重増加、倦怠感。",
-    care_points: "毎日の体重測定（1週間で2kg以上増えていないか）、下肢のむくみチェック。過剰な水分摂取や塩分摂取に注意。",
-    emergency: "安静時にも激しい息切れがある、ゼーゼーした呼吸、ピンク色の泡状の痰が出る場合は急性心不全の疑い。座位を保ち直ちに救急要請または往診医へ連絡。"
+    symptoms: "動いた時の息切れ・起座呼吸（横になると苦しく起き上がると楽になる）・下肢の浮腫・急激な体重増加・倦怠感。",
+    care_points: "【現場介護の実践ケア】①毎日の体重測定（1週間で2kg以上の急増がないか確認）。②下肢のむくみチェック（靴下ゴム跡・靴がきつくないか）。③水分補給は制限指示量を厳守し過剰摂取を避ける。",
+    emergency: "【看護師・医師への報告基準】安静時にも激しい息切れがある、ゼーゼーした苦しい呼吸、ピンク色の泡状痰、SpO2 92%以下への急低下時は起座位を保ち直ちに看護師・往診医または救急要請。"
   },
   "高血圧": {
-    symptoms: "頭痛、めまい、肩こり、のぼせ。自覚症状がないことも多い。",
-    care_points: "入浴時・排便時の急激な血圧変動（ヒートショック）に注意。脱衣所や浴室の温度差をなくし、排便時のいきみすぎを予防。",
-    emergency: "収縮期血圧180以上で激しい頭痛、嘔吐、麻痺、ろれつが回らない症状がある場合は脳血管障害の疑い。直ちに安静にして救急対応。"
+    symptoms: "頭痛・めまい・肩こり・のぼせ・悪心。自覚症状がないことも多い。",
+    care_points: "【現場介護の実践ケア】①入浴時・排泄時の急激な血圧変動（ヒートショック）予防（脱衣所・浴室の保温）。②排便時のいきみすぎ予防（水分補給・排便記録確認）。③急な立ち上がりを避ける声かけ。",
+    emergency: "【看護師・医師への報告基準】収縮期血圧180mmHg以上、激しい頭痛、嘔吐、麻痺、ろれつが回らない症状がある場合は脳血管障害の疑い。頭部を少し高くして安静を保ち直ちに看護師へ連絡。"
   },
   "誤嚥性肺炎": {
-    symptoms: "発熱、湿性咳嗽、食欲低下、食事中の激しいむせ、痰の増加、呼吸促迫、元気がない（活気低下）。",
-    care_points: "食事中の姿勢（軽度前傾・顎引き）、食形態（きざみ・とろみ）の徹底。一口量を少なくしペースを守る。食後30分は横にならず座位を保持する。食後の口腔ケアと義歯洗浄を徹底。",
-    emergency: "38度以上の発熱、呼吸数24回/分以上、SpO2低下（90%以下）、喘鳴が続く場合は直ちに医師へ報告。"
+    symptoms: "37.5℃以上の発熱、湿性咳嗽、食事中の激しいむせ、ガラガラ声（湿性嗄声）、痰の増加、呼吸促迫、元気がない（活気低下）。",
+    care_points: "【現場介護の実践ケア】①食事姿勢の徹底（背上げ30〜60度、軽度前傾・顎引き姿勢）。②食形態（刻み・とろみ）の厳守。一口量を少量にしペースを守る。③食後30分〜1時間は横にならず座位を保持する。④食後の丁寧な口腔ケアと義歯洗浄を徹底。",
+    emergency: "【看護師・医師への報告基準】37.8℃以上の発熱、呼吸数24回/分以上、SpO2 92%以下への低下、喘鳴が続く場合は直ちに看護師・往診医へ報告。"
   },
   "誤嚥性肺炎既往": {
-    symptoms: "過去に誤嚥性肺炎の罹患歴あり。活気低下、微熱、食事摂取量の低下などの初期徴候に留意。",
-    care_points: "再発予防が最重要。食後の丁寧な口腔ケア・義歯清掃、毎食後の座位保持（30分〜1時間）、喀痰吸引の準備。",
-    emergency: "37.5℃以上の発熱、SpO2低下、痰の増加が見られた場合は初期段階で看護師・往診医へ報告。"
+    symptoms: "過去に誤嚥性肺炎の罹患歴あり。活気低下、微熱、食事摂取量の低下、食後の痰がらみなどの初期兆候に留意。",
+    care_points: "【現場介護の実践ケア】再発予防が最重要。①食形態の厳守。②食後の丁寧な口腔清拭・義歯洗浄。③毎食後の座位保持（30分〜1時間）。④必要時の喀痰吸引準備と看護師連携。",
+    emergency: "【看護師・医師への報告基準】37.5℃以上の発熱、SpO2低下、痰の急増が見られた場合は初期段階で看護師・往診医へ報告。"
   },
   "嚥下障害": {
-    symptoms: "食事中のむせ、湿性嗄声（ガラガラ声）、口腔内への食物残留、飲み込みの遅れ、食欲低下。",
-    care_points: "食事形態の厳守（刻み食・とろみ調整）。一口量を適量にし、交互嚥下（固形物と水分）を促す。食後30分は座位保持を徹底。",
-    emergency: "食物の気道閉塞（チョークサイン、チアノーゼ、声が出ない）時は直ちに背部叩打法またはハイムリック法を実施し救急要請。"
+    symptoms: "食事中のむせ、飲み込みの遅れ、口腔内への食物残留、湿性嗄声（ガラガラ声）、食欲低下。",
+    care_points: "【現場介護の実践ケア】①食事形態の厳守（刻み食・とろみ調整）。②交互嚥下（固形物と水分）を促す。③一口量を適量（スプーン半分）にする。④食前の口腔体操（パタカラ体操）の実施。",
+    emergency: "【看護師・医師への報告基準】気道閉塞（チョークサイン、声が出ない、顔色蒼白・チアノーゼ）時は直ちに背部叩打法等を実施し大声で他スタッフ・看護師を呼び救急要請。"
   },
   "脳梗塞後遺症": {
     symptoms: "片麻痺、構音障害（ろれつ不良）、嚥下障害、感覚鈍麻、感情失禁、半側空間無視。",
-    care_points: "麻痺側からの転倒・ずり落ち防止。健側からのアプローチ・食事介助。拘縮予防のための良肢位保持と定期的な体位変換。",
-    emergency: "麻痺の急激な悪化、意識障害、左右の瞳孔不同、激しい嘔吐は再発の疑い。直ちに救急搬送。"
+    care_points: "【現場介護の実践ケア】①健側（麻痺のない側）からのアプローチ・声かけ・介助。②麻痺側への転倒・ずり落ち・巻き込み防止。③良肢位の保持と定期的な体位変換。④食事時の麻痺側ポケット（食物残留）確認。",
+    emergency: "【看護師・医師への報告基準】麻痺の急激な悪化、意識障害、左右の瞳孔不同、激しい嘔吐は再発の疑い。直ちに安静を保ち看護師・救急搬送要請。"
   },
   "パーキンソン病": {
-    symptoms: "安静時振戦（手の震え）、筋固縮、無動（動作緩慢）、姿勢反射障害（小刻み歩行、突進現象、すくみ足）。",
-    care_points: "内服時間を厳守する。歩行時の転倒リスクが極めて高いため見守り・付き添い徹底。すくみ足にはリズミカルな声かけや視覚刺激が有効。",
-    emergency: "抗パーキンソン薬の急な中断や脱水による「悪性症候群」（高熱、意識混濁、著しい筋固縮）に注意。"
+    symptoms: "安静時振戦（手の震え）、筋固縮、動作緩慢、姿勢反射障害（小刻み歩行、突進現象、すくみ足）。",
+    care_points: "【現場介護の実践ケア】①抗パーキンソン薬の内服時間を厳守する。②歩行時の転倒リスクが極めて高いため移動時の付き添い・見守り徹底。③すくみ足にはリズミカルな声かけ（『いち、に』）や足元の視覚刺激が有効。",
+    emergency: "【看護師・医師への報告基準】高熱、著しい全身のこわばり、意識混濁（悪性症候群の疑い）、または転倒による骨折疑い時は直ちに安静にして看護師・医師へ連絡。"
   },
   "骨粗鬆症": {
-    symptoms: "骨脆弱化。軽微な衝撃や転倒での大腿骨頚部骨折、圧迫骨折。",
-    care_points: "転倒予防が最優先。車椅子への移乗介助時やオムツ交換時の無理な引っ張り・捻りを避ける。履物はかかとのある靴を使用。",
-    emergency: "転倒後に立ち上がれない、股関節や腰背部に激痛を訴える場合は骨折の疑い。患部を動かさず医師へ連絡。"
+    symptoms: "骨脆弱化。軽微な衝撃やベッドからの立ち上がり時の転倒で大腿骨頸部骨折、圧迫骨折を起こしやすい。",
+    care_points: "【現場介護の実践ケア】①転倒・転落防止が最優先（ベッド柵の適切な使用、ナースコール手元配置、床の障害物撤去）。②移乗時やオムツ交換時に腕や足を無理に引っ張らない・ひねらない。③かかとのある靴を使用。",
+    emergency: "【看護師・医師への報告基準】転倒後に立ち上がれない、股関節や腰背部に激痛を訴える、足の向きが外側に向いている場合は骨折の疑い。無理に動かさず直ちに看護師・医師へ連絡。"
+  },
+  "認知症": {
+    symptoms: "もの忘れ、見当識障害（時間・場所の誤認）、夕暮れ症候群（夕方の焦燥・不穏）、帰宅願望、徘徊リスク。",
+    care_points: "【現場介護の実践ケア】①否定や叱責をせず、本人の不安・気持ちに共感して傾聴する。②急な行動変更を避け、穏やかに『〜しましょうね』と具体的に声をかける。③日中に適度な覚醒と日光浴・レクを行い、昼夜逆転を予防。④離床センサー・見守り体制の確認。",
+    emergency: "【看護師・医師への報告基準】急激なせん妄・意識レベル低下、極度の興奮・パニック、食事・水分の完全拒否が続く場合は、脱水や感染症（尿路感染等）の二次症状の可能性があるため看護師へ報告。"
   }
 };
 
@@ -1387,20 +1392,30 @@ function renderResidentDetail() {
       <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
         <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
         <div style="display:flex; align-items:center; gap:8px;">
-          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openBodyConditionModal(${r.id})">✏️ 変更</button>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}); return false;">✏️ 変更</button>
           <span style="font-size:11px; color:#64748b;">(開閉)</span>
         </div>
       </summary>
       <div style="padding:12px;">
         <div style="margin-bottom:10px;">
-          <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで症状ガイド表示):</div>
+          <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで現場対応ガイド表示):</div>
           <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
         </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; background:#f8fafc; padding:10px; border-radius:6px;">
-          <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "特記なし")}</div>
-          <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
-          <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
-          <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+        
+        <!-- 身体状況・食形態情報カード -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:10px;">
+            <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "特記なし")}</div>
+            <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
+            <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
+            <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
+            <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
+            <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="openBodyConditionModal(${r.id})">
+              ✏️ 身体状況・食形態を変更
+            </button>
+          </div>
         </div>
       </div>
     </details>
@@ -1522,35 +1537,64 @@ function renderResidentDetail() {
   `;
 }
 
-// 病歴ガイド モーダル
+// 病歴ガイド モーダル (現場実践・看護連携マニュアル)
 function openDiseaseGuide(diseaseName) {
   const guide = DISEASE_GUIDE[diseaseName] || {
-    symptoms: "日々のバイタル・顔色・呼吸状態を観察してください。",
-    care_points: "無理のない動作介助、水分補給、規則正しい生活リズムの維持。",
-    emergency: "意識障害、激しい痛み、高熱時は直ちに看護師または医師へ連絡。"
+    symptoms: "日々のバイタル・顔色・呼吸状態・食欲・活気を観察してください。",
+    care_points: "【現場介護の実践ケア】無理のない動作介助、水分補給、規則正しい生活リズムの維持、転倒予防の見守り。",
+    emergency: "【看護師・医師への報告基準】意識障害、激しい痛み、37.5℃以上の高熱時は直ちに安静を保ち看護師または医師へ連絡。"
   };
 
-  document.getElementById("diseaseModalTitle").textContent = `🩺 【${diseaseName}】 詳しい症状 ＆ 介護上の観察ポイント`;
-  document.getElementById("diseaseModalContent").innerHTML = `
-    <div style="margin-bottom:14px;">
-      <h4 style="font-size:14px; color:#b91c1c; font-weight:bold;">🔍 主な症状・観察サイン:</h4>
-      <p style="font-size:14px; margin-top:4px; line-height:1.6;">${guide.symptoms}</p>
-    </div>
-    <div style="margin-bottom:14px;">
-      <h4 style="font-size:14px; color:#1e40af; font-weight:bold;">👀 介護時の観察ポイント・ケアの注意点:</h4>
-      <p style="font-size:14px; margin-top:4px; line-height:1.6;">${guide.care_points}</p>
-    </div>
-    <div style="background:#fee2e2; border-left:4px solid #dc2626; padding:10px; border-radius:6px;">
-      <h4 style="font-size:14px; color:#991b1b; font-weight:bold;">🚨 急変時の対応・注意点:</h4>
-      <p style="font-size:13px; margin-top:4px; line-height:1.5;">${guide.emergency}</p>
-    </div>
-  `;
+  const titleEl = document.getElementById("diseaseModalTitle");
+  if (titleEl) {
+    titleEl.textContent = `🩺 【${diseaseName}】 現場ケアガイド ＆ 観察ポイント`;
+  }
 
-  document.getElementById("btnSearchDiseaseRecords").onclick = () => {
-    closeModal("diseaseModal");
-    document.getElementById("searchInput").value = diseaseName;
-    doSearch();
-  };
+  const contentEl = document.getElementById("diseaseModalContent");
+  if (contentEl) {
+    contentEl.innerHTML = `
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-left:4px solid #2563eb; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:12px; color:#1e40af; line-height:1.5;">
+        💡 <strong>現場介護の実践基準:</strong> 本ガイドは介護職員が現場で無理なく実践できる「日常ケア（見守り・姿勢・水分）」と「看護師・医師への連絡ライン」を明確に整理したマニュアルです。介護職が無理な医療判断を行う必要はありません。
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🔍 主な症状 ＆ 現場での観察サイン:</span>
+        </h4>
+        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;">${escapeHtml(guide.symptoms)}</p>
+      </div>
+
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#166534; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🤝 現場介護職員ができる具体的ケア・見守り:</span>
+        </h4>
+        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;">${escapeHtml(guide.care_points)}</p>
+      </div>
+
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:8px; padding:12px;">
+        <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🚨 看護師・医師への報告基準 (医療連携ライン):</span>
+        </h4>
+        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;">${escapeHtml(guide.emergency)}</p>
+      </div>
+
+      <div style="margin-top:10px; font-size:11.5px; color:#64748b; text-align:right;">
+        ※主治医・往診医からの個別指示がある場合は「🏥 往診医・受診時指示」が最優先されます。
+      </div>
+    `;
+  }
+
+  const btnSearch = document.getElementById("btnSearchDiseaseRecords");
+  if (btnSearch) {
+    btnSearch.onclick = () => {
+      closeModal("diseaseModal");
+      const searchInp = document.getElementById("searchInput");
+      if (searchInp) {
+        searchInp.value = diseaseName;
+        doSearch();
+      }
+    };
+  }
   document.getElementById("diseaseModal").style.display = "flex";
 }
 
@@ -5402,31 +5446,70 @@ function submitCarePlanModal() {
 // ==========================================
 function openBodyConditionModal(resId) {
   const id = resId || gState.selectedResidentId;
-  const r = gState.residents.find(x => x.id === id);
+  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
   if (!r) return;
 
   const titleEl = document.getElementById("bodyConditionModalTitle");
   if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態の変更 (${r.name} 様)`;
-  document.getElementById("bodyConditionResidentId").value = r.id;
-  document.getElementById("quickDiseases").value = r.diseases || "";
-  document.getElementById("quickParalysis").value = r.paralysis || "";
-  document.getElementById("quickAllergies").value = r.allergies || "";
-  document.getElementById("quickDietType").value = r.diet_type || "普通食";
-  document.getElementById("quickOralState").value = r.oral_state || "";
+  
+  const idEl = document.getElementById("bodyConditionResidentId");
+  if (idEl) idEl.value = r.id;
+  
+  const disEl = document.getElementById("quickDiseases");
+  if (disEl) disEl.value = r.diseases || "";
+  
+  const parEl = document.getElementById("quickParalysis");
+  if (parEl) parEl.value = r.paralysis || "";
+  
+  const algEl = document.getElementById("quickAllergies");
+  if (algEl) algEl.value = r.allergies || "";
+  
+  const dietSel = document.getElementById("quickDietType");
+  if (dietSel) {
+    let found = false;
+    for (let i = 0; i < dietSel.options.length; i++) {
+      if (dietSel.options[i].value === r.diet_type) {
+        dietSel.selectedIndex = i;
+        found = true;
+        break;
+      }
+    }
+    if (!found && r.diet_type) {
+      const opt = document.createElement("option");
+      opt.value = r.diet_type;
+      opt.textContent = r.diet_type;
+      dietSel.appendChild(opt);
+      dietSel.value = r.diet_type;
+    } else if (!r.diet_type) {
+      dietSel.value = "普通食";
+    }
+  }
 
-  document.getElementById("bodyConditionModal").style.display = "flex";
+  const oralEl = document.getElementById("quickOralState");
+  if (oralEl) oralEl.value = r.oral_state || "";
+
+  const modal = document.getElementById("bodyConditionModal");
+  if (modal) modal.style.display = "flex";
 }
 
 function submitBodyConditionModal() {
-  const id = parseInt(document.getElementById("bodyConditionResidentId").value, 10);
-  const r = gState.residents.find(x => x.id === id);
+  const idEl = document.getElementById("bodyConditionResidentId");
+  if (!idEl) return;
+  const id = parseInt(idEl.value, 10);
+  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
   if (!r) return;
 
-  r.diseases = document.getElementById("quickDiseases").value.trim();
-  r.paralysis = document.getElementById("quickParalysis").value.trim();
-  r.allergies = document.getElementById("quickAllergies").value.trim();
-  r.diet_type = document.getElementById("quickDietType").value;
-  r.oral_state = document.getElementById("quickOralState").value.trim();
+  const disEl = document.getElementById("quickDiseases");
+  const parEl = document.getElementById("quickParalysis");
+  const algEl = document.getElementById("quickAllergies");
+  const dietEl = document.getElementById("quickDietType");
+  const oralEl = document.getElementById("quickOralState");
+
+  if (disEl) r.diseases = disEl.value.trim();
+  if (parEl) r.paralysis = parEl.value.trim();
+  if (algEl) r.allergies = algEl.value.trim();
+  if (dietEl) r.diet_type = dietEl.value;
+  if (oralEl) r.oral_state = oralEl.value.trim();
 
   db.save();
   closeModal("bodyConditionModal");

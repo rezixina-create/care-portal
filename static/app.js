@@ -49,6 +49,7 @@ class LocalDB {
     this.data = this.loadLocal();
     this.serverIPs = [];
     this.serverPort = window.location.port || 8888;
+    this.hasSyncedWithServer = !this.isServerMode;
     this.lastSavedJson = JSON.stringify(this.data);
 
     if (this.isServerMode) {
@@ -76,14 +77,157 @@ class LocalDB {
       "shifts", "notebooks", "notebook_stamps", "vitals", "excretions",
       "meals", "oral_cares", "baths", "meds", "turns", "linens",
       "groomings", "weight_records", "visitations", "inventory_logs",
-      "consumptions", "orders", "deposits", "complaints", "incidents", "photos"
+      "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
+      "daily_schedules", "monthly_notices"
     ];
     arrayKeys.forEach(k => {
       if (!Array.isArray(d[k])) d[k] = [];
     });
     if (Array.isArray(d.stamps)) {
+      const nameMap = {
+        "施設長": "木村 健一",
+        "木村": "木村 健一",
+        "田中": "田中 慎一",
+        "鈴木": "鈴木 美智子",
+        "山田": "山田 孝之",
+        "佐藤": "佐藤 健太",
+        "高橋": "高橋 直樹",
+        "伊藤": "伊藤 翔太",
+        "渡辺": "渡辺 拓也",
+        "中村": "中村 大輔",
+        "小林": "小林 亮"
+      };
+      // 既存の短縮名をフルネームに置換
+      d.stamps.forEach(s => {
+        const curName = s.name || s;
+        if (nameMap[curName]) {
+          s.name = nameMap[curName];
+        }
+      });
+
+      // 15名フルネーム体制の定義
+      const fullStaffDefaults = [
+        { name: "木村 健一", role: "管理者" },
+        { name: "鈴木 美智子", role: "主任看護師" },
+        { name: "加藤 由美", role: "看護師" },
+        { name: "山田 孝之", role: "介護リーダー" },
+        { name: "佐藤 健太", role: "介護職員" },
+        { name: "高橋 直樹", role: "介護職員" },
+        { name: "伊藤 翔太", role: "介護職員" },
+        { name: "渡辺 拓也", role: "介護職員" },
+        { name: "中村 大輔", role: "介護職員" },
+        { name: "小林 亮", role: "介護職員" },
+        { name: "斉藤 翼", role: "介護職員" },
+        { name: "吉田 誠", role: "介護職員" },
+        { name: "清水 翔平", role: "介護職員" },
+        { name: "田中 慎一", role: "事務員" },
+        { name: "松本 陽子", role: "事務員" }
+      ];
+      fullStaffDefaults.forEach(s => {
+        if (!d.stamps.some(existing => (existing.name || existing) === s.name)) {
+          d.stamps.push(s);
+        }
+      });
       d.stamps = sortStaffList(d.stamps);
     }
+
+    if (!d.monthly_shifts || typeof d.monthly_shifts !== "object") {
+      d.monthly_shifts = {};
+    }
+    if (!Array.isArray(d.shift_ng_pairs)) {
+      d.shift_ng_pairs = [
+        { id: 1, staff1: "佐藤 健太", staff2: "高橋 直樹", reason: "相性配慮 (同日夜勤NG)" }
+      ];
+    } else {
+      // 既存の短縮名をフルネームに更新
+      d.shift_ng_pairs.forEach(p => {
+        if (p.staff1 === "佐藤") p.staff1 = "佐藤 健太";
+        if (p.staff1 === "高橋") p.staff1 = "高橋 直樹";
+        if (p.staff2 === "佐藤") p.staff2 = "佐藤 健太";
+        if (p.staff2 === "高橋") p.staff2 = "高橋 直樹";
+      });
+    }
+
+    // 消耗品マスター・アイテム同期＆移行 (手袋S/L追加、尿取りパッド名称統一、ワイドパッド追加)
+    if (Array.isArray(d.inventory)) {
+      d.inventory.forEach(i => {
+        if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
+      });
+      if (!d.inventory.some(i => i.name === "ワイドパッド")) {
+        d.inventory.push({
+          id: 401,
+          name: "ワイドパッド",
+          category: "オムツ・パッド",
+          current_stock: 4,
+          safety_stock: 5,
+          normal_stock: 10,
+          unit: "パック",
+          unit_price: 1600,
+          is_personal_billable: 1,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+      if (!d.inventory.some(i => i.name === "使い捨てプラスチック手袋 S")) {
+        d.inventory.push({
+          id: 402,
+          name: "使い捨てプラスチック手袋 S",
+          category: "衛生用品",
+          current_stock: 12,
+          safety_stock: 8,
+          normal_stock: 16,
+          unit: "箱",
+          unit_price: 650,
+          is_personal_billable: 0,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+      if (!d.inventory.some(i => i.name === "使い捨てプラスチック手袋 L")) {
+        d.inventory.push({
+          id: 403,
+          name: "使い捨てプラスチック手袋 L",
+          category: "衛生用品",
+          current_stock: 10,
+          safety_stock: 8,
+          normal_stock: 16,
+          unit: "箱",
+          unit_price: 650,
+          is_personal_billable: 0,
+          supplier_id: 1,
+          supplier_name: "ケアサポート商事"
+        });
+      }
+    }
+
+    // 取引先 (suppliers) の取扱品目同期
+    if (Array.isArray(d.suppliers)) {
+      const careSupp = d.suppliers.find(s => s.id === 1 || (s.name || "").includes("ケアサポート"));
+      if (careSupp && Array.isArray(careSupp.items)) {
+        careSupp.items.forEach(i => {
+          if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
+        });
+        if (!careSupp.items.some(i => i.name === "ワイドパッド")) {
+          careSupp.items.push({ name: "ワイドパッド", unit_price: 1600, unit: "パック" });
+        }
+        if (!careSupp.items.some(i => i.name === "使い捨てプラスチック手袋 S")) {
+          careSupp.items.push({ name: "使い捨てプラスチック手袋 S", unit_price: 650, unit: "箱" });
+        }
+        if (!careSupp.items.some(i => i.name === "使い捨てプラスチック手袋 L")) {
+          careSupp.items.push({ name: "使い捨てプラスチック手袋 L", unit_price: 650, unit: "箱" });
+        }
+      }
+    }
+
+    // 過去履歴内の旧表記更新
+    ["orders", "consumptions", "inventory_logs"].forEach(tblKey => {
+      if (Array.isArray(d[tblKey])) {
+        d[tblKey].forEach(row => {
+          if (row.item_name === "尿取りパッド 4回分") row.item_name = "尿取りパッド";
+        });
+      }
+    });
+
     return d;
   }
 
@@ -93,13 +237,14 @@ class LocalDB {
       localStorage.setItem(this.key, JSON.stringify(this.data));
     } catch (e) {}
 
-    // 2. サーバーモードなら親機へ即時送信
-    if (this.isServerMode) {
+    // 2. サーバーモードなら親機へ即時送信 (初回同期完了後のみ)
+    if (this.isServerMode && this.hasSyncedWithServer) {
       this.saveToServer();
     }
   }
 
   async saveToServer() {
+    if (this.isServerMode && !this.hasSyncedWithServer) return;
     try {
       const payload = JSON.stringify(this.data);
       this.lastSavedJson = payload;
@@ -110,6 +255,12 @@ class LocalDB {
       });
       if (res.ok) {
         this.updateSyncBadge(true);
+        try {
+          const resp = await res.json();
+          this.updateBackupBadge(resp.saved_at || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        } catch (e) {
+          this.updateBackupBadge(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+        }
       } else {
         this.updateSyncBadge(false);
       }
@@ -117,6 +268,14 @@ class LocalDB {
       console.warn("Server save error:", err);
       this.updateSyncBadge(false);
     }
+  }
+
+  updateBackupBadge(timeStr) {
+    const b = document.getElementById("backupStatusBadge");
+    if (!b) return;
+    b.textContent = `💾 自動バックアップ済 (${timeStr})`;
+    b.style.background = "#10b981";
+    b.title = `最新データは ${timeStr} に自動3重バックアップ保管されました (PC・USB内完結)`;
   }
 
   async initServerSync() {
@@ -127,6 +286,12 @@ class LocalDB {
         const ipData = await resIp.json();
         this.serverIPs = ipData.ips || [];
         this.serverPort = ipData.port || window.location.port || 8888;
+        if (ipData.tunnel_url && ipData.tunnel_url.trim() !== "") {
+          localStorage.setItem("care_portal_tunnel_url", ipData.tunnel_url.trim());
+        } else {
+          // トンネル起動直後のURL遅延取得に対応（自動リトライ）
+          setTimeout(() => this.retryFetchTunnelUrl(1), 3000);
+        }
         this.renderShareModalUrls();
       }
     } catch (e) {}
@@ -151,8 +316,10 @@ class LocalDB {
           }
         } else {
           // サーバーが空ならローカル初期データをサーバーへ初回登録
+          this.hasSyncedWithServer = true;
           await this.saveToServer();
         }
+        this.hasSyncedWithServer = true;
         this.updateSyncBadge(true);
       }
     } catch (e) {
@@ -164,27 +331,51 @@ class LocalDB {
     setInterval(() => this.pollServerUpdates(), 5000);
   }
 
+  async retryFetchTunnelUrl(attempt) {
+    if (attempt > 3) return;
+    try {
+      const res = await fetch('/api/ip');
+      if (res.ok) {
+        const data = await res.json();
+        if (data.tunnel_url && data.tunnel_url.trim() !== "") {
+          localStorage.setItem("care_portal_tunnel_url", data.tunnel_url.trim());
+          this.renderShareModalUrls();
+          return;
+        }
+      }
+    } catch (_) {}
+    if (attempt < 3) {
+      setTimeout(() => this.retryFetchTunnelUrl(attempt + 1), 4000);
+    }
+  }
+
   async pollServerUpdates() {
     if (!this.isServerMode) return;
     try {
       const res = await fetch('/api/data');
       if (!res.ok) return;
       const text = await res.text();
-      if (!text || text.trim() === "" || text === "{}" || text === this.lastSavedJson) return;
+      if (!text || text.trim() === "" || text === "{}") return;
 
       const serverData = JSON.parse(text);
-      if (serverData && serverData.residents) {
-        this.data = this.ensureDefaultArrays(serverData);
-        this.lastSavedJson = JSON.stringify(this.data);
-        try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
-        this.updateSyncBadge(true);
+      if (!serverData || !serverData.residents) return;
 
-        // 職員が編集中でない場合に限りビューを更新
-        const activeTag = document.activeElement ? document.activeElement.tagName : "";
-        if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
-          if (typeof reloadStateFromDb === 'function') {
-            reloadStateFromDb();
-          }
+      const normalizedJson = JSON.stringify(serverData);
+      if (normalizedJson === this.lastSavedJson) {
+        this.updateSyncBadge(true);
+        return;
+      }
+
+      this.data = this.ensureDefaultArrays(serverData);
+      this.lastSavedJson = normalizedJson;
+      try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
+      this.updateSyncBadge(true);
+
+      // 職員が編集中でない場合に限りビューを更新
+      const activeTag = document.activeElement ? document.activeElement.tagName : "";
+      if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
+        if (typeof reloadStateFromDb === 'function') {
+          reloadStateFromDb();
         }
       }
     } catch (e) {
@@ -217,64 +408,48 @@ class LocalDB {
     if (!container) return;
     container.innerHTML = "";
 
-    const currentHost = window.location.hostname;
     const port = this.serverPort || 8888;
-
     let ipsToShow = [...this.serverIPs];
+    const currentHost = window.location.hostname;
     if (currentHost && currentHost !== "localhost" && currentHost !== "127.0.0.1" && !ipsToShow.includes(currentHost)) {
       ipsToShow.unshift(currentHost);
     }
-
     if (ipsToShow.length === 0) {
       ipsToShow.push("192.168.11.17");
     }
-
-    // 施設内Wi-Fi/LAN (192.168.x.x または 10.x.x.x) を優先整列
-    ipsToShow.sort((a, b) => {
-      const aIsLan = a.startsWith("192.168.") || a.startsWith("10.");
-      const bIsLan = b.startsWith("192.168.") || b.startsWith("10.");
-      if (aIsLan && !bIsLan) return -1;
-      if (!aIsLan && bIsLan) return 1;
-      return 0;
-    });
-
     const primaryIp = ipsToShow[0];
-    const primaryUrl = `http://${primaryIp}:${port}`;
+    const localUrl = `http://${primaryIp}:${port}`;
 
-    // 推奨URL ＋ QRコード表示
-    const qrDiv = document.createElement("div");
-    qrDiv.style.cssText = "display:flex; gap:16px; align-items:center; background:#ffffff; border:1px solid #93c5fd; border-radius:8px; padding:12px 16px; margin-bottom:8px;";
-    const qrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=120x120&data=" + encodeURIComponent(primaryUrl);
-    qrDiv.innerHTML = '<div style="flex-shrink:0; text-align:center;">' +
-      '<img src="' + qrUrl + '" alt="QRコード" style="width:110px; height:110px; border-radius:6px; border:1px solid #e2e8f0; display:block;">' +
-      '<span style="font-size:11px; color:#64748b; margin-top:4px; display:block;">カメラで読み取り</span>' +
-      '</div>' +
-      '<div style="flex:1;">' +
-      '<div style="font-size:12px; color:#3b82f6; font-weight:bold; margin-bottom:4px;">★ 推奨接続URL（施設内Wi-Fi）</div>' +
-      '<div style="font-family:monospace; font-size:16px; font-weight:bold; color:#1e40af; margin-bottom:8px; word-break:break-all;">' + primaryUrl + '</div>' +
-      '<button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="copyShareUrl(\'' + primaryUrl + '\')">📋 URLをコピー</button>' +
-      '</div>';
-    container.appendChild(qrDiv);
+    // トンネルURL（最新取得値 または 保存値）
+    let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
+    const isTunnel = Boolean(cloudflareUrl && cloudflareUrl.trim() !== "");
+    const unifiedUrl = isTunnel ? cloudflareUrl.trim() : localUrl;
+    const unifiedQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(unifiedUrl);
 
-    // その他の接続候補
-    if (ipsToShow.length > 1) {
-      const subHeader = document.createElement("div");
-      subHeader.style.cssText = "font-size:12px; color:#64748b; margin:6px 0 2px 0;";
-      subHeader.textContent = "その他の接続候補:";
-      container.appendChild(subHeader);
-
-      for (let i = 1; i < ipsToShow.length; i++) {
-        const ip = ipsToShow[i];
-        const url = `http://${ip}:${port}`;
-        const div = document.createElement("div");
-        div.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:6px 10px;";
-        div.innerHTML = `
-          <span style="font-family:monospace; font-size:13px; color:#334155;">${url}</span>
-          <button class="btn btn-secondary" style="padding:3px 8px; font-size:11px;" onclick="copyShareUrl('${url}')">コピー</button>
-        `;
-        container.appendChild(div);
-      }
-    }
+    // 📱 スマホ・他端末 外部接続用（統一案内 1つに統合）
+    const cardDiv = document.createElement("div");
+    cardDiv.style.cssText = "display:flex; gap:18px; align-items:center; background:#f8fafc; border:2px solid #2563eb; border-radius:12px; padding:16px 18px; box-shadow:0 3px 10px rgba(37,99,235,0.12); flex-wrap:wrap;";
+    cardDiv.innerHTML = `
+      <div style="flex-shrink:0; text-align:center; margin:0 auto;">
+        <img src="${unifiedQrUrl}" alt="統一接続QRコード" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
+        <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">📱 カメラでスキャン</span>
+      </div>
+      <div style="flex:1; min-width:260px;">
+        <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1d4ed8; margin-bottom:12px; word-break:break-all; background:#ffffff; padding:8px 12px; border-radius:6px; border:1px solid #bfdbfe;">
+          ${unifiedUrl}
+        </div>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
+          <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">📋 接続URLをコピー</button>
+          <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:7px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">🔗 ブラウザで開く</a>
+          <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">✏️ URL変更</button>
+        </div>
+        ${isTunnel ? `
+        <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+          <span>同一Wi-Fi内 直接アクセス: <code style="color:#334155;">${localUrl}</code></span>
+        </div>` : ''}
+      </div>
+    `;
+    container.appendChild(cardDiv);
   }
 
   initSeedData() {
@@ -286,15 +461,25 @@ class LocalDB {
       residents: [
         { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: "⚠️ 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (左側からの介助推奨)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
         { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: "⚠️ ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
-        { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護4", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: "⚠️ 車椅子移乗時全介助", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "誤嚥性肺炎, パーキンソン病", care_plan_goal: "食後30分は座位保持。小刻みな歩行に付き添い。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+        { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: "⚠️ 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
         { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
       ],
       stamps: [
-        { name: "施設長", role: "管理者" },
-        { name: "山田", role: "介護リーダー" },
-        { name: "鈴木", role: "看護師" },
-        { name: "佐藤", role: "介護職員" },
-        { name: "田中", role: "事務員" }
+        { name: "木村 健一", role: "管理者" },
+        { name: "鈴木 美智子", role: "主任看護師" },
+        { name: "加藤 由美", role: "看護師" },
+        { name: "山田 孝之", role: "介護リーダー" },
+        { name: "佐藤 健太", role: "介護職員" },
+        { name: "高橋 直樹", role: "介護職員" },
+        { name: "伊藤 翔太", role: "介護職員" },
+        { name: "渡辺 拓也", role: "介護職員" },
+        { name: "中村 大輔", role: "介護職員" },
+        { name: "小林 亮", role: "介護職員" },
+        { name: "斉藤 翼", role: "介護職員" },
+        { name: "吉田 誠", role: "介護職員" },
+        { name: "清水 翔平", role: "介護職員" },
+        { name: "田中 慎一", role: "事務員" },
+        { name: "松本 陽子", role: "事務員" }
       ],
       templates: [
         { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
@@ -308,8 +493,11 @@ class LocalDB {
         { id: 1, name: "ケアサポート商事", phone: "03-1234-5678", contact_person: "佐々木", items: [
           { name: "テープ止めオムツ L", unit_price: 2600, unit: "パック" },
           { name: "テープ止めオムツ M", unit_price: 2400, unit: "パック" },
-          { name: "尿取りパッド 4回分", unit_price: 1400, unit: "パック" },
-          { name: "使い捨てプラスチック手袋 M", unit_price: 650, unit: "箱" }
+          { name: "尿取りパッド", unit_price: 1400, unit: "パック" },
+          { name: "ワイドパッド", unit_price: 1600, unit: "パック" },
+          { name: "使い捨てプラスチック手袋 S", unit_price: 650, unit: "箱" },
+          { name: "使い捨てプラスチック手袋 M", unit_price: 650, unit: "箱" },
+          { name: "使い捨てプラスチック手袋 L", unit_price: 650, unit: "箱" }
         ]},
         { id: 2, name: "メディカル薬品", phone: "03-9876-5432", contact_person: "木村", items: [
           { name: "ヒルドイドソフト軟膏 100g", unit_price: 1800, unit: "本" },
@@ -318,12 +506,15 @@ class LocalDB {
         ]}
       ],
       inventory: [
-        { id: 1, name: "テープ止めオムツ L", category: "オムツ・パッド", current_stock: 2, safety_stock: 5, unit: "パック", unit_price: 2600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 2, name: "テープ止めオムツ M", category: "オムツ・パッド", current_stock: 8, safety_stock: 5, unit: "パック", unit_price: 2400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 3, name: "尿取りパッド 4回分", category: "オムツ・パッド", current_stock: 3, safety_stock: 6, unit: "パック", unit_price: 1400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 4, name: "使い捨てプラスチック手袋 M", category: "衛生用品", current_stock: 15, safety_stock: 10, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
-        { id: 5, name: "手指消毒用アルコール 1L", category: "消毒", current_stock: 4, safety_stock: 3, unit: "本", unit_price: 1200, is_personal_billable: 0, supplier_id: 2, supplier_name: "メディカル薬品" },
-        { id: 6, name: "とろみ調整剤 1kg", category: "食事関連", current_stock: 6, safety_stock: 4, unit: "袋", unit_price: 2800, is_personal_billable: 1, supplier_id: 2, supplier_name: "メディカル薬品" }
+        { id: 1, name: "テープ止めオムツ L", category: "オムツ・パッド", current_stock: 2, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 2600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 2, name: "テープ止めオムツ M", category: "オムツ・パッド", current_stock: 8, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 2400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 3, name: "尿取りパッド", category: "オムツ・パッド", current_stock: 3, safety_stock: 6, normal_stock: 12, unit: "パック", unit_price: 1400, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 4, name: "ワイドパッド", category: "オムツ・パッド", current_stock: 4, safety_stock: 5, normal_stock: 10, unit: "パック", unit_price: 1600, is_personal_billable: 1, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 5, name: "使い捨てプラスチック手袋 S", category: "衛生用品", current_stock: 12, safety_stock: 8, normal_stock: 16, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 6, name: "使い捨てプラスチック手袋 M", category: "衛生用品", current_stock: 15, safety_stock: 10, normal_stock: 20, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 7, name: "使い捨てプラスチック手袋 L", category: "衛生用品", current_stock: 10, safety_stock: 8, normal_stock: 16, unit: "箱", unit_price: 650, is_personal_billable: 0, supplier_id: 1, supplier_name: "ケアサポート商事" },
+        { id: 8, name: "手指消毒用アルコール 1L", category: "消毒", current_stock: 4, safety_stock: 3, normal_stock: 8, unit: "本", unit_price: 1200, is_personal_billable: 0, supplier_id: 2, supplier_name: "メディカル薬品" },
+        { id: 9, name: "とろみ調整剤 1kg", category: "食事関連", current_stock: 6, safety_stock: 4, normal_stock: 10, unit: "袋", unit_price: 2800, is_personal_billable: 1, supplier_id: 2, supplier_name: "メディカル薬品" }
       ],
       emergency_supplies: [
         { id: 1, name: "保存水 2L (6本入)", quantity: 30, unit: "箱", expiry_date: "2028-09-30", notes: "地下備蓄庫" },
@@ -410,45 +601,63 @@ let gState = {
   currentMonth: new Date().toISOString().slice(0, 7),
   activePortal: "care",
   activeCareTab: "record",
-  activeOfficeTab: "inventory"
+  activeOfficeTab: "inventory",
+  currentShiftMonth: new Date().toISOString().slice(0, 7),
+  recordScope: "today",
+  dismissedAlerts: []
 };
 
 // 病歴ガイド辞書
 const DISEASE_GUIDE = {
   "糖尿病": {
-    symptoms: "高血糖時：口渇、多尿、倦怠感、意識障害。低血糖時：冷や汗、動悸、手指の震え、脱力感、ふらつき、あくび。",
-    care_points: "食事の摂取時間と摂取量の厳守。足の血流障害や壊疽に注意し、入浴時に足先の傷や爪白癬をチェックする。",
-    emergency: "冷や汗・手指の震え・意識混濁などの低血糖発作時は、直ちにブドウ糖（または砂糖水・ジュース）を飲ませ、看護師・医師へ連絡。"
+    symptoms: "【高血糖時】強い口渇・頻尿・倦怠感・ぼんやりする。【低血糖時】冷や汗・動悸・手指の震え・急な脱力感・生あくび・ふらつき。",
+    care_points: "【現場介護の実践ケア】①食事時間と提供量の厳守（欠食・大量残食時は看護師へ共有）。②入浴時に足先の傷・爪白癬・靴擦れの早期発見と保湿ケア。③間食は施設・主治医ルールを厳守。",
+    emergency: "【看護師・医師への報告基準】冷や汗・手指の震え・意識混濁などの低血糖発作時は安静を保ち、直ちに看護師へ連絡（指示に基づきブドウ糖や甘い飲料を摂取）。"
   },
   "心不全": {
-    symptoms: "息切れ、呼吸苦（起座呼吸）、動悸、下肢の浮腫、急激な体重増加、倦怠感。",
-    care_points: "毎日の体重測定（1週間で2kg以上増えていないか）、下肢のむくみチェック。過剰な水分摂取や塩分摂取に注意。",
-    emergency: "安静時にも激しい息切れがある、ゼーゼーした呼吸、ピンク色の泡状の痰が出る場合は急性心不全の疑い。座位を保ち直ちに救急要請または往診医へ連絡。"
+    symptoms: "動いた時の息切れ・起座呼吸（横になると苦しく起き上がると楽になる）・下肢の浮腫・急激な体重増加・倦怠感。",
+    care_points: "【現場介護の実践ケア】①毎日の体重測定（1週間で2kg以上の急増がないか確認）。②下肢のむくみチェック（靴下ゴム跡・靴がきつくないか）。③水分補給は制限指示量を厳守し過剰摂取を避ける。",
+    emergency: "【看護師・医師への報告基準】安静時にも激しい息切れがある、ゼーゼーした苦しい呼吸、ピンク色の泡状痰、SpO2 92%以下への急低下時は起座位を保ち直ちに看護師・往診医または救急要請。"
   },
   "高血圧": {
-    symptoms: "頭痛、めまい、肩こり、のぼせ。自覚症状がないことも多い。",
-    care_points: "入浴時・排便時の急激な血圧変動（ヒートショック）に注意。脱衣所や浴室の温度差をなくし、排便時のいきみすぎを予防。",
-    emergency: "収縮期血圧180以上で激しい頭痛、嘔吐、麻痺、ろれつが回らない症状がある場合は脳血管障害の疑い。直ちに安静にして救急対応。"
+    symptoms: "頭痛・めまい・肩こり・のぼせ・悪心。自覚症状がないことも多い。",
+    care_points: "【現場介護の実践ケア】①入浴時・排泄時の急激な血圧変動（ヒートショック）予防（脱衣所・浴室の保温）。②排便時のいきみすぎ予防（水分補給・排便記録確認）。③急な立ち上がりを避ける声かけ。",
+    emergency: "【看護師・医師への報告基準】収縮期血圧180mmHg以上、激しい頭痛、嘔吐、麻痺、ろれつが回らない症状がある場合は脳血管障害の疑い。頭部を少し高くして安静を保ち直ちに看護師へ連絡。"
   },
   "誤嚥性肺炎": {
-    symptoms: "発熱、湿性咳嗽、食欲低下、食事中の激しいむせ、痰の増加、呼吸促迫、元気がない（活気低下）。",
-    care_points: "食事中の姿勢（軽度前傾・顎引き）、食形態（きざみ・とろみ）の徹底。一口量を少なくしペースを守る。食後30分は横にならず座位を保持する。食後の口腔ケアと義歯洗浄を徹底。",
-    emergency: "38度以上の発熱、呼吸数24回/分以上、SpO2低下（90%以下）、喘鳴が続く場合は直ちに医師へ報告。"
+    symptoms: "37.5℃以上の発熱、湿性咳嗽、食事中の激しいむせ、ガラガラ声（湿性嗄声）、痰の増加、呼吸促迫、元気がない（活気低下）。",
+    care_points: "【現場介護の実践ケア】①食事姿勢の徹底（背上げ30〜60度、軽度前傾・顎引き姿勢）。②食形態（刻み・とろみ）の厳守。一口量を少量にしペースを守る。③食後30分〜1時間は横にならず座位を保持する。④食後の丁寧な口腔ケアと義歯洗浄を徹底。",
+    emergency: "【看護師・医師への報告基準】37.8℃以上の発熱、呼吸数24回/分以上、SpO2 92%以下への低下、喘鳴が続く場合は直ちに看護師・往診医へ報告。"
+  },
+  "誤嚥性肺炎既往": {
+    symptoms: "過去に誤嚥性肺炎の罹患歴あり。活気低下、微熱、食事摂取量の低下、食後の痰がらみなどの初期兆候に留意。",
+    care_points: "【現場介護の実践ケア】再発予防が最重要。①食形態の厳守。②食後の丁寧な口腔清拭・義歯洗浄。③毎食後の座位保持（30分〜1時間）。④必要時の喀痰吸引準備と看護師連携。",
+    emergency: "【看護師・医師への報告基準】37.5℃以上の発熱、SpO2低下、痰の急増が見られた場合は初期段階で看護師・往診医へ報告。"
+  },
+  "嚥下障害": {
+    symptoms: "食事中のむせ、飲み込みの遅れ、口腔内への食物残留、湿性嗄声（ガラガラ声）、食欲低下。",
+    care_points: "【現場介護の実践ケア】①食事形態の厳守（刻み食・とろみ調整）。②交互嚥下（固形物と水分）を促す。③一口量を適量（スプーン半分）にする。④食前の口腔体操（パタカラ体操）の実施。",
+    emergency: "【看護師・医師への報告基準】気道閉塞（チョークサイン、声が出ない、顔色蒼白・チアノーゼ）時は直ちに背部叩打法等を実施し大声で他スタッフ・看護師を呼び救急要請。"
   },
   "脳梗塞後遺症": {
     symptoms: "片麻痺、構音障害（ろれつ不良）、嚥下障害、感覚鈍麻、感情失禁、半側空間無視。",
-    care_points: "麻痺側からの転倒・ずり落ち防止。健側からのアプローチ・食事介助。拘縮予防のための良肢位保持と定期的な体位変換。",
-    emergency: "麻痺の急激な悪化、意識障害、左右の瞳孔不同、激しい嘔吐は再発の疑い。直ちに救急搬送。"
+    care_points: "【現場介護の実践ケア】①健側（麻痺のない側）からのアプローチ・声かけ・介助。②麻痺側への転倒・ずり落ち・巻き込み防止。③良肢位の保持と定期的な体位変換。④食事時の麻痺側ポケット（食物残留）確認。",
+    emergency: "【看護師・医師への報告基準】麻痺の急激な悪化、意識障害、左右の瞳孔不同、激しい嘔吐は再発の疑い。直ちに安静を保ち看護師・救急搬送要請。"
   },
   "パーキンソン病": {
-    symptoms: "安静時振戦（手の震え）、筋固縮、無動（動作緩慢）、姿勢反射障害（小刻み歩行、突進現象、すくみ足）。",
-    care_points: "内服時間を厳守する。歩行時の転倒リスクが極めて高いため見守り・付き添い徹底。すくみ足にはリズミカルな声かけや視覚刺激が有効。",
-    emergency: "抗パーキンソン薬の急な中断や脱水による「悪性症候群」（高熱、意識混濁、著しい筋固縮）に注意。"
+    symptoms: "安静時振戦（手の震え）、筋固縮、動作緩慢、姿勢反射障害（小刻み歩行、突進現象、すくみ足）。",
+    care_points: "【現場介護の実践ケア】①抗パーキンソン薬の内服時間を厳守する。②歩行時の転倒リスクが極めて高いため移動時の付き添い・見守り徹底。③すくみ足にはリズミカルな声かけ（『いち、に』）や足元の視覚刺激が有効。",
+    emergency: "【看護師・医師への報告基準】高熱、著しい全身のこわばり、意識混濁（悪性症候群の疑い）、または転倒による骨折疑い時は直ちに安静にして看護師・医師へ連絡。"
   },
   "骨粗鬆症": {
-    symptoms: "骨脆弱化。軽微な衝撃や転倒での大腿骨頚部骨折、圧迫骨折。",
-    care_points: "転倒予防が最優先。車椅子への移乗介助時やオムツ交換時の無理な引っ張り・捻りを避ける。履物はかかとのある靴を使用。",
-    emergency: "転倒後に立ち上がれない、股関節や腰背部に激痛を訴える場合は骨折の疑い。患部を動かさず医師へ連絡。"
+    symptoms: "骨脆弱化。軽微な衝撃やベッドからの立ち上がり時の転倒で大腿骨頸部骨折、圧迫骨折を起こしやすい。",
+    care_points: "【現場介護の実践ケア】①転倒・転落防止が最優先（ベッド柵の適切な使用、ナースコール手元配置、床の障害物撤去）。②移乗時やオムツ交換時に腕や足を無理に引っ張らない・ひねらない。③かかとのある靴を使用。",
+    emergency: "【看護師・医師への報告基準】転倒後に立ち上がれない、股関節や腰背部に激痛を訴える、足の向きが外側に向いている場合は骨折の疑い。無理に動かさず直ちに看護師・医師へ連絡。"
+  },
+  "認知症": {
+    symptoms: "もの忘れ、見当識障害（時間・場所の誤認）、夕暮れ症候群（夕方の焦燥・不穏）、帰宅願望、徘徊リスク。",
+    care_points: "【現場介護の実践ケア】①否定や叱責をせず、本人の不安・気持ちに共感して傾聴する。②急な行動変更を避け、穏やかに『〜しましょうね』と具体的に声をかける。③日中に適度な覚醒と日光浴・レクを行い、昼夜逆転を予防。④離床センサー・見守り体制の確認。",
+    emergency: "【看護師・医師への報告基準】急激なせん妄・意識レベル低下、極度の興奮・パニック、食事・水分の完全拒否が続く場合は、脱水や感染症（尿路感染等）の二次症状の可能性があるため看護師へ報告。"
   }
 };
 
@@ -477,8 +686,6 @@ function updateFacilityNameUI() {
 window.addEventListener("DOMContentLoaded", () => {
   updateFacilityNameUI();
   gState.stamps = sortStaffList(gState.stamps);
-  db.data.stamps = gState.stamps;
-  db.save();
   renderStaffSelect();
   renderResidentsStrip();
   renderResidentDetail();
@@ -514,99 +721,392 @@ function renderStaffSelect() {
 
 function onCurrentStaffChange() {
   renderNotebook();
+  checkGlobalAlerts();
+  if (gState.activePortal === "office" && gState.activeOfficeTab === "orders") {
+    renderOfficeOrders();
+  }
 }
 
-// アラート監視（前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限）
-function checkGlobalAlerts() {
-  const container = document.getElementById("alertsContainer");
-  container.innerHTML = "";
-  const today = new Date();
+// 管理者権限チェック (施設長または管理者ロール)
+function isCurrentStaffAdmin() {
+  const staffSelect = document.getElementById("currentStaff");
+  if (!staffSelect) return false;
+  const staff = staffSelect.value || "";
+  if (!staff) return false;
+  const staffObj = (gState.stamps || []).find(s => (s.name || s) === staff);
+  const role = staffObj ? (staffObj.role || "") : "";
+  const combined = `${role} ${staff}`.toLowerCase();
+  if (combined.includes("管理者") || combined.includes("施設長") || combined.includes("所長") || combined.includes("ホーム長") || combined.includes("院長") || combined.includes("理事") || combined.includes("事務長")) {
+    return true;
+  }
+  return false;
+}
 
-  // 1. 【前月誕生日事前アラート】
-  const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
-  const nextMonthBirthdays = [];
-  gState.residents.forEach(r => {
-    if (r.birth_date && typeof r.birth_date === 'string' && r.birth_date.includes("-")) {
-      const parts = r.birth_date.split("-");
-      if (parts.length >= 2) {
-        const birthMonth = parseInt(parts[1], 10);
-        if (birthMonth === nextMonthNum) {
-          nextMonthBirthdays.push({ name: r.name, room: r.room_no, date: r.birth_date.slice(5) });
-        }
-      }
+// ==========================================
+// 🔔 アラート完了・非表示（ディスミス）＆ 即時補充管理
+// ==========================================
+function dismissAlert(alertKey) {
+  if (!gState.dismissedAlerts) gState.dismissedAlerts = [];
+  if (!gState.dismissedAlerts.includes(alertKey)) {
+    gState.dismissedAlerts.push(alertKey);
+  }
+  checkGlobalAlerts();
+}
+
+function isAlertDismissed(alertKey) {
+  return Array.isArray(gState.dismissedAlerts) && gState.dismissedAlerts.includes(alertKey);
+}
+
+// アラートから直接ワンタップで在庫を平常時定数まで補充する
+function quickReplenishStock(itemId) {
+  const item = (gState.inventory || []).find(i => i.id === itemId);
+  if (!item) return;
+
+  const staff = (document.getElementById("currentStaff")?.value) || "現場担当";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+  
+  const normalStock = item.normal_stock || (item.safety_stock * 2);
+  const addQty = Math.max(normalStock - item.current_stock, item.safety_stock);
+  item.current_stock += addQty;
+
+  if (!db.data.inventory_logs) db.data.inventory_logs = [];
+  db.data.inventory_logs.unshift({
+    id: Date.now(),
+    timestamp: nowStr,
+    item_id: item.id,
+    item_name: item.name,
+    action_type: "補充",
+    change_qty: addQty,
+    after_qty: item.current_stock,
+    staff_name: staff,
+    reason: "現場アラートより即時補充 (平常時定数達成)"
+  });
+
+  db.save();
+  if (typeof renderOfficeInventory === 'function') renderOfficeInventory();
+  checkGlobalAlerts();
+  alert(`「${item.name}」を ${addQty}${item.unit} 補充しました！（平常時定数: ${normalStock}${item.unit} / 現在庫: ${item.current_stock}${item.unit}）\n要発注アラートを解除しました。`);
+}
+
+// すべての不足在庫を一括補充する
+function quickReplenishAllStock() {
+  const staff = (document.getElementById("currentStaff")?.value) || "現場担当";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+  let replenishedNames = [];
+
+  (gState.inventory || []).forEach(item => {
+    if (item.current_stock <= item.safety_stock) {
+      const normalStock = item.normal_stock || (item.safety_stock * 2);
+      const addQty = Math.max(normalStock - item.current_stock, item.safety_stock);
+      item.current_stock += addQty;
+      replenishedNames.push(`${item.name} (+${addQty}${item.unit})`);
+
+      if (!db.data.inventory_logs) db.data.inventory_logs = [];
+      db.data.inventory_logs.unshift({
+        id: Date.now() + Math.random(),
+        timestamp: nowStr,
+        item_id: item.id,
+        item_name: item.name,
+        action_type: "補充",
+        change_qty: addQty,
+        after_qty: item.current_stock,
+        staff_name: staff,
+        reason: "現場アラートより全品一括補充 (平常時定数達成)"
+      });
     }
   });
-  if (nextMonthBirthdays.length > 0) {
-    const list = nextMonthBirthdays.map(b => `${b.room}号室 ${b.name} 様 (${b.date})`).join(", ");
-    container.innerHTML += `
-      <div class="alert-banner alert-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
-        <span>🎂 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
+
+  db.save();
+  if (typeof renderOfficeInventory === 'function') renderOfficeInventory();
+  checkGlobalAlerts();
+  alert(`以下の消耗品を平常時定数まで一括補充しました！\n・${replenishedNames.join("\n・")}\n\n要発注アラートをすべて解除しました。`);
+}
+
+// 月間業務連絡を当職員分すべて一括確認済にする
+function confirmAllMonthlyNoticesForStaff() {
+  const staff = (document.getElementById("currentStaff")?.value) || "";
+  if (!staff) return;
+  const curMonth = (gState.selectedDate || new Date().toISOString()).slice(0, 7);
+  (db.data.monthly_notices || []).forEach(n => {
+    if (n.month === curMonth) {
+      if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
+      if (!n.confirmed_staff.includes(staff)) n.confirmed_staff.push(staff);
+    }
+  });
+  db.save();
+  if (typeof renderMonthlyNotices === 'function') renderMonthlyNotices();
+  checkGlobalAlerts();
+  alert(`${staff} さんの未確認連絡をすべて「確認済」にしました！未確認アラートを解除しました。`);
+}
+
+// アラート監視（管理者発注認証待ち・前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限・排便3日以上なし・月間連絡未確認）
+function checkGlobalAlerts() {
+  const container = document.getElementById("alertsContainer");
+  if (!container) return;
+  let alertHtml = "";
+  const today = new Date();
+  const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
+
+  // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
+  const isAdmin = isCurrentStaffAdmin();
+  const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
+  if (isAdmin && pendingOrders.length > 0 && !isAlertDismissed('admin_pending_orders')) {
+    const currentStaffName = (document.getElementById("currentStaff")?.value) || "管理者";
+    const orderItemsSummary = pendingOrders.map(o => {
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; padding:6px 12px; border-radius:6px; border:1px solid #fed7aa; margin-top:4px;">
+          <div>
+            <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
+            <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
+            <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
+            <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '補充発注')} / 申請日: ${o.ordered_at || '-'}</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')">✓ 承認する</button>
+            <button class="btn btn-danger" style="padding:3px 8px; font-size:12px; background:#ef4444; border-color:#dc2626; color:#fff;" onclick="approveOrder(${o.id}, '差戻し')">✕ 差戻し</button>
+          </div>
+        </div>
+      `;
+    }).join("");
+
+    alertHtml += `
+      <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
+        <div style="width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <span>🔔 ⚠️ <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');">📋 発注台帳を開く</button>
+              <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')">✕ 閉じる</button>
+            </div>
+          </div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+            ${orderItemsSummary}
+          </div>
+        </div>
       </div>
     `;
   }
 
+  // 1. 【前月誕生日事前アラート】
+  const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
+  const birthdayKey = `birthday_${nextMonthNum}`;
+  if (!isAlertDismissed(birthdayKey)) {
+    const nextMonthBirthdays = [];
+    gState.residents.forEach(r => {
+      if (r.birth_date && typeof r.birth_date === 'string' && r.birth_date.includes("-")) {
+        const parts = r.birth_date.split("-");
+        if (parts.length >= 2) {
+          const birthMonth = parseInt(parts[1], 10);
+          if (birthMonth === nextMonthNum) {
+            nextMonthBirthdays.push({ name: r.name, room: r.room_no, date: r.birth_date.slice(5) });
+          }
+        }
+      }
+    });
+    if (nextMonthBirthdays.length > 0) {
+      const list = nextMonthBirthdays.map(b => `${b.room}号室 ${b.name} 様 (${b.date})`).join(", ");
+      alertHtml += `
+        <div class="alert-banner alert-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
+          <span>🎂 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${birthdayKey}')">✓ 準備確認・閉じる</button>
+        </div>
+      `;
+    }
+  }
+
   // 2. 【非常食・防災備蓄 賞味期限2週間前アラート】
-  gState.emergencySupplies.forEach(item => {
-    if (item.expiry_date) {
+  (gState.emergencySupplies || []).forEach(item => {
+    const emKey = `emergency_${item.id}`;
+    if (!isAlertDismissed(emKey) && item.expiry_date) {
       const expDate = new Date(item.expiry_date);
       const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
       if (diffDays > 0 && diffDays <= 14) {
-        container.innerHTML += `
+        alertHtml += `
           <div class="alert-banner alert-warning">
             <span>🥫 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${emKey}')">✓ 確認済・閉じる</button>
           </div>
         `;
       }
     }
   });
 
-  // 3. 在庫補充アラート
-  const lowStockItems = gState.inventory.filter(i => i.current_stock <= i.safety_stock);
+  // 3. 【在庫補充アラート (要発注)】
+  // すでに発注申請中・承認済の品目は「発注手配中」として要発注アラートから自動解除
+  const pendingOrderNames = (db.data.orders || [])
+    .filter(o => o.status === "申請中" || o.status === "承認済")
+    .map(o => o.item_name);
+
+  const lowStockItems = (gState.inventory || []).filter(i => {
+    if (i.current_stock > i.safety_stock) return false;
+    if (pendingOrderNames.includes(i.name)) return false; // すでに発注済ならアラート解除
+    if (isAlertDismissed(`stock_${i.id}`) || isAlertDismissed('stock_all')) return false; // スタッフが手動完了・非表示にした場合
+    return true;
+  });
+
   if (lowStockItems.length > 0) {
-    const names = lowStockItems.map(i => `${i.name} (残${i.current_stock}${i.unit}/基準${i.safety_stock})`).join(", ");
-    container.innerHTML += `
-      <div class="alert-banner alert-danger">
-        <span>⚠️ 【要発注アラート】以下の消耗品の補充が必要です：${names}</span>
-        <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px;" onclick="switchPortal('office'); switchOfficeTab('orders'); openOrderModal();">発注申請へ</button>
-      </div>
-    `;
+    if (lowStockItems.length === 1) {
+      const item = lowStockItems[0];
+      const normalStock = item.normal_stock || (item.safety_stock * 2);
+      const deficit = Math.max(1, normalStock - item.current_stock);
+      alertHtml += `
+        <div class="alert-banner alert-danger">
+          <span>⚠️ <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">📝 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}')">✕ 閉じる</button>
+          </div>
+        </div>
+      `;
+    } else {
+      const itemListHtml = lowStockItems.map(item => {
+        const normalStock = item.normal_stock || (item.safety_stock * 2);
+        const deficit = Math.max(1, normalStock - item.current_stock);
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
+            <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})">📝 発注申請 (+${deficit})</button>
+            </div>
+          </div>
+        `;
+      }).join("");
+
+      alertHtml += `
+        <div class="alert-banner alert-danger">
+          <div style="width:100%;">
+            <span>⚠️ <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
+            <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+              ${itemListHtml}
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_all')">✕ 全て閉じる</button>
+          </div>
+        </div>
+      `;
+    }
   }
 
-  // 4. 受診2週前・1週前事前告知
+
+  // 4. 受診2週前・1週前事前告知 ＆ 往診特殊指示アラート (絶食・薬のみ等)
   gState.residents.forEach(r => {
     if (r.next_clinic_date) {
       const clinicDate = new Date(r.next_clinic_date);
       const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
-      if (diffDays > 0 && diffDays <= 14) {
-        const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
-        const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
-        container.innerHTML += `
-          <div class="alert-banner ${alertType}">
-            <span>🏥 ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備</span>
-          </div>
-        `;
+      const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;">⚠️ 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
+      
+      if (diffDays === 0 || r.next_clinic_date === todayStr) {
+        // 当日往診
+        const todayClinicKey = `clinic_today_${r.id}`;
+        if (!isAlertDismissed(todayClinicKey)) {
+          alertHtml += `
+            <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
+              <span>🩺 <strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${todayClinicKey}')">✓ 受診対応完了</button>
+              </div>
+            </div>
+          `;
+        }
+      } else if (diffDays > 0 && diffDays <= 14) {
+        const upcomingKey = `clinic_upcoming_${r.id}`;
+        if (!isAlertDismissed(upcomingKey)) {
+          const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
+          const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
+          alertHtml += `
+            <div class="alert-banner ${alertType}">
+              <span>🏥 ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
+              <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${upcomingKey}')">✓ 確認済・閉じる</button>
+            </div>
+          `;
+        }
       }
     }
   });
 
-  // 5. 要介護認定有効期限 (満了60日以内)
-  const expiringResidents = [];
+  // 5. 【排便3日以上なしアラート (便秘コントロール)】
+  const excretions = db.data.excretions || [];
   gState.residents.forEach(r => {
-    if (r.care_expiry_date) {
-      const expiryDate = new Date(r.care_expiry_date);
-      const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
-      if (diffDays > 0 && diffDays <= 60) {
-        expiringResidents.push({ name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays });
-      }
+    if (r.status !== "在所") return;
+    const stoolKey = `stool_${r.id}`;
+    if (isAlertDismissed(stoolKey)) return;
+
+    const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
+    let daysNoStool = 0;
+    if (resExcs.length > 0) {
+      resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+      const latestDateStr = resExcs[0].date;
+      const latestDate = new Date(latestDateStr);
+      const curDate = new Date(todayStr);
+      daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
+    } else {
+      daysNoStool = 3;
+    }
+
+    if (daysNoStool >= 3) {
+      alertHtml += `
+        <div class="alert-banner alert-danger" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
+          <span>🚽 ⚠️ <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="dismissAlert('${stoolKey}')">✓ 処置・対応完了</button>
+          </div>
+        </div>
+      `;
     }
   });
-  if (expiringResidents.length > 0) {
-    const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
-    container.innerHTML += `
-      <div class="alert-banner alert-warning">
-        <span>📋 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
-      </div>
-    `;
+
+  // 6. 【月間業務連絡 未確認アラート】
+  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+  const curMonth = todayStr.slice(0, 7);
+  const monthlyNotices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  if (currentStaff && monthlyNotices.length > 0) {
+    const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
+    if (unconfirmed.length > 0 && !isAlertDismissed('monthly_notices_' + currentStaff)) {
+      alertHtml += `
+        <div class="alert-banner alert-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
+          <span>📢 ⚠️ <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#5b21b6;" onclick="confirmAllMonthlyNoticesForStaff()">✓ 一括確認済にする</button>
+          </div>
+        </div>
+      `;
+    }
+  }
+
+  // 7. 要介護認定有効期限 (満了60日以内)
+  if (!isAlertDismissed('care_expiry_all')) {
+    const expiringResidents = [];
+    gState.residents.forEach(r => {
+      if (r.care_expiry_date) {
+        const expiryDate = new Date(r.care_expiry_date);
+        const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0 && diffDays <= 60) {
+          const expKey = `care_expiry_${r.id}`;
+          if (!isAlertDismissed(expKey)) {
+            expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays });
+          }
+        }
+      }
+    });
+    if (expiringResidents.length > 0) {
+      const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
+      alertHtml += `
+        <div class="alert-banner alert-warning">
+          <span>📋 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('care_expiry_all')">✓ 申請手配済・閉じる</button>
+        </div>
+      `;
+    }
+  }
+
+  if (container.innerHTML !== alertHtml) {
+    container.innerHTML = alertHtml;
   }
 }
 
@@ -636,7 +1136,7 @@ function switchCareTab(tab) {
   });
 
   const tabMap = {
-    record: "tabCareRecord", vitals: "tabCareVitals", excretion: "tabCareExcretion",
+    record: "tabCareRecord", daily_journal: "tabCareDailyJournal", vitals: "tabCareVitals", excretion: "tabCareExcretion",
     meal: "tabCareMeal", bath: "tabCareBath", oral: "tabCareOral", med: "tabCareMed",
     night: "tabCareNight", weight: "tabCareWeight", linen: "tabCareLinen",
     grooming: "tabCareGrooming", visit: "tabCareVisit", recreation: "tabCareRecreation",
@@ -650,6 +1150,8 @@ function switchCareTab(tab) {
   const target = document.getElementById(tabMap[tab]);
   if (target) target.style.display = "block";
 
+  if (tab === "record") renderSelectedDateRecords();
+  if (tab === "daily_journal") renderDailyJournal();
   if (tab === "vitals") renderVitalsTable();
   if (tab === "excretion") renderExcretionTable();
   if (tab === "meal") renderMealsTable();
@@ -668,7 +1170,7 @@ function switchCareTab(tab) {
 function renderCalendar() {
   const monthLabel = document.getElementById("calCurrentMonthLabel");
   const [year, month] = gState.currentMonth.split("-");
-  monthLabel.textContent = `${year}年${parseInt(month)}月`;
+  if (monthLabel) monthLabel.textContent = `${year}年${parseInt(month)}月`;
 
   const recordedDates = new Set();
   (db.data.care_records || []).forEach(r => {
@@ -681,6 +1183,7 @@ function renderCalendar() {
   (db.data.notebooks || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
 
   const daysRow = document.getElementById("calDaysRow");
+  if (!daysRow) return;
   daysRow.innerHTML = "";
   const daysInMonth = new Date(year, month, 0).getDate();
   const weekDays = ["日", "月", "火", "水", "木", "金", "土"];
@@ -727,6 +1230,7 @@ function selectDate(dt) {
 function loadDateRecords(dt) {
   renderSelectedDateRecords();
   renderNotebook();
+  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
   if (gState.activeCareTab === "vitals") renderVitalsTable();
   if (gState.activeCareTab === "excretion") renderExcretionTable();
   if (gState.activeCareTab === "meal") renderMealsTable();
@@ -745,7 +1249,8 @@ function loadDateRecords(dt) {
 function renderResidentsStrip() {
   const strip = document.getElementById("residentsStrip");
   strip.innerHTML = "";
-  document.getElementById("residentCountLabel").textContent = `登録利用者: ${gState.residents.length}名`;
+  const countLabel = document.getElementById("residentCountLabel");
+  if (countLabel) countLabel.textContent = `登録利用者: ${gState.residents.length}名`;
 
   gState.residents.forEach(r => {
     const card = document.createElement("div");
@@ -769,6 +1274,7 @@ function selectResident(id) {
   renderResidentsStrip();
   renderResidentDetail();
   updateRecordTargetBanner();
+  renderSelectedDateRecords();
   if (gState.activeCareTab === "consume") renderQuickConsume();
   if (gState.activeCareTab === "linen") renderLinenTable();
   renderOfficeDepositTable();
@@ -793,19 +1299,30 @@ function renderResidentDetail() {
   const belongings = (db.data.belongings || []).filter(b => b.resident_id === r.id);
   let belongingsHtml = belongings.map(b => `
     <tr style="font-size:12px;">
-      <td>${b.category}</td>
-      <td><strong>${b.item_name}</strong></td>
-      <td><span style="color:#0284c7; font-weight:bold;">${b.quantity}</span></td>
-      <td>${b.marked ? '✓ 記名済' : '未確認'}</td>
-      <td>${b.notes || '-'}</td>
+      <td>${escapeHtml(b.category || '-')}</td>
+      <td><strong>${escapeHtml(b.item_name || '-')}</strong></td>
+      <td>
+        <div style="display:inline-flex; align-items:center; gap:4px;">
+          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ減らす（劣化・破棄時）" onclick="adjustBelongingQty(${b.id}, -1)">−</button>
+          <span style="color:#0284c7; font-weight:bold; min-width:32px; text-align:center;">${escapeHtml(b.quantity || '1')}</span>
+          <button class="btn btn-secondary" style="padding:1px 6px; font-size:11px; line-height:1.1;" title="数量を1つ増やす（追加持参時）" onclick="adjustBelongingQty(${b.id}, 1)">＋</button>
+        </div>
+      </td>
+      <td>${b.marked ? '✓ 記名済' : '<span style="color:#dc2626;">未確認</span>'}</td>
+      <td style="color:#64748b;">${escapeHtml(b.notes || '-')}</td>
+      <td style="white-space:nowrap;">
+        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})">✏️ 編集</button>
+        <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">🗑️ 削除</button>
+      </td>
     </tr>
   `).join("");
 
   // 備品リスト
   const equipments = (db.data.equipments || []).filter(eq => eq.resident_id === r.id);
   let equipmentsHtml = equipments.map(eq => `
-    <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:3px 8px; font-size:12px; margin-right:4px;">
-      ${eq.equipment_name} (${eq.ownership_type})
+    <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; font-size:12px; margin-right:6px; margin-bottom:4px; display:inline-flex; align-items:center; gap:6px;">
+      <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(eq.ownership_type || '施設備品')})</span>
+      <button style="border:none; background:none; color:#0369a1; cursor:pointer; font-size:13px; font-weight:bold; padding:0 2px;" title="使用解除・返却" onclick="deleteEquipment(${eq.id})">✕</button>
     </span>
   `).join("");
 
@@ -833,123 +1350,251 @@ function renderResidentDetail() {
       </div>
     </div>
 
-    <!-- 見守り注意書きバッジ (新規スタッフ・夜勤転倒防止) -->
-    ${r.sensor_alert ? `
-      <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-weight:bold; color:#991b1b; font-size:13px;">
-        ${r.sensor_alert}
+    <!-- 1. 基本方針・見守り注意・ケアプラン目標 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🎯 基本方針 ＆ ケアプラン目標・見守り注意</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openCarePlanModal(${r.id})">✏️ 変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
+      </summary>
+      <div style="padding:12px;">
+        ${r.sensor_alert ? `
+          <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
+            <span>${escapeHtml(r.sensor_alert)}</span>
+            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px; color:#dc2626;" onclick="openCarePlanModal(${r.id})">変更</button>
+          </div>
+        ` : ''}
+        <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start;">
+          <div>
+            <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
+            <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">変更</button>
+        </div>
+        ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
+          <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e; display:flex; justify-content:space-between; align-items:center;">
+            <div>
+              <strong>⚠️ 設定済バイタル注意基準:</strong>
+              ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
+              ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
+              ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
+            </div>
+            <button class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="openCarePlanModal(${r.id})">基準値変更</button>
+          </div>
+        ` : ''}
       </div>
-    ` : ''}
+    </details>
 
-    <!-- ケアマネのケアプラン目標 -->
-    <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:#15803d;">🎯 ケアプラン目標・注意事項:</div>
-      <div style="font-size:13px; margin-top:2px;">${r.care_plan_goal || "安全な日常生活の維持・転倒予防"}</div>
-    </div>
-
-    <!-- 病歴ガイド -->
-    <div style="margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで症状ガイド表示):</div>
-      <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
-    </div>
-
-    <!-- 身体状況・アレルギー・食形態・口腔状態 -->
-    <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:12px; background:#f8fafc; padding:10px; border-radius:6px;">
-      <div><strong>身体・麻痺:</strong> ${r.paralysis || "特記なし"}</div>
-      <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${r.allergies || "なし"}</span></div>
-      <div><strong>食形態:</strong> ${r.diet_type || "普通食"}</div>
-      <div><strong>口腔状態:</strong> ${r.oral_state || "残歯のみ"}</div>
-    </div>
-
-    <!-- 備品・福祉用具 (施設備品/個人レンタル/個人購入) -->
-    <div style="margin-bottom:12px; font-size:13px;">
-      <strong>🦼 使用福祉用具・備品:</strong>
-      <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted);">登録なし</span>'}</div>
-    </div>
-
-    <!-- 私物・持ち込み品管理 (品名と個数の行追加テーブル) -->
-    <div style="margin-bottom:12px; border:1px solid #e2e8f0; border-radius:8px; padding:10px; background:white;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
-        <strong style="font-size:13px;">🧳 私物・持ち込み品台帳 (物と個数):</strong>
-        <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openBelongingModal()">＋私物行を追加</button>
+    <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🩺 身体状況・病歴 ＆ 食形態・口腔状態</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}); return false;">✏️ 変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
+      </summary>
+      <div style="padding:12px;">
+        <div style="margin-bottom:10px;">
+          <div style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-bottom:4px;">病歴・既往歴 (タップで現場対応ガイド表示):</div>
+          <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
+        </div>
+        
+        <!-- 身体状況・食形態情報カード -->
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:10px;">
+            <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "特記なし")}</div>
+            <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
+            <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
+            <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+          </div>
+          <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
+            <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
+            <button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="openBodyConditionModal(${r.id})">
+              ✏️ 身体状況・食形態を変更
+            </button>
+          </div>
+        </div>
       </div>
-      <table class="data-table" style="font-size:12px; margin-top:4px;">
-        <thead>
-          <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考</th></tr>
-        </thead>
-        <tbody>
-          ${belongingsHtml || '<tr><td colspan="5" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
-        </tbody>
-      </table>
-    </div>
+    </details>
 
-    <!-- 同意書・写真保管 -->
-    <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; background:#f8fafc;">
-      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
-        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真保管庫:</strong>
-        <span style="font-size:11px; color:#64748b;">タップで画像一覧・拡大表示・追加</span>
+    <!-- 3. 往診医・受診時指示 ＆ 特殊指示 (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
+        <span>🏥 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.stopPropagation(); openClinicInstructionModal(${r.id})">✏️ 受診指示を変更</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
+      </summary>
+      <div style="padding:12px;">
+        <!-- 特殊指示ブロック -->
+        <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px;">
+          <div style="color:#991b1b; font-weight:bold; font-size:13px;">
+            ⚠️ 【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'special')">✏️ 特殊指示を変更</button>
+        </div>
+
+        <!-- 医師の指示内容 (受診時コメント) -->
+        <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f8fafc; padding:8px 10px; border-radius:6px;">
+          <div>
+            <strong>🩺 医師の指示内容 (受診時コメント):</strong>
+            <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '定期採血・血圧コントロール')}</div>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'instructions')">✏️ 指示内容を変更</button>
+        </div>
+
+        <!-- 次回予定日 -->
+        <div style="font-size:13px; display:flex; justify-content:space-between; align-items:center; background:#f0f9ff; padding:8px 10px; border-radius:6px;">
+          <div>
+            <strong style="color:#0369a1;">📅 次回受診・往診予定日:</strong>
+            <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${r.next_clinic_date || '未定'}</span>
+          </div>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="openClinicInstructionModal(${r.id}, 'date')">✏️ 予定日を変更</button>
+        </div>
       </div>
-      <div style="display:flex; gap:8px; flex-wrap:wrap;">
-        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
-          📜 重要書類(同意書)
-          <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
-        </button>
-        <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
-          📷 個人写真
-          <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
-        </button>
+    </details>
+
+    <!-- 4. 福祉用具 ＆ 私物持ち込み品台帳 (アコーディオン) -->
+    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>🧳 福祉用具 ＆ 私物・持ち込み品台帳 (${belongings.length}点)</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openBelongingModal()">＋私物を追加</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
+      </summary>
+      <div style="padding:12px;">
+        <div style="margin-bottom:12px; font-size:13px; background:#f0fdf4; border:1px solid #bbf7d0; padding:8px 10px; border-radius:6px;">
+          <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+            <strong style="color:#166534;">🦼 使用福祉用具・備品 (${equipments.length}点):</strong>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="openEquipmentModal()">＋福祉用具・備品を追加</button>
+          </div>
+          <div style="margin-top:4px;">${equipmentsHtml || '<span style="color:var(--text-muted); font-size:12px;">登録なし</span>'}</div>
+        </div>
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+          <strong style="font-size:13px;">私物・持ち込み品一覧 (衣類・日用品・家具等):</strong>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openBelongingModal()">＋私物行を追加</button>
+        </div>
+        <table class="data-table" style="font-size:12px; margin-top:4px;">
+          <thead>
+            <tr><th>区分</th><th>品名(物)</th><th>個数</th><th>記名</th><th>備考・劣化状態</th><th style="width:110px;">操作</th></tr>
+          </thead>
+          <tbody>
+            ${belongingsHtml || '<tr><td colspan="6" style="text-align:center; color:var(--text-muted);">登録なし</td></tr>'}
+          </tbody>
+        </table>
       </div>
-    </div>
+    </details>
 
-    <!-- 往診医・受診時指示 -->
-    <div style="background:#eff6ff; border-left:4px solid #2563eb; padding:10px; border-radius:6px; margin-bottom:12px;">
-      <div style="font-size:12px; font-weight:bold; color:#1e40af;">🩺 往診医・受診時指示:</div>
-      <div style="font-size:13px; margin-top:2px;">${r.dr_instructions || "定期採血・血圧コントロール"}</div>
-      <div style="font-size:11px; color:#60a5fa; margin-top:4px;">次回予定日: ${r.next_clinic_date || "-"}</div>
-    </div>
+    <!-- 5. 同意書 ＆ 写真保管庫 (アコーディオン) -->
+    <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>📁 重要書類(同意書) ＆ 写真保管庫 (${resDocs.length + resPhotos.length}件)</span>
+        <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+      </summary>
+      <div style="padding:12px;">
+        <div style="display:flex; gap:8px; flex-wrap:wrap;">
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
+            📜 重要書類(同意書)
+            <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
+          </button>
+          <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
+            📷 個人写真
+            <span style="background:#10b981; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resPhotos.length}件</span>
+          </button>
+        </div>
+      </div>
+    </details>
 
-    <!-- 緊急連絡先 ＆ 家族の要望 -->
-    <div style="font-size:13px; margin-bottom:12px;">
-      <div><strong>📞 緊急連絡先:</strong> ${r.emergency_contact || "未登録"}</div>
-      <div style="margin-top:4px;"><strong>👪 家族の要望:</strong> ${r.family_wishes || "特になし"}</div>
-    </div>
+    <!-- 6. 緊急連絡先 ＆ 家族の要望・生活歴・こだわり (アコーディオン) -->
+    <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+      <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+        <span>👪 緊急連絡先 ＆ 家族の要望・生活歴・こだわり</span>
+        <div style="display:flex; align-items:center; gap:8px;">
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openFamilyHistoryModal(${r.id})">✏️ 変更・更新</button>
+          <span style="font-size:11px; color:#64748b;">(開閉)</span>
+        </div>
+      </summary>
+      <div style="padding:12px; font-size:13px;">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+          <div style="flex:1;">
+            <div><strong>📞 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
+            <div style="margin-top:6px;"><strong>👪 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#334155;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
+          </div>
+          <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#f1f5f9; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})">✏️ 項目を編集</button>
+        </div>
+        <div style="background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
+          <strong>📖 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
+          <p style="margin-top:3px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
+        </div>
+      </div>
+    </details>
 
-    <!-- 生活歴・人生歴 -->
-    <div style="font-size:12px; background:#fffbeb; border:1px solid #fef3c7; padding:8px; border-radius:6px;">
-      <strong>📖 生活歴・人生歴・こだわり:</strong>
-      <p style="margin-top:2px; color:#78350f;">${r.life_history || "穏やかな生活を好まれる。"}</p>
-    </div>
   `;
 }
 
-// 病歴ガイド モーダル
+// 病歴ガイド モーダル (現場実践・看護連携マニュアル)
 function openDiseaseGuide(diseaseName) {
   const guide = DISEASE_GUIDE[diseaseName] || {
-    symptoms: "日々のバイタル・顔色・呼吸状態を観察してください。",
-    care_points: "無理のない動作介助、水分補給、規則正しい生活リズムの維持。",
-    emergency: "意識障害、激しい痛み、高熱時は直ちに看護師または医師へ連絡。"
+    symptoms: "日々のバイタル・顔色・呼吸状態・食欲・活気を観察してください。",
+    care_points: "【現場介護の実践ケア】無理のない動作介助、水分補給、規則正しい生活リズムの維持、転倒予防の見守り。",
+    emergency: "【看護師・医師への報告基準】意識障害、激しい痛み、37.5℃以上の高熱時は直ちに安静を保ち看護師または医師へ連絡。"
   };
 
-  document.getElementById("diseaseModalTitle").textContent = `🩺 【${diseaseName}】 詳しい症状 ＆ 介護上の観察ポイント`;
-  document.getElementById("diseaseModalContent").innerHTML = `
-    <div style="margin-bottom:14px;">
-      <h4 style="font-size:14px; color:#b91c1c; font-weight:bold;">🔍 主な症状・観察サイン:</h4>
-      <p style="font-size:14px; margin-top:4px; line-height:1.6;">${guide.symptoms}</p>
-    </div>
-    <div style="margin-bottom:14px;">
-      <h4 style="font-size:14px; color:#1e40af; font-weight:bold;">👀 介護時の観察ポイント・ケアの注意点:</h4>
-      <p style="font-size:14px; margin-top:4px; line-height:1.6;">${guide.care_points}</p>
-    </div>
-    <div style="background:#fee2e2; border-left:4px solid #dc2626; padding:10px; border-radius:6px;">
-      <h4 style="font-size:14px; color:#991b1b; font-weight:bold;">🚨 急変時の対応・注意点:</h4>
-      <p style="font-size:13px; margin-top:4px; line-height:1.5;">${guide.emergency}</p>
-    </div>
-  `;
+  const titleEl = document.getElementById("diseaseModalTitle");
+  if (titleEl) {
+    titleEl.textContent = `🩺 【${diseaseName}】 現場ケアガイド ＆ 観察ポイント`;
+  }
 
-  document.getElementById("btnSearchDiseaseRecords").onclick = () => {
-    closeModal("diseaseModal");
-    document.getElementById("searchInput").value = diseaseName;
-    doSearch();
-  };
+  const contentEl = document.getElementById("diseaseModalContent");
+  if (contentEl) {
+    contentEl.innerHTML = `
+      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-left:4px solid #2563eb; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:12px; color:#1e40af; line-height:1.5;">
+        💡 <strong>現場介護の実践基準:</strong> 本ガイドは介護職員が現場で無理なく実践できる「日常ケア（見守り・姿勢・水分）」と「看護師・医師への連絡ライン」を明確に整理したマニュアルです。介護職が無理な医療判断を行う必要はありません。
+      </div>
+
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🔍 主な症状 ＆ 現場での観察サイン:</span>
+        </h4>
+        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;">${escapeHtml(guide.symptoms)}</p>
+      </div>
+
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#166534; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🤝 現場介護職員ができる具体的ケア・見守り:</span>
+        </h4>
+        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;">${escapeHtml(guide.care_points)}</p>
+      </div>
+
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:8px; padding:12px;">
+        <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🚨 看護師・医師への報告基準 (医療連携ライン):</span>
+        </h4>
+        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;">${escapeHtml(guide.emergency)}</p>
+      </div>
+
+      <div style="margin-top:10px; font-size:11.5px; color:#64748b; text-align:right;">
+        ※主治医・往診医からの個別指示がある場合は「🏥 往診医・受診時指示」が最優先されます。
+      </div>
+    `;
+  }
+
+  const btnSearch = document.getElementById("btnSearchDiseaseRecords");
+  if (btnSearch) {
+    btnSearch.onclick = () => {
+      closeModal("diseaseModal");
+      const searchInp = document.getElementById("searchInput");
+      if (searchInp) {
+        searchInp.value = diseaseName;
+        doSearch();
+      }
+    };
+  }
   document.getElementById("diseaseModal").style.display = "flex";
 }
 
@@ -980,8 +1625,38 @@ function updateRecordCharCount() {
   const len = area.value.length;
   if (countEl) countEl.textContent = len;
   if (fsCountEl) fsCountEl.textContent = len;
-  if (badgeEl) badgeEl.style.display = "none";
-  if (fsBadgeEl) fsBadgeEl.style.display = "none";
+
+  let badgeText = "";
+  let badgeBg = "#64748b";
+
+  if (len === 0) {
+    if (badgeEl) badgeEl.style.display = "none";
+    if (fsBadgeEl) fsBadgeEl.style.display = "none";
+    return;
+  } else if (len < 400) {
+    badgeText = "📄 B5目安: 約1/3枚";
+    badgeBg = "#64748b";
+  } else if (len < 700) {
+    badgeText = "📄 B5目安: 約半分";
+    badgeBg = "#0284c7";
+  } else if (len <= 1000) {
+    badgeText = "📄 B5用紙1枚適量 (推奨)";
+    badgeBg = "#16a34a";
+  } else {
+    badgeText = "⚠️ B5用紙1枚超過 (2枚目へ)";
+    badgeBg = "#d97706";
+  }
+
+  if (badgeEl) {
+    badgeEl.textContent = badgeText;
+    badgeEl.style.background = badgeBg;
+    badgeEl.style.display = "inline-block";
+  }
+  if (fsBadgeEl) {
+    fsBadgeEl.textContent = badgeText;
+    fsBadgeEl.style.background = badgeBg;
+    fsBadgeEl.style.display = "inline-block";
+  }
 }
 
 // 日報・総合記録テンプレートの挿入
@@ -1182,25 +1857,98 @@ function toggleRecordExpand(recId) {
   renderSelectedDateRecords();
 }
 
-// 指定日の介護記録一覧表示 (長文カルテ対応)
+// 記録表示範囲の切り替え（指定日のみ ⇄ 全過去履歴）
+function toggleRecordScope() {
+  gState.recordScope = (gState.recordScope === "all") ? "today" : "all";
+  const btn = document.getElementById("btnToggleRecordScope");
+  if (btn) {
+    if (gState.recordScope === "all") {
+      btn.textContent = "📅 指定日の記録のみ表示";
+      btn.style.background = "#eff6ff";
+      btn.style.color = "#1d4ed8";
+      btn.style.border = "1px solid #93c5fd";
+    } else {
+      btn.textContent = "📖 すべての過去履歴を表示";
+      btn.style.background = "#f0fdf4";
+      btn.style.color = "#166534";
+      btn.style.border = "1px solid #bbf7d0";
+    }
+  }
+  renderSelectedDateRecords();
+}
+
+// 年月アコーディオン開閉状態 Set & 選択中月フィルター
+const gOpenMonthAccordions = new Set();
+let gSelectedHistoryMonth = "all";
+
+function toggleMonthAccordion(ym) {
+  if (gOpenMonthAccordions.has(ym)) {
+    gOpenMonthAccordions.delete(ym);
+  } else {
+    gOpenMonthAccordions.add(ym);
+  }
+  renderSelectedDateRecords();
+}
+
+function filterHistoryMonth(ym) {
+  gSelectedHistoryMonth = ym;
+  if (ym !== "all") {
+    gOpenMonthAccordions.add(ym);
+  }
+  renderSelectedDateRecords();
+}
+
+// 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
 function renderSelectedDateRecords() {
   const list = document.getElementById("selectedDateRecordsList");
   if (!list) return;
   const titleEl = document.getElementById("selectedDateRecordsTitle");
-  if (titleEl) titleEl.textContent = `📅 【${gState.selectedDate}】の介護記録一覧`;
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+
+  const isAllScope = gState.recordScope === "all";
+  if (titleEl) {
+    titleEl.textContent = isAllScope
+      ? `👤 【${resName}】の個別カルテ履歴 (年月別アーカイブ)`
+      : `👤 【${resName}】の個別介護記録 (${gState.selectedDate})`;
+  }
   list.innerHTML = "";
 
-  const records = (db.data.care_records || []).filter(r => {
-    const timeStr = r.recorded_at || r.record_time || "";
-    return timeStr.startsWith(gState.selectedDate);
-  });
+  // 選択中利用者の記録のみに厳密絞り込み
+  const allUserRecords = (db.data.care_records || [])
+    .filter(r => r.resident_id === gState.selectedResidentId)
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return tb.localeCompare(ta); // 新しい順
+    });
+
+  const records = isAllScope
+    ? allUserRecords
+    : allUserRecords.filter(r => {
+        const timeStr = r.recorded_at || r.record_time || "";
+        return timeStr.startsWith(gState.selectedDate);
+      });
+
   if (records.length === 0) {
-    list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:16px; text-align:center;">この日の介護記録はありません。</p>';
+    if (!isAllScope && allUserRecords.length > 0) {
+      list.innerHTML = `
+        <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px dashed #cbd5e1;">
+          <p style="font-size:14px; color:#64748b; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の個別記録はまだ登録されていません。</p>
+          <p style="font-size:13px; color:#2563eb; margin-bottom:12px;">（※この利用者様には過去のカルテ記録が計 ${allUserRecords.length} 件あります）</p>
+          <button type="button" class="btn btn-secondary" style="font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="toggleRecordScope()">
+            📖 すべての過去履歴を表示する
+          </button>
+        </div>
+      `;
+    } else {
+      list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:20px; text-align:center;">この利用者様の介護記録はありません。</p>';
+    }
     return;
   }
 
-  records.forEach(r => {
-    const res = gState.residents.find(x => x.id === r.resident_id);
+  // レコード単体の描画ヘルパー関数
+  const createRecordItem = (r) => {
     const item = document.createElement("div");
     item.className = "care-record-card";
 
@@ -1208,9 +1956,9 @@ function renderSelectedDateRecords() {
     if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
     else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
     else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+    else if (r.category === "連絡") catBadgeStyle = "background:#fef9c3; color:#854d0e; font-weight:bold;";
 
     const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
-    const resName = res ? `${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様` : "利用者未指定";
     const rawContent = r.content || "";
     const charLen = rawContent.length;
     const isLong = charLen > 400;
@@ -1229,7 +1977,7 @@ function renderSelectedDateRecords() {
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
         <div style="display:flex; align-items:center; gap:8px;">
           <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
-          <strong style="font-size:15px; color:#1e293b;">${resName}</strong>
+          <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
           ${isLong ? `<span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
         </div>
         <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
@@ -1237,19 +1985,113 @@ function renderSelectedDateRecords() {
       <div class="care-record-body">${escapeHtml(displayContent)}</div>
       ${toggleBtnHtml}
     `;
-    list.appendChild(item);
-  });
+    return item;
+  };
+
+  // 全履歴表示（isAllScope）の場合は年月別アコーディオンでグループ化！
+  if (isAllScope) {
+    const monthGroups = {};
+    allUserRecords.forEach(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      const ym = timeStr.slice(0, 7) || "その他";
+      if (!monthGroups[ym]) monthGroups[ym] = [];
+      monthGroups[ym].push(r);
+    });
+
+    const ymList = Object.keys(monthGroups).sort().reverse(); // 新しい月順
+
+    // デフォルトで最新の月を展開状態にしておく
+    if (gOpenMonthAccordions.size === 0 && ymList.length > 0) {
+      gOpenMonthAccordions.add(ymList[0]);
+    }
+
+    // 月別クイック絞り込みバー
+    const filterBar = document.createElement("div");
+    filterBar.style.cssText = "display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center;";
+    filterBar.innerHTML = `
+      <span style="font-size:12px; font-weight:bold; color:#475569; margin-right:4px;">月別表示:</span>
+      <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
+      ${ymList.map(ym => {
+        const parts = ym.split("-");
+        const label = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月 (${monthGroups[ym].length}件)` : ym;
+        const active = gSelectedHistoryMonth === ym;
+        return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
+      }).join("")}
+    `;
+    list.appendChild(filterBar);
+
+    // 各月の描画
+    ymList.forEach(ym => {
+      if (gSelectedHistoryMonth !== "all" && gSelectedHistoryMonth !== ym) return;
+
+      const parts = ym.split("-");
+      const ymTitle = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月` : ym;
+      const mRecs = monthGroups[ym];
+      const isOpen = gOpenMonthAccordions.has(ym);
+
+      const accordionContainer = document.createElement("div");
+      accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; background:#fff;";
+
+      // アコーディオンヘッダー
+      const header = document.createElement("div");
+      header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3b82f6; transition:background 0.2s;";
+      header.onmouseover = () => header.style.background = "#f1f5f9";
+      header.onmouseout = () => header.style.background = "#f8fafc";
+      header.onclick = () => toggleMonthAccordion(ym);
+
+      header.innerHTML = `
+        <div style="display:flex; align-items:center; gap:8px;">
+          <span style="font-size:14px; font-weight:bold; color:#1e3a8a;">📅 ${ymTitle}</span>
+          <span style="font-size:11px; background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
+        </div>
+        <span style="font-size:12px; color:#64748b; font-weight:bold;">
+          ${isOpen ? '▲ 折りたたむ' : '▼ 展開して表示'}
+        </span>
+      `;
+      accordionContainer.appendChild(header);
+
+      // アコーディオン中身（展開時のみ表示）
+      if (isOpen) {
+        const body = document.createElement("div");
+        body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #e2e8f0;";
+        mRecs.forEach(r => {
+          body.appendChild(createRecordItem(r));
+        });
+        accordionContainer.appendChild(body);
+      }
+
+      list.appendChild(accordionContainer);
+    });
+
+  } else {
+    // 指定日モードの場合はそのまま表示
+    records.forEach(r => {
+      list.appendChild(createRecordItem(r));
+    });
+  }
 }
 
-// 本日の記録一覧を日報書類として印刷
+// 選択中利用者の個別カルテ記録を印刷
 function printSelectedDateRecords() {
-  const records = (db.data.care_records || []).filter(r => {
-    const timeStr = r.recorded_at || r.record_time || "";
-    return timeStr.startsWith(gState.selectedDate);
-  });
+  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
+  const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+
+  const isAllScope = gState.recordScope === "all";
+  const records = (db.data.care_records || [])
+    .filter(r => {
+      if (r.resident_id !== gState.selectedResidentId) return false;
+      if (isAllScope) return true;
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    })
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return tb.localeCompare(ta);
+    });
 
   if (records.length === 0) {
-    alert(`【${gState.selectedDate}】の介護記録はありません。印刷するデータがありません。`);
+    alert(`【${resName}】の対象記録はありません。印刷するデータがありません。`);
     return;
   }
 
@@ -1263,10 +2105,7 @@ function printSelectedDateRecords() {
   const nowStr = new Date().toLocaleString("ja-JP");
 
   let recordsHtml = records.map((r, idx) => {
-    const res = gState.residents.find(x => x.id === r.resident_id);
-    const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
     const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
-
     return `
       <div style="margin-bottom:18px; border:1px solid #cbd5e1; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
         <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
@@ -1290,11 +2129,11 @@ ${escapeHtml(r.content || '')}
     <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
       <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:10px; margin-bottom:16px;">
         <div>
-          <h1 style="font-size:22px; margin:0; color:#1e3a8a;">📑 介護業務日報・総合記録書</h1>
-          <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 施設ポータル帳票</p>
+          <h1 style="font-size:22px; margin:0; color:#1e3a8a;">📑 個別介護記録・カルテ報告書</h1>
+          <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
         </div>
         <div style="text-align:right; font-size:12px; color:#64748b;">
-          <div>印刷出力日時: ${nowStr}</div>
+          <div>印刷日時: ${nowStr}</div>
           <div>出力担当者: ${escapeHtml(staffName)}</div>
           <div>記録件数: 計 ${records.length} 件</div>
         </div>
@@ -1305,13 +2144,379 @@ ${escapeHtml(r.content || '')}
       </div>
 
       <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
-        <span>ケアポータル 統合管理システム (業務日報印刷)</span>
+        <span>ケアポータル 統合管理システム (個別カルテ印刷)</span>
         <span>確認印: __________________</span>
       </div>
     </div>
   `;
 
   window.print();
+}
+
+// ============================================================
+// 📰 施設・フロア 業務日誌 (一日の記録・日課スケジュール ＆ 特変日報)
+// ============================================================
+function renderDailyJournal() {
+  const titleEl = document.getElementById("dailyJournalTitle");
+  if (titleEl) {
+    titleEl.textContent = `📰 【${gState.selectedDate}】施設・フロア 業務日誌 (一日の記録)`;
+  }
+
+  // 1. サマリーバー（勤務体制 ＆ 利用者概況 ＆ 記録件数）
+  const summaryBar = document.getElementById("dailyJournalSummaryBar");
+  if (summaryBar) {
+    const presentCount = gState.residents.filter(r => r.status === "在所").length;
+    const hospitalCount = gState.residents.filter(r => r.status === "入院中").length;
+
+    const dayRecords = (db.data.care_records || []).filter(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    });
+    const tokukanCount = dayRecords.filter(r => r.category === "特変").length;
+
+    const shiftText = (document.getElementById("todayShiftBar") ? document.getElementById("todayShiftBar").innerText : "").replace("🕒 本日の勤務体制:", "").trim();
+
+    summaryBar.innerHTML = `
+      <div style="display:flex; flex-direction:column; gap:4px;">
+        <div style="font-size:13px; color:#1e40af; font-weight:bold;">🕒 本日のフロア勤務体制:</div>
+        <div style="font-size:13px; color:#334155;">${escapeHtml(shiftText || '管理者: 施設長 | リーダー: 山田 | 看護: 鈴木 | 介護: 佐藤 | 事務: 田中')}</div>
+      </div>
+      <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">入居者状況</div>
+          <div style="font-size:14px; font-weight:bold; color:#1e293b;">在所 ${presentCount}名 / 入院 ${hospitalCount}名</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">本日の介護記録</div>
+          <div style="font-size:14px; font-weight:bold; color:#2563eb;">計 ${dayRecords.length} 件</div>
+        </div>
+        <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
+          <div style="font-size:11px; color:#64748b;">特変・要申送</div>
+          <div style="font-size:14px; font-weight:bold; color:${tokukanCount > 0 ? '#dc2626' : '#16a34a'};">${tokukanCount} 件</div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 2. 施設・フロア 一日の日課スケジュールタイムライン (何時に何を行ったか)
+  renderDailyScheduleTimeline();
+
+  // 3. 指定日のフロア特変・申し送り記録一覧 (個別の体位交換「左側臥位」等は除外)
+  const recordsListEl = document.getElementById("dailyJournalRecordsList");
+  if (recordsListEl) {
+    const allRecords = (db.data.care_records || [])
+      .filter(r => {
+        const timeStr = r.recorded_at || r.record_time || "";
+        if (!timeStr.startsWith(gState.selectedDate)) return false;
+        // 個別の体位変換・巡視記録(左側臥位等)は日誌の一日の記録から除外
+        if (r.category === "巡視" && (r.content || "").includes("夜間巡視")) return false;
+        return true;
+      })
+      .sort((a, b) => {
+        const ta = a.recorded_at || a.record_time || "";
+        const tb = b.recorded_at || b.record_time || "";
+        return ta.localeCompare(tb);
+      });
+
+    if (allRecords.length === 0) {
+      recordsListEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:12px; text-align:center; background:#f8fafc; border-radius:6px;">この日の特変・特記事項はありません。</p>';
+    } else {
+      recordsListEl.innerHTML = "";
+      allRecords.forEach(r => {
+        const res = gState.residents.find(x => x.id === r.resident_id);
+        const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+        const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
+
+        let catBadgeStyle = "background:#e0f2fe; color:#0369a1;";
+        if (r.category === "特変") catBadgeStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+        else if (r.category === "バイタル") catBadgeStyle = "background:#fef3c7; color:#92400e;";
+        else if (r.category === "頓服服用") catBadgeStyle = "background:#f3e8ff; color:#6b21a8;";
+
+        const item = document.createElement("div");
+        item.className = "care-record-card";
+        item.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <div style="display:flex; align-items:center; gap:8px;">
+              <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
+              <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
+            </div>
+            <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
+          </div>
+          <div class="care-record-body" style="margin-top:6px;">${escapeHtml(r.content || '')}</div>
+        `;
+        recordsListEl.appendChild(item);
+      });
+    }
+  }
+
+  // 3. フロア全体ケアサマリー表 (バイタル・食事・排泄・入浴)
+  const summaryTableEl = document.getElementById("dailyJournalCareSummaryTable");
+  if (summaryTableEl) {
+    let rowsHtml = gState.residents.map(r => {
+      // 本日のバイタル
+      const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
+      const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
+
+      // 本日の食事 (朝・昼)
+      const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
+      const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
+      const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+
+      // 本日の排泄
+      const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
+      const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
+      const excStr = excs.length > 0 ? `排尿:${excs.length}回 / 排便:${stoolCount}回` : "記録なし";
+
+      // 本日の入浴
+      const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
+      const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+
+      return `
+        <tr>
+          <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no)}号室</td>
+          <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.name)} 様</td>
+          <td style="font-size:12px; white-space:nowrap;">${escapeHtml(r.care_level)}</td>
+          <td style="font-size:12px;">${escapeHtml(vitStr)}</td>
+          <td style="font-size:12px;">${escapeHtml(mealStr)}</td>
+          <td style="font-size:12px;">${escapeHtml(excStr)}</td>
+          <td style="font-size:12px; white-space:nowrap;">${escapeHtml(bathStr)}</td>
+        </tr>
+      `;
+    }).join("");
+
+    summaryTableEl.innerHTML = `
+      <table class="data-table" style="font-size:13px; width:100%;">
+        <thead>
+          <tr>
+            <th>居室</th>
+            <th>氏名</th>
+            <th>介護度</th>
+            <th>バイタル (体温/血圧/脈拍/SpO2)</th>
+            <th>食事摂取量 (主食)</th>
+            <th>排泄状況</th>
+            <th>入浴実施</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rowsHtml}
+        </tbody>
+      </table>
+    `;
+  }
+}
+
+// 施設・フロア業務日誌 (一日の記録) の印刷
+function printDailyJournal() {
+  const records = (db.data.care_records || [])
+    .filter(r => {
+      const timeStr = r.recorded_at || r.record_time || "";
+      return timeStr.startsWith(gState.selectedDate);
+    })
+    .sort((a, b) => {
+      const ta = a.recorded_at || a.record_time || "";
+      const tb = b.recorded_at || b.record_time || "";
+      return ta.localeCompare(tb);
+    });
+
+  const printArea = document.getElementById("printArea");
+  if (!printArea) {
+    alert("印刷コンテナが見つかりません。");
+    return;
+  }
+
+  const staffName = document.getElementById("currentStaff").value || "未記録";
+  const nowStr = new Date().toLocaleString("ja-JP");
+  const facilityName = (db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+
+  let summaryTableRows = gState.residents.map(r => {
+    const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
+    const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
+    const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
+    const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
+    const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+    const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
+    const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
+    const excStr = excs.length > 0 ? `尿:${excs.length}回 便:${stoolCount}回` : "記録なし";
+    const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
+    const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+
+    return `
+      <tr>
+        <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(r.care_level)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(vitStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(mealStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(excStr)}</td>
+        <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(bathStr)}</td>
+      </tr>
+    `;
+  }).join("");
+
+  let recordsHtml = records.map((r, idx) => {
+    const res = gState.residents.find(x => x.id === r.resident_id);
+    const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
+    const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
+
+    return `
+      <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:4px; padding:10px; page-break-inside:avoid;">
+        <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px; font-size:12px;">
+          <div>
+            <span style="font-weight:bold; background:#e2e8f0; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
+            <strong style="font-size:14px; margin-left:6px;">${escapeHtml(resName)}</strong>
+          </div>
+          <div style="color:#64748b;">
+            <span>${escapeHtml(timeDisplay)}</span> / <span>記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
+          </div>
+        </div>
+        <div style="white-space:pre-wrap; font-size:13px; line-height:1.6; color:#1e293b;">
+${escapeHtml(r.content || '')}
+        </div>
+      </div>
+    `;
+  }).join("");
+
+  printArea.innerHTML = `
+    <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
+      <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:8px; margin-bottom:14px;">
+        <div>
+          <h1 style="font-size:20px; margin:0; color:#1e3a8a;">📑 ${escapeHtml(facilityName)} フロア業務日誌 (一日の記録)</h1>
+          <p style="font-size:12px; color:#475569; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 日報管理書類</p>
+        </div>
+        <div style="text-align:right; font-size:11px; color:#64748b;">
+          <div>印刷日時: ${nowStr}</div>
+          <div>出力者: ${escapeHtml(staffName)}</div>
+        </div>
+      </div>
+
+      <h3 style="font-size:14px; margin:12px 0 6px 0; color:#1e3a8a;">1. フロア全体 ケア実施サマリー表</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">氏名・居室</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">介護度</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">バイタル</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">食事</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">排泄</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">入浴</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryTableRows}
+        </tbody>
+      </table>
+
+      <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) -->
+      <h3 style="font-size:14px; margin:16px 0 6px 0; color:#1e3a8a;">2. フロア一日の日課・業務スケジュール実施記録</h3>
+      <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
+        <thead>
+          <tr style="background:#f1f5f9;">
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:70px;">時間</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:150px;">日課・行事項目</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px;">実施内容・様子</th>
+            <th style="border:1px solid #94a3b8; padding:5px 8px; width:100px;">担当</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${(db.data.daily_schedules || []).slice().sort((a,b) => (a.time||'').localeCompare(b.time||'')).map(s => `
+            <tr>
+              <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold; text-align:center;">${s.time}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(s.title)}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.content || '-')}</td>
+              <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.staff_name || '-')}</td>
+            </tr>
+          `).join("") || '<tr><td colspan="4" style="text-align:center; padding:8px;">スケジュール記録なし</td></tr>'}
+        </tbody>
+      </table>
+
+      <h3 style="font-size:14px; margin:14px 0 6px 0; color:#1e3a8a;">3. 特変・申し送り記録 (計 ${records.length} 件)</h3>
+      <div>
+        ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#64748b;">記録なし</p>'}
+      </div>
+
+      <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+        <span>ケアポータル 統合管理システム (フロア日報印刷)</span>
+        <span>施設長印: __________________ / リーダー印: __________________</span>
+      </div>
+    </div>
+  `;
+
+  window.print();
+}
+
+// 施設・フロア 一日の日課・業務スケジュール
+function renderDailyScheduleTimeline() {
+  const container = document.getElementById("dailyScheduleTimeline");
+  if (!container) return;
+  const list = (db.data.daily_schedules || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  
+  if (list.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">登録された日課・行事スケジュールはありません。「＋ 日課・業務を追加」から追加できます。</p>';
+    return;
+  }
+
+  let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
+  list.forEach(s => {
+    html += `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;">
+        <div style="display:flex; gap:12px; align-items:flex-start;">
+          <span style="background:#1e40af; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap;">
+            ${s.time}
+          </span>
+          <div>
+            <strong style="color:#0f172a; font-size:14px;">${escapeHtml(s.title)}</strong>
+            ${s.content ? `<div style="font-size:12.5px; color:#475569; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
+            ${s.staff_name ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
+          </div>
+        </div>
+        <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailySchedule(${s.id})">削除</button>
+      </div>
+    `;
+  });
+  html += '</div>';
+  container.innerHTML = html;
+}
+
+function openDailyScheduleModal() {
+  const tm = new Date().toTimeString().slice(0, 5);
+  document.getElementById("schedTime").value = tm;
+  document.getElementById("schedTitle").value = "";
+  document.getElementById("schedContent").value = "";
+  const staff = document.getElementById("currentStaff").value || "";
+  document.getElementById("schedStaff").value = staff;
+  document.getElementById("dailyScheduleModal").style.display = "flex";
+}
+
+function submitDailySchedule() {
+  const tm = document.getElementById("schedTime").value;
+  const title = document.getElementById("schedTitle").value.trim();
+  const content = document.getElementById("schedContent").value.trim();
+  const staff = document.getElementById("schedStaff").value.trim();
+
+  if (!tm || !title) {
+    alert("時間と日課・項目名は必須入力です。");
+    return;
+  }
+
+  if (!Array.isArray(db.data.daily_schedules)) db.data.daily_schedules = [];
+  db.data.daily_schedules.push({
+    id: Date.now(),
+    time: tm,
+    title: title,
+    content: content,
+    staff_name: staff
+  });
+
+  db.save();
+  closeModal("dailyScheduleModal");
+  renderDailyScheduleTimeline();
+  alert(`日課スケジュール「${title}」を追加しました！`);
+}
+
+function deleteDailySchedule(id) {
+  if (!confirm("この日課スケジュールを削除してもよろしいですか？")) return;
+  db.data.daily_schedules = (db.data.daily_schedules || []).filter(s => s.id !== id);
+  db.save();
+  renderDailyScheduleTimeline();
 }
 
 // 文字検索機能 (何月何日何時の記録か一発検索)
@@ -1429,6 +2634,43 @@ function saveVital(resId) {
     return;
   }
 
+  // 個別注意基準値チェック (いつもより外れている場合の確認警告)
+  const res = gState.residents.find(x => x.id === resId);
+  if (res) {
+    const warnings = [];
+    const tNum = temp ? parseFloat(temp) : null;
+    const bpHNum = bpHigh ? parseInt(bpHigh, 10) : null;
+    const bpLNum = bpLow ? parseInt(bpLow, 10) : null;
+    const spNum = spo2 ? parseInt(spo2, 10) : null;
+    const pNum = pulse ? parseInt(pulse, 10) : null;
+
+    if (tNum !== null && res.temp_max && tNum > res.temp_max) {
+      warnings.push(`体温が個別上限(${res.temp_max}℃)を超えています (測定値: ${tNum}℃)`);
+    }
+    if (bpHNum !== null && res.bp_high_max && bpHNum > res.bp_high_max) {
+      warnings.push(`最高血圧が個別上限(${res.bp_high_max}mmHg)を超えています (測定値: ${bpHNum}mmHg)`);
+    }
+    if (bpHNum !== null && res.bp_high_min && bpHNum < res.bp_high_min) {
+      warnings.push(`最高血圧が個別下限(${res.bp_high_min}mmHg)を下回っています (測定値: ${bpHNum}mmHg)`);
+    }
+    if (spNum !== null && res.spo2_min && spNum < res.spo2_min) {
+      warnings.push(`SpO2が個別下限(${res.spo2_min}%)を下回っています (測定値: ${spNum}%)`);
+    }
+    if (pNum !== null && res.pulse_max && pNum > res.pulse_max) {
+      warnings.push(`脈拍が個別上限(${res.pulse_max}bpm)を超えています (測定値: ${pNum}bpm)`);
+    }
+    if (pNum !== null && res.pulse_min && pNum < res.pulse_min) {
+      warnings.push(`脈拍が個別下限(${res.pulse_min}bpm)を下回っています (測定値: ${pNum}bpm)`);
+    }
+
+    if (warnings.length > 0) {
+      const confirmMsg = `⚠️ いつもより数値が外れていますが間違いありませんか？\n\n【${res.name} 様の個別注意設定】\n・${warnings.join("\n・")}\n\nこの数値のまま記録してよろしいですか？`;
+      if (!confirm(confirmMsg)) {
+        return; // キャンセルされたら入力修正のため中断
+      }
+    }
+  }
+
   const staff = document.getElementById("currentStaff").value;
   const tm = new Date().toTimeString().slice(0, 5);
 
@@ -1449,7 +2691,6 @@ function saveVital(resId) {
   db.data.vitals.push(vitalObj);
 
   // 個人記録へ自動連動
-  const res = gState.residents.find(x => x.id === resId);
   const vitalText = `バイタル測定: 体温${temp || '-'}℃, 血圧${bpHigh || '-'}/${bpLow || '-'}, 脈拍${pulse || '-'}, SpO2 ${spo2 || '-'}%`;
   db.data.care_records.unshift({
     id: Date.now() + 1,
@@ -1742,89 +2983,208 @@ function saveMed(resId, slot) {
   alert(`${r ? r.name : '利用者'}様の【${slot}】服薬/点眼完了を記録しました！`);
 }
 
-// 7. 夜勤体位変換 ➔ 個人記録自動転記
+// 7. 夜勤体位変換 ➔ トグル解除 ＆ 一括確定 (個人記録自動転記)
+gState.nightTurnDate = null;
+gState.nightTurnDrafts = null;
+
+function initNightTurnDrafts(force) {
+  if (!force && gState.nightTurnDate === gState.selectedDate && gState.nightTurnDrafts !== null) {
+    return;
+  }
+  gState.nightTurnDate = gState.selectedDate;
+  gState.nightTurnDrafts = {};
+  const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
+  turns.forEach(t => {
+    gState.nightTurnDrafts[`${t.resident_id}_${t.time}`] = t.action;
+  });
+}
+
+function setNightTurnAction(resId, time, action) {
+  const key = `${resId}_${time}`;
+  if (!gState.nightTurnDrafts) gState.nightTurnDrafts = {};
+  if (!action) {
+    delete gState.nightTurnDrafts[key];
+    if (db.data.turns) {
+      db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
+      db.save();
+    }
+  } else {
+    gState.nightTurnDrafts[key] = action;
+  }
+  renderNightTable();
+}
+
+function toggleNightTurnAction(resId, time) {
+  const key = `${resId}_${time}`;
+  if (gState.nightTurnDrafts) {
+    delete gState.nightTurnDrafts[key];
+  }
+  // 確定済みのデータからも即座に削除・永続保存（解除したものが復活するのを完全防止）
+  if (db.data.turns) {
+    db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
+    db.save();
+  }
+  renderNightTable();
+}
+
+function clearAllNightTurnsForDate() {
+  if (!confirm(`${gState.selectedDate} の夜間体位変換・巡視チェックを全て解除しますか？`)) return;
+  gState.nightTurnDrafts = {};
+  if (db.data.turns) {
+    db.data.turns = db.data.turns.filter(t => t.date !== gState.selectedDate);
+    db.save();
+  }
+  renderNightTable();
+  alert(`${gState.selectedDate} の体位変換チェックをすべて解除しました。`);
+}
+
+function submitNightTurnsBatch() {
+  const staff = document.getElementById("currentStaff").value;
+  const turns = db.data.turns || [];
+  db.data.turns = turns.filter(t => t.date !== gState.selectedDate);
+
+  const resActionsMap = {};
+
+  if (gState.nightTurnDrafts) {
+    Object.keys(gState.nightTurnDrafts).forEach(key => {
+      const parts = key.split("_");
+      const resId = parseInt(parts[0], 10);
+      const time = parts[1];
+      const action = gState.nightTurnDrafts[key];
+      if (action) {
+        db.data.turns.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          date: gState.selectedDate,
+          time: time,
+          resident_id: resId,
+          action: action,
+          staff_name: staff
+        });
+        if (!resActionsMap[resId]) resActionsMap[resId] = [];
+        resActionsMap[resId].push(`${time} ${action}`);
+      }
+    });
+  }
+
+  const nowTm = new Date().toTimeString().slice(0, 5);
+  Object.keys(resActionsMap).forEach(resIdStr => {
+    const resId = parseInt(resIdStr, 10);
+    const actions = resActionsMap[resId];
+    if (actions.length > 0) {
+      db.data.care_records.unshift({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        recorded_at: `${gState.selectedDate} ${nowTm}`,
+        resident_id: resId,
+        category: "巡視",
+        content: `夜間巡視・体位変換: ${actions.join(", ")}`,
+        staff_name: staff
+      });
+    }
+  });
+
+  db.save();
+  renderNightTable();
+  loadDateRecords(gState.selectedDate);
+  if (Object.keys(resActionsMap).length > 0) {
+    alert("体位変換・夜間巡視を一括確定しました！個人記録へも反映されました。");
+  } else {
+    alert("体位変換・夜間巡視のチェック解除状態を確定・保存しました。");
+  }
+}
+
 function renderNightTable() {
   const tbody = document.querySelector("#nightTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
-  const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
+  if (gState.nightTurnDate !== gState.selectedDate || gState.nightTurnDrafts === null) {
+    initNightTurnDrafts();
+  }
+
+  const times = ["22:00", "00:00", "02:00", "04:00", "06:00"];
 
   gState.residents.forEach(r => {
     const tr = document.createElement("tr");
-    const getActionBtn = (tm) => {
-      const turn = turns.find(t => t.resident_id === r.id && t.time === tm);
-      if (turn) return `<span style="color:#16a34a; font-weight:bold; font-size:12px;">✓ ${turn.action}</span>`;
+    const cells = times.map(tm => {
+      const key = `${r.id}_${tm}`;
+      const curAction = gState.nightTurnDrafts[key];
+      if (curAction) {
+        return `
+          <td style="text-align:center;">
+            <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで解除">
+              ✓ ${curAction} ✕
+            </button>
+          </td>
+        `;
+      }
       return `
-        <select class="form-control" style="font-size:12px; padding:2px;" onchange="saveNightTurn(${r.id}, '${tm}', this.value)">
-          <option value="">選択</option>
-          <option value="安眠中">安眠中</option>
-          <option value="左側臥位">左側臥位</option>
-          <option value="右側臥位">右側臥位</option>
-          <option value="仰臥位">仰臥位</option>
-          <option value="おむつ交換">おむつ交換</option>
-        </select>
+        <td>
+          <select class="form-control" style="font-size:11px; padding:2px;" onchange="setNightTurnAction(${r.id}, '${tm}', this.value)">
+            <option value="">選択</option>
+            <option value="安眠中">安眠中</option>
+            <option value="左側臥位">左側臥位</option>
+            <option value="右側臥位">右側臥位</option>
+            <option value="仰臥位">仰臥位</option>
+            <option value="おむつ交換">おむつ交換</option>
+          </select>
+        </td>
       `;
-    };
+    }).join("");
 
     tr.innerHTML = `
       <td>${r.room_no}</td>
       <td><strong>${r.name} 様</strong></td>
-      <td>${getActionBtn("22:00")}</td>
-      <td>${getActionBtn("00:00")}</td>
-      <td>${getActionBtn("02:00")}</td>
-      <td>${getActionBtn("04:00")}</td>
-      <td>${getActionBtn("06:00")}</td>
+      ${cells}
     `;
     tbody.appendChild(tr);
   });
 }
 
 function saveNightTurn(resId, time, action) {
-  if (!action) return;
-  const staff = document.getElementById("currentStaff").value;
-  let existing = (db.data.turns || []).find(t => t.date === gState.selectedDate && t.resident_id === resId && t.time === time);
-  if (existing) {
-    existing.action = action;
-    existing.staff_name = staff;
-  } else {
-    db.data.turns.push({
-      id: Date.now(), date: gState.selectedDate, time: time, resident_id: resId, action: action, staff_name: staff
-    });
-  }
-  db.data.care_records.unshift({
-    id: Date.now() + 1, recorded_at: `${gState.selectedDate} ${time}`, resident_id: resId, category: "巡視", content: `夜間巡視: ${action}`, staff_name: staff
-  });
-  db.save();
-  loadDateRecords(gState.selectedDate);
-  alert(`体位変換/巡視（${time}: ${action}）を記録しました！個人記録にも自動転記されました。`);
+  setNightTurnAction(resId, time, action);
 }
 
-// 8. 月次体重
+// 8. 月次体重 (前月比 ＆ 前々月比 ＆ 1年推移グラフ)
 function renderWeightTable() {
   const tbody = document.querySelector("#weightTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
   const records = db.data.weight_records || [];
   
-  // 前月の年月文字列を算出 (例: "2026-09" -> "2026-08")
   const [y, m] = gState.currentMonth.split("-").map(Number);
   const prevDate = new Date(y, m - 2, 1);
   const prevMonth = `${prevDate.getFullYear()}-${String(prevDate.getMonth() + 1).padStart(2, "0")}`;
+  const prev2Date = new Date(y, m - 3, 1);
+  const prev2Month = `${prev2Date.getFullYear()}-${String(prev2Date.getMonth() + 1).padStart(2, "0")}`;
 
   gState.residents.forEach(r => {
-    // 当月と前月の最新レコードを取得
     const currentRec = records.filter(w => w.resident_id === r.id && (w.month === gState.currentMonth || (w.date && w.date.startsWith(gState.currentMonth)))).sort((a,b) => b.id - a.id)[0];
     const prevRec = records.filter(w => w.resident_id === r.id && (w.month === prevMonth || (w.date && w.date.startsWith(prevMonth)))).sort((a,b) => b.id - a.id)[0];
+    const prev2Rec = records.filter(w => w.resident_id === r.id && (w.month === prev2Month || (w.date && w.date.startsWith(prev2Month)))).sort((a,b) => b.id - a.id)[0];
 
+    // 前月比
     let diffDisplay = "-";
     if (currentRec && prevRec) {
       const diff = (currentRec.weight - prevRec.weight).toFixed(1);
       const diffNum = parseFloat(diff);
       const diffStr = diffNum > 0 ? `+${diff} kg` : (diffNum < 0 ? `${diff} kg` : `±0.0 kg`);
       const color = diffNum > 0 ? '#16a34a' : (diffNum < 0 ? '#dc2626' : '#64748b');
-      diffDisplay = `<strong style="color:${color}; font-size:14px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(前月: ${prevRec.weight}kg)</span>`;
+      diffDisplay = `<strong style="color:${color}; font-size:13px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prevRec.weight}k)</span>`;
     } else if (currentRec) {
-      diffDisplay = `<span style="font-size:12px; color:var(--text-muted);">- (前月なし)</span>`;
+      diffDisplay = `<span style="font-size:11px; color:var(--text-muted);">- (前月なし)</span>`;
     } else if (prevRec) {
-      diffDisplay = `<span style="font-size:12px; color:var(--text-muted);">前月: ${prevRec.weight}kg</span>`;
+      diffDisplay = `<span style="font-size:11px; color:var(--text-muted);">前月: ${prevRec.weight}k</span>`;
+    }
+
+    // 前々月比
+    let diff2Display = "-";
+    if (currentRec && prev2Rec) {
+      const diff2 = (currentRec.weight - prev2Rec.weight).toFixed(1);
+      const diff2Num = parseFloat(diff2);
+      const diff2Str = diff2Num > 0 ? `+${diff2} kg` : (diff2Num < 0 ? `${diff2} kg` : `±0.0 kg`);
+      const color2 = diff2Num > 0 ? '#16a34a' : (diff2Num < 0 ? '#dc2626' : '#64748b');
+      diff2Display = `<strong style="color:${color2}; font-size:13px;">${diff2Str}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prev2Rec.weight}k)</span>`;
+    } else if (currentRec) {
+      diff2Display = `<span style="font-size:11px; color:var(--text-muted);">-</span>`;
     }
 
     const currentVal = currentRec ? currentRec.weight : "";
@@ -1834,12 +3194,116 @@ function renderWeightTable() {
       <td>${r.room_no}</td>
       <td><strong>${r.name} 様</strong></td>
       <td>${gState.currentMonth}</td>
-      <td><input type="number" step="0.1" class="form-control" style="width:100px;" id="wVal_${r.id}" value="${currentVal}" placeholder="52.4"></td>
+      <td><input type="number" step="0.1" class="form-control" style="width:90px;" id="wVal_${r.id}" value="${currentVal}" placeholder="52.4"></td>
       <td>${diffDisplay}</td>
-      <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveWeight(${r.id})">測定登録</button></td>
+      <td>${diff2Display}</td>
+      <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveWeight(${r.id})">測定登録</button></td>
     `;
     tbody.appendChild(tr);
   });
+
+  renderWeightChart();
+}
+
+function renderWeightChart(selectedResId = null) {
+  const container = document.getElementById("weightChartContainer");
+  if (!container) return;
+
+  const targetResId = selectedResId || gState.selectedResidentId || (gState.residents[0] ? gState.residents[0].id : 1);
+  const targetRes = gState.residents.find(r => r.id === targetResId);
+  const records = (db.data.weight_records || []).filter(w => w.resident_id === targetResId);
+
+  // 過去12ヶ月の月リスト生成 (例: 2025-11 〜 2026-10)
+  const [curY, curM] = gState.currentMonth.split("-").map(Number);
+  const months = [];
+  for (let i = 11; i >= 0; i--) {
+    const d = new Date(curY, curM - 1 - i, 1);
+    months.push(`${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`);
+  }
+
+  // 各月の最新体重を取得
+  const points = months.map(mStr => {
+    const rec = records.filter(w => (w.month === mStr || (w.date && w.date.startsWith(mStr)))).sort((a,b) => b.id - a.id)[0];
+    return { month: mStr, weight: rec ? rec.weight : null };
+  });
+
+  // 利用者切り替えボタン
+  const resButtons = gState.residents.map(r => `
+    <button class="btn ${r.id === targetResId ? 'btn-primary' : 'btn-secondary'}" style="padding:3px 10px; font-size:12px;" onclick="renderWeightChart(${r.id})">
+      ${r.room_no}号室 ${r.name}様
+    </button>
+  `).join("");
+
+  // グラフ描画用スケール計算
+  const validWeights = points.filter(p => p.weight !== null).map(p => p.weight);
+  const minW = validWeights.length > 0 ? Math.floor(Math.min(...validWeights) - 2) : 40;
+  const maxW = validWeights.length > 0 ? Math.ceil(Math.max(...validWeights) + 2) : 70;
+  const range = maxW - minW || 10;
+
+  const svgW = 760;
+  const svgH = 220;
+  const padL = 50;
+  const padR = 30;
+  const padT = 30;
+  const padB = 40;
+  const graphW = svgW - padL - padR;
+  const graphH = svgH - padT - padB;
+
+  // グリッド線
+  let gridLines = "";
+  const steps = 4;
+  for (let s = 0; s <= steps; s++) {
+    const val = (minW + (range / steps) * s).toFixed(1);
+    const yPos = padT + graphH - (s / steps) * graphH;
+    gridLines += `
+      <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}" stroke="#e2e8f0" stroke-dasharray="3,3" />
+      <text x="${padL - 8}" y="${yPos + 4}" font-size="11" fill="#64748b" text-anchor="end">${val}kg</text>
+    `;
+  }
+
+  // 折れ線と点
+  let pathD = "";
+  let dotsHtml = "";
+  let monthLabelsHtml = "";
+  const numPts = points.length;
+
+  points.forEach((pt, idx) => {
+    const xPos = padL + (idx / (numPts - 1)) * graphW;
+    const shortM = pt.month.slice(5) + "月";
+    monthLabelsHtml += `<text x="${xPos}" y="${svgH - padB + 18}" font-size="11" fill="#475569" text-anchor="middle">${shortM}</text>`;
+
+    if (pt.weight !== null) {
+      const yPos = padT + graphH - ((pt.weight - minW) / range) * graphH;
+      if (!pathD) {
+        pathD = `M ${xPos} ${yPos}`;
+      } else {
+        pathD += ` L ${xPos} ${yPos}`;
+      }
+      dotsHtml += `
+        <circle cx="${xPos}" cy="${yPos}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2" />
+        <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#1e3a8a" text-anchor="middle">${pt.weight}kg</text>
+      `;
+    }
+  });
+
+  container.innerHTML = `
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
+      <div style="font-weight:bold; font-size:14px; color:#1e3a8a;">
+        📈 過去1年間の体重推移グラフ (${targetRes ? `${targetRes.name} 様` : ''})
+      </div>
+      <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        ${resButtons}
+      </div>
+    </div>
+    <div style="overflow-x:auto;">
+      <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:${svgW}px; height:auto; background:#f8fafc; border-radius:6px; display:block;">
+        ${gridLines}
+        ${pathD ? `<path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ''}
+        ${dotsHtml}
+        ${monthLabelsHtml}
+      </svg>
+    </div>
+  `;
 }
 
 function saveWeight(resId) {
@@ -1990,6 +3454,68 @@ function saveGrooming(resId) {
   alert("身だしなみチェックを保存しました！");
 }
 
+function submitGroomingsBatch() {
+  const staff = document.getElementById("currentStaff").value;
+  const nowTm = new Date().toTimeString().slice(0, 5);
+  let savedCount = 0;
+
+  gState.residents.forEach(r => {
+    const nailEl = document.getElementById(`gNail_${r.id}`);
+    const shaveEl = document.getElementById(`gShave_${r.id}`);
+    const earEl = document.getElementById(`gEar_${r.id}`);
+    const notesEl = document.getElementById(`gNotes_${r.id}`);
+    if (!nailEl || !shaveEl || !earEl) return;
+
+    const nail = nailEl.checked ? 1 : 0;
+    const shave = shaveEl.checked ? 1 : 0;
+    const ear = earEl.checked ? 1 : 0;
+    const notes = notesEl ? notesEl.value.trim() : "";
+
+    if (nail || shave || ear || notes) {
+      let existing = (db.data.groomings || []).find(g => g.date === gState.selectedDate && g.resident_id === r.id);
+      if (existing) {
+        existing.nail_done = nail;
+        existing.shave_done = shave;
+        existing.ear_done = ear;
+        existing.notes = notes;
+        existing.staff_name = staff;
+      } else {
+        db.data.groomings.push({
+          id: Date.now() + Math.floor(Math.random() * 1000),
+          date: gState.selectedDate,
+          resident_id: r.id,
+          nail_done: nail,
+          shave_done: shave,
+          ear_done: ear,
+          notes: notes,
+          staff_name: staff
+        });
+      }
+
+      const parts = [];
+      if (nail) parts.push("爪切り");
+      if (shave) parts.push("髭剃り");
+      if (ear) parts.push("耳掃除");
+      if (notes) parts.push(`特記:${notes}`);
+      
+      db.data.care_records.unshift({
+        id: Date.now() + Math.floor(Math.random() * 10000),
+        recorded_at: `${gState.selectedDate} ${nowTm}`,
+        resident_id: r.id,
+        category: "身だしなみ",
+        content: `身だしなみケア実施: ${parts.join(", ")}`,
+        staff_name: staff
+      });
+      savedCount++;
+    }
+  });
+
+  db.save();
+  renderGroomingTable();
+  loadDateRecords(gState.selectedDate);
+  alert(`身だしなみチェックを一括確定しました（${savedCount}名分のケアを個人記録へ転記完了）！`);
+}
+
 // 11. レク履歴
 function renderRecreationTable() {
   const tbody = document.querySelector("#recreationTable tbody");
@@ -2042,14 +3568,17 @@ function submitVisitation() {
   alert("面会・差し入れ荷物を登録しました！個人記録へ自動転記されました。");
 }
 
-// 13. 連絡帳 ＆ 【認】名前スタンプ (時間なし)
+// 13. 連絡帳 ＆ 【認】名前スタンプ ＆ 月間業務連絡表 (完全分離)
 function renderNotebook() {
+  renderMonthlyNotices();
+
   const list = document.getElementById("notebookList");
+  if (!list) return;
   list.innerHTML = "";
   const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
 
   if (notebooks.length === 0) {
-    list.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">本日の連絡事項・申し送りはありません。</p>';
+    list.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">本日の引継ぎ・申し送り事項はありません。</p>';
   } else {
     notebooks.forEach(nb => {
       const card = document.createElement("div");
@@ -2079,6 +3608,7 @@ function renderNotebook() {
   }
 
   const stampArea = document.getElementById("hankoStampArea");
+  if (!stampArea) return;
   stampArea.innerHTML = "";
   const stamps = (db.data.notebook_stamps || []).filter(s => s.date === gState.selectedDate).map(s => s.staff_name);
   if (stamps.length === 0) {
@@ -2163,12 +3693,180 @@ function removeNotebookStamp(date, staffName) {
   }
 }
 
+// 📢 月間業務連絡表 (全館・当月1ヶ月間継続掲示・変更事項等)
+function renderMonthlyNotices() {
+  const container = document.getElementById("monthlyNoticeList");
+  const alertArea = document.getElementById("monthlyNoticeAlertArea");
+  if (!container) return;
+  container.innerHTML = "";
+  if (alertArea) alertArea.innerHTML = "";
+
+  const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+  const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+
+  // 未確認アラート表示
+  if (currentStaff && notices.length > 0) {
+    const unconfirmed = notices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
+    if (unconfirmed.length > 0 && alertArea) {
+      alertArea.innerHTML = `
+        <div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
+          ⚠️ ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「✓ 確認済にする」を押してください。
+        </div>
+      `;
+    }
+  }
+
+  if (notices.length === 0) {
+    container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
+    return;
+  }
+
+  notices.forEach(n => {
+    const isConfirmedByMe = currentStaff && (n.confirmed_staff || []).includes(currentStaff);
+    let prioStyle = "background:#f1f5f9; color:#475569;";
+    if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+    else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
+
+    const confirmedListStr = (n.confirmed_staff || []).length > 0
+      ? (n.confirmed_staff || []).join("・")
+      : "未確認";
+
+    const card = document.createElement("div");
+    card.style.background = isConfirmedByMe ? "#f8fafc" : "#ffffff";
+    card.style.border = isConfirmedByMe ? "1px solid #cbd5e1" : "2px solid #818cf8";
+    card.style.borderRadius = "8px";
+    card.style.padding = "12px 14px";
+    card.style.marginBottom = "10px";
+    card.style.boxShadow = isConfirmedByMe ? "none" : "0 2px 6px rgba(99,102,241,0.15)";
+
+    card.innerHTML = `
+      <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+        <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+          <span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
+          <strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+        </div>
+        <div style="display:flex; gap:6px; align-items:center;">
+          <span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+          <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
+        </div>
+      </div>
+      <div style="font-size:13.5px; line-height:1.7; color:#334155; margin:8px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; padding-top:8px; font-size:12px;">
+        <div style="color:#64748b;">
+          <strong>確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
+        </div>
+        <div>
+          ${isConfirmedByMe ? `
+            <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="confirmMonthlyNotice(${n.id})">
+              ✓ 確認済 (解除する)
+            </button>
+          ` : `
+            <button class="btn btn-primary" style="padding:4px 14px; font-size:12px; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
+              ✓ 私が確認済みにする
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+    container.appendChild(card);
+  });
+}
+
+function openMonthlyNoticeModal() {
+  const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+  document.getElementById("noticeMonth").value = curMonth;
+  document.getElementById("noticePriority").value = "重要";
+  document.getElementById("noticeTitle").value = "";
+  document.getElementById("noticeContent").value = "";
+  document.getElementById("monthlyNoticeModal").style.display = "flex";
+}
+
+function submitMonthlyNotice() {
+  const m = document.getElementById("noticeMonth").value;
+  const prio = document.getElementById("noticePriority").value;
+  const title = document.getElementById("noticeTitle").value.trim();
+  const content = document.getElementById("noticeContent").value.trim();
+  const staff = document.getElementById("currentStaff").value || "施設長";
+
+  if (!m || !title || !content) {
+    alert("対象月、件名、連絡内容は必須入力です。");
+    return;
+  }
+
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+
+  if (!Array.isArray(db.data.monthly_notices)) db.data.monthly_notices = [];
+  db.data.monthly_notices.unshift({
+    id: Date.now(),
+    month: m,
+    priority: prio,
+    title: title,
+    content: content,
+    staff_name: staff,
+    created_at: nowStr,
+    confirmed_staff: [staff]
+  });
+
+  db.save();
+  closeModal("monthlyNoticeModal");
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+  alert(`月間業務連絡「${title}」を登録しました！全職員に1ヶ月間掲示されます。`);
+}
+
+function confirmMonthlyNotice(id) {
+  const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
+  if (!currentStaff) {
+    alert("担当職員を選択してください。");
+    return;
+  }
+
+  const notice = (db.data.monthly_notices || []).find(n => n.id === id);
+  if (!notice) return;
+  if (!Array.isArray(notice.confirmed_staff)) notice.confirmed_staff = [];
+
+  const idx = notice.confirmed_staff.indexOf(currentStaff);
+  if (idx !== -1) {
+    notice.confirmed_staff.splice(idx, 1);
+  } else {
+    notice.confirmed_staff.push(currentStaff);
+  }
+
+  db.save();
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+}
+
+function deleteMonthlyNotice(id) {
+  if (!confirm("この月間業務連絡を削除してもよろしいですか？")) return;
+  db.data.monthly_notices = (db.data.monthly_notices || []).filter(n => n.id !== id);
+  db.save();
+  renderMonthlyNotices();
+  checkGlobalAlerts();
+}
+
 // 14. 現場クイック消費 (優しい「修正」ボタン付き)
+let gPendingConsume = null;
+
 function renderQuickConsume() {
   const r = gState.residents.find(x => x.id === gState.selectedResidentId);
-  document.getElementById("consumeResidentName").textContent = r ? r.name : "利用者";
+  const nameEl = document.getElementById("consumeResidentName");
+  if (nameEl) nameEl.textContent = r ? r.name : "利用者";
+
+  // 利用者切り替えドロップダウンの同期
+  const sel = document.getElementById("consumeResidentSelect");
+  if (sel) {
+    sel.innerHTML = gState.residents.map(res => `
+      <option value="${res.id}" ${res.id === gState.selectedResidentId ? 'selected' : ''}>
+        ${res.room_no}号室 ${res.name} 様
+      </option>
+    `).join("");
+  }
 
   const grid = document.getElementById("quickConsumeGrid");
+  if (!grid) return;
   grid.innerHTML = "";
 
   gState.inventory.forEach(item => {
@@ -2183,14 +3881,14 @@ function renderQuickConsume() {
 
     card.innerHTML = `
       <div>
-        <div style="font-weight:bold; font-size:14px;">${item.name}</div>
+        <div style="font-weight:bold; font-size:14px; color:#1e293b;">${item.name}</div>
         <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
-          現在庫: ${item.current_stock} ${item.unit} | 単価: ¥${item.unit_price}
-          ${item.is_personal_billable ? '<span style="color:#0284c7;">[個人請求対象]</span>' : '<span style="color:#16a34a;">[施設負担]</span>'}
+          現在庫: <strong>${item.current_stock}</strong> ${item.unit} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
+          ${item.is_personal_billable ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
         </div>
       </div>
       <div style="margin-top:10px;">
-        <button class="btn btn-primary" style="width:100%; padding:8px; font-size:14px;" onclick="consumeItem(${item.id}, 1)">➖ 1${item.unit}使用</button>
+        <button class="btn btn-primary" style="width:100%; padding:8px; font-size:13px; font-weight:bold;" onclick="consumeItem(${item.id}, 1)">➖ 1${item.unit}使用する</button>
       </div>
     `;
     grid.appendChild(card);
@@ -2199,48 +3897,95 @@ function renderQuickConsume() {
   renderRecentConsumeLogs();
 }
 
+function onConsumeResidentChange() {
+  const sel = document.getElementById("consumeResidentSelect");
+  if (!sel) return;
+  const newId = parseInt(sel.value, 10);
+  if (!isNaN(newId)) {
+    gState.selectedResidentId = newId;
+    renderResidentsStrip();
+    renderResidentDetail();
+    updateRecordTargetBanner();
+    renderQuickConsume();
+  }
+}
+
 function consumeItem(itemId, qty) {
   const item = gState.inventory.find(i => i.id === itemId);
   const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  if (!item || !res) return;
+
+  gPendingConsume = { itemId, qty, resId: res.id };
+
+  const billNote = item.is_personal_billable
+    ? `<div style="margin-top:8px; font-size:12px; color:#0284c7; background:#f0f9ff; padding:6px 10px; border-radius:4px;">※ 個人購入として月次請求明細に 1${item.unit} (¥${item.unit_price.toLocaleString()}) 自動計上されます。<br>（預かり金出納帳の残高からは引かれません）</div>`
+    : `<div style="margin-top:8px; font-size:12px; color:#15803d; background:#f0fdf4; padding:6px 10px; border-radius:4px;">※ 施設負担備品として在庫から消費されます。</div>`;
+
+  const msgEl = document.getElementById("confirmConsumeMsg");
+  if (msgEl) {
+    msgEl.innerHTML = `
+      <strong style="font-size:16px; color:#1e3a8a;">${res.room_no}号室 ${res.name} 様</strong> に<br>
+      【<strong>${item.name}</strong>】 を <strong>${qty} ${item.unit}</strong> 使用します。<br><br>
+      対象者と物品はお間違いないですか？
+      ${billNote}
+    `;
+    document.getElementById("confirmConsumeModal").style.display = "flex";
+  } else {
+    // モーダルがない場合のフォールバック
+    if (confirm(`${res.name}様に「${item.name}」を${qty}${item.unit}使用します。よろしいですか？`)) {
+      executeConsume();
+    }
+  }
+}
+
+function executeConsume() {
+  if (!gPendingConsume) return;
+  const { itemId, qty, resId } = gPendingConsume;
+  const item = gState.inventory.find(i => i.id === itemId);
+  const res = gState.residents.find(r => r.id === resId);
   const staff = document.getElementById("currentStaff").value;
   const now = new Date();
   const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
 
-  item.current_stock -= qty;
+  if (item) {
+    item.current_stock -= qty;
 
-  if (item.is_personal_billable === 1) {
-    db.data.consumptions.unshift({
-      id: Date.now(),
-      consumed_at: nowStr,
-      resident_id: gState.selectedResidentId,
+    if (item.is_personal_billable === 1) {
+      db.data.consumptions.unshift({
+        id: Date.now(),
+        consumed_at: nowStr,
+        resident_id: resId,
+        item_id: item.id,
+        item_name: item.name,
+        quantity: qty,
+        unit_price: item.unit_price,
+        subtotal: item.unit_price * qty,
+        staff_name: staff
+      });
+    }
+
+    const logId = Date.now() + 1;
+    db.data.inventory_logs.unshift({
+      id: logId,
+      timestamp: nowStr,
       item_id: item.id,
       item_name: item.name,
-      quantity: qty,
-      unit_price: item.unit_price,
-      subtotal: item.unit_price * qty,
-      staff_name: staff
+      action_type: "消費",
+      change_qty: -qty,
+      after_qty: item.current_stock,
+      resident_id: resId,
+      resident_name: res ? res.name : "",
+      staff_name: staff,
+      reason: "現場ケア時使用"
     });
+
+    db.save();
+    renderQuickConsume();
+    checkGlobalAlerts();
+    closeModal("confirmConsumeModal");
+    alert(`${res ? res.name : ''}様に ${item.name} を ${qty}${item.unit} 消費記録しました！`);
   }
-
-  const logId = Date.now() + 1;
-  db.data.inventory_logs.unshift({
-    id: logId,
-    timestamp: nowStr,
-    item_id: item.id,
-    item_name: item.name,
-    action_type: "消費",
-    change_qty: -qty,
-    after_qty: item.current_stock,
-    resident_id: gState.selectedResidentId,
-    resident_name: res ? res.name : "",
-    staff_name: staff,
-    reason: "ケア時使用"
-  });
-
-  db.save();
-  renderQuickConsume();
-  checkGlobalAlerts();
-  alert(`${item.name} を${qty}点消費しました！`);
+  gPendingConsume = null;
 }
 
 function renderRecentConsumeLogs() {
@@ -2328,6 +4073,7 @@ function loadOfficeData() {
   renderOfficeSuppliers();
   renderOfficeBillingSelect();
   renderOfficeDepositTable();
+  renderShiftTable(gState.currentShiftMonth || "2026-10");
   renderOfficeVehicleLogs();
   renderOfficeFireDrills();
   renderOfficeCommittees();
@@ -2360,7 +4106,12 @@ function switchOfficeTab(tab) {
     if (el) el.style.display = "none";
   });
   const target = document.getElementById(tabMap[tab]);
-  if (target) target.style.display = "block";
+  if (target) {
+    target.style.display = "block";
+    if (tab === "shift") {
+      renderShiftTable(gState.currentShiftMonth || "2026-10");
+    }
+  }
 }
 
 // 在庫一覧 ＆ 棚卸し実数合わせ
@@ -2535,34 +4286,140 @@ function renderOfficeFireDrills() {
   });
 }
 
-// 法定委員会
+// 法定委員会・研修記録
 function renderOfficeCommittees() {
   const tbody = document.querySelector("#committeeTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
-  const list = db.data.committees || db.data.committee_meetings || [];
+  const list = db.data.committees || [];
+  if (list.length === 0) {
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td colspan="7" style="text-align:center; color:#64748b; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
+    tbody.appendChild(tr);
+    return;
+  }
+
   list.forEach(c => {
     const tr = document.createElement("tr");
+    const cat = c.category || "法定委員会";
+    let catBadgeColor = "#2563eb";
+    let catBgColor = "#dbeafe";
+    if (cat === "施設内研修") {
+      catBadgeColor = "#166534";
+      catBgColor = "#dcfce7";
+    } else if (cat === "外部研修") {
+      catBadgeColor = "#7c2d12";
+      catBgColor = "#ffedd5";
+    } else if (cat === "その他業務項目") {
+      catBadgeColor = "#4b5563";
+      catBgColor = "#f3f4f6";
+    }
+
     tr.innerHTML = `
-      <td>${c.date}</td>
-      <td><strong>${c.committee_name}</strong></td>
+      <td>${c.date || '-'}</td>
+      <td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${cat}</span></td>
+      <td><strong>${c.committee_name || c.name || '-'}</strong></td>
       <td>${c.attendees || '-'}</td>
       <td>${c.agenda || '-'}</td>
-      <td>${c.content}</td>
+      <td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${c.content || '-'}</td>
+      <td>
+        <button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#dc2626;" onclick="deleteCommittee(${c.id})">削除</button>
+      </td>
     `;
     tbody.appendChild(tr);
   });
 }
 
-// 発注 ＆ 上司承認
+function openCommitteeModal() {
+  const today = new Date().toISOString().split("T")[0];
+  const dateInput = document.getElementById("comDate");
+  if (dateInput) dateInput.value = today;
+  const nameInput = document.getElementById("comName");
+  if (nameInput) nameInput.value = "";
+  const attendeesInput = document.getElementById("comAttendees");
+  if (attendeesInput) {
+    const curStaff = document.getElementById("currentStaff")?.value || "";
+    attendeesInput.value = curStaff;
+  }
+  const agendaInput = document.getElementById("comAgenda");
+  if (agendaInput) agendaInput.value = "";
+  const contentInput = document.getElementById("comContent");
+  if (contentInput) contentInput.value = "";
+  const catInput = document.getElementById("comCategory");
+  if (catInput) catInput.value = "法定委員会";
+
+  const modal = document.getElementById("committeeModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function submitCommittee() {
+  const date = document.getElementById("comDate")?.value;
+  const category = document.getElementById("comCategory")?.value || "法定委員会";
+  const name = document.getElementById("comName")?.value?.trim();
+  const attendees = document.getElementById("comAttendees")?.value?.trim() || "-";
+  const agenda = document.getElementById("comAgenda")?.value?.trim() || "-";
+  const content = document.getElementById("comContent")?.value?.trim();
+
+  if (!date || !name || !content) {
+    alert("開催日、委員会・研修名、および協議内容は必須項目です。");
+    return;
+  }
+
+  if (!db.data.committees) db.data.committees = [];
+  const newRecord = {
+    id: Date.now(),
+    date: date,
+    category: category,
+    committee_name: name,
+    attendees: attendees,
+    agenda: agenda,
+    content: content,
+    created_at: new Date().toISOString().replace("T", " ").slice(0, 16)
+  };
+  db.data.committees.unshift(newRecord);
+  db.save();
+  closeModal("committeeModal");
+  renderOfficeCommittees();
+  alert("法定委員会・研修記録を登録・保存しました！");
+}
+
+function deleteCommittee(id) {
+  if (!confirm("この委員会・研修記録を削除してもよろしいですか？")) return;
+  if (!db.data.committees) return;
+  db.data.committees = db.data.committees.filter(c => c.id !== id);
+  db.save();
+  renderOfficeCommittees();
+}
+
+// 発注 ＆ 上司承認 (管理者のみ認証・閲覧制限)
 function renderOfficeOrders() {
   const tbody = document.querySelector("#ordersTable tbody");
+  if (!tbody) return;
   tbody.innerHTML = "";
+  const isAdmin = isCurrentStaffAdmin();
+
   (db.data.orders || []).forEach(o => {
     const tr = document.createElement("tr");
     let badgeColor = "#fef3c7; color:#92400e;";
     if (o.status === "承認済") badgeColor = "#dbeafe; color:#1e40af;";
     if (o.status === "納品完了") badgeColor = "#dcfce7; color:#166534;";
     if (o.status === "差戻し") badgeColor = "#fee2e2; color:#991b1b;";
+
+    let actionButtons = "";
+    if (o.status === "申請中") {
+      if (isAdmin) {
+        actionButtons = `
+          <button class="btn btn-primary" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '承認済')">上司承認</button>
+          <button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '差戻し')">差戻し</button>
+        `;
+      } else {
+        actionButtons = `<span style="font-size:11px; color:#94a3b8; background:#f1f5f9; padding:3px 6px; border-radius:4px;">※ 承認権限: 管理者のみ</span>`;
+      }
+    } else if (o.status === "承認済") {
+      actionButtons = `
+        <button class="btn btn-success" style="padding:4px 8px; font-size:12px;" onclick="receiveOrder(${o.id})">納品受取 (在庫加算)</button>
+      `;
+    }
 
     tr.innerHTML = `
       <td>${o.ordered_at || o.order_date || '-'}</td>
@@ -2573,30 +4430,32 @@ function renderOfficeOrders() {
       <td>${o.reason || '-'}</td>
       <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${o.status}</span></td>
       <td>${o.applicant} / ${o.approver || '-'}</td>
-      <td>
-        ${o.status === '申請中' ? `
-          <button class="btn btn-primary" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '承認済')">上司承認</button>
-          <button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '差戻し')">差戻し</button>
-        ` : ''}
-        ${o.status === '承認済' ? `
-          <button class="btn btn-success" style="padding:4px 8px; font-size:12px;" onclick="receiveOrder(${o.id})">納品受取 (在庫加算)</button>
-        ` : ''}
-      </td>
+      <td>${actionButtons}</td>
     `;
     tbody.appendChild(tr);
   });
 }
 
 function approveOrder(id, status) {
+  if (!isCurrentStaffAdmin()) {
+    alert("⚠️ 発注申請の承認・差戻しは管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
+    return;
+  }
   const staff = document.getElementById("currentStaff").value;
   const o = db.data.orders.find(x => x.id === id);
-  if (o) {
-    o.status = status;
-    o.approver = staff;
-    db.save();
-    loadOfficeData();
-    alert(`発注申請を「${status}」にしました！`);
-  }
+  if (!o) return;
+
+  const actionLabel = status === "承認済" ? "承認" : "差戻し";
+  const ok = confirm(`【発注申請 ${actionLabel}】\n・申請者: ${o.applicant || '職員'}\n・品名: ${o.item_name}\n・数量: ${o.quantity}\n・金額: ¥${(o.total_price || 0).toLocaleString()}\n・業者: ${o.supplier_name || '-'}\n・理由: ${o.reason || '特記なし'}`);
+  if (!ok) return;
+
+  o.status = status;
+  o.approver = staff;
+  o.approved_at = new Date().toISOString().split("T")[0];
+  db.save();
+  if (gState.activePortal === "office") loadOfficeData();
+  checkGlobalAlerts();
+  alert(`発注申請（${o.item_name} × ${o.quantity}）を「${status}」にしました。`);
 }
 
 function receiveOrder(id) {
@@ -3089,11 +4948,38 @@ function saveIncidentReport() {
   alert("報告書を保存しました！");
 }
 
-// 私物行追加
-function openBelongingModal() {
-  document.getElementById("belongingModal").style.display = "flex";
+// 私物行 追加・編集
+function openBelongingModal(editId = null) {
+  const modal = document.getElementById("belongingModal");
+  if (!modal) return;
+  const titleEl = document.getElementById("belModalTitle");
+  const submitBtn = document.getElementById("belSubmitBtn");
+  const editIdEl = document.getElementById("belEditId");
+
+  if (editId) {
+    const b = (db.data.belongings || []).find(x => x.id === editId);
+    if (!b) return;
+    if (editIdEl) editIdEl.value = b.id;
+    if (titleEl) titleEl.textContent = `🧳 私物・持ち込み品の編集 (${b.item_name})`;
+    if (submitBtn) submitBtn.textContent = "私物情報を更新・保存";
+    document.getElementById("belCat").value = b.category || "衣類・日用品";
+    document.getElementById("belItemName").value = b.item_name || "";
+    document.getElementById("belQty").value = b.quantity || "";
+    document.getElementById("belNotes").value = b.notes || "";
+  } else {
+    if (editIdEl) editIdEl.value = "";
+    if (titleEl) titleEl.textContent = "🧳 私物・持ち込み品の追加 (品名と個数)";
+    if (submitBtn) submitBtn.textContent = "私物台帳へ追加";
+    document.getElementById("belCat").value = "衣類・日用品";
+    document.getElementById("belItemName").value = "";
+    document.getElementById("belQty").value = "";
+    document.getElementById("belNotes").value = "";
+  }
+  modal.style.display = "flex";
 }
+
 function submitBelonging() {
+  const editId = document.getElementById("belEditId")?.value;
   const cat = document.getElementById("belCat").value;
   const name = document.getElementById("belItemName").value.trim();
   const qty = document.getElementById("belQty").value.trim();
@@ -3104,19 +4990,208 @@ function submitBelonging() {
     return;
   }
 
-  db.data.belongings.push({
-    id: Date.now(), resident_id: gState.selectedResidentId, category: cat,
-    item_name: name, quantity: qty, marked: 1, notes: notes
-  });
+  if (!db.data.belongings) db.data.belongings = [];
+
+  if (editId) {
+    const b = db.data.belongings.find(x => x.id == editId);
+    if (b) {
+      const ok = confirm(`『${b.item_name}』の登録内容を変更しますか？\n\n・品名: ${b.item_name} → ${name}\n・個数: ${b.quantity} → ${qty}\n・区分: ${b.category} → ${cat}\n・備考: ${b.notes || 'なし'} → ${notes || 'なし'}`);
+      if (!ok) return;
+
+      b.category = cat;
+      b.item_name = name;
+      b.quantity = qty;
+      b.notes = notes;
+    }
+    alert(`私物『${name}』の情報を更新しました。`);
+  } else {
+    db.data.belongings.push({
+      id: Date.now(),
+      resident_id: gState.selectedResidentId,
+      category: cat,
+      item_name: name,
+      quantity: qty,
+      marked: 1,
+      notes: notes
+    });
+    alert(`私物台帳に『${name}』を追加しました。`);
+  }
   db.save();
 
   closeModal("belongingModal");
   document.getElementById("belItemName").value = "";
   document.getElementById("belQty").value = "";
   document.getElementById("belNotes").value = "";
+  if (document.getElementById("belEditId")) document.getElementById("belEditId").value = "";
   renderResidentDetail();
-  alert("私物台帳に行を追加しました！");
 }
+
+// 数量クイック調整 (衣類破棄・劣化・買い足し時)
+function adjustBelongingQty(id, delta) {
+  const b = (db.data.belongings || []).find(x => x.id === id);
+  if (!b) return;
+
+  const currentStr = String(b.quantity || "1").trim();
+  const numMatch = currentStr.match(/\d+/);
+  let curNum = numMatch ? parseInt(numMatch[0], 10) : 1;
+  const unit = currentStr.replace(/\d+/g, "").trim() || "点";
+
+  const nextNum = curNum + delta;
+  if (nextNum <= 0) {
+    const ok = confirm(`『${b.item_name}』の数量が0になります。台帳から削除しますか？`);
+    if (ok) {
+      deleteBelonging(id, false);
+    }
+    return;
+  }
+
+  const ok = confirm(`『${b.item_name}』の数量を変更しますか？\n\n【 変更前 】 ${b.quantity}\n　　↓\n【 変更後 】 ${nextNum}${unit}`);
+  if (!ok) return;
+
+  b.quantity = `${nextNum}${unit}`;
+  db.save();
+  renderResidentDetail();
+}
+
+// 私物の削除 (廃棄・持ち帰り)
+function deleteBelonging(id, needConfirm = true) {
+  const b = (db.data.belongings || []).find(x => x.id === id);
+  if (!b) return;
+
+  if (needConfirm) {
+    const ok = confirm(`『${b.item_name} (${b.quantity})』を台帳から削除しますか？`);
+    if (!ok) return;
+  }
+
+  db.data.belongings = (db.data.belongings || []).filter(x => x.id !== id);
+  db.save();
+  renderResidentDetail();
+  alert(`『${b.item_name}』を台帳から削除しました。`);
+}
+
+// 福祉用具・備品 追加
+function openEquipmentModal() {
+  const modal = document.getElementById("equipmentModal");
+  if (!modal) return;
+  document.getElementById("eqName").value = "";
+  document.getElementById("eqOwnership").value = "施設備品";
+  document.getElementById("eqNotes").value = "";
+  modal.style.display = "flex";
+}
+
+function submitEquipment() {
+  const name = document.getElementById("eqName").value.trim();
+  const ownership = document.getElementById("eqOwnership").value;
+  const notes = document.getElementById("eqNotes").value.trim();
+
+  if (!name) {
+    alert("用具・備品名を入力してください。");
+    return;
+  }
+
+  if (!db.data.equipments) db.data.equipments = [];
+  db.data.equipments.push({
+    id: Date.now(),
+    resident_id: gState.selectedResidentId,
+    equipment_name: name,
+    ownership_type: ownership,
+    notes: notes
+  });
+  db.save();
+
+  closeModal("equipmentModal");
+  renderResidentDetail();
+  alert(`福祉用具『${name}』を登録しました。`);
+}
+
+// 福祉用具・備品の解除・返却
+function deleteEquipment(id) {
+  const eq = (db.data.equipments || []).find(x => x.id === id);
+  if (!eq) return;
+
+  const ok = confirm(`福祉用具『${eq.equipment_name} (${eq.ownership_type})』の使用を終了（解除）しますか？`);
+  if (!ok) return;
+
+  db.data.equipments = (db.data.equipments || []).filter(x => x.id !== id);
+  db.save();
+  renderResidentDetail();
+  alert(`『${eq.equipment_name}』の使用を終了・解除しました。`);
+}
+
+// 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針 クイック変更モーダル
+function openFamilyHistoryModal(residentId) {
+  const r = (gState.residents || []).find(x => x.id === residentId);
+  if (!r) return;
+
+  const modal = document.getElementById("familyHistoryModal");
+  if (!modal) return;
+
+  document.getElementById("familyHistoryModalTitle").textContent = `👪 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針の変更 (${r.name} 様)`;
+  document.getElementById("fhResidentId").value = r.id;
+  document.getElementById("fhEmergencyContact").value = r.emergency_contact || "";
+  document.getElementById("fhPolicyStamp").value = r.policy_stamp || "緊急搬送";
+  document.getElementById("fhSensorAlert").value = r.sensor_alert || "";
+  document.getElementById("fhFamilyWishes").value = r.family_wishes || "";
+  document.getElementById("fhLifeHistory").value = r.life_history || "";
+
+  modal.style.display = "flex";
+}
+
+function submitFamilyHistory() {
+  const resId = parseInt(document.getElementById("fhResidentId").value, 10);
+  const r = (gState.residents || []).find(x => x.id === resId);
+  if (!r) return;
+
+  const staff = (document.getElementById("currentStaff")?.value) || "担当職員";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+
+  const newContact = document.getElementById("fhEmergencyContact").value.trim();
+  const newStamp = document.getElementById("fhPolicyStamp").value;
+  const newSensor = document.getElementById("fhSensorAlert").value.trim();
+  const newWishes = document.getElementById("fhFamilyWishes").value.trim();
+  const newHistory = document.getElementById("fhLifeHistory").value.trim();
+
+  // 変更前と比較して差分チェック
+  const changes = [];
+  if (r.emergency_contact !== newContact) changes.push(`・緊急連絡/延命方針: ${r.emergency_contact || '未登録'} → ${newContact || 'なし'}`);
+  if (r.policy_stamp !== newStamp) changes.push(`・基本方針: ［${r.policy_stamp}］→［${newStamp}］`);
+  if (r.family_wishes !== newWishes) changes.push(`・家族の要望: ${r.family_wishes || 'なし'} → ${newWishes || 'なし'}`);
+  if (r.life_history !== newHistory) changes.push(`・生活歴/こだわりを更新`);
+  if (r.sensor_alert !== newSensor) changes.push(`・見守り/センサー: ${r.sensor_alert || 'なし'} → ${newSensor || 'なし'}`);
+
+  if (changes.length > 0) {
+    const ok = confirm(`『${r.name} 様』の登録情報を変更しますか？\n\n${changes.join("\n")}`);
+    if (!ok) return;
+  }
+
+
+
+  r.emergency_contact = newContact;
+  r.policy_stamp = newStamp;
+  r.sensor_alert = newSensor;
+  r.family_wishes = newWishes;
+  r.life_history = newHistory;
+
+  if (changes.length > 0) {
+    if (!db.data.care_records) db.data.care_records = [];
+    db.data.care_records.unshift({
+      id: Date.now(),
+      resident_id: r.id,
+      category: "特変",
+      recorded_at: nowStr,
+      content: `【基本情報更新】家族要望・緊急連絡先・看取り方針等の更新 (${changes.join(" / ")})`,
+      staff_name: staff
+    });
+  }
+
+  db.save();
+  closeModal("familyHistoryModal");
+  renderResidentDetail();
+  checkGlobalAlerts();
+  alert(`『${r.name} 様』の緊急連絡先・家族要望・看取り方針を最新状態に更新・保存しました！`);
+}
+
 
 // 新規利用者登録・編集
 function openAddResidentModal() {
@@ -3141,6 +5216,13 @@ function openAddResidentModal() {
   document.getElementById("resDrInstructions").value = "";
   document.getElementById("resNextClinicDate").value = "";
   document.getElementById("resCareExpiryDate").value = "";
+  document.getElementById("resClinicSpecialNotes").value = "";
+  document.getElementById("resBpHighMax").value = "";
+  document.getElementById("resBpHighMin").value = "";
+  document.getElementById("resTempMax").value = "";
+  document.getElementById("resSpo2Min").value = "";
+  document.getElementById("resPulseMax").value = "";
+  document.getElementById("resPulseMin").value = "";
 
   document.getElementById("residentModal").style.display = "flex";
 }
@@ -3170,6 +5252,13 @@ function openEditResidentModal(id) {
   document.getElementById("resDrInstructions").value = r.dr_instructions || "";
   document.getElementById("resNextClinicDate").value = r.next_clinic_date || "";
   document.getElementById("resCareExpiryDate").value = r.care_expiry_date || "";
+  document.getElementById("resClinicSpecialNotes").value = r.clinic_special_notes || "";
+  document.getElementById("resBpHighMax").value = r.bp_high_max || "";
+  document.getElementById("resBpHighMin").value = r.bp_high_min || "";
+  document.getElementById("resTempMax").value = r.temp_max || "";
+  document.getElementById("resSpo2Min").value = r.spo2_min || "";
+  document.getElementById("resPulseMax").value = r.pulse_max || "";
+  document.getElementById("resPulseMin").value = r.pulse_min || "";
 
   document.getElementById("residentModal").style.display = "flex";
 }
@@ -3202,7 +5291,14 @@ function submitResidentForm() {
     life_history: document.getElementById("resLifeHistory").value.trim(),
     dr_instructions: document.getElementById("resDrInstructions").value.trim(),
     next_clinic_date: document.getElementById("resNextClinicDate").value,
-    care_expiry_date: document.getElementById("resCareExpiryDate").value
+    care_expiry_date: document.getElementById("resCareExpiryDate").value,
+    clinic_special_notes: document.getElementById("resClinicSpecialNotes").value.trim(),
+    bp_high_max: document.getElementById("resBpHighMax").value ? parseInt(document.getElementById("resBpHighMax").value, 10) : null,
+    bp_high_min: document.getElementById("resBpHighMin").value ? parseInt(document.getElementById("resBpHighMin").value, 10) : null,
+    temp_max: document.getElementById("resTempMax").value ? parseFloat(document.getElementById("resTempMax").value) : null,
+    spo2_min: document.getElementById("resSpo2Min").value ? parseInt(document.getElementById("resSpo2Min").value, 10) : null,
+    pulse_max: document.getElementById("resPulseMax").value ? parseInt(document.getElementById("resPulseMax").value, 10) : null,
+    pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null
   };
 
   let targetId;
@@ -3232,6 +5328,193 @@ function submitResidentForm() {
   checkGlobalAlerts();
 
   alert(editId ? `「${name} 様」の登録情報を更新しました！` : `新規利用者「${name} 様」を登録しました！`);
+}
+
+// ==========================================
+// 🏥 往診医・受診時指示＆特殊指示 項目別クイック編集機能
+// ==========================================
+function insertQuickSpecialNote(text) {
+  const input = document.getElementById("quickClinicSpecialNotes");
+  if (!input) return;
+  if (!input.value) {
+    input.value = text;
+  } else if (!input.value.includes(text)) {
+    input.value = input.value + "、" + text;
+  }
+}
+
+function openClinicInstructionModal(resId, focusField = 'all') {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const titleEl = document.getElementById("clinicModalTitle");
+  if (titleEl) titleEl.textContent = `🏥 往診医・受診時指示 ＆ 特殊指示の変更 (${r.name} 様)`;
+  document.getElementById("clinicResidentId").value = r.id;
+  document.getElementById("quickClinicSpecialNotes").value = r.clinic_special_notes || "";
+  document.getElementById("quickDrInstructions").value = r.dr_instructions || "";
+  document.getElementById("quickNextClinicDate").value = r.next_clinic_date || "";
+
+  document.getElementById("clinicInstructionModal").style.display = "flex";
+
+  setTimeout(() => {
+    if (focusField === 'special') {
+      document.getElementById("quickClinicSpecialNotes")?.focus();
+    } else if (focusField === 'instructions') {
+      document.getElementById("quickDrInstructions")?.focus();
+    } else if (focusField === 'date') {
+      document.getElementById("quickNextClinicDate")?.focus();
+    }
+  }, 100);
+}
+
+function submitClinicInstructions() {
+  const id = parseInt(document.getElementById("clinicResidentId").value, 10);
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const specialNotes = document.getElementById("quickClinicSpecialNotes").value.trim();
+  const drInstructions = document.getElementById("quickDrInstructions").value.trim();
+  const nextClinicDate = document.getElementById("quickNextClinicDate").value;
+
+  r.clinic_special_notes = specialNotes;
+  r.dr_instructions = drInstructions;
+  r.next_clinic_date = nextClinicDate;
+
+  // 介護記録にも往診・受診指示変更の記録を自動記録（変更履歴の保持）
+  const staff = (document.getElementById("currentStaff")?.value) || "看護師";
+  const now = new Date();
+  const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+  if (!db.data.care_records) db.data.care_records = [];
+  db.data.care_records.unshift({
+    id: Date.now(),
+    resident_id: r.id,
+    category: "受診",
+    recorded_at: nowStr,
+    content: `【往診・受診指示変更】医師指示: ${drInstructions || '特記なし'} / 特殊指示: ${specialNotes || 'なし'} / 次回予定: ${nextClinicDate || '未定'}`,
+    staff_name: staff
+  });
+
+  db.save();
+  closeModal("clinicInstructionModal");
+  renderResidentDetail();
+  checkGlobalAlerts();
+  alert(`${r.name} 様の受診時指示および特殊指示を保存しました！個人記録へも変更履歴を自動転記しました。`);
+}
+
+// ==========================================
+// 🎯 基本方針・見守り注意 クイック編集機能
+// ==========================================
+function openCarePlanModal(resId) {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  const titleEl = document.getElementById("carePlanModalTitle");
+  if (titleEl) titleEl.textContent = `🎯 基本方針 ＆ ケアプラン目標の変更 (${r.name} 様)`;
+  document.getElementById("carePlanResidentId").value = r.id;
+  document.getElementById("quickCarePlanGoal").value = r.care_plan_goal || "";
+  document.getElementById("quickSensorAlert").value = r.sensor_alert || "";
+  document.getElementById("quickBpHMax").value = r.bp_high_max || "";
+  document.getElementById("quickBpHMin").value = r.bp_high_min || "";
+  document.getElementById("quickTempMax").value = r.temp_max || "";
+  document.getElementById("quickSpo2Min").value = r.spo2_min || "";
+
+  document.getElementById("carePlanModal").style.display = "flex";
+}
+
+function submitCarePlanModal() {
+  const id = parseInt(document.getElementById("carePlanResidentId").value, 10);
+  const r = gState.residents.find(x => x.id === id);
+  if (!r) return;
+
+  r.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
+  r.sensor_alert = document.getElementById("quickSensorAlert").value.trim();
+  r.bp_high_max = document.getElementById("quickBpHMax").value ? parseInt(document.getElementById("quickBpHMax").value, 10) : null;
+  r.bp_high_min = document.getElementById("quickBpHMin").value ? parseInt(document.getElementById("quickBpHMin").value, 10) : null;
+  r.temp_max = document.getElementById("quickTempMax").value ? parseFloat(document.getElementById("quickTempMax").value) : null;
+  r.spo2_min = document.getElementById("quickSpo2Min").value ? parseInt(document.getElementById("quickSpo2Min").value, 10) : null;
+
+  db.save();
+  closeModal("carePlanModal");
+  renderResidentDetail();
+  alert(`${r.name} 様の基本方針・ケアプラン目標・バイタル基準値を更新しました！`);
+}
+
+// ==========================================
+// 🩺 身体状況・食形態 クイック編集機能
+// ==========================================
+function openBodyConditionModal(resId) {
+  const id = resId || gState.selectedResidentId;
+  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
+  if (!r) return;
+
+  const titleEl = document.getElementById("bodyConditionModalTitle");
+  if (titleEl) titleEl.textContent = `🩺 身体状況 ＆ 食形態・口腔状態の変更 (${r.name} 様)`;
+  
+  const idEl = document.getElementById("bodyConditionResidentId");
+  if (idEl) idEl.value = r.id;
+  
+  const disEl = document.getElementById("quickDiseases");
+  if (disEl) disEl.value = r.diseases || "";
+  
+  const parEl = document.getElementById("quickParalysis");
+  if (parEl) parEl.value = r.paralysis || "";
+  
+  const algEl = document.getElementById("quickAllergies");
+  if (algEl) algEl.value = r.allergies || "";
+  
+  const dietSel = document.getElementById("quickDietType");
+  if (dietSel) {
+    let found = false;
+    for (let i = 0; i < dietSel.options.length; i++) {
+      if (dietSel.options[i].value === r.diet_type) {
+        dietSel.selectedIndex = i;
+        found = true;
+        break;
+      }
+    }
+    if (!found && r.diet_type) {
+      const opt = document.createElement("option");
+      opt.value = r.diet_type;
+      opt.textContent = r.diet_type;
+      dietSel.appendChild(opt);
+      dietSel.value = r.diet_type;
+    } else if (!r.diet_type) {
+      dietSel.value = "普通食";
+    }
+  }
+
+  const oralEl = document.getElementById("quickOralState");
+  if (oralEl) oralEl.value = r.oral_state || "";
+
+  const modal = document.getElementById("bodyConditionModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function submitBodyConditionModal() {
+  const idEl = document.getElementById("bodyConditionResidentId");
+  if (!idEl) return;
+  const id = parseInt(idEl.value, 10);
+  const r = gState.residents ? gState.residents.find(x => x.id === id) : null;
+  if (!r) return;
+
+  const disEl = document.getElementById("quickDiseases");
+  const parEl = document.getElementById("quickParalysis");
+  const algEl = document.getElementById("quickAllergies");
+  const dietEl = document.getElementById("quickDietType");
+  const oralEl = document.getElementById("quickOralState");
+
+  if (disEl) r.diseases = disEl.value.trim();
+  if (parEl) r.paralysis = parEl.value.trim();
+  if (algEl) r.allergies = algEl.value.trim();
+  if (dietEl) r.diet_type = dietEl.value;
+  if (oralEl) r.oral_state = oralEl.value.trim();
+
+  db.save();
+  closeModal("bodyConditionModal");
+  renderResidentDetail();
+  alert(`${r.name} 様の身体状況・食形態を更新しました！`);
 }
 
 // 職員・認印管理
@@ -3360,17 +5643,53 @@ function openOrderModal() {
 
 function openOrderModalWithItem(itemId) {
   openOrderModal();
-  const item = gState.inventory.find(i => i.id === itemId);
-  if (item && item.supplier_id) {
-    document.getElementById("orderSupplierSelect").value = item.supplier_id;
-    onSupplierChangeInOrder();
+  const item = (gState.inventory || []).find(i => i.id === itemId);
+  if (item) {
+    if (item.supplier_id) {
+      document.getElementById("orderSupplierSelect").value = item.supplier_id;
+      onSupplierChangeInOrder();
+    }
     document.getElementById("orderItemSelect").value = item.name;
+    
+    // 平常時までの不足数を初期発注数量として自動算出
+    const normalStock = item.normal_stock || (item.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - item.current_stock);
+    const qtyEl = document.getElementById("orderQty");
+    if (qtyEl) qtyEl.value = deficit;
+
+    const reasonEl = document.getElementById("orderReason");
+    if (reasonEl) reasonEl.value = `平常時定数(${normalStock}${item.unit})までの補充発注 (現在庫: ${item.current_stock}${item.unit})`;
+
     onItemChangeInOrder();
+    calcOrderTotal();
+  }
+}
+
+function adjustOrderQty(delta) {
+  const el = document.getElementById("orderQty");
+  if (!el) return;
+  let cur = parseInt(el.value, 10) || 1;
+  cur = Math.max(1, cur + delta);
+  el.value = cur;
+  calcOrderTotal();
+}
+
+function setOrderQtyToNormalDeficit() {
+  const itemName = document.getElementById("orderItemSelect")?.value;
+  const item = (gState.inventory || []).find(i => i.name === itemName);
+  if (item) {
+    const normalStock = item.normal_stock || (item.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - item.current_stock);
+    const el = document.getElementById("orderQty");
+    if (el) {
+      el.value = deficit;
+      calcOrderTotal();
+    }
   }
 }
 
 function onSupplierChangeInOrder() {
-  const suppId = parseInt(document.getElementById("orderSupplierSelect").value);
+  const suppId = parseInt(document.getElementById("orderSupplierSelect").value, 10);
   const supp = gState.suppliers.find(s => s.id === suppId);
   const itemSel = document.getElementById("orderItemSelect");
   itemSel.innerHTML = "";
@@ -3390,15 +5709,58 @@ function onSupplierChangeInOrder() {
 function onItemChangeInOrder() {
   const itemSel = document.getElementById("orderItemSelect");
   const selectedOpt = itemSel.selectedOptions[0];
-  const price = selectedOpt ? parseInt(selectedOpt.dataset.price || 0) : 0;
+  const price = selectedOpt ? parseInt(selectedOpt.dataset.price || 0, 10) : 0;
   document.getElementById("orderUnitPrice").value = price;
+
+  const itemName = itemSel.value;
+  const invItem = (gState.inventory || []).find(i => i.name === itemName);
+  const hintEl = document.getElementById("orderStockHint");
+  const qtyEl = document.getElementById("orderQty");
+
+  if (invItem) {
+    const normalStock = invItem.normal_stock || (invItem.safety_stock * 2);
+    const deficit = Math.max(1, normalStock - invItem.current_stock);
+
+    if (qtyEl && (!qtyEl.value || qtyEl.value === "0")) {
+      qtyEl.value = deficit;
+    }
+
+    if (hintEl) {
+      hintEl.style.display = "block";
+      const isLow = invItem.current_stock <= invItem.safety_stock;
+      const headerEl = document.getElementById("orderStockHintHeader");
+      if (headerEl) {
+        headerEl.innerHTML = `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+            <span>📦 <strong>在庫現況:</strong> 現在庫: <strong style="${isLow ? 'color:#dc2626;' : ''}">${invItem.current_stock}${invItem.unit}</strong> / 安全基準: ${invItem.safety_stock}${invItem.unit} / 平常時定数: <strong>${normalStock}${invItem.unit}</strong></span>
+            <span style="font-weight:bold; color:#1d4ed8;">🎯 平常時不足: +${deficit}${invItem.unit}</span>
+          </div>
+        `;
+      }
+    }
+  } else {
+    if (hintEl) hintEl.style.display = "none";
+  }
+
   calcOrderTotal();
 }
 
 function calcOrderTotal() {
-  const qty = parseInt(document.getElementById("orderQty").value || 1);
-  const price = parseInt(document.getElementById("orderUnitPrice").value || 0);
+  const qtyEl = document.getElementById("orderQty");
+  const qty = parseInt(qtyEl?.value || 1, 10);
+  const price = parseInt(document.getElementById("orderUnitPrice").value || 0, 10);
   document.getElementById("orderTotalPrice").value = qty * price;
+
+  const itemName = document.getElementById("orderItemSelect")?.value;
+  const invItem = (gState.inventory || []).find(i => i.name === itemName);
+  const projText = document.getElementById("orderProjectedStockText");
+  if (invItem && projText) {
+    const normalStock = invItem.normal_stock || (invItem.safety_stock * 2);
+    const after = invItem.current_stock + qty;
+    const diffToNormal = after - normalStock;
+    let note = diffToNormal === 0 ? "（平常時定数とピッタリ一致 🎯）" : (diffToNormal > 0 ? `（平常時定数より ＋${diffToNormal}${invItem.unit} 多め）` : `（平常時定数まであと ${Math.abs(diffToNormal)}${invItem.unit} 不足）`);
+    projText.innerHTML = `※ 発注納品後の想定在庫: <strong>${after}${invItem.unit}</strong> <span style="color:#0369a1; font-weight:bold;">${note}</span>`;
+  }
 }
 
 function submitOrderApply() {
@@ -3415,13 +5777,19 @@ function submitOrderApply() {
     id: Date.now(), ordered_at: new Date().toISOString().split("T")[0], supplier_id: suppId,
     supplier_name: supp ? supp.name : "", item_name: itemName, quantity: qty,
     unit_price: unitPrice, total_price: totalPrice, reason: reason, status: "申請中",
-    applicant: applicant, approver: null, approved_at: null
   });
+  
+  // 新規申請時は管理者向け未承認アラートの非表示を解除
+  if (Array.isArray(gState.dismissedAlerts)) {
+    gState.dismissedAlerts = gState.dismissedAlerts.filter(k => k !== 'admin_pending_orders');
+  }
+
   db.save();
 
   closeModal("orderModal");
   loadOfficeData();
-  alert("発注申請を提出しました（上司承認待ちへ）！");
+  checkGlobalAlerts();
+  alert("発注申請を提出しました（上司承認待ちへ）！要発注アラートを発注手配済みに更新し、管理者の認証アラートへ通知しました。");
 }
 
 function updateResidentStatus(resId, status) {
@@ -3486,12 +5854,22 @@ function openShareModal() {
 function copyShareUrl(url) {
   if (navigator.clipboard) {
     navigator.clipboard.writeText(url).then(() => {
-      alert("✅ URLをコピーしました！\n" + url + "\n\n施設内のタブレット（iPad等）のブラウザを開いて貼り付けてください。\n同じデータがリアルタイムで共有されます。");
+      alert("✅ 接続URLをコピーしました！\n" + url + "\n\nスマホやタブレット等のブラウザに貼り付けて開いてください。\nどこからでも同じデータがリアルタイムで共有されます。");
     }).catch(() => {
-      prompt("以下のURLをコピーしてタブレットで開いてください:", url);
+      prompt("以下の接続URLをコピーして開いてください:", url);
     });
   } else {
-    prompt("以下のURLをコピーしてタブレットで開いてください:", url);
+    prompt("以下の接続URLをコピーして開いてください:", url);
+  }
+}
+
+function promptChangeTunnelUrl() {
+  const current = localStorage.getItem("care_portal_tunnel_url") || "https://percentage-freelance-unwrap-spatial.trycloudflare.com";
+  const newUrl = prompt("外部接続用のCloudflare Tunnel URLを入力してください:", current);
+  if (newUrl && newUrl.trim() !== "") {
+    localStorage.setItem("care_portal_tunnel_url", newUrl.trim());
+    if (db) db.renderShareModalUrls();
+    alert("✅ 接続URLとQRコードを更新しました！\n" + newUrl.trim());
   }
 }
 
@@ -3774,4 +6152,1069 @@ function openLightbox(src, caption) {
   img.src = src;
   if (cap) cap.textContent = caption || "";
   modal.style.display = "flex";
+}
+
+// ==========================================
+// 7. 月間勤務表・シフト管理 (自動生成・手動修正・特例配慮・週休2日・夜勤2名)
+// ==========================================
+
+let gShiftEditingCell = { staffName: null, day: null, yearMonth: null };
+
+function getShiftYearMonth() {
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel && sel.value) {
+    gState.currentShiftMonth = sel.value;
+    return sel.value;
+  }
+  const defaultYm = gState.currentShiftMonth || new Date().toISOString().slice(0, 7);
+  gState.currentShiftMonth = defaultYm;
+  if (sel) sel.value = defaultYm;
+  return defaultYm;
+}
+
+function changeShiftMonth(delta) {
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  let y = parseInt(yearStr, 10);
+  let m = parseInt(monthStr, 10) + delta;
+  if (m < 1) {
+    m = 12;
+    y--;
+  } else if (m > 12) {
+    m = 1;
+    y++;
+  }
+  const newYm = `${y}-${String(m).padStart(2, '0')}`;
+  gState.currentShiftMonth = newYm;
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel) sel.value = newYm;
+  renderShiftTable(newYm);
+}
+
+function onShiftMonthChange() {
+  const sel = document.getElementById("shiftMonthSelector");
+  if (sel && sel.value) {
+    gState.currentShiftMonth = sel.value;
+    renderShiftTable(sel.value);
+  }
+}
+
+function generateMonthlyShiftAction() {
+  const ym = getShiftYearMonth();
+  const [y, m] = ym.split("-");
+  if (db.data.monthly_shifts && db.data.monthly_shifts[ym]) {
+    if (!confirm(`${y}年${parseInt(m, 10)}月の勤務表シフトを再生成しますか？\n（手動修正された内容もリセットされます）`)) {
+      return;
+    }
+  }
+  generateMonthlyShiftData(ym);
+  renderShiftTable(ym);
+  alert(`✅ ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・早出・遅出：毎日必ず各1名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（土日祝・年末年始休み）\n・公休：全員週休2日配分`);
+}
+
+// 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
+function isHolidayOrYearEnd(year, month, day) {
+  // 年末年始休暇: 12月29日〜12月31日、1月1日〜1月3日
+  if (month === 12 && day >= 29) return { isHoliday: true, name: "年末休暇" };
+  if (month === 1 && day <= 3) return { isHoliday: true, name: (day === 1 ? "元日" : "年始休暇") };
+
+  // 春分・秋分の計算 (2000年〜2099年)
+  const getVernalEquinox = y => Math.floor(20.8431 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+  const getAutumnEquinox = y => Math.floor(23.2488 + 0.242194 * (y - 1980) - Math.floor((y - 1980) / 4));
+
+  // ハッピーマンデー (第N月曜日の日付)
+  const getNthMonday = (y, m, n) => {
+    const firstDow = new Date(y, m - 1, 1).getDay();
+    const firstMonday = (firstDow <= 1) ? (1 - firstDow + 1) : (8 - firstDow + 1);
+    return firstMonday + (n - 1) * 7;
+  };
+
+  let name = null;
+
+  if (month === 1) {
+    if (day === 1) name = "元日";
+    else if (day === getNthMonday(year, 1, 2)) name = "成人の日";
+  } else if (month === 2) {
+    if (day === 11) name = "建国記念の日";
+    else if (day === 23) name = "天皇誕生日";
+    else if (day === 24 && new Date(year, 1, 23).getDay() === 0) name = "振替休日";
+  } else if (month === 3) {
+    const ve = getVernalEquinox(year);
+    if (day === ve) name = "春分の日";
+    else if (day === ve + 1 && new Date(year, 2, ve).getDay() === 0) name = "振替休日";
+  } else if (month === 4) {
+    if (day === 29) name = "昭和の日";
+    else if (day === 30 && new Date(year, 3, 29).getDay() === 0) name = "振替休日";
+  } else if (month === 5) {
+    if (day === 3) name = "憲法記念日";
+    else if (day === 4) name = "みどりの日";
+    else if (day === 5) name = "こどもの日";
+    else if (day === 6) {
+      const d3 = new Date(year, 4, 3).getDay();
+      const d4 = new Date(year, 4, 4).getDay();
+      const d5 = new Date(year, 4, 5).getDay();
+      if (d3 === 0 || d4 === 0 || d5 === 0) name = "振替休日";
+    }
+  } else if (month === 7) {
+    if (day === getNthMonday(year, 7, 3)) name = "海の日";
+  } else if (month === 8) {
+    if (day === 11) name = "山の日";
+    else if (day === 12 && new Date(year, 7, 11).getDay() === 0) name = "振替休日";
+  } else if (month === 9) {
+    const respectDay = getNthMonday(year, 9, 3);
+    const ae = getAutumnEquinox(year);
+    if (day === respectDay) name = "敬老の日";
+    else if (day === ae) name = "秋分の日";
+    else if (day === ae + 1 && new Date(year, 8, ae).getDay() === 0) name = "振替休日";
+    else if (respectDay + 2 === ae && day === respectDay + 1) name = "国民の休日";
+  } else if (month === 10) {
+    if (day === getNthMonday(year, 10, 2)) name = "スポーツの日";
+  } else if (month === 11) {
+    if (day === 3) name = "文化の日";
+    else if (day === 4 && new Date(year, 10, 3).getDay() === 0) name = "振替休日";
+    else if (day === 23) name = "勤労感謝の日";
+    else if (day === 24 && new Date(year, 10, 23).getDay() === 0) name = "振替休日";
+  }
+
+  if (name) {
+    return { isHoliday: true, name: name };
+  }
+  return { isHoliday: false, name: null };
+}
+
+// 職員の職種カテゴリ判定 (director:施設長, office:事務員, nurse:看護師, care:介護職員)
+function getStaffRoleCategory(staffName) {
+  const allStamps = db.data.stamps || [];
+  const staff = allStamps.find(s => (s.name || s) === staffName);
+  const role = staff && staff.role ? staff.role : "";
+  const name = staffName || "";
+  if (role.includes("施設長") || role.includes("管理者") || name.includes("施設長") || name.includes("木村")) {
+    return "director";
+  }
+  if (role.includes("事務") || name.includes("田中") || name.includes("松本")) {
+    return "office";
+  }
+  if (role.includes("看護") || name.includes("鈴木") || name.includes("加藤")) {
+    return "nurse";
+  }
+  return "care";
+}
+
+function generateMonthlyShiftData(yearMonth) {
+  if (!yearMonth) yearMonth = getShiftYearMonth();
+  const [yearStr, monthStr] = yearMonth.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  // 1. スタッフ分類 (15名体制: 管理者1, 看護2, 介護10, 事務2)
+  const allStamps = sortStaffList(db.data.stamps || []);
+  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+  const isDirector = s => getStaffRoleCategory(s.name) === "director";
+  const isOffice = s => getStaffRoleCategory(s.name) === "office";
+  const isNurse = s => getStaffRoleCategory(s.name) === "nurse";
+  const isCare = s => getStaffRoleCategory(s.name) === "care";
+
+  const directors = staffList.filter(isDirector);
+  const officeStaff = staffList.filter(isOffice);
+  const nurses = staffList.filter(isNurse);
+  const careStaff = staffList.filter(isCare);
+
+  // NGペアチェック関数
+  const ngPairs = db.data.shift_ng_pairs || [];
+  const isNgPair = (name1, name2) => {
+    return ngPairs.some(p => 
+      (p.staff1 === name1 && p.staff2 === name2) || 
+      (p.staff1 === name2 && p.staff2 === name1)
+    );
+  };
+
+  const shiftData = {};
+  staffList.forEach(s => {
+    shiftData[s.name] = {};
+  });
+
+  // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+  directors.forEach(s => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      const hol = isHolidayOrYearEnd(year, month, d);
+      if (dow === 0 || dow === 6 || hol.isHoliday) {
+        shiftData[s.name][d] = "休";
+      } else {
+        shiftData[s.name][d] = "日";
+      }
+    }
+  });
+
+  // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+  officeStaff.forEach((s) => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      const hol = isHolidayOrYearEnd(year, month, d);
+      if (dow === 0 || dow === 6 || hol.isHoliday) {
+        shiftData[s.name][d] = "休";
+      } else {
+        shiftData[s.name][d] = "日";
+      }
+    }
+  });
+
+  // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置)
+  nurses.forEach((s, idx) => {
+    for (let d = 1; d <= daysInMonth; d++) {
+      const dow = new Date(year, month - 1, d).getDay();
+      if (idx === 0) {
+        shiftData[s.name][d] = (dow === 0 || dow === 3) ? "休" : "日";
+      } else {
+        shiftData[s.name][d] = (dow === 4 || dow === 6) ? "休" : "日";
+      }
+    }
+  });
+
+  // 5. 介護職員 (14名体制): 毎日必ず「早出2名」「遅出2名」「日勤2名」「夜勤2名」「明け2名」「公休4名」
+  if (careStaff.length > 0) {
+    const careNames = careStaff.map(s => s.name);
+    const nightCount = {};
+    const earlyCount = {};
+    const lateCount = {};
+    const dayCount = {};
+    const holidayCount = {};
+    careNames.forEach(n => {
+      nightCount[n] = 0;
+      earlyCount[n] = 0;
+      lateCount[n] = 0;
+      dayCount[n] = 0;
+      holidayCount[n] = 0;
+    });
+
+    // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
+    const totalMonthHolidays = daysInMonth * 4;
+    const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
+    const extraHolidays = totalMonthHolidays % careNames.length;
+    const targetHolidays = {};
+    careNames.forEach((n, idx) => {
+      targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
+    });
+
+    const dailyCareHolidays = {};
+    for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
+
+    // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
+    if (careNames.length >= 2) {
+      const prevNightStaff = [careNames[careNames.length - 2], careNames[careNames.length - 1]];
+      prevNightStaff.forEach(pn => {
+        shiftData[pn][1] = "明";
+      });
+    }
+
+    // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
+    for (let d = 1; d <= daysInMonth; d++) {
+      // 候補者: 前日夜勤でない人（前日夜勤＝当日明のため夜勤不可）
+      const candidates = careNames.filter(name => {
+        if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+        if (shiftData[name][d] === "明") return false;
+        return true;
+      });
+
+      // 夜勤回数が少なく、前々日夜勤でない人を優先
+      candidates.sort((a, b) => {
+        const countDiff = nightCount[a] - nightCount[b];
+        if (countDiff !== 0) return countDiff;
+        const aPrev2 = (d > 2 && shiftData[a][d - 2] === "夜") ? 1 : 0;
+        const bPrev2 = (d > 2 && shiftData[b][d - 2] === "夜") ? 1 : 0;
+        if (aPrev2 !== bPrev2) return aPrev2 - bPrev2;
+        return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
+      });
+
+      // 特例配慮(NGペア: 佐藤 健太 ✖ 高橋 直樹)を回避する2名を選出
+      let selectedPair = null;
+      for (let i = 0; i < candidates.length; i++) {
+        for (let j = i + 1; j < candidates.length; j++) {
+          const c1 = candidates[i];
+          const c2 = candidates[j];
+          if (!isNgPair(c1, c2)) {
+            selectedPair = [c1, c2];
+            break;
+          }
+        }
+        if (selectedPair) break;
+      }
+      if (!selectedPair) {
+        selectedPair = [candidates[0], candidates[1] || candidates[0]];
+      }
+
+      selectedPair.forEach(n => {
+        shiftData[n][d] = "夜";
+        nightCount[n]++;
+        if (d + 1 <= daysInMonth) {
+          shiftData[n][d + 1] = "明";
+        }
+      });
+    }
+
+    // Step B: 公休「休」の配分 (毎日必ず4名)
+    // 優先1: 夜勤明けの翌日を優先して「休」とする
+    for (let d = 1; d <= daysInMonth; d++) {
+      careNames.forEach(n => {
+        if (!shiftData[n][d]) {
+          if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays[n] && dailyCareHolidays[d] < 4) {
+            shiftData[n][d] = "休";
+            holidayCount[n]++;
+            dailyCareHolidays[d]++;
+          }
+        }
+      });
+    }
+
+    // 優先2: 各日に公休をバランス配分 (1日4名になるまで)
+    for (let d = 1; d <= daysInMonth; d++) {
+      if (dailyCareHolidays[d] < 4) {
+        const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
+        for (const n of sortedCare) {
+          if (holidayCount[n] < targetHolidays[n] && !shiftData[n][d] && dailyCareHolidays[d] < 4) {
+            shiftData[n][d] = "休";
+            holidayCount[n]++;
+            dailyCareHolidays[d]++;
+          }
+        }
+      }
+    }
+
+    // 4名未満の日があれば空いている人を公休に充当して毎日必ず4名にする
+    for (let d = 1; d <= daysInMonth; d++) {
+      while (dailyCareHolidays[d] < 4) {
+        const unassigned = careNames.filter(n => !shiftData[n][d]);
+        if (unassigned.length > 0) {
+          unassigned.sort((a, b) => holidayCount[a] - holidayCount[b]);
+          const pick = unassigned[0];
+          shiftData[pick][d] = "休";
+          holidayCount[pick]++;
+          dailyCareHolidays[d]++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
+    for (let d = 1; d <= daysInMonth; d++) {
+      const avail = careNames.filter(n => !shiftData[n][d]);
+
+      // 早出の選定 (2名選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
+      const earlyCandidates = [...avail].sort((a, b) => {
+        const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
+        const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
+        if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate;
+        const eDiff = earlyCount[a] - earlyCount[b];
+        if (eDiff !== 0) return eDiff;
+        return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
+      });
+      const pickedEarly = earlyCandidates.slice(0, 2);
+      pickedEarly.forEach(n => {
+        shiftData[n][d] = "早";
+        earlyCount[n]++;
+      });
+
+      // 遅出の選定 (2名選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
+      const lateCandidates = avail.filter(n => !pickedEarly.includes(n)).sort((a, b) => {
+        const lDiff = lateCount[a] - lateCount[b];
+        if (lDiff !== 0) return lDiff;
+        return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
+      });
+      const pickedLate = lateCandidates.slice(0, 2);
+      pickedLate.forEach(n => {
+        shiftData[n][d] = "遅";
+        lateCount[n]++;
+      });
+
+      // 残りの介護職員（2名）はすべて「日」（日勤）
+      const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
+      remainingDay.forEach(n => {
+        shiftData[n][d] = "日";
+        dayCount[n]++;
+      });
+    }
+
+    // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
+    for (let d = 1; d <= daysInMonth; d++) {
+      let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
+      let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
+      let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
+
+      // 早出を2名に
+      while (eCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "日");
+        if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
+      }
+      // 遅出を2名に
+      while (lCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "日");
+        if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
+      }
+      // 日勤を2名に
+      while (dCount < 2) {
+        const cand = careNames.find(n => shiftData[n][d] === "休");
+        if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
+      }
+    }
+  }
+
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  db.data.monthly_shifts[yearMonth] = shiftData;
+  db.save();
+  return shiftData;
+}
+
+function renderShiftTable(yearMonth) {
+  const ym = yearMonth || getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const daysInMonth = new Date(year, month, 0).getDate();
+
+  const allStamps = sortStaffList(db.data.stamps || []);
+  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+  const isCare = s => getStaffRoleCategory(s.name) === "care";
+  const careStaffNames = staffList.filter(isCare).map(s => s.name);
+
+  // シフトデータの存在および完全性チェック (全日「早2・遅2・日2・夜2・明2」を満たしているか、最新職員が含まれているか)
+  let needRegen = false;
+  const currentData = db.data.monthly_shifts && db.data.monthly_shifts[ym];
+  if (!currentData || Object.keys(currentData).length === 0) {
+    needRegen = true;
+  } else {
+    const missingStaff = careStaffNames.some(name => !currentData[name]);
+    if (missingStaff) {
+      needRegen = true;
+    }
+  }
+
+  if (needRegen) {
+    generateMonthlyShiftData(ym);
+  }
+  const shiftData = db.data.monthly_shifts[ym] || {};
+
+  const table = document.getElementById("shiftMatrixTable");
+  if (!table) return;
+
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+  // 日別統計用 (介護職: 早出2名・遅出2名・夜勤2名・明け2名・日勤2名・公休4名)
+  const dailyEarlyCount = new Array(daysInMonth + 1).fill(0);
+  const dailyLateCount = new Array(daysInMonth + 1).fill(0);
+  const dailyNightCount = new Array(daysInMonth + 1).fill(0);
+  const dailyAkeCount = new Array(daysInMonth + 1).fill(0);
+  const dailyCareDayCount = new Array(daysInMonth + 1).fill(0);
+  const dailyDayCount = new Array(daysInMonth + 1).fill(0);
+  const dailyHolidayCount = new Array(daysInMonth + 1).fill(0);
+
+  // 1. ヘッダー生成
+  let theadHtml = `
+    <thead>
+      <tr>
+        <th rowspan="2" style="position:sticky; left:0; z-index:4; background:#1e3a8a; color:#fff; width:130px; min-width:130px; border:1px solid #3b82f6;">職員氏名</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; width:80px; min-width:80px; border:1px solid #3b82f6;">役職</th>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    const hol = isHolidayOrYearEnd(year, month, d);
+    const isSat = dow === 6;
+    const isSun = dow === 0 || hol.isHoliday;
+    const bg = isSun ? "#ef4444" : (isSat ? "#2563eb" : "#3b82f6");
+    const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
+    theadHtml += `<th style="background:${bg}; color:#fff; padding:4px 2px; min-width:32px; border:1px solid rgba(255,255,255,0.3); font-weight:bold;" ${titleAttr}>${d}</th>`;
+  }
+
+  theadHtml += `
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="出勤日数">出勤</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="夜勤回数">夜勤</th>
+        <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="公休日数">公休</th>
+      </tr>
+      <tr>
+  `;
+
+  for (let d = 1; d <= daysInMonth; d++) {
+    const dow = new Date(year, month - 1, d).getDay();
+    const hol = isHolidayOrYearEnd(year, month, d);
+    const isSat = dow === 6;
+    const isSun = dow === 0 || hol.isHoliday;
+    const bg = isSun ? "#fee2e2" : (isSat ? "#dbeafe" : "#f1f5f9");
+    const color = isSun ? "#b91c1c" : (isSat ? "#1d4ed8" : "#475569");
+    const dowLabel = hol.isHoliday ? (hol.name.length <= 3 ? hol.name : "祝") : dowNames[dow];
+    const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
+    theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:10.5px; font-weight:bold; border:1px solid #cbd5e1;" ${titleAttr}>${dowLabel}</th>`;
+  }
+
+  theadHtml += `
+      </tr>
+    </thead>
+  `;
+
+  // 2. ボディ行（各職員）生成
+  let tbodyHtml = "<tbody>";
+
+  staffList.forEach(st => {
+    const staffShifts = shiftData[st.name] || {};
+    const isCareStaff = getStaffRoleCategory(st.name) === "care";
+    let workDays = 0;
+    let nightDays = 0;
+    let holidays = 0;
+
+    let roleColor = "#64748b";
+    let roleBg = "#f1f5f9";
+    if (st.role.includes("施設長") || st.role.includes("管理者")) {
+      roleColor = "#92400e"; roleBg = "#fef3c7";
+    } else if (st.role.includes("事務")) {
+      roleColor = "#065f46"; roleBg = "#d1fae5";
+    } else if (st.role.includes("看護")) {
+      roleColor = "#0369a1"; roleBg = "#e0f2fe";
+    } else if (st.role.includes("リーダー")) {
+      roleColor = "#6d28d9"; roleBg = "#ede9fe";
+    }
+
+    tbodyHtml += `
+      <tr>
+        <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#1e293b; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
+          ${escapeHtml(st.name)}
+        </td>
+        <td style="border:1px solid #cbd5e1; padding:4px 2px; white-space:nowrap;">
+          <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
+        </td>
+    `;
+
+    for (let d = 1; d <= daysInMonth; d++) {
+      const sym = staffShifts[d] || "";
+      const dow = new Date(year, month - 1, d).getDay();
+      const hol = isHolidayOrYearEnd(year, month, d);
+      const isSat = dow === 6;
+      const isSun = dow === 0 || hol.isHoliday;
+
+      let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
+      let badgeClass = "";
+      if (sym === "早") {
+        badgeClass = "shift-badge shift-haya";
+        workDays++;
+        dailyEarlyCount[d]++;
+      } else if (sym === "日") {
+        badgeClass = "shift-badge shift-nichi";
+        workDays++;
+        dailyDayCount[d]++;
+        if (isCareStaff) dailyCareDayCount[d]++;
+      } else if (sym === "遅") {
+        badgeClass = "shift-badge shift-osoba";
+        workDays++;
+        dailyLateCount[d]++;
+      } else if (sym === "夜") {
+        badgeClass = "shift-badge shift-yakan";
+        workDays++;
+        nightDays++;
+        dailyNightCount[d]++;
+      } else if (sym === "明") {
+        badgeClass = "shift-badge shift-ake";
+        workDays++;
+        dailyAkeCount[d]++;
+      } else if (sym === "休") {
+        badgeClass = "shift-badge shift-kyu";
+        holidays++;
+        if (isCareStaff) dailyHolidayCount[d]++;
+      }
+
+      const safeName = escapeHtml(st.name);
+      tbodyHtml += `
+        <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: クリックして即時変更">
+          ${sym ? `<span class="${badgeClass}">${sym}</span>` : `<span style="color:#cbd5e1;">-</span>`}
+        </td>
+      `;
+    }
+
+    tbodyHtml += `
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#1e293b; background:#f8fafc;">${workDays}</td>
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#3730a3; background:#f8fafc;">${nightDays}</td>
+        <td style="border:1px solid #cbd5e1; font-weight:bold; color:#b91c1c; background:#f8fafc;">${holidays}</td>
+      </tr>
+    `;
+  });
+
+  tbodyHtml += "</tbody>";
+
+  // 3. フッター集計行 (🌅早出2名・🌆遅出2名・🌙夜勤2名・🌅明け2名・☀️介護日勤2名・🏢全体日勤・🍵介護公休4名)
+  let tfootHtml = `
+    <tfoot>
+      <!-- 早出人数チェック行 (基準: 2名) -->
+      <tr style="background:#ffedd5; font-weight:bold; border-top:2px solid #ea580c;">
+        <td style="position:sticky; left:0; z-index:2; background:#ffedd5; text-align:left; padding:5px 8px; border:1px solid #fed7aa; color:#9a3412;" colspan="2">
+          🌅 早出体制 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyEarlyCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fed7aa; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 遅出人数チェック行 (基準: 2名) -->
+      <tr style="background:#ede9fe; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#ede9fe; text-align:left; padding:5px 8px; border:1px solid #ddd6fe; color:#5b21b6;" colspan="2">
+          🌆 遅出体制 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyLateCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #ddd6fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 夜勤人数チェック行 (基準: 2名) -->
+      <tr style="background:#e0e7ff; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:5px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
+          🌙 夜勤体制 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyNightCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #c7d2fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 明け人数チェック行 (基準: 2名) -->
+      <tr style="background:#fef9c3; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#fef9c3; text-align:left; padding:5px 8px; border:1px solid #fef08a; color:#854d0e;" colspan="2">
+          🌅 明け体制 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyAkeCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fef08a; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 介護日勤人数行 (基準: 2名) -->
+      <tr style="background:#e0f2fe; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#e0f2fe; text-align:left; padding:5px 8px; border:1px solid #bae6fd; color:#0369a1;" colspan="2">
+          ☀️ 介護日勤 (基準: 2名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyCareDayCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 2) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else if (cnt < 2) {
+      badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #bae6fd; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #bae6fd; color:#0369a1; font-size:11px;">毎日2名</td>
+      </tr>
+
+      <!-- 全体日勤人数行 (施設長・事務・看護含む) -->
+      <tr style="background:#f1f5f9; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:5px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
+          🏢 全体日勤 (施設長・事務・看護含む)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyDayCount[d];
+    tfootHtml += `<td style="border:1px solid #cbd5e1; padding:3px 2px; color:#334155;">${cnt}</td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">施設全体</td>
+      </tr>
+
+      <!-- 介護公休人数行 (基準: 4名) -->
+      <tr style="background:#fef2f2; font-weight:bold;">
+        <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:5px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
+          🍵 介護公休 (週休2日・基準: 4名)
+        </td>
+  `;
+  for (let d = 1; d <= daysInMonth; d++) {
+    const cnt = dailyHolidayCount[d];
+    let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    if (cnt === 4) {
+      badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
+    } else {
+      badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
+    }
+    tfootHtml += `<td style="border:1px solid #fecaca; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
+  }
+  tfootHtml += `
+        <td colspan="3" style="border:1px solid #fecaca; color:#991b1b; font-size:11px;">公休合計</td>
+      </tr>
+    </tfoot>
+  `;
+
+  table.innerHTML = theadHtml + tbodyHtml + tfootHtml;
+}
+
+// クイック変更ポップオーバー (セル直下で職種別安全選択)
+function openShiftCellPopover(event, staffName, day, currentSymbol) {
+  if (event) event.stopPropagation();
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dow = new Date(year, month - 1, day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, day);
+
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+
+  let popover = document.getElementById("shiftCellPopover");
+  if (!popover) {
+    popover = document.createElement("div");
+    popover.id = "shiftCellPopover";
+    popover.className = "shift-cell-popover";
+    document.body.appendChild(popover);
+  }
+
+  const rect = event ? event.currentTarget.getBoundingClientRect() : { top: 200, bottom: 230, left: 200 };
+  const dateInfo = hol.isHoliday ? `${month}/${day}(${dowNames[dow]}・${hol.name})` : `${month}/${day}(${dowNames[dow]})`;
+  const roleCategory = getStaffRoleCategory(staffName);
+
+  let roleBadgeLabel = "介護職員";
+  if (roleCategory === "director") roleBadgeLabel = "施設長（日勤専従）";
+  else if (roleCategory === "office") roleBadgeLabel = "事務員（日勤専従）";
+  else if (roleCategory === "nurse") roleBadgeLabel = "看護師（日勤専従）";
+
+  let contentHtml = "";
+
+  if (roleCategory !== "care") {
+    // 施設長・事務員・看護師: 日勤または公休のみ！夜勤・早・遅は完全除外で誤操作を絶対防止
+    contentHtml = `
+      <div class="shift-popover-header">
+        <div>
+          <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
+          <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+        </div>
+        <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+      </div>
+      <div style="font-size:11px; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:3px 6px; margin-bottom:8px;">
+        🔒 <strong>${roleBadgeLabel}</strong><br>日勤または公休のみ選択可能です（夜勤・早遅は自動ガード）
+      </div>
+      <div class="shift-popover-grid" style="grid-template-columns: 1fr 1fr;">
+        <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
+        <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
+        <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
+      </div>
+      <div style="margin-top:6px; text-align:right;">
+        <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細設定</a>
+      </div>
+    `;
+  } else {
+    // 介護職員: 全シフト選択可能
+    contentHtml = `
+      <div class="shift-popover-header">
+        <div>
+          <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
+          <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+        </div>
+        <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+      </div>
+      <div style="font-size:11px; color:#475569; margin-bottom:6px;">
+        👥 介護職員シフト（基準: 早出1名・遅出1名・夜勤2名体制）
+      </div>
+      <div class="shift-popover-grid">
+        <button class="shift-popover-btn btn-haya" onclick="executeShiftCellEdit('早')">🌅 早番</button>
+        <button class="shift-popover-btn btn-nichi" onclick="executeShiftCellEdit('日')">☀️ 日勤</button>
+        <button class="shift-popover-btn btn-osoba" onclick="executeShiftCellEdit('遅')">🌆 遅番</button>
+        <button class="shift-popover-btn btn-yakan" onclick="executeShiftCellEdit('夜')">🌙 夜勤</button>
+        <button class="shift-popover-btn btn-ake" onclick="executeShiftCellEdit('明')">🌤️ 明け</button>
+        <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')">🍵 公休</button>
+        <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;">✕ クリア</button>
+      </div>
+      <div style="margin-top:6px; text-align:right;">
+        <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;">✏️ 詳細設定</a>
+      </div>
+    `;
+  }
+
+  popover.innerHTML = contentHtml;
+
+  // 画面位置の調整 (画面外はみ出し防止)
+  let top = rect.bottom + window.scrollY + 6;
+  let left = rect.left + window.scrollX - 60;
+  if (left < 10) left = 10;
+  if (left + 270 > window.innerWidth) left = window.innerWidth - 280;
+  if (rect.bottom + 160 > window.innerHeight) {
+    top = rect.top + window.scrollY - 150;
+  }
+
+  popover.style.top = `${top}px`;
+  popover.style.left = `${left}px`;
+  popover.style.display = "block";
+}
+
+function closeShiftPopover() {
+  const p = document.getElementById("shiftCellPopover");
+  if (p) p.style.display = "none";
+}
+
+function executeShiftCellEdit(symbol) {
+  applyShiftCellEdit(symbol);
+  closeShiftPopover();
+}
+
+// ダブルクリックで安全な切り替え (事務・施設長・看護師は「日 ⇄ 休」のみ、介護職も日勤・公休安全トグルで夜勤誤爆を完全防止)
+function cycleShiftCell(staffName, day) {
+  const ym = getShiftYearMonth();
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  if (!db.data.monthly_shifts[ym]) db.data.monthly_shifts[ym] = {};
+  if (!db.data.monthly_shifts[ym][staffName]) db.data.monthly_shifts[ym][staffName] = {};
+
+  const cur = db.data.monthly_shifts[ym][staffName][day] || "";
+  const roleCategory = getStaffRoleCategory(staffName);
+
+  let nextSym = "日";
+  if (roleCategory !== "care") {
+    // 施設長・事務員・看護師: 「日 ⇄ 休」のみ安全にトグル！決して夜勤や早出・遅出にならない！
+    nextSym = (cur === "日") ? "休" : "日";
+  } else {
+    // 介護職員: 誤操作で夜勤にならないよう安全に「日 ⇄ 休」をトグル
+    // 夜勤・早番・遅番への変更はポップオーバーから明示的に選択
+    if (cur === "日") nextSym = "休";
+    else if (cur === "休") nextSym = "日";
+    else if (cur === "早" || cur === "遅" || cur === "夜") nextSym = "日";
+    else if (cur === "明") nextSym = "休";
+    else nextSym = "日";
+  }
+
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+  applyShiftCellEdit(nextSym);
+}
+
+// ポップオーバー外側クリックで閉じるリスナー
+if (typeof window !== "undefined") {
+  document.addEventListener("click", (e) => {
+    const popover = document.getElementById("shiftCellPopover");
+    if (popover && popover.style.display !== "none") {
+      if (!popover.contains(e.target) && !e.target.closest(".shift-cell")) {
+        popover.style.display = "none";
+      }
+    }
+  });
+}
+
+// 手動セル編集モーダル (職種別ガード付き)
+function openShiftCellModal(staffName, day) {
+  const ym = getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dow = new Date(year, month - 1, day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, day);
+
+  gShiftEditingCell = { staffName, day, yearMonth: ym };
+
+  const targetText = document.getElementById("shiftEditTargetText");
+  if (targetText) {
+    const dateLabel = hol.isHoliday ? `${month}月${day}日(${dowNames[dow]}・${hol.name})` : `${month}月${day}日(${dowNames[dow]})`;
+    targetText.textContent = `${staffName} - ${dateLabel}`;
+  }
+
+  const roleCategory = getStaffRoleCategory(staffName);
+  const notice = document.getElementById("shiftEditRoleNotice");
+  const btnEarly = document.querySelector("#shiftEditButtonsContainer button:nth-child(1)");
+  const btnDay = document.querySelector("#shiftEditButtonsContainer button:nth-child(2)");
+  const btnLate = document.querySelector("#shiftEditButtonsContainer button:nth-child(3)");
+  const btnNight = document.querySelector("#shiftEditButtonsContainer button:nth-child(4)");
+  const btnDawn = document.querySelector("#shiftEditButtonsContainer button:nth-child(5)");
+  const btnHoliday = document.querySelector("#shiftEditButtonsContainer button:nth-child(6)");
+
+  if (roleCategory !== "care") {
+    if (notice) notice.innerHTML = "<span style='color:#0369a1; font-weight:bold;'>🔒 施設長・事務員・看護師は日勤専従（土日祝・年末年始休み）です。<br>日勤または公休のみ選択可能です。</span>";
+    if (btnEarly) { btnEarly.disabled = true; btnEarly.style.opacity = "0.35"; btnEarly.style.pointerEvents = "none"; }
+    if (btnLate) { btnLate.disabled = true; btnLate.style.opacity = "0.35"; btnLate.style.pointerEvents = "none"; }
+    if (btnNight) { btnNight.disabled = true; btnNight.style.opacity = "0.35"; btnNight.style.pointerEvents = "none"; }
+    if (btnDawn) { btnDawn.disabled = true; btnDawn.style.opacity = "0.35"; btnDawn.style.pointerEvents = "none"; }
+    if (btnDay) { btnDay.disabled = false; btnDay.style.opacity = "1"; btnDay.style.pointerEvents = "auto"; }
+    if (btnHoliday) { btnHoliday.disabled = false; btnHoliday.style.opacity = "1"; btnHoliday.style.pointerEvents = "auto"; }
+  } else {
+    if (notice) notice.innerHTML = "<span style='color:#475569;'>👥 介護職員（基準: 毎日早出1名・遅出1名・夜勤2名体制）</span>";
+    [btnEarly, btnDay, btnLate, btnNight, btnDawn, btnHoliday].forEach(btn => {
+      if (btn) { btn.disabled = false; btn.style.opacity = "1"; btn.style.pointerEvents = "auto"; }
+    });
+  }
+
+  const modal = document.getElementById("shiftEditModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function applyShiftCellEdit(symbol) {
+  if (!gShiftEditingCell) return;
+  const { staffName, day, yearMonth } = gShiftEditingCell;
+  if (!staffName || !day || !yearMonth) return;
+
+  const roleCategory = getStaffRoleCategory(staffName);
+
+  // 職種制約ガード: 施設長・事務員・看護師は「日」「休」「クリア」以外を厳格に拒絶
+  if (roleCategory !== "care" && symbol && symbol !== "日" && symbol !== "休") {
+    alert(`⚠️ 【職種制約ガード】\n${staffName} は日勤専従のため、「日勤」または「公休」のみ設定可能です。\n（夜勤・早番・遅番・明けへの誤変更を防止しました）`);
+    return;
+  }
+
+  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+  if (!db.data.monthly_shifts[yearMonth]) db.data.monthly_shifts[yearMonth] = {};
+  if (!db.data.monthly_shifts[yearMonth][staffName]) db.data.monthly_shifts[yearMonth][staffName] = {};
+
+  db.data.monthly_shifts[yearMonth][staffName][day] = symbol;
+
+  // 介護職で夜勤に手動変更した場合、翌日が当月内であれば「明」にする連動アシスト
+  if (roleCategory === "care" && symbol === "夜") {
+    const [yStr, mStr] = yearMonth.split("-");
+    const daysInMonth = new Date(parseInt(yStr, 10), parseInt(mStr, 10), 0).getDate();
+    if (day + 1 <= daysInMonth) {
+      const curNext = db.data.monthly_shifts[yearMonth][staffName][day + 1];
+      if (!curNext || curNext === "日" || curNext === "早" || curNext === "遅") {
+        db.data.monthly_shifts[yearMonth][staffName][day + 1] = "明";
+      }
+    }
+  }
+
+  db.save();
+  closeModal("shiftEditModal");
+  closeShiftPopover();
+  renderShiftTable(yearMonth);
+}
+
+// 特例配慮設定 (同番NG) モーダル
+function openShiftNgModal() {
+  const stamps = sortStaffList(db.data.stamps || []);
+  const staffList = stamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+  const sel1 = document.getElementById("shiftNgStaff1");
+  const sel2 = document.getElementById("shiftNgStaff2");
+
+  if (sel1 && sel2) {
+    const optionsHtml = staffList.map(s => `<option value="${s.name}">${s.name} (${s.role || '介護職員'})</option>`).join("");
+    sel1.innerHTML = optionsHtml;
+    sel2.innerHTML = optionsHtml;
+    if (staffList.length > 1) {
+      sel2.selectedIndex = 1;
+    }
+  }
+
+  renderShiftNgList();
+  const modal = document.getElementById("shiftNgModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function renderShiftNgList() {
+  const container = document.getElementById("shiftNgPairList");
+  if (!container) return;
+
+  const pairs = db.data.shift_ng_pairs || [];
+  if (pairs.length === 0) {
+    container.innerHTML = `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">登録された配慮ペアはありません。</div>`;
+    return;
+  }
+
+  let html = `<ul style="list-style:none; padding:0; margin:0;">`;
+  pairs.forEach(p => {
+    html += `
+      <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+        <div>
+          <strong style="color:#1e293b;">${escapeHtml(p.staff1)}</strong> 
+          <span style="color:#dc2626; font-weight:bold; margin:0 4px;">✖</span> 
+          <strong style="color:#1e293b;">${escapeHtml(p.staff2)}</strong>
+          <span style="color:#64748b; font-size:11.5px; margin-left:8px;">(${escapeHtml(p.reason || '相性配慮')})</span>
+        </div>
+        <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftNgPair(${p.id})">削除</button>
+      </li>
+    `;
+  });
+  html += `</ul>`;
+  container.innerHTML = html;
+}
+
+function submitShiftNgPair() {
+  const sel1 = document.getElementById("shiftNgStaff1");
+  const sel2 = document.getElementById("shiftNgStaff2");
+  const reasonInput = document.getElementById("shiftNgReason");
+
+  if (!sel1 || !sel2) return;
+  const s1 = sel1.value;
+  const s2 = sel2.value;
+  const reason = reasonInput ? (reasonInput.value.trim() || "相性配慮 (同日夜勤NG)") : "相性配慮 (同日夜勤NG)";
+
+  if (s1 === s2) {
+    alert("異なる職員を選択してください。");
+    return;
+  }
+
+  if (!Array.isArray(db.data.shift_ng_pairs)) db.data.shift_ng_pairs = [];
+
+  const exists = db.data.shift_ng_pairs.some(p => 
+    (p.staff1 === s1 && p.staff2 === s2) || 
+    (p.staff1 === s2 && p.staff2 === s1)
+  );
+
+  if (exists) {
+    alert("このペアは既に登録されています。");
+    return;
+  }
+
+  db.data.shift_ng_pairs.push({
+    id: Date.now(),
+    staff1: s1,
+    staff2: s2,
+    reason: reason
+  });
+
+  db.save();
+  renderShiftNgList();
+  if (reasonInput) reasonInput.value = "";
+}
+
+function deleteShiftNgPair(id) {
+  if (!confirm("この配慮ルールを削除しますか？")) return;
+  db.data.shift_ng_pairs = (db.data.shift_ng_pairs || []).filter(p => p.id !== id);
+  db.save();
+  renderShiftNgList();
 }
