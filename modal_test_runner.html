@@ -113,6 +113,15 @@
           const m = doc.getElementById("diseaseModal");
           const isOpen = m && win.getComputedStyle(m).display === "flex";
           report("病歴タグ クリックで病歴ガイドモーダル表示", isOpen, m ? win.getComputedStyle(m).display : "要素なし");
+
+          const c = doc.getElementById("diseaseModalContent");
+          const hasUnneededBanner = c && c.textContent.includes("介護職が無理な医療判断を行う必要はありません");
+          const hasEmergencySection = c && c.textContent.includes("すぐに看護師・医師へ報告する基準");
+          const hasSafeCareSection = c && c.textContent.includes("現場介護でしてよい対応・ケア");
+          report("病歴ガイド 不要な能書きバナーが完全削除されていること", !hasUnneededBanner);
+          report("病歴ガイド すぐに看護師・医師へ報告する基準が明記されていること", hasEmergencySection);
+          report("病歴ガイド 現場介護でしてよい対応・ケア（医療行為外）が明記されていること", hasSafeCareSection);
+
           win.closeModal("diseaseModal");
         }
 

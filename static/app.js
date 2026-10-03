@@ -1721,9 +1721,9 @@ function openDiseaseGuide(diseaseName) {
   const name = (diseaseName || "").trim();
   const res = resolveDiseaseGuide(name);
   const guide = res ? res.guide : {
-    symptoms: "日々のバイタル・顔色・呼吸状態・食欲・活気を観察してください。",
-    care_points: "【現場介護の実践ケア】無理のない動作介助、水分補給、規則正しい生活リズムの維持、転倒予防の見守り。",
-    emergency: "【看護師・医師への報告基準】意識障害、激しい痛み、37.5℃以上の高熱時は直ちに安静を保ち看護師または医師へ連絡。"
+    emergency: "【即時報告基準】体温37.5℃以上（または平熱+1℃以上）、SpO2 93%未満、収縮期血圧160以上または急低下、激しい痛み・嘔吐・冷汗、意識障害・呼びかけへの反応鈍麻時は、直ちに安静を保ち看護師または医師へ連絡してください。",
+    care_points: "【現場介護でしてよい安全な初期対応】①無理に動かさず安楽な姿勢（背上げ・側臥位・クッション除圧）を保持。②衣類・ベルトを緩めて呼吸を楽にする。③室温調整・掛け物での保温またはクーリング。④バイタル（体温・血圧・脈拍・SpO2）を再測定して記録。⑤むせがないか確認し、医師・看護師の指示があるまで不用意な飲食・投薬は行わない。",
+    symptoms: "日々のバイタル、顔色・表情・口唇色、呼吸のリズム、食事摂取量・水分の進み具合、歩行時のふらつき、活気・傾眠傾向を観察してください。"
   };
   const matchedName = res ? res.matchedName : name;
   const isCustom = res ? res.isCustom : false;
@@ -1745,29 +1745,28 @@ function openDiseaseGuide(diseaseName) {
   const contentEl = document.getElementById("diseaseModalContent");
   if (contentEl) {
     contentEl.innerHTML = `
-      <div style="background:#eff6ff; border:1px solid #bfdbfe; border-left:4px solid #2563eb; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:12px; color:#1e40af; line-height:1.5;">
-        💡 <strong>現場介護の実践基準:</strong> 本ガイドは介護職員が現場で無理なく実践できる「日常ケア（見守り・姿勢・水分）」と「看護師・医師への連絡ライン」を明確に整理したマニュアルです。介護職が無理な医療判断を行う必要はありません。
-      </div>
-
-      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-          <span>🔍 主な症状 ＆ 現場での観察サイン:</span>
+      <!-- 1. すぐに報告する基準 (最優先) -->
+      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:5px solid #dc2626; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🚨 すぐに看護師・医師へ報告する基準（危険レベル・具体的症状）:</span>
         </h4>
-        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${escapeHtml(guide.symptoms)}</p>
+        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;" id="dispGuideEmergency">${escapeHtml(guide.emergency)}</p>
       </div>
 
-      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; margin-bottom:12px;">
+      <!-- 2. 現場介護でしてよい対応・ケア (医療行為外の安全対応) -->
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-left:5px solid #16a34a; border-radius:8px; padding:12px; margin-bottom:12px;">
         <h4 style="font-size:13.5px; color:#166534; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-          <span>🤝 現場介護職員ができる具体的ケア・見守り:</span>
+          <span>🤝 現場介護でしてよい対応・ケア（医療行為以外の安全な初期対応）:</span>
         </h4>
         <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;" id="dispGuideCare">${escapeHtml(guide.care_points)}</p>
       </div>
 
-      <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #dc2626; border-radius:8px; padding:12px; margin-bottom:12px;">
-        <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
-          <span>🚨 看護師・医師への報告基準 (医療連携ライン):</span>
+      <!-- 3. 主な症状・見守りの観察サイン -->
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:5px solid #64748b; border-radius:8px; padding:12px; margin-bottom:12px;">
+        <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+          <span>🔍 主な症状 ＆ 日常ケア時の観察サイン:</span>
         </h4>
-        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;" id="dispGuideEmergency">${escapeHtml(guide.emergency)}</p>
+        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${escapeHtml(guide.symptoms)}</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
