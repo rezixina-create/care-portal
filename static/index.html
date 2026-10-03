@@ -1090,7 +1090,8 @@
  <span> 職員アカウント・暗証番号管理（管理者・事務専用）</span>
  </div>
  <p style="font-size:13px; color:#475569; margin:8px 0 14px 0;">
- 職員の4桁暗証番号の初期化（リセット）や、2名承認（ツーマンルール）による暗証番号変更を行います。
+ 職員が暗証番号を忘れた場合、不正や誤操作を防ぐため<strong>2名（管理者・事務員）の承認</strong>を経て初期値(0000)へリセットします。<br>
+ リセット後は、対象職員本人が新しい暗証番号を設定します。
  </p>
 
  <!-- 職員一覧テーブル -->
@@ -1102,58 +1103,55 @@
  <th>職員名</th>
  <th>役職</th>
  <th>状態</th>
- <th>初期化操作</th>
+ <th>初期化（リセット）</th>
  </tr>
  </thead>
  <tbody></tbody>
  </table>
  </div>
 
- <!-- 暗証番号変更フォーム (2名承認 / 初回設定) -->
+ <!-- 2名承認による初期化リセットフォーム -->
  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:16px; max-width:640px;">
- <div style="font-weight:bold; font-size:14px; color:#1e3a8a; margin-bottom:8px;">暗証番号の変更・更新（2名承認または初回設定）</div>
- <div id="staffAuthRuleNotice" style="font-size:12.5px; padding:8px 12px; border-radius:6px; background:#eff6ff; color:#1d4ed8; margin-bottom:14px;">
- ※ 対象者を選択してください。初期値(0000)の場合は本人のみ、既設定の場合は2名承認（ツーマンルール）が必要です。
- </div>
+ <div style="font-weight:bold; font-size:14px; color:#991b1b; margin-bottom:6px;">【2名承認制】暗証番号の初期化（0000へリセット）</div>
+ <p style="font-size:12px; color:#64748b; margin-bottom:12px; line-height:1.5;">
+ 誤クリックや不正操作を防止するため、リセットには<strong>操作者（管理者または事務員）と、もう1名の管理者または事務員の計2名</strong>による暗証番号入力が必要です。
+ </p>
 
  <div style="display:flex; flex-direction:column; gap:12px;">
  <div>
- <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">変更対象の職員:</label>
- <select id="staffAuthTargetSelect" class="form-control" style="width:100%; font-size:13px;" onchange="onStaffAuthTargetChange()"></select>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">初期化する対象職員:</label>
+ <select id="staffAuthTargetSelect" class="form-control" style="width:100%; font-size:13px;"></select>
  </div>
 
- <div id="staffAuthTargetPinRow">
- <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">対象職員の現在の暗証番号 (数字4桁):</label>
- <input type="password" id="staffAuthCurrentPin" class="form-control" style="width:160px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+ <div style="font-weight:bold; font-size:12.5px; color:#1e3a8a;">[承認者1] 操作者（現在ログイン中の管理者・事務員）</div>
+ <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+ <div style="font-size:13px; color:#334155; font-weight:bold; min-width:140px;" id="staffAuthApprover1NameDisplay">管理者</div>
+ <div style="display:flex; align-items:center; gap:6px;">
+ <label style="font-size:11.5px; color:#64748b;">暗証番号(4桁):</label>
+ <input type="password" id="staffAuthApprover1Pin" class="form-control" style="width:120px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ </div>
+ </div>
  </div>
 
- <div id="staffAuthApproverRow" style="display:none; background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px;">
- <div style="font-weight:bold; font-size:12.5px; color:#991b1b; margin-bottom:6px;">【承認者の認証（ツーマンルール）】</div>
- <div style="display:flex; gap:12px; flex-wrap:wrap;">
+ <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;">
+ <div style="font-weight:bold; font-size:12.5px; color:#991b1b;">[承認者2] もう1名の管理者または事務員（立ち会い承認）</div>
+ <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
  <div style="flex:1; min-width:160px;">
- <label style="font-size:11.5px; color:#475569; display:block; margin-bottom:2px;">承認者 (管理者または別の事務員):</label>
- <select id="staffAuthApproverSelect" class="form-control" style="width:100%; font-size:13px;"></select>
+ <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">立ち会い承認者:</label>
+ <select id="staffAuthApprover2Select" class="form-control" style="width:100%; font-size:13px;"></select>
  </div>
- <div style="width:150px;">
- <label style="font-size:11.5px; color:#475569; display:block; margin-bottom:2px;">承認者の暗証番号:</label>
- <input type="password" id="staffAuthApproverPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+ <div style="width:140px;">
+ <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">承認者の暗証番号:</label>
+ <input type="password" id="staffAuthApprover2Pin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
  </div>
- </div>
- </div>
-
- <div style="display:flex; gap:12px; flex-wrap:wrap;">
- <div style="flex:1; min-width:140px;">
- <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (数字4桁):</label>
- <input type="password" id="staffAuthNewPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
- </div>
- <div style="flex:1; min-width:140px;">
- <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">新しい暗証番号 (確認再入力):</label>
- <input type="password" id="staffAuthConfirmPin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
  </div>
  </div>
 
- <div style="margin-top:8px;">
- <button class="btn btn-primary" style="padding:8px 18px; font-size:13px;" onclick="submitStaffPinChange()">暗証番号を正式変更する</button>
+ <div style="margin-top:6px;">
+ <button class="btn btn-danger" style="padding:9px 20px; font-size:13px; background:#dc2626; border-color:#b91c1c;" onclick="submitTwoPersonReset()">
+ 2名承認で「0000」に初期化（リセット）を実行
+ </button>
  </div>
  </div>
  </div>

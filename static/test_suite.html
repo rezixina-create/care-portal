@@ -139,13 +139,10 @@
     <div id="tabOfficeStaffAuth" style="display:none;"></div>
     <table id="staffAuthTable"><tbody></tbody></table>
     <select id="staffAuthTargetSelect"></select>
-    <div id="staffAuthRuleNotice"></div>
-    <div id="staffAuthApproverRow"></div>
-    <select id="staffAuthApproverSelect"></select>
-    <input id="staffAuthCurrentPin">
-    <input id="staffAuthApproverPin">
-    <input id="staffAuthNewPin">
-    <input id="staffAuthConfirmPin">
+    <div id="staffAuthApprover1NameDisplay"></div>
+    <input id="staffAuthApprover1Pin">
+    <select id="staffAuthApprover2Select"></select>
+    <input id="staffAuthApprover2Pin">
   </div>
 
   <script src="app.js"></script>
@@ -535,8 +532,8 @@
       const isCareYamada = isStaffAdminOrClerk("伊藤 翔太");
       assert(isAdminKimura && isClerkMatsumoto && !isCareYamada, "Test 81: 管理者・事務員ロールのみ正しく認証・識別されること");
 
-      // 27. パスワードリセット・ツーマンルール変更・事務所専用タブテスト
-      assert(typeof resetStaffPin === "function" && typeof submitStaffPinChange === "function" && typeof renderOfficeStaffAuth === "function", "Test 82: パスワード初期化および2名承認変更関数 (resetStaffPin, submitStaffPinChange, renderOfficeStaffAuth) が存在すること");
+      // 27. パスワードリセット・ツーマンルール初期化・事務所専用タブテスト
+      assert(typeof resetStaffPin === "function" && typeof submitTwoPersonReset === "function" && typeof selectTargetForReset === "function" && typeof renderOfficeStaffAuth === "function", "Test 82: 2名承認パスワード初期化リセット関数 (resetStaffPin, submitTwoPersonReset, selectTargetForReset, renderOfficeStaffAuth) が存在すること");
       renderOfficeStaffAuth();
       const staffAuthRows = document.querySelectorAll("#staffAuthTable tbody tr");
       assert(staffAuthRows.length > 0, "Test 83: 事務所ポータルの職員アカウント・暗証番号管理テーブルが正常に描画されること");
