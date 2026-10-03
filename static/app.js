@@ -774,7 +774,7 @@ function selectResident(id) {
   renderOfficeDepositTable();
 }
 
-// 利用者カルテ (フェイスシート・病歴ガイド・看取りスタンプ・見守り注意・私物行追加・備品・スクショ保管)
+// 利用者カルテ (フェイスシート・病歴ガイド・看取りスタンプ・見守り注意・私物行追加・備品・写真保管)
 function renderResidentDetail() {
   const r = gState.residents.find(x => x.id === gState.selectedResidentId);
   const container = document.getElementById("residentDetailCard");
@@ -882,10 +882,10 @@ function renderResidentDetail() {
       </table>
     </div>
 
-    <!-- 同意書・写真スクショ保管 -->
+    <!-- 同意書・写真保管 -->
     <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:8px; padding:10px; background:#f8fafc;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:4px;">
-        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真スクショ保管庫:</strong>
+        <strong style="font-size:13px; color:#1e3a8a;">📁 同意書 ＆ 写真保管庫:</strong>
         <span style="font-size:11px; color:#64748b;">タップで画像一覧・拡大表示・追加</span>
       </div>
       <div style="display:flex; gap:8px; flex-wrap:wrap;">
