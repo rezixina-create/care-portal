@@ -1126,3 +1126,44 @@ body {
   margin-right: 6px;
   margin-bottom: 4px;
 }
+
+/* 人体シェーマ図 ＆ 処置ピン スタイル (モノクロ・高コントラスト 施設向け白黒印刷対応仕様) */
+.schema-pin-badge {
+  position: absolute;
+  width: 26px;
+  height: 26px;
+  margin-left: -13px;
+  margin-top: -13px;
+  background: #000000;
+  color: #ffffff;
+  border: 2px solid #ffffff;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  font-size: 13px;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.7);
+  cursor: pointer;
+  pointer-events: auto;
+  user-select: none;
+  z-index: 10;
+  transition: transform 0.15s ease, background-color 0.15s ease;
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+}
+
+.schema-pin-badge:hover,
+.schema-pin-badge.active-pin {
+  background: #ffffff;
+  color: #000000;
+  border: 2px solid #000000;
+  transform: scale(1.22);
+  z-index: 25;
+  box-shadow: 0 0 8px rgba(0,0,0,0.85);
+}
+
+@keyframes pulseTemp {
+  from { transform: scale(1); opacity: 0.9; }
+  to { transform: scale(1.25); opacity: 1; }
+}

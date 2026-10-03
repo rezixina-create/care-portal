@@ -1587,7 +1587,12 @@
  </div>
  </div>
  <div class="form-group">
- <label>発生状況 (何が起きたか):</label>
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+ <label style="margin:0;">発生状況 (何が起きたか):</label>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; font-weight:bold;" onclick="openBodySchemaForIncident()">
+ 受傷部位をシェーマ図で確認・記録
+ </button>
+ </div>
  <textarea id="incSituation" class="form-control" rows="3"></textarea>
  </div>
  <div class="form-group">
@@ -2806,6 +2811,176 @@
  <button type="button" class="btn btn-secondary" onclick="closeModal('emergencySummaryModal')">閉じる</button>
  <button type="button" class="btn btn-primary" style="background:#dc2626; border-color:#dc2626;" onclick="printEmergencySummary()">A4用紙に印刷 (救急隊・医師提出用)</button>
  </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 皮膚・身体シェーマ図 モーダル (軟膏塗布・処置ピン・A4印刷) -->
+ <div class="modal-overlay" id="bodySchemaModal" style="display:none; z-index:9998;">
+ <div class="modal-card" style="max-width:1050px; max-height:92vh; overflow-y:auto; padding:22px;">
+ <!-- ヘッダー -->
+ <div class="modal-header" style="border-bottom:2px solid #0f172a; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+ <div>
+ <div style="display:flex; align-items:center; gap:8px;">
+ <h3 style="margin:0; color:#0f172a; font-size:19px;">皮膚・身体シェーマ図 (軟膏塗布・皮膚処置マップ)</h3>
+ <span id="schemaResidentBadge" class="badge" style="background:#0f172a; color:white; font-size:12px; padding:3px 8px;"></span>
+ </div>
+ <p style="font-size:12px; color:#475569; margin:4px 0 0 0;">
+ 図上の患部や塗布部位をクリックしてピン止めし、処置内容を記録・訂正できます。皮膚科受診時や往診時のA4提出用紙も印刷できます。
+ </p>
+ </div>
+ <button class="modal-close-btn" onclick="closeModal('bodySchemaModal')">&times;</button>
+ </div>
+
+ <!-- 操作案内バー ＆ 印刷ボタン -->
+ <div style="display:flex; justify-content:space-between; align-items:center; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 14px; margin-bottom:14px; flex-wrap:wrap; gap:8px;">
+ <div style="font-size:12.5px; color:#334155;">
+ <strong>操作方法:</strong> 下の人体図（正面・背面）の患部を<strong>クリック</strong>すると新しいピンを追加できます。既存のピンをクリックすると<strong>訂正・削除</strong>できます。
+ </div>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px; background:#ffffff; color:#0f172a; border:1px solid #cbd5e1; font-weight:bold;" onclick="printBodySchema()">
+ 皮膚科受診・処置指示書 印刷 (A4モノクロ)
+ </button>
+ </div>
+ </div>
+
+ <!-- メインレイアウト: 2カラム (左: シェーマ図、右: 登録済ピン一覧＆編集) -->
+ <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start;" id="schemaMainLayout">
+ <!-- 左: シェーマ図エリア -->
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:10px; text-align:center;">
+ <div style="font-size:12px; font-weight:bold; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; padding:0 12px;">
+ <span>【正面図】 (前面・左右)</span>
+ <span>【背面図】 (背面・左右)</span>
+ </div>
+ <!-- 画像とピン配置コンテナ -->
+ <div id="schemaImageWrapper" style="position:relative; width:100%; display:inline-block; user-select:none; cursor:crosshair; border:1px solid #e2e8f0; border-radius:4px; overflow:hidden; background:#fafafa;" onclick="handleSchemaImageClick(event)">
+ <img id="schemaBodyImage" src="assets/body_schema.jpg" alt="人体シェーマ図" style="width:100%; height:auto; display:block; pointer-events:none;">
+ <!-- ピン一覧がここに動的配置される -->
+ <div id="schemaPinsOverlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+ </div>
+ <div style="font-size:11px; color:#64748b; margin-top:6px;">
+ ※クリックした位置にピンが配置されます (施設印刷向けの白黒高コントラスト仕様)
+ </div>
+ </div>
+
+ <!-- 右: ピン一覧テーブル ＆ 編集エリア -->
+ <div>
+ <!-- ピン一覧リスト -->
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:12px;">
+ <div style="font-weight:bold; font-size:13px; color:#0f172a; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+ <span id="schemaPinsCountTitle">登録中の処置・ピン一覧 (0件)</span>
+ <span style="font-size:11px; color:#64748b;">番号をクリックで訂正</span>
+ </div>
+ <div id="schemaPinsTableContainer" style="max-height:260px; overflow-y:auto;">
+ <!-- JSでテーブル描画 -->
+ </div>
+ </div>
+
+ <!-- ピン登録・編集フォーム -->
+ <div id="schemaPinEditBox" style="background:#f8fafc; border:2px solid #0f172a; border-radius:8px; padding:14px;">
+ <div style="font-weight:bold; font-size:13px; color:#0f172a; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+ <span id="schemaPinEditTitle">新規ピン登録 (図をクリックして位置を指定)</span>
+ <span id="schemaPinCoordsBadge" style="font-size:11px; color:#64748b;"></span>
+ </div>
+ <input type="hidden" id="schemaEditPinId">
+ <input type="hidden" id="schemaEditPinXPct">
+ <input type="hidden" id="schemaEditPinYPct">
+
+ <!-- 部位名 ＆ 区分 -->
+ <div class="form-group" style="display:flex; gap:10px; margin-bottom:8px;">
+ <div style="flex:1;">
+ <label style="font-size:12px; font-weight:bold;">部位名:</label>
+ <input type="text" id="schemaPinSite" class="form-control" placeholder="例: 背部 (肩甲骨間), 仙骨部, 右膝 等" style="font-size:12px;">
+ </div>
+ <div style="flex:1;">
+ <label style="font-size:12px; font-weight:bold;">区分:</label>
+ <select id="schemaPinCategory" class="form-control" style="font-size:12px;">
+ <option value="軟膏塗布">軟膏塗布</option>
+ <option value="湿布・貼付剤">湿布・貼付剤</option>
+ <option value="褥瘡・発赤">褥瘡・発赤</option>
+ <option value="打撲・創傷">打撲・創傷</option>
+ <option value="麻痺・拘縮">麻痺・拘縮</option>
+ <option value="その他">その他</option>
+ </select>
+ </div>
+ </div>
+
+ <!-- よく使う部位候補 -->
+ <div style="margin-bottom:8px;">
+ <span style="font-size:11px; color:#64748b;">よく使う部位: </span>
+ <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px;">
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('背部')">背部</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('仙骨部')">仙骨部</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('腰部')">腰部</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('右膝')">右膝</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('左膝')">左膝</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('両下腿')">両下腿</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('右足・踵')">右足・踵</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('左足・踵')">左足・踵</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('左肘')">左肘</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('右肘')">右肘</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaSite('頸部')">頸部</button>
+ </div>
+ </div>
+
+ <!-- 処置内容・薬剤名 -->
+ <div class="form-group" style="margin-bottom:8px;">
+ <label style="font-size:12px; font-weight:bold;">処置内容・薬剤名:</label>
+ <input type="text" id="schemaPinItem" class="form-control" placeholder="例: ヒルドイドソフト軟膏 0.3%, モーラステープL 40mg 等" style="font-size:12px;">
+ <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;">
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('ヒルドイドソフト軟膏 0.3%', '軟膏塗布')">ヒルドイドソフト</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('プロペト (白色ワセリン)', '軟膏塗布')">プロペト</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('アズノール軟膏 0.033%', '褥瘡・発赤')">アズノール</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('モーラステープL 40mg', '湿布・貼付剤')">モーラステープ</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('ロキソニンテープ 50mg', '湿布・貼付剤')">ロキソニンテープ</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="setSchemaItem('亜鉛華単軟膏', '打撲・創傷')">亜鉛華軟膏</button>
+ </div>
+ </div>
+
+ <!-- 頻度・タイミング ＆ 状態 -->
+ <div class="form-group" style="display:flex; gap:10px; margin-bottom:8px;">
+ <div style="flex:1;">
+ <label style="font-size:12px; font-weight:bold;">塗布・貼付頻度:</label>
+ <input type="text" id="schemaPinFrequency" class="form-control" placeholder="例: 入浴後, 朝・夕, 1日1回 朝 等" style="font-size:12px;">
+ <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px;">
+ <button type="button" class="btn btn-secondary" style="font-size:10px; padding:1px 5px;" onclick="setSchemaFrequency('入浴後')">入浴後</button>
+ <button type="button" class="btn btn-secondary" style="font-size:10px; padding:1px 5px;" onclick="setSchemaFrequency('朝・夕 (1日2回)')">朝・夕</button>
+ <button type="button" class="btn btn-secondary" style="font-size:10px; padding:1px 5px;" onclick="setSchemaFrequency('1日1回 朝')">1日1回 朝</button>
+ <button type="button" class="btn btn-secondary" style="font-size:10px; padding:1px 5px;" onclick="setSchemaFrequency('就寝前')">就寝前</button>
+ <button type="button" class="btn btn-secondary" style="font-size:10px; padding:1px 5px;" onclick="setSchemaFrequency('随時')">随時</button>
+ </div>
+ </div>
+ <div style="flex:1;">
+ <label style="font-size:12px; font-weight:bold;">状態・ステータス:</label>
+ <select id="schemaPinStatus" class="form-control" style="font-size:12px;">
+ <option value="継続中">継続中</option>
+ <option value="治癒・終了">治癒・終了</option>
+ <option value="経過観察中">経過観察中</option>
+ </select>
+ </div>
+ </div>
+
+ <!-- 特記事項・処置方法・注意点 -->
+ <div class="form-group" style="margin-bottom:10px;">
+ <label style="font-size:12px; font-weight:bold;">処置方法・特記メモ:</label>
+ <input type="text" id="schemaPinNotes" class="form-control" placeholder="例: 薄く広げて塗布。擦らないこと。赤み引くまで継続。" style="font-size:12px;">
+ </div>
+
+ <!-- ボタン類 -->
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+ <button type="button" id="btnDeleteSchemaPin" class="btn btn-danger" style="font-size:12px; display:none;" onclick="deleteSchemaPin()">このピンを削除</button>
+ <div style="display:flex; gap:6px; margin-left:auto;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="resetSchemaPinForm()">新規入力に戻す</button>
+ <button type="button" class="btn btn-primary" style="font-size:12px; background:#0f172a; border-color:#0f172a;" onclick="saveSchemaPin()">ピンを保存・登録</button>
+ </div>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- フッター -->
+ <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #e2e8f0; padding-top:12px;">
+ <button type="button" class="btn btn-secondary" onclick="closeModal('bodySchemaModal')">閉じる</button>
  </div>
  </div>
  </div>

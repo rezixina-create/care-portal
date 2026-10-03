@@ -78,7 +78,7 @@ class LocalDB {
  "meals", "oral_cares", "baths", "meds", "turns", "linens",
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
- "daily_schedules", "monthly_notices", "care_summaries"
+ "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -126,7 +126,65 @@ class LocalDB {
  care_notes: "活動的なため無理な早歩きによる転倒に留意。適度な休憩を促す。",
  family_info: "長男様がこまめに連絡対応。退院日決定次第共有いただく手はず。",
  future_goals: "再入所後のADL低下を防ぎ、自立した日常動作を維持する。"
+ },
+ {
+ id: 3,
+ resident_id: 2,
+ created_at: "2026-10-02",
+ updated_at: "2026-10-02",
+ staff_name: "佐藤 恵美",
+ summary_type: "定期見直しサマリー",
+ basic_info: "要介護2。生年月日: 1938-11-20 (87歳)。キーパーソン: 長女・田中 美咲様 (090-3333-4444)。認知症自立度I。障害自立度A2。心不全・高血圧・両変形性膝関節症あり。",
+ background: "元小学校教員。夫他界後、長女近隣にて一人暮らしをしていたが、心不全による緊急入院を契機に下肢筋力低下。退院後、在宅療養見守りのため当施設へ入所され6ヶ月経過。定期見直し実施。",
+ physical_cognitive: "認知機能はおおむね良好で日常会話・意思疎通明瞭。几帳面な性格。両膝関節に変形性膝関節症に伴う荷重痛あり。歩行時は手すりまたはシルバーカー使用。軽度心不全による下腿浮腫傾向。",
+ adl: "室内移動は手すり伝い歩行またはシルバーカーにて自立・見守り。立ち上がり時に膝痛のため手押し動作必要。更衣・整容は自立。入浴は一般浴・見守りにて洗身・洗髪実施（浴槽出入り時軽介助）。",
+ meals_hydration: "軟飯・一口大刻み食。自力全量摂取可能。心不全管理のため塩分制限・水分管理目標（1日1,000〜1,200ml程度）。計量カップにて水分摂取量を記録。",
+ excretion: "日中・夜間ともにポータブルトイレまたは居室トイレにて自立排泄。夜間1回排泄覚醒あり。利尿剤内服中のため午前中の尿量増加に配慮。",
+ sleep: "21:30就寝、6:30起床。足元の冷えを訴えることがあり、保温靴下や毛布にて調整。入眠良好。中途覚醒時もナースコール対応にて安全確認。",
+ meds: "降圧薬・利尿剤・胃薬を定期内服中。朝・夕食後。職員による配薬と服用確認にて自己内服確実。",
+ medical_care: "心不全管理のための毎朝体重測定（前日比+1.5kg以上で往診医報告基準）。バイタル測定。両膝関節へのモーラステープ貼付（朝貼付・夕入浴前剥離）。両下腿へのヒルドイドローション塗布。",
+ dementia_behavior: "目立ったBPSD・周辺症状なし。読書や手芸を楽しまれ、落ち着いて穏やかに過ごされている。几帳面ゆえに持ち物の位置等にこだわりあり傾聴。",
+ care_notes: "立ち上がりや歩行時は膝への負担軽減のため焦らせず見守る。下肢浮腫・呼吸苦・体重増加の早期発見に努める。手芸や読書等の活動を尊重。",
+ family_info: "長女様が週1〜2回面会および日用品補充に来訪。家族関係極めて良好。何かあれば長女様へ連絡。救急搬送方針（心不全悪化時は早期搬送希望）。",
+ future_goals: "心不全の安定維持（体重・浮腫・血圧コントロール）。両膝の疼痛を緩和し、室内歩行・活動性を維持して穏やかな生活を支援。"
+ },
+ {
+ id: 4,
+ resident_id: 3,
+ created_at: "2026-10-01",
+ updated_at: "2026-10-01",
+ staff_name: "山田 孝之",
+ summary_type: "新規入所時サマリー",
+ basic_info: "要介護3。生年月日: 1935-02-15 (91歳)。キーパーソン: 妻・鈴木 和子様 (090-5555-6666)。認知症自立度IIa。障害自立度B2。パーキンソン病、嚥下障害、誤嚥性肺炎既往、左片麻痺。",
+ background: "元農業。真面目で温厚な性格。10年前にパーキンソン病と診断。在宅にて妻が介護していたが、誤嚥性肺炎で入院加療。退院にあたり経口摂取支援と専門的介護を要するため当施設へ新規入所。",
+ physical_cognitive: "左片麻痺およびパーキンソン病による無動・振戦・筋強剛あり。小刻み歩行・突進歩行のリスク高く、自立歩行は不可。車椅子移動。意思疎通は可能だが発語が小声で聞き取りに傾聴を要する。",
+ adl: "ベッド上での寝返り・起き上がりは軽介助。端座位保持は数分可能。車椅子への移乗は職員1名による軽介助〜一部介助。更衣・整容は全介助。入浴は機械浴（リフト浴）にて全身清拭・洗身介助。",
+ meals_hydration: "極小刻み食（トロミ中）。嚥下反射の遅延あり、食事時は頭頸部前屈位（顎引き）を保持。スプーンにて一口ずつ全介助。水分は全量トロミ茶。1日目標1,000ml。むせ込み・湿性咳嗽に厳重警戒。",
+ excretion: "リハビリパンツ＋尿取りパッド使用。定時おむつ交換および車椅子移乗時にポータブルトイレ誘導（成功率約50%）。排便は2〜3日に1回、緩下剤調整にて管理。",
+ sleep: "20:30就寝、6:00起床。夜間体位変換（3時間ごと）実施。仙骨部発赤予防のため体圧分散エアマット使用。離床センサー設置。夜間覚醒時は穏やかに声かけ。",
+ meds: "抗パーキンソン薬（レボドパ合剤）、便秘薬、胃薬。定時内服厳守（薬効オン・オフ現象あり、時間厳守が動作に直結）。トロミ水または服薬ゼリーにて全介助服薬。",
+ medical_care: "誤嚥性肺炎予防の口腔ケア徹底（毎食後）。仙骨部発赤予防（アズノール軟膏塗布＋体交）。左肘スキンテア処置（亜鉛華軟膏＋ガーゼ保護）。背部乾燥へのプロペト塗布。",
+ dementia_behavior: "夜間に小声での独語やせん妄傾向が稀に見られるが、職員の手を握り優しく声かけすることで入眠。暴言や拒絶はなし。",
+ care_notes: "抗パーキンソン薬の内服時間を厳守すること。食事介助は絶対に急がず一口ごとの嚥下を確認。車椅子座位時の姿勢崩れ（左傾き）にクッションで補正。",
+ family_info: "高齢の奥様が週1回面会。介護負担軽減に感謝されている。看取り方針合意済（DNAR、施設での平穏な看取り希望）。緊急連絡先は長男様（副）。",
+ future_goals: "誤嚥性肺炎の再発防止と安全な経口摂取の継続。褥瘡を発生させず、車椅子移乗による離床機会を確保して寝たきり化を予防。"
  }
+ ];
+ }
+ if (!Array.isArray(d.body_schema_pins) || d.body_schema_pins.length === 0) {
+ d.body_schema_pins = [
+ { id: 1, resident_id: 1, pin_no: 1, category: "軟膏塗布", site_name: "背部 (肩甲骨間〜腰部)", item_name: "ヒルドイドソフト軟膏 0.3%", frequency: "入浴後", status: "継続中", notes: "乾燥・掻痒予防。入浴後に擦らず薄く広げて塗布すること。", doctor_name: "さくら皮膚科", x_pct: 75.5, y_pct: 32.0, created_at: "2026-10-01 10:00", updated_at: "2026-10-01 10:00", staff_name: "山田 孝之" },
+ { id: 2, resident_id: 1, pin_no: 2, category: "褥瘡・発赤", site_name: "仙骨部", item_name: "アズノール軟膏 0.033%", frequency: "朝・夕 (1日2回)", status: "継続中", notes: "軽度発赤あり。除圧マット使用中。車椅子座位長引かないよう声かけ。", doctor_name: "さくら往診クリニック", x_pct: 75.0, y_pct: 46.5, created_at: "2026-10-01 10:15", updated_at: "2026-10-01 10:15", staff_name: "山田 孝之" },
+ { id: 3, resident_id: 1, pin_no: 3, category: "軟膏塗布", site_name: "右足背・踵部", item_name: "プロペト (白色ワセリン)", frequency: "入浴後", status: "継続中", notes: "角質硬化・亀裂予防。靴下着用前に塗布。", doctor_name: "さくら皮膚科", x_pct: 38.0, y_pct: 92.0, created_at: "2026-10-02 09:30", updated_at: "2026-10-02 09:30", staff_name: "佐藤 恵美" },
+ { id: 4, resident_id: 2, pin_no: 1, category: "湿布・貼付剤", site_name: "右膝関節部 (前面〜側方)", item_name: "モーラステープL 40mg", frequency: "1日1回 朝", status: "継続中", notes: "変形性膝関節症の疼痛緩和。入浴前（夕方）に剥がす。日光過敏・かぶれ確認。", doctor_name: "中央整形外科", x_pct: 20.5, y_pct: 66.5, created_at: "2026-10-01 11:00", updated_at: "2026-10-01 11:00", staff_name: "佐藤 恵美" },
+ { id: 5, resident_id: 2, pin_no: 2, category: "湿布・貼付剤", site_name: "左膝関節部 (前面〜側方)", item_name: "モーラステープL 40mg", frequency: "1日1回 朝", status: "継続中", notes: "立ち上がり時の疼痛軽減。皮膚発赤ないか剥離時に確認。", doctor_name: "中央整形外科", x_pct: 30.5, y_pct: 66.5, created_at: "2026-10-01 11:05", updated_at: "2026-10-01 11:05", staff_name: "佐藤 恵美" },
+ { id: 6, resident_id: 2, pin_no: 3, category: "軟膏塗布", site_name: "両下腿 (すね〜ふくらはぎ)", item_name: "ヒルドイドローション 0.3%", frequency: "入浴後", status: "継続中", notes: "下肢乾燥・軽度浮腫ケア。下から上へ優しくなじませるように塗布。", doctor_name: "さくら皮膚科", x_pct: 25.5, y_pct: 78.0, created_at: "2026-10-02 14:00", updated_at: "2026-10-02 14:00", staff_name: "山田 孝之" },
+ { id: 7, resident_id: 3, pin_no: 1, category: "褥瘡・発赤", site_name: "仙骨部〜尾骨部", item_name: "アズノール軟膏 0.033% ＋ フィルム保護", frequency: "朝・夕・就寝前 (1日3回)", status: "継続中", notes: "車椅子自走なし・座位姿勢が崩れやすく発赤リスク大。定期的な体位変換と除圧クッション確認。", doctor_name: "さくら往診クリニック", x_pct: 75.0, y_pct: 46.5, created_at: "2026-09-28 10:00", updated_at: "2026-10-02 15:00", staff_name: "山田 孝之" },
+ { id: 8, resident_id: 3, pin_no: 2, category: "打撲・創傷", site_name: "左肘頭部 (外側)", item_name: "亜鉛華単軟膏 ＋ メロリンガーゼ被覆", frequency: "1日1回 朝処置", status: "継続中", notes: "車椅子手すり接触による皮膚剥離（スキンテア・約1cm）。浸出液少、上皮化傾向。テープ固定は弱粘着使用。", doctor_name: "さくら往診クリニック", x_pct: 91.0, y_pct: 35.0, created_at: "2026-09-30 08:30", updated_at: "2026-10-03 09:00", staff_name: "鈴木 美智子" },
+ { id: 9, resident_id: 3, pin_no: 3, category: "軟膏塗布", site_name: "背部全体 (胸椎〜腰椎部)", item_name: "プロペト (白色ワセリン)", frequency: "入浴後", status: "継続中", notes: "老人性乾皮症による痒み訴えあり。入浴後に水分を拭き取り次第すぐ塗布。", doctor_name: "さくら皮膚科", x_pct: 75.0, y_pct: 30.0, created_at: "2026-10-01 16:30", updated_at: "2026-10-01 16:30", staff_name: "山田 孝之" },
+ { id: 10, resident_id: 4, pin_no: 1, category: "打撲・創傷", site_name: "右大腿外側 (骨折手術創部)", item_name: "ヘパリン類似物質油性クリーム ＋ 保護ガーゼ", frequency: "1日1回 朝", status: "継続中", notes: "手術創治癒後瘢痕の皮膚ツッパリ・乾燥予防。強く揉まないこと。創部発赤・熱感なし。", doctor_name: "さくら総合病院 整形外科", x_pct: 18.0, y_pct: 49.0, created_at: "2026-10-02 11:00", updated_at: "2026-10-02 11:00", staff_name: "鈴木 美智子" },
+ { id: 11, resident_id: 4, pin_no: 2, category: "湿布・貼付剤", site_name: "腰部中央 (L3〜L5付近)", item_name: "ロキソニンテープ 50mg", frequency: "1日1回 朝貼付", status: "継続中", notes: "腰背部痛緩和。1日1回朝食後貼付、入浴時剥離。皮膚かぶれ注視。", doctor_name: "さくら総合病院 整形外科", x_pct: 75.0, y_pct: 40.0, created_at: "2026-10-02 11:15", updated_at: "2026-10-02 11:15", staff_name: "鈴木 美智子" },
+ { id: 12, resident_id: 4, pin_no: 3, category: "褥瘡・発赤", site_name: "右踵部 (かかと)", item_name: "アズノール軟膏 ＋ かかと保護パッド", frequency: "1日1回 就寝前", status: "継続中", notes: "臥床時の持続圧迫による発赤予防。除圧クッションを足首下に配置。", doctor_name: "さくら往診クリニック", x_pct: 38.0, y_pct: 95.0, created_at: "2026-10-02 11:30", updated_at: "2026-10-02 11:30", staff_name: "鈴木 美智子" }
  ];
  }
  if (Array.isArray(d.stamps)) {
@@ -650,7 +708,8 @@ class LocalDB {
  deposits: [],
  complaints: [],
  incidents: [],
- care_summaries: []
+ care_summaries: [],
+ body_schema_pins: []
  };
  localStorage.setItem(this.key, JSON.stringify(seed));
  return seed;
@@ -670,6 +729,8 @@ let gState = {
  recreations: db.data.recreations,
  emergencySupplies: db.data.emergency_supplies,
  care_summaries: db.data.care_summaries,
+ body_schema_pins: db.data.body_schema_pins || [],
+ schemaResidentId: 1,
  selectedResidentId: 1,
  selectedDate: new Date().toISOString().split("T")[0],
  currentMonth: new Date().toISOString().slice(0, 7),
@@ -2169,6 +2230,9 @@ function renderResidentDetail() {
  <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
  緊急搬送・受診サマリー
  </button>
+ <button type="button" class="btn btn-dark" style="font-size:12px; padding:5px 12px; background:#0f172a; border-color:#0f172a; color:#ffffff; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
+ 皮膚・身体シェーマ図 (軟膏・処置)
+ </button>
  </div>
  </div>
 
@@ -2234,6 +2298,14 @@ function renderResidentDetail() {
  <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
  <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
  <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+ </div>
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:12px; color:#1e293b; flex:1; min-width:200px;">
+ <strong>皮膚処置・軟膏ピン:</strong> ${renderSchemaSummaryBadges(r.id)}
+ </div>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
+ シェーマ図を開く
+ </button>
  </div>
  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
  <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
@@ -3570,6 +3642,640 @@ ADL: ${s ? s.adl : "寝返り・起き上がり自立、移動見守り"}
  } else {
  alert("クリップボードAPI非対応環境です。");
  }
+}
+
+// ======================================================================
+// 皮膚・身体シェーマ図 (軟膏塗布・処置ピン・A4モノクロ印刷)
+// ======================================================================
+
+function renderSchemaSummaryBadges(residentId) {
+ const rId = Number(residentId);
+ const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const pins = allPins.filter(p => Number(p.resident_id) === rId && p.status !== "治癒・終了");
+ if (pins.length === 0) {
+ return `<span style="color:#64748b; font-size:11.5px;">特記処置なし</span>`;
+ }
+ pins.sort((a, b) => (Number(a.pin_no) || 0) - (Number(b.pin_no) || 0));
+ return pins.map(p => `
+ <span style="display:inline-flex; align-items:center; gap:3px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px;">
+ <span style="display:inline-block; width:15px; height:15px; line-height:15px; border-radius:50%; background:#000000; color:#ffffff; font-size:9.5px; text-align:center; font-weight:bold;">${p.pin_no}</span>
+ <strong>${escapeHtml(p.site_name)}:</strong> ${escapeHtml(p.item_name)}
+ </span>
+ `).join("");
+}
+
+function openBodySchemaModal(residentId) {
+ const rId = Number(residentId || gState.selectedResidentId || 1);
+ gState.schemaResidentId = rId;
+
+ const r = (gState.residents || []).find(x => Number(x.id) === rId);
+ const badge = document.getElementById("schemaResidentBadge");
+ if (badge) {
+ if (r) {
+ badge.textContent = `${r.name} 様 (${r.room_no}号室 / ${r.care_level})`;
+ } else {
+ badge.textContent = "利用者情報";
+ }
+ }
+
+ resetSchemaPinForm();
+ renderBodySchemaPins();
+ openModal("bodySchemaModal");
+}
+
+function openBodySchemaForIncident() {
+ const sel = document.getElementById("incResidentSelect");
+ const rId = sel ? Number(sel.value) : Number(gState.selectedResidentId);
+ openBodySchemaModal(rId || gState.selectedResidentId);
+}
+
+function renderBodySchemaPins() {
+ const overlay = document.getElementById("schemaPinsOverlay");
+ const tableContainer = document.getElementById("schemaPinsTableContainer");
+ const countTitle = document.getElementById("schemaPinsCountTitle");
+ if (!overlay || !tableContainer) return;
+
+ const rId = Number(gState.schemaResidentId || gState.selectedResidentId);
+ const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const pins = allPins.filter(p => Number(p.resident_id) === rId);
+
+ pins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+ pins.forEach((p, idx) => { p.pin_no = idx + 1; });
+
+ if (countTitle) {
+ countTitle.textContent = `登録中の処置・ピン一覧 (${pins.length}件)`;
+ }
+
+ const activeEditId = Number(document.getElementById("schemaEditPinId")?.value || 0);
+ let pinsHtml = "";
+ pins.forEach(p => {
+ const isSelected = activeEditId === Number(p.id);
+ const selectedStyle = isSelected
+ ? "background:#ffffff; color:#000000; border:2px solid #000000; transform:scale(1.25); z-index:25; box-shadow:0 0 8px rgba(0,0,0,0.9);"
+ : "background:#000000; color:#ffffff; border:2px solid #ffffff; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.7);";
+
+ pinsHtml += `
+ <div class="schema-pin-badge" id="schemaPinEl_${p.id}"
+ style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; cursor:pointer; pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${selectedStyle}"
+ title="[${p.pin_no}] ${escapeHtml(p.site_name)}: ${escapeHtml(p.item_name)} (${escapeHtml(p.frequency || '-')})"
+ onclick="event.stopPropagation(); editSchemaPin(${p.id});">
+ ${p.pin_no}
+ </div>
+ `;
+ });
+ overlay.innerHTML = pinsHtml;
+
+ if (pins.length === 0) {
+ tableContainer.innerHTML = `
+ <div style="text-align:center; padding:24px 10px; color:#64748b; font-size:12px;">
+ 現在登録されている処置ピンはありません。<br>
+ 左の人体図（正面・背面）をクリックしてピンを配置してください。
+ </div>
+ `;
+ return;
+ }
+
+ let tableHtml = `
+ <table class="table" style="width:100%; font-size:12px; margin-bottom:0; border-collapse:collapse;">
+ <thead>
+ <tr style="background:#f1f5f9; color:#0f172a; border-bottom:2px solid #cbd5e1;">
+ <th style="padding:6px 8px; width:40px; text-align:center;">番号</th>
+ <th style="padding:6px 8px; width:85px;">部位</th>
+ <th style="padding:6px 8px;">処置内容・薬剤名</th>
+ <th style="padding:6px 8px; width:80px;">頻度</th>
+ <th style="padding:6px 8px; width:65px; text-align:center;">状態</th>
+ <th style="padding:6px 8px; width:95px; text-align:center;">操作</th>
+ </tr>
+ </thead>
+ <tbody>
+ `;
+
+ pins.forEach(p => {
+ const isSelected = activeEditId === Number(p.id);
+ const rowBg = isSelected ? "background:#fef3c7;" : "";
+ tableHtml += `
+ <tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+ <td style="padding:6px 8px; text-align:center;">
+ <span style="display:inline-block; width:22px; height:22px; line-height:20px; border-radius:50%; background:#000000; color:#ffffff; font-weight:bold; font-size:12px; text-align:center;">
+ ${p.pin_no}
+ </span>
+ </td>
+ <td style="padding:6px 8px;">
+ <strong>${escapeHtml(p.site_name || '-')}</strong>
+ <div style="font-size:10px; color:#64748b;">${escapeHtml(p.category || '-')}</div>
+ </td>
+ <td style="padding:6px 8px;">
+ <div style="font-weight:bold; color:#0f172a;">${escapeHtml(p.item_name || '-')}</div>
+ ${p.notes ? `<div style="font-size:11px; color:#475569; margin-top:2px;">${escapeHtml(p.notes)}</div>` : ''}
+ </td>
+ <td style="padding:6px 8px; font-size:11px; color:#334155;">
+ ${escapeHtml(p.frequency || '-')}
+ </td>
+ <td style="padding:6px 8px; text-align:center;">
+ <span style="font-size:10.5px; padding:2px 5px; border-radius:4px; font-weight:bold; background:${p.status === '継続中' ? '#e2e8f0' : '#dcfce7'}; color:#0f172a; border:1px solid #94a3b8;">
+ ${escapeHtml(p.status || '継続中')}
+ </span>
+ </td>
+ <td style="padding:6px 8px; text-align:center; white-space:nowrap;">
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="editSchemaPin(${p.id})">訂正</button>
+ <button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteSchemaPinById(${p.id})">削除</button>
+ </td>
+ </tr>
+ `;
+ });
+
+ tableHtml += `</tbody></table>`;
+ tableContainer.innerHTML = tableHtml;
+}
+
+function handleSchemaImageClick(event) {
+ const wrapper = document.getElementById("schemaImageWrapper");
+ if (!wrapper) return;
+
+ const rect = wrapper.getBoundingClientRect();
+ const clickX = event.clientX - rect.left;
+ const clickY = event.clientY - rect.top;
+
+ let xPct = (clickX / rect.width) * 100;
+ let yPct = (clickY / rect.height) * 100;
+
+ xPct = Math.max(2, Math.min(98, Math.round(xPct * 10) / 10));
+ yPct = Math.max(2, Math.min(98, Math.round(yPct * 10) / 10));
+
+ const isFront = xPct < 50;
+ const viewName = isFront ? "正面図" : "背面図";
+
+ let suggestedSite = "";
+ if (yPct < 16) {
+ suggestedSite = isFront ? "頭部・顔面" : "後頭部・頚部";
+ } else if (yPct < 35) {
+ suggestedSite = isFront ? "胸部・上肢" : "背部・肩甲骨部";
+ } else if (yPct < 50) {
+ suggestedSite = isFront ? "腹部・前腕" : "腰部・仙骨部";
+ } else if (yPct < 75) {
+ suggestedSite = isFront ? "大腿部・膝" : "臀部・大腿後面";
+ } else {
+ suggestedSite = isFront ? "下腿・足部" : "下腿後面・踵部";
+ }
+
+ const idInput = document.getElementById("schemaEditPinId");
+ if (idInput) idInput.value = "";
+
+ const xInput = document.getElementById("schemaEditPinXPct");
+ if (xInput) xInput.value = xPct;
+
+ const yInput = document.getElementById("schemaEditPinYPct");
+ if (yInput) yInput.value = yPct;
+
+ const siteInput = document.getElementById("schemaPinSite");
+ if (siteInput && !siteInput.value.trim()) {
+ siteInput.value = suggestedSite;
+ }
+
+ const coordsBadge = document.getElementById("schemaPinCoordsBadge");
+ if (coordsBadge) {
+ coordsBadge.textContent = `位置: ${viewName} (${xPct}%, ${yPct}%)`;
+ }
+
+ const titleEl = document.getElementById("schemaPinEditTitle");
+ if (titleEl) {
+ titleEl.textContent = `新規ピン登録 (${viewName}: ${suggestedSite} 付近)`;
+ }
+
+ const delBtn = document.getElementById("btnDeleteSchemaPin");
+ if (delBtn) delBtn.style.display = "none";
+
+ const overlay = document.getElementById("schemaPinsOverlay");
+ if (overlay) {
+ const existingTemp = document.querySelector(".schema-temp-click-pin");
+ if (existingTemp) existingTemp.remove();
+
+ const tempDiv = document.createElement("div");
+ tempDiv.className = "schema-temp-click-pin";
+ tempDiv.style.cssText = `position:absolute; left:${xPct}%; top:${yPct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; background:#000000; color:#ffffff; border:2px dashed #ffffff; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px; pointer-events:none; z-index:30; animation:pulseTemp 1s infinite alternate;`;
+ tempDiv.textContent = "+";
+ overlay.appendChild(tempDiv);
+ }
+
+ const itemInput = document.getElementById("schemaPinItem");
+ if (itemInput) itemInput.focus();
+}
+
+function saveSchemaPin() {
+ const rId = Number(gState.schemaResidentId || gState.selectedResidentId);
+ const editId = Number(document.getElementById("schemaEditPinId")?.value || 0);
+ const xPct = parseFloat(document.getElementById("schemaEditPinXPct")?.value || 0);
+ const yPct = parseFloat(document.getElementById("schemaEditPinYPct")?.value || 0);
+ const site = document.getElementById("schemaPinSite")?.value.trim() || "";
+ const category = document.getElementById("schemaPinCategory")?.value || "軟膏塗布";
+ const item = document.getElementById("schemaPinItem")?.value.trim() || "";
+ const frequency = document.getElementById("schemaPinFrequency")?.value.trim() || "入浴後";
+ const status = document.getElementById("schemaPinStatus")?.value || "継続中";
+ const notes = document.getElementById("schemaPinNotes")?.value.trim() || "";
+
+ if (!site) {
+ alert("部位名を入力または選択してください (例: 背部, 仙骨部, 右膝等)。");
+ document.getElementById("schemaPinSite")?.focus();
+ return;
+ }
+ if (!item) {
+ alert("処置内容・薬剤名を入力または選択してください (例: ヒルドイドソフト, プロペト等)。");
+ document.getElementById("schemaPinItem")?.focus();
+ return;
+ }
+ if (xPct === 0 && yPct === 0 && !editId) {
+ alert("左の人体図（シェーマ図）をクリックしてピンの位置を指定してください。");
+ return;
+ }
+
+ if (!db.data.body_schema_pins) db.data.body_schema_pins = [];
+ const staffName = document.getElementById("currentStaff")?.value || "職員";
+ const now = new Date();
+ const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')} ${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+ if (editId > 0) {
+ const pin = db.data.body_schema_pins.find(p => Number(p.id) === editId);
+ if (pin) {
+ pin.site_name = site;
+ pin.category = category;
+ pin.item_name = item;
+ pin.frequency = frequency;
+ pin.status = status;
+ pin.notes = notes;
+ pin.updated_at = nowStr;
+ pin.staff_name = staffName;
+ if (xPct > 0 && yPct > 0) {
+ pin.x_pct = xPct;
+ pin.y_pct = yPct;
+ }
+ }
+ } else {
+ const newId = db.data.body_schema_pins.length > 0
+ ? Math.max(...db.data.body_schema_pins.map(p => Number(p.id) || 0)) + 1
+ : 1;
+
+ const resPins = db.data.body_schema_pins.filter(p => Number(p.resident_id) === rId);
+ const pinNo = resPins.length + 1;
+
+ db.data.body_schema_pins.push({
+ id: newId,
+ resident_id: rId,
+ pin_no: pinNo,
+ category: category,
+ site_name: site,
+ item_name: item,
+ frequency: frequency,
+ status: status,
+ notes: notes,
+ doctor_name: "担当医",
+ x_pct: xPct,
+ y_pct: yPct,
+ created_at: nowStr,
+ updated_at: nowStr,
+ staff_name: staffName
+ });
+ }
+
+ gState.body_schema_pins = db.data.body_schema_pins;
+ if (typeof db.save === 'function') db.save();
+
+ resetSchemaPinForm();
+ renderBodySchemaPins();
+ if (typeof renderResidentDetail === 'function') renderResidentDetail();
+
+ const toastMsg = editId > 0 ? "処置ピンの内容を訂正・更新しました。" : "新しい処置ピンを登録しました。";
+ if (typeof showToast === 'function') {
+ showToast(toastMsg);
+ } else {
+ alert(toastMsg);
+ }
+}
+
+function editSchemaPin(pinId) {
+ const pin = (db.data.body_schema_pins || []).find(p => Number(p.id) === Number(pinId));
+ if (!pin) return;
+
+ const idInput = document.getElementById("schemaEditPinId");
+ if (idInput) idInput.value = pin.id;
+
+ const xInput = document.getElementById("schemaEditPinXPct");
+ if (xInput) xInput.value = pin.x_pct;
+
+ const yInput = document.getElementById("schemaEditPinYPct");
+ if (yInput) yInput.value = pin.y_pct;
+
+ const siteInput = document.getElementById("schemaPinSite");
+ if (siteInput) siteInput.value = pin.site_name || "";
+
+ const catSelect = document.getElementById("schemaPinCategory");
+ if (catSelect) catSelect.value = pin.category || "軟膏塗布";
+
+ const itemInput = document.getElementById("schemaPinItem");
+ if (itemInput) itemInput.value = pin.item_name || "";
+
+ const freqInput = document.getElementById("schemaPinFrequency");
+ if (freqInput) freqInput.value = pin.frequency || "入浴後";
+
+ const statusSelect = document.getElementById("schemaPinStatus");
+ if (statusSelect) statusSelect.value = pin.status || "継続中";
+
+ const notesInput = document.getElementById("schemaPinNotes");
+ if (notesInput) notesInput.value = pin.notes || "";
+
+ const titleEl = document.getElementById("schemaPinEditTitle");
+ if (titleEl) titleEl.textContent = `ピン訂正・編集 (No. ${pin.pin_no}: ${pin.site_name})`;
+
+ const coordsBadge = document.getElementById("schemaPinCoordsBadge");
+ if (coordsBadge) {
+ const isFront = pin.x_pct < 50;
+ coordsBadge.textContent = `位置: ${isFront ? "正面図" : "背面図"} (${pin.x_pct}%, ${pin.y_pct}%) - 図をクリックで位置再指定可`;
+ }
+
+ const delBtn = document.getElementById("btnDeleteSchemaPin");
+ if (delBtn) delBtn.style.display = "inline-block";
+
+ const tempPin = document.querySelector(".schema-temp-click-pin");
+ if (tempPin) tempPin.remove();
+
+ renderBodySchemaPins();
+}
+
+function deleteSchemaPin() {
+ const editId = Number(document.getElementById("schemaEditPinId")?.value || 0);
+ if (!editId) return;
+ deleteSchemaPinById(editId);
+}
+
+function deleteSchemaPinById(pinId) {
+ const pin = (db.data.body_schema_pins || []).find(p => Number(p.id) === Number(pinId));
+ if (!pin) return;
+
+ const confirmMsg = `No. ${pin.pin_no}「${pin.site_name}: ${pin.item_name}」のピンを削除しますか？\n（※処置が終了した場合は、状態を「治癒・終了」に変更して記録を残すことも可能です）`;
+ if (!confirm(confirmMsg)) return;
+
+ const rId = pin.resident_id;
+ db.data.body_schema_pins = (db.data.body_schema_pins || []).filter(p => Number(p.id) !== Number(pinId));
+
+ const resPins = db.data.body_schema_pins.filter(p => Number(p.resident_id) === Number(rId));
+ resPins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+ resPins.forEach((p, idx) => { p.pin_no = idx + 1; });
+
+ gState.body_schema_pins = db.data.body_schema_pins;
+ if (typeof db.save === 'function') db.save();
+
+ resetSchemaPinForm();
+ renderBodySchemaPins();
+ if (typeof renderResidentDetail === 'function') renderResidentDetail();
+
+ if (typeof showToast === 'function') {
+ showToast("ピンを削除しました。");
+ } else {
+ alert("ピンを削除しました。");
+ }
+}
+
+function resetSchemaPinForm() {
+ const idInput = document.getElementById("schemaEditPinId");
+ if (idInput) idInput.value = "";
+
+ const xInput = document.getElementById("schemaEditPinXPct");
+ if (xInput) xInput.value = "";
+
+ const yInput = document.getElementById("schemaEditPinYPct");
+ if (yInput) yInput.value = "";
+
+ const siteInput = document.getElementById("schemaPinSite");
+ if (siteInput) siteInput.value = "";
+
+ const catSelect = document.getElementById("schemaPinCategory");
+ if (catSelect) catSelect.value = "軟膏塗布";
+
+ const itemInput = document.getElementById("schemaPinItem");
+ if (itemInput) itemInput.value = "";
+
+ const freqInput = document.getElementById("schemaPinFrequency");
+ if (freqInput) freqInput.value = "入浴後";
+
+ const statusSelect = document.getElementById("schemaPinStatus");
+ if (statusSelect) statusSelect.value = "継続中";
+
+ const notesInput = document.getElementById("schemaPinNotes");
+ if (notesInput) notesInput.value = "";
+
+ const titleEl = document.getElementById("schemaPinEditTitle");
+ if (titleEl) titleEl.textContent = "新規ピン登録 (図をクリックして位置を指定)";
+
+ const coordsBadge = document.getElementById("schemaPinCoordsBadge");
+ if (coordsBadge) coordsBadge.textContent = "";
+
+ const delBtn = document.getElementById("btnDeleteSchemaPin");
+ if (delBtn) delBtn.style.display = "none";
+
+ const tempPin = document.querySelector(".schema-temp-click-pin");
+ if (tempPin) tempPin.remove();
+}
+
+function setSchemaSite(site) {
+ const input = document.getElementById("schemaPinSite");
+ if (input) {
+ input.value = site;
+ input.focus();
+ }
+}
+
+function setSchemaItem(item, cat) {
+ const input = document.getElementById("schemaPinItem");
+ if (input) {
+ input.value = item;
+ input.focus();
+ }
+ if (cat) {
+ const catSelect = document.getElementById("schemaPinCategory");
+ if (catSelect) catSelect.value = cat;
+ }
+}
+
+function setSchemaFrequency(freq) {
+ const input = document.getElementById("schemaPinFrequency");
+ if (input) {
+ input.value = freq;
+ input.focus();
+ }
+}
+
+function printBodySchema() {
+ const rId = Number(gState.schemaResidentId || gState.selectedResidentId);
+ const r = (gState.residents || []).find(x => Number(x.id) === rId);
+ const printArea = document.getElementById("printArea");
+ if (!printArea) {
+ alert("印刷コンテナが見つかりません。");
+ return;
+ }
+
+ const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+ const now = new Date();
+ const printDateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
+ const staffName = document.getElementById("currentStaff")?.value || "担当職員";
+
+ const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const pins = allPins.filter(p => Number(p.resident_id) === rId);
+ pins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
+ pins.forEach((p, idx) => { p.pin_no = idx + 1; });
+
+ let ageText = "-";
+ if (r && r.birth_date) {
+ const bYear = parseInt(r.birth_date.split("-")[0], 10);
+ if (!isNaN(bYear)) ageText = `${2026 - bYear}歳`;
+ }
+
+ let pinsOverlayHtml = "";
+ pins.forEach(p => {
+ pinsOverlayHtml += `
+ <div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:20px; height:20px; margin-left:-10px; margin-top:-10px; border-radius:50%; background:#000000 !important; color:#ffffff !important; border:2px solid #000000 !important; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:11px; -webkit-print-color-adjust:exact; print-color-adjust:exact;">
+ ${p.pin_no}
+ </div>
+ `;
+ });
+
+ let tableRowsHtml = "";
+ if (pins.length === 0) {
+ tableRowsHtml = `
+ <tr>
+ <td colspan="6" style="padding:10px; text-align:center; border:1px solid #000; font-size:11px;">
+ 現在登録されている皮膚処置・外用薬ピンはありません。
+ </td>
+ </tr>
+ `;
+ } else {
+ pins.forEach(p => {
+ tableRowsHtml += `
+ <tr style="border-bottom:1px solid #000;">
+ <td style="padding:5px 6px; text-align:center; border:1px solid #000; font-weight:bold; font-size:12px;">
+ ${p.pin_no}
+ </td>
+ <td style="padding:5px 6px; border:1px solid #000; font-weight:bold; font-size:11px;">
+ ${escapeHtml(p.site_name || '-')}
+ <div style="font-size:9.5px; font-weight:normal;">(${escapeHtml(p.category || '-')})</div>
+ </td>
+ <td style="padding:5px 6px; border:1px solid #000; font-size:11px;">
+ <strong>${escapeHtml(p.item_name || '-')}</strong>
+ </td>
+ <td style="padding:5px 6px; border:1px solid #000; font-size:10.5px; text-align:center;">
+ ${escapeHtml(p.frequency || '-')}
+ </td>
+ <td style="padding:5px 6px; border:1px solid #000; font-size:10.5px;">
+ ${escapeHtml(p.notes || '-')}
+ </td>
+ <td style="padding:5px 6px; border:1px solid #000; font-size:10.5px; text-align:center;">
+ ${escapeHtml(p.status || '継続中')}
+ </td>
+ </tr>
+ `;
+ });
+ }
+
+ printArea.innerHTML = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000; padding:4px; max-width:820px; margin:0 auto; font-size:11px; line-height:1.35;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:8px;">
+ <div>
+ <div style="font-size:10px; font-weight:bold; letter-spacing:1px;">介護施設・医療機関連携 共通記録シート</div>
+ <h1 style="font-size:19px; margin:2px 0 0 0; font-weight:bold; letter-spacing:0.5px;">【皮膚処置・身体シェーマ指示書】 (皮膚科・往診連携用)</h1>
+ </div>
+ <div style="text-align:right; font-size:10px; line-height:1.4;">
+ <div>施設名: <strong>${escapeHtml(facility)}</strong></div>
+ <div>発行日: ${printDateStr}</div>
+ <div>記録者: ${escapeHtml(staffName)}</div>
+ </div>
+ </div>
+
+ <table style="width:100%; border-collapse:collapse; margin-bottom:8px; border:1px solid #000; font-size:11px;">
+ <tr style="background:#f1f5f9; -webkit-print-color-adjust:exact;">
+ <th style="padding:4px 6px; border:1px solid #000; width:12%; text-align:left;">利用者氏名</th>
+ <td style="padding:4px 6px; border:1px solid #000; width:28%; font-size:13px; font-weight:bold;">${r ? escapeHtml(r.name) : '-'} 様</td>
+ <th style="padding:4px 6px; border:1px solid #000; width:10%; text-align:left;">居室 / 介護度</th>
+ <td style="padding:4px 6px; border:1px solid #000; width:20%;">${r ? escapeHtml(r.room_no) : '-'}号室 / ${r ? escapeHtml(r.care_level) : '-'}</td>
+ <th style="padding:4px 6px; border:1px solid #000; width:10%; text-align:left;">年齢 / 生年月日</th>
+ <td style="padding:4px 6px; border:1px solid #000; width:20%;">${ageText} (${r ? escapeHtml(r.birth_date || '-') : '-'})</td>
+ </tr>
+ <tr>
+ <th style="padding:4px 6px; border:1px solid #000; text-align:left;">病名・既往歴</th>
+ <td style="padding:4px 6px; border:1px solid #000;">${r ? escapeHtml(r.diseases || '-') : '-'}</td>
+ <th style="padding:4px 6px; border:1px solid #000; text-align:left;">アレルギー</th>
+ <td style="padding:4px 6px; border:1px solid #000; font-weight:bold;">${r && r.allergies ? escapeHtml(r.allergies) : '特になし'}</td>
+ <th style="padding:4px 6px; border:1px solid #000; text-align:left;">身体状況</th>
+ <td style="padding:4px 6px; border:1px solid #000;">${r ? escapeHtml(r.paralysis || '-') : '-'}</td>
+ </tr>
+ </table>
+
+ <div style="border:1px solid #000; padding:6px; margin-bottom:8px; text-align:center; background:#ffffff;">
+ <div style="display:flex; justify-content:space-between; font-weight:bold; font-size:10px; margin-bottom:4px; padding:0 30px;">
+ <span>【正面図】 (前面・左右)</span>
+ <span>【背面図】 (背面・左右)</span>
+ </div>
+ <div style="position:relative; display:inline-block; max-width:440px; width:100%;">
+ <img src="assets/body_schema.jpg" alt="人体シェーマ図" style="width:100%; height:auto; display:block; border:1px solid #ccc;">
+ ${pinsOverlayHtml}
+ </div>
+ <div style="font-size:9.5px; color:#333; margin-top:2px;">
+ ※図上の黒丸番号 (1, 2, 3...) は、下記の処置一覧テーブルの番号と対応しています。
+ </div>
+ </div>
+
+ <div style="margin-bottom:8px;">
+ <div style="font-weight:bold; font-size:11px; margin-bottom:3px; display:flex; justify-content:space-between;">
+ <span>■ 登録中の皮膚処置・外用薬・貼付剤 一覧</span>
+ <span style="font-size:10px;">(計 ${pins.length} 件)</span>
+ </div>
+ <table style="width:100%; border-collapse:collapse; border:1px solid #000; font-size:10.5px;">
+ <thead>
+ <tr style="background:#e2e8f0; font-weight:bold; -webkit-print-color-adjust:exact;">
+ <th style="padding:4px 5px; border:1px solid #000; width:35px; text-align:center;">No.</th>
+ <th style="padding:4px 5px; border:1px solid #000; width:110px;">部位 (区分)</th>
+ <th style="padding:4px 5px; border:1px solid #000; width:160px;">処置内容・薬剤名</th>
+ <th style="padding:4px 5px; border:1px solid #000; width:80px; text-align:center;">頻度・タイミング</th>
+ <th style="padding:4px 5px; border:1px solid #000;">症状・目的・特記事項</th>
+ <th style="padding:4px 5px; border:1px solid #000; width:55px; text-align:center;">状態</th>
+ </tr>
+ </thead>
+ <tbody>
+ ${tableRowsHtml}
+ </tbody>
+ </table>
+ </div>
+
+ <div style="display:grid; grid-template-columns: 2fr 1fr; gap:8px; margin-top:6px;">
+ <div style="border:1.5px solid #000; padding:6px; min-height:85px; position:relative;">
+ <div style="font-weight:bold; font-size:10.5px; border-bottom:1px solid #000; padding-bottom:2px; margin-bottom:4px;">
+ 【皮膚科・往診医 指示・処方変更 記入欄】 (医師記入)
+ </div>
+ <div style="font-size:9.5px; color:#555; line-height:2.2;">
+ ・処置・軟膏の変更 / 中止指示:<br>
+ ・次回受診・再評価の目安:<br>
+ ・特記事項:
+ </div>
+ <div style="position:absolute; bottom:4px; right:8px; font-size:10px;">
+ 医師署名: ____________________ 印
+ </div>
+ </div>
+
+ <div style="border:1.5px solid #000; padding:6px; min-height:85px; display:flex; flex-direction:column; justify-content:space-between;">
+ <div style="font-weight:bold; font-size:10.5px; border-bottom:1px solid #000; padding-bottom:2px;">
+ 【施設看護・介護 確認欄】
+ </div>
+ <div style="font-size:9.5px; line-height:1.6; margin-top:2px;">
+ 指示受託者: _______________<br>
+ 記録反映確認: _______________<br>
+ 受託日時: _____/_____ (_____)
+ </div>
+ <div style="text-align:right; font-size:9px; color:#666;">
+ ※受診後カルテへ即日反映
+ </div>
+ </div>
+ </div>
+ </div>
+ `;
+
+ window.print();
 }
 
 // 介護記録の追加
@@ -8547,7 +9253,9 @@ function reloadStateFromDb() {
  gState.recreations = db.data.recreations;
  gState.emergencySupplies = db.data.emergency_supplies;
  gState.care_summaries = db.data.care_summaries;
+ gState.body_schema_pins = db.data.body_schema_pins || [];
 
+ if (typeof renderBodySchemaPins === 'function') renderBodySchemaPins();
  if (typeof renderQuickTemplates === 'function') renderQuickTemplates();
  if (typeof renderFsQuickTemplates === 'function') renderFsQuickTemplates();
  if (typeof renderStaffSelect === 'function') renderStaffSelect();

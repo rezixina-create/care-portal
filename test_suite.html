@@ -187,6 +187,31 @@
       <textarea id="emgReasonInput"></textarea>
       <div id="emergencySummarySheetPreview"></div>
     </div>
+    <div id="bodySchemaModal" style="display:none;">
+      <div id="schemaResidentBadge"></div>
+      <div id="schemaImageWrapper">
+        <img id="schemaBodyImage" src="assets/body_schema.jpg">
+        <div id="schemaPinsOverlay"></div>
+      </div>
+      <div id="schemaPinsCountTitle"></div>
+      <div id="schemaPinsTableContainer"></div>
+      <div id="schemaPinEditTitle"></div>
+      <div id="schemaPinCoordsBadge"></div>
+      <input id="schemaEditPinId">
+      <input id="schemaEditPinXPct">
+      <input id="schemaEditPinYPct">
+      <input id="schemaPinSite">
+      <select id="schemaPinCategory">
+        <option value="軟膏塗布">軟膏塗布</option>
+      </select>
+      <input id="schemaPinItem">
+      <input id="schemaPinFrequency">
+      <select id="schemaPinStatus">
+        <option value="継続中">継続中</option>
+      </select>
+      <input id="schemaPinNotes">
+      <button id="btnDeleteSchemaPin"></button>
+    </div>
   </div>
 
   <script src="app.js"></script>
@@ -601,7 +626,25 @@
       // 30. 緊急搬送・受診申し送りサマリーテスト
       assert(typeof openEmergencySummaryModal === "function" && typeof printEmergencySummary === "function" && typeof copyEmergencySummaryText === "function", "Test 89: 緊急搬送・受診申し送りサマリー関数が存在すること");
 
-      // 31. 総合結果判定
+      // 31. 皮膚・身体シェーマ図 (軟膏塗布・処置ピン・モノクロA4印刷) テスト
+      assert(typeof openBodySchemaModal === "function" && typeof saveSchemaPin === "function" && typeof printBodySchema === "function", "Test 90: 皮膚・身体シェーマ図表示・保存・印刷関数が存在すること");
+      assert(Array.isArray(db.data.body_schema_pins) && db.data.body_schema_pins.length >= 12, "Test 91: 登録済ピン配列が全4名分 (計12件以上) 保持されていること");
+      assert(Array.isArray(db.data.care_summaries) && db.data.care_summaries.length >= 4, "Test 92: 介護サマリーが全4名分すべて作成・保持されていること");
+
+      // ピン追加・訂正の動作テスト
+      const initPinCount = (db.data.body_schema_pins || []).length;
+      document.getElementById("schemaEditPinId").value = "";
+      document.getElementById("schemaEditPinXPct").value = 75.0;
+      document.getElementById("schemaEditPinYPct").value = 30.0;
+      document.getElementById("schemaPinSite").value = "背部テスト部位";
+      document.getElementById("schemaPinCategory").value = "軟膏塗布";
+      document.getElementById("schemaPinItem").value = "テスト軟膏";
+      document.getElementById("schemaPinFrequency").value = "入浴後";
+      document.getElementById("schemaPinStatus").value = "継続中";
+      saveSchemaPin();
+      assert((db.data.body_schema_pins || []).length === initPinCount + 1, "Test 93: シェーマ図への新規ピン登録が正常に保存されること");
+
+      // 32. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
