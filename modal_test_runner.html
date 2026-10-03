@@ -253,6 +253,18 @@
  const hasDynamicShiftContent = todayBarText.includes("早出") && todayBarText.includes("日勤") && todayBarText.includes("夜勤");
  report("本日の勤務体制バーがシフト表と動的連動し早出・日勤・夜勤等が表示されること", hasDynamicShiftContent, todayBarText.slice(0, 60));
 
+ // 15. 自動バックアップ稼働状況モーダルの動作確認
+ win.openBackupStatusModal();
+ await new Promise(r => setTimeout(r, 200));
+ const bModal = doc.getElementById("backupStatusModal");
+ const isBModalOpen = bModal && win.getComputedStyle(bModal).display === "flex";
+ report("自動バックアップ稼働状況モーダルが開くこと", isBModalOpen);
+
+ win.closeModal("backupStatusModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isBModalClosed = bModal && win.getComputedStyle(bModal).display === "none";
+ report("自動バックアップ稼働状況モーダルが正常に閉じられること", isBModalClosed);
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

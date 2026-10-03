@@ -9357,6 +9357,76 @@ function renderTodayShiftBar(targetDateStr) {
  `;
 }
 
+// 自動バックアップ稼働状況・手動保存機能
+function openBackupStatusModal() {
+ const modal = document.getElementById("backupStatusModal");
+ if (!modal) return;
+
+ const timeEl = document.getElementById("backupModalLastTime");
+ const resEl = document.getElementById("backupModalResidentCount");
+ const recEl = document.getElementById("backupModalRecordCount");
+ const noticeEl = document.getElementById("backupManualNotice");
+
+ if (timeEl) {
+  const badge = document.getElementById("backupStatusBadge");
+  const badgeText = badge ? badge.textContent : "";
+  const match = badgeText.match(/\(([^)]+)\)/);
+  timeEl.textContent = match ? match[1] : (new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+ }
+ if (resEl) {
+  const resCount = (gState.residents || []).length;
+  resEl.textContent = `${resCount}名`;
+ }
+ if (recEl) {
+  const recCount = (db.data.care_records || []).length;
+  recEl.textContent = `${recCount}件`;
+ }
+ if (noticeEl) {
+  noticeEl.textContent = "";
+ }
+
+ modal.style.display = "flex";
+}
+
+function triggerManualBackup() {
+ if (typeof db !== "undefined" && db.saveToServer) {
+  db.saveToServer();
+  const noticeEl = document.getElementById("backupManualNotice");
+  if (noticeEl) {
+   const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+   noticeEl.textContent = `親機PCおよび世代保管庫 (data/backup/) に最新データを保管しました (${now})`;
+  }
+ }
+}
+
+function downloadBackupJson() {
+ if (typeof db === "undefined" || !db.data) return;
+ try {
+  const jsonStr = JSON.stringify(db.data, null, 2);
+  const blob = new Blob([jsonStr], { type: "application/json" });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, "0");
+  const d = String(now.getDate()).padStart(2, "0");
+  const hh = String(now.getHours()).padStart(2, "0");
+  const mm = String(now.getMinutes()).padStart(2, "0");
+  a.href = url;
+  a.download = `care_portal_backup_${y}${m}${d}_${hh}${mm}.json`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  const noticeEl = document.getElementById("backupManualNotice");
+  if (noticeEl) {
+   noticeEl.textContent = "この端末へのバックアップJSONダウンロードが完了しました。";
+  }
+ } catch (e) {
+  alert("バックアップファイルの生成に失敗しました: " + e.message);
+ }
+}
+
 // グローバル関数公開 (インラインonclick等の即時呼出保証)
 if (typeof window !== "undefined") {
  window.openClinicInstructionModal = openClinicInstructionModal;
@@ -9396,4 +9466,7 @@ if (typeof window !== "undefined") {
   window.applyHopeOffsAndRegenerate = applyHopeOffsAndRegenerate;
   window.getDailyShiftRoster = getDailyShiftRoster;
   window.renderTodayShiftBar = renderTodayShiftBar;
+  window.openBackupStatusModal = openBackupStatusModal;
+  window.triggerManualBackup = triggerManualBackup;
+  window.downloadBackupJson = downloadBackupJson;
 }

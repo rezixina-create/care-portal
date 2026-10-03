@@ -59,6 +59,13 @@
   <!-- テスト用ダミーDOM環境 (app.js が必要とする主要要素) -->
   <div id="sandbox" style="display:none;">
     <div id="todayShiftBar"></div>
+    <div id="backupStatusBadge">自動バックアップ済 (12:00)</div>
+    <div id="backupStatusModal" style="display:none;">
+      <div id="backupModalLastTime"></div>
+      <div id="backupModalResidentCount"></div>
+      <div id="backupModalRecordCount"></div>
+      <div id="backupManualNotice"></div>
+    </div>
     <select id="currentStaff"><option value="山田">山田</option></select>
     <div id="residentsStrip"></div>
     <div id="residentCountLabel"></div>
@@ -478,7 +485,15 @@
       const isShiftBarLinked = barText.includes("早出") && barText.includes("日勤") && barText.includes("遅出") && barText.includes("夜勤") && barText.includes("明け");
       assert(isShiftBarLinked, "Test 75: 本日の勤務体制バー (#todayShiftBar) が静的ダミーから実際のシフト表データと完全連動し描画されること");
 
-      // 25. 総合結果判定
+      // 25. 自動バックアップ稼働状況・手動保存機能テスト
+      assert(typeof openBackupStatusModal === "function" && typeof triggerManualBackup === "function" && typeof downloadBackupJson === "function", "Test 76: 自動バックアップ状況モーダルおよび手動保存関数 (openBackupStatusModal, triggerManualBackup, downloadBackupJson) が存在すること");
+      openBackupStatusModal();
+      const bsModal = document.getElementById("backupStatusModal");
+      const isBsModalOpen = bsModal && bsModal.style.display === "flex";
+      assert(isBsModalOpen, "Test 77: openBackupStatusModal によりバックアップ状況モーダルが正常に展開されること");
+      closeModal("backupStatusModal");
+
+      // 26. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
