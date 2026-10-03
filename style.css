@@ -1096,3 +1096,33 @@ body {
   margin-top: 1px;
 }
 
+/* 介護サマリー & 緊急搬送申し送り スタイル */
+.summary-section-box {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+.summary-section-title {
+  font-weight: bold;
+  font-size: 13px;
+  color: #1e3a8a;
+  margin-bottom: 6px;
+}
+.summary-textarea {
+  width: 100%;
+  font-size: 13px;
+  line-height: 1.5;
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 6px;
+  padding: 6px 10px;
+}
+.summary-badge-item {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 12px;
+  margin-right: 6px;
+  margin-bottom: 4px;
+}

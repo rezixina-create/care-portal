@@ -143,6 +143,50 @@
     <input id="staffAuthApprover1Pin">
     <select id="staffAuthApprover2Select"></select>
     <input id="staffAuthApprover2Pin">
+    <button id="btnManageTemplates"></button>
+    <button id="btnFsManageTemplates"></button>
+    <div id="templateManageModal" style="display:none;">
+      <div id="tplFormHeading"></div>
+      <div id="tplEditingBadge"></div>
+      <input id="tplEditIndex">
+      <select id="tplCategorySelect"></select>
+      <input id="tplLabelInput">
+      <textarea id="tplPhraseInput"></textarea>
+      <button id="btnCancelEditTemplate"></button>
+      <button id="btnSaveTemplate"></button>
+      <div id="tplCountLabel"></div>
+      <div id="templateManageListContainer"></div>
+      <table id="templateManageTable">
+        <tbody id="templateManageTableBody"></tbody>
+      </table>
+    </div>
+    <div id="careSummaryModal" style="display:none;">
+      <div id="csResidentBadge"></div>
+      <select id="careSummaryHistorySelect"></select>
+      <input id="csSummaryId">
+      <input id="csResidentId">
+      <select id="csSummaryType"></select>
+      <input id="csDate">
+      <select id="csStaff"></select>
+      <textarea id="csBasicInfo"></textarea>
+      <textarea id="csBackground"></textarea>
+      <textarea id="csPhysicalCognitive"></textarea>
+      <textarea id="csAdl"></textarea>
+      <textarea id="csMealsHydration"></textarea>
+      <textarea id="csExcretion"></textarea>
+      <textarea id="csSleep"></textarea>
+      <textarea id="csMeds"></textarea>
+      <textarea id="csMedicalCare"></textarea>
+      <textarea id="csDementiaBehavior"></textarea>
+      <textarea id="csCareNotes"></textarea>
+      <textarea id="csFamilyInfo"></textarea>
+      <textarea id="csFutureGoals"></textarea>
+    </div>
+    <div id="emergencySummaryModal" style="display:none;">
+      <div id="emgResidentBadge"></div>
+      <textarea id="emgReasonInput"></textarea>
+      <div id="emergencySummarySheetPreview"></div>
+    </div>
   </div>
 
   <script src="app.js"></script>
@@ -538,7 +582,26 @@
       const staffAuthRows = document.querySelectorAll("#staffAuthTable tbody tr");
       assert(staffAuthRows.length > 0, "Test 83: 事務所ポータルの職員アカウント・暗証番号管理テーブルが正常に描画されること");
 
-      // 28. 総合結果判定
+      // 28. よく使う定型文テンプレート管理・追加・編集テスト
+      assert(typeof openTemplateManageModal === "function" && typeof submitTemplateForm === "function" && typeof deleteTemplate === "function", "Test 84: 定型文管理・追加・編集関数が存在すること");
+      const initialTplCount = (db.data.templates || []).length;
+      document.getElementById("tplCategorySelect").value = "食事";
+      document.getElementById("tplLabelInput").value = "むせ込み時とろみ増量";
+      document.getElementById("tplPhraseInput").value = "水分摂取時にむせ込みあり。とろみ調整剤を中間に増量して全量摂取。";
+      document.getElementById("tplEditIndex").value = -1;
+      submitTemplateForm();
+      assert((db.data.templates || []).length === initialTplCount + 1, "Test 85: 新規定型文の追加登録が正常に保存されること");
+
+      // 29. 介護サマリー (生活・ADL 13項目) 新規・変更・履歴テスト
+      assert(typeof openCareSummaryModal === "function" && typeof submitCareSummary === "function" && typeof startNewCareSummary === "function", "Test 86: 介護サマリー表示・新規作成・保存関数が存在すること");
+      assert(Array.isArray(db.data.care_summaries) && db.data.care_summaries.length > 0, "Test 87: 介護サマリーテーブル配列が初期化されデータが保持されていること");
+      const firstSummary = db.data.care_summaries[0];
+      assert(firstSummary && firstSummary.adl && firstSummary.meals_hydration && firstSummary.dementia_behavior, "Test 88: 介護サマリーにADL・食事・認知症行動等の13項目が網羅保持されていること");
+
+      // 30. 緊急搬送・受診申し送りサマリーテスト
+      assert(typeof openEmergencySummaryModal === "function" && typeof printEmergencySummary === "function" && typeof copyEmergencySummaryText === "function", "Test 89: 緊急搬送・受診申し送りサマリー関数が存在すること");
+
+      // 31. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

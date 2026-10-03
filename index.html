@@ -153,7 +153,10 @@
 
  <!-- 定型文ボタン -->
  <div>
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
  <label style="font-size:12px; color:var(--text-muted); font-weight:bold;">よく使う定型文 (タップで文章追加):</label>
+ <button type="button" class="btn btn-secondary" id="btnManageTemplates" style="font-size:11px; padding:2px 8px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
+ </div>
  <div class="templates-list" id="quickTemplatesList"></div>
  </div>
 
@@ -1771,6 +1774,7 @@
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
  <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="insertB5Template(true)"> 日報雛形を挿入</button>
+ <button type="button" class="btn btn-secondary" id="btnFsManageTemplates" style="font-size:12px; padding:3px 8px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
  <div class="templates-list" id="fsQuickTemplatesList" style="margin:0; display:inline-flex;"></div>
  </div>
  <div style="font-size:14px; color:var(--text-muted);">
@@ -2535,6 +2539,273 @@
  <div style="margin-top:12px; display:flex; justify-content:flex-end; gap:8px;">
  <button class="btn btn-secondary" onclick="closeModal('initialPinModal')">閉じる</button>
  <button class="btn btn-primary" onclick="submitInitialPinModal()">暗証番号を保存する</button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 定型文テンプレート管理・追加・編集モーダル -->
+ <div class="modal-overlay" id="templateManageModal" style="display:none; z-index:9999;">
+ <div class="modal-card" style="max-width:760px; max-height:88vh; overflow-y:auto; padding:20px;">
+ <div class="modal-header" style="border-bottom:2px solid #e2e8f0; padding-bottom:12px; margin-bottom:16px;">
+ <div>
+ <h3 style="margin:0; color:#1e3a8a; font-size:18px;">よく使う定型文テンプレートの管理・追加・変更</h3>
+ <p style="font-size:12px; color:#64748b; margin:4px 0 0 0;">ワンタップで入力できる定型文を自由に追加・変更・削除できます。</p>
+ </div>
+ <button class="modal-close-btn" onclick="closeModal('templateManageModal')">&times;</button>
+ </div>
+
+ <!-- 定型文の追加・編集フォーム -->
+ <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:14px; margin-bottom:18px;">
+ <div style="font-weight:bold; font-size:13.5px; color:#1e3a8a; margin-bottom:10px; display:flex; justify-content:space-between; align-items:center;">
+ <span id="tplFormHeading">＋ 新しい定型文の登録</span>
+ <span id="tplEditingBadge" style="display:none; font-size:11px; background:#fef3c7; color:#92400e; padding:2px 8px; border-radius:4px;">編集中</span>
+ </div>
+ <input type="hidden" id="tplEditIndex" value="-1">
+ <div style="display:grid; grid-template-columns:1fr 2fr; gap:10px; margin-bottom:10px;">
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">区分・カテゴリ:</label>
+ <select id="tplCategorySelect" class="form-control" style="width:100%; font-size:13px;">
+ <option value="巡視">巡視</option>
+ <option value="食事">食事</option>
+ <option value="排泄">排泄</option>
+ <option value="入浴">入浴</option>
+ <option value="バイタル">バイタル</option>
+ <option value="特変">特変</option>
+ <option value="申し送り">申し送り</option>
+ <option value="睡眠">睡眠</option>
+ <option value="介護サマリー">介護サマリー</option>
+ <option value="その他">その他</option>
+ </select>
+ </div>
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">ボタン表示名 (短縮ラベル):</label>
+ <input type="text" id="tplLabelInput" class="form-control" style="width:100%; font-size:13px;" placeholder="例: むせ込みあり、安眠中、水分補給促し">
+ </div>
+ </div>
+ <div style="margin-bottom:10px;">
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">挿入される定型文章:</label>
+ <textarea id="tplPhraseInput" class="form-control" rows="2" style="width:100%; font-size:13px;" placeholder="ボタンを押した際に記録欄に自動入力される文章"></textarea>
+ </div>
+ <div style="display:flex; justify-content:flex-end; gap:8px;">
+ <button type="button" class="btn btn-secondary" id="btnCancelEditTemplate" style="display:none; font-size:12px;" onclick="cancelTemplateEdit()">キャンセル</button>
+ <button type="button" class="btn btn-primary" id="btnSaveTemplate" style="font-size:12.5px; padding:6px 16px;" onclick="submitTemplateForm()">定型文を保存する</button>
+ </div>
+ </div>
+
+ <!-- 登録済みテンプレート一覧 -->
+ <div style="margin-bottom:16px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+ <h4 style="margin:0; font-size:14px; color:#1e293b;">登録中の定型文一覧 (<span id="tplCountLabel">0</span>件)</h4>
+ <button type="button" class="btn btn-outline" style="font-size:11.5px; padding:3px 8px; color:#475569;" onclick="resetDefaultTemplates()">初期定型文にリセット</button>
+ </div>
+ <div id="templateManageListContainer" style="max-height:280px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:#ffffff;">
+ <table class="data-table" style="font-size:12px; margin:0;">
+ <thead>
+ <tr>
+ <th style="width:80px;">区分</th>
+ <th style="width:140px;">ボタン名</th>
+ <th>定型文章</th>
+ <th style="width:110px; text-align:center;">操作</th>
+ </tr>
+ </thead>
+ <tbody id="templateManageTableBody"></tbody>
+ </table>
+ </div>
+ </div>
+
+ <div style="display:flex; justify-content:flex-end;">
+ <button type="button" class="btn btn-secondary" onclick="closeModal('templateManageModal')">閉じる</button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 利用者 介護サマリー (生活・ADLアセスメント詳細) モーダル -->
+ <div class="modal-overlay" id="careSummaryModal" style="display:none; z-index:9998;">
+ <div class="modal-card" style="max-width:920px; max-height:92vh; overflow-y:auto; padding:22px;">
+ <!-- ヘッダー -->
+ <div class="modal-header" style="border-bottom:2px solid #e2e8f0; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+ <div>
+ <div style="display:flex; align-items:center; gap:8px;">
+ <h3 style="margin:0; color:#1e3a8a; font-size:19px;">利用者 介護サマリー (生活・ADL詳細)</h3>
+ <span id="csResidentBadge" class="badge" style="background:#2563eb; color:white; font-size:12px; padding:3px 8px;"></span>
+ </div>
+ <p style="font-size:12px; color:#64748b; margin:4px 0 0 0;">
+ 入所時・入院後再入所・状態変化時の生活動作・認知・介助方法を体系的に記録・確認します。
+ </p>
+ </div>
+ <button class="modal-close-btn" onclick="closeModal('careSummaryModal')">&times;</button>
+ </div>
+
+ <!-- 過去サマリー履歴切替 ＆ 新規作成ボタン -->
+ <div style="background:#f1f5f9; border-radius:8px; padding:10px 14px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+ <div style="display:flex; align-items:center; gap:8px; flex:1; min-width:240px;">
+ <label style="font-size:12.5px; font-weight:bold; color:#1e293b; white-space:nowrap;">サマリー履歴:</label>
+ <select id="careSummaryHistorySelect" class="form-control" style="font-size:13px; max-width:340px;" onchange="switchCareSummaryRecord(this.value)"></select>
+ </div>
+ <div style="display:flex; gap:6px; flex-wrap:wrap;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px; background:#eff6ff; color:#1d4ed8; border-color:#93c5fd;" onclick="startNewCareSummary('新規入所時サマリー')">＋ 新規入所時</button>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; background:#f0fdf4; color:#166534; border-color:#86efac;" onclick="startNewCareSummary('入院後再入所サマリー')">＋ 入院後再入所</button>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; background:#fff7ed; color:#c2410c; border-color:#fed7aa;" onclick="startNewCareSummary('状態変化・見直しサマリー')">＋ 状態変化見直し</button>
+ </div>
+ </div>
+
+ <!-- サマリー基本属性フォーム -->
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:12px 14px; margin-bottom:16px; display:grid; grid-template-columns:repeat(auto-fit, minmax(180px, 1fr)); gap:12px;">
+ <input type="hidden" id="csSummaryId" value="">
+ <input type="hidden" id="csResidentId" value="">
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">サマリー種別:</label>
+ <select id="csSummaryType" class="form-control" style="width:100%; font-size:13px;">
+ <option value="新規入所時サマリー">新規入所時サマリー</option>
+ <option value="入院後再入所サマリー">入院後再入所サマリー</option>
+ <option value="状態変化・見直しサマリー">状態変化・見直しサマリー</option>
+ <option value="定期見直しサマリー">定期見直しサマリー</option>
+ <option value="退所・転所サマリー">退所・転所サマリー</option>
+ </select>
+ </div>
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">作成日 / 更新日:</label>
+ <input type="date" id="csDate" class="form-control" style="width:100%; font-size:13px;">
+ </div>
+ <div>
+ <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">作成担当職員:</label>
+ <select id="csStaff" class="form-control" style="width:100%; font-size:13px;"></select>
+ </div>
+ </div>
+
+ <!-- 13項目入力フォーム -->
+ <div style="display:flex; flex-direction:column; gap:14px;">
+ <!-- 1. 基本情報 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">1. 基本情報 (年齢、要介護度、家族構成、キーパーソン)</div>
+ <textarea id="csBasicInfo" class="form-control summary-textarea" rows="2" placeholder="年齢、要介護度、家族構成、キーパーソン連絡先、自立度判定など"></textarea>
+ </div>
+
+ <!-- 2. これまでの経過 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">2. これまでの経過 (発症・入院・入所経緯、退院時サマリーの要約)</div>
+ <textarea id="csBackground" class="form-control summary-textarea" rows="2" placeholder="疾患発症、入院治療歴、退院サマリーの概要、施設入所に至った経緯など"></textarea>
+ </div>
+
+ <!-- 3. 現在の身体・認知状態 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">3. 現在の身体・認知状態 (麻痺・拘縮・意識清明度・見当識・認知機能)</div>
+ <textarea id="csPhysicalCognitive" class="form-control summary-textarea" rows="2" placeholder="四肢の麻痺・拘縮、関節可動域、意識清明度、見当識、短期記憶、認知症自立度など"></textarea>
+ </div>
+
+ <!-- 4. ADL（日常生活動作） -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">4. ADL（日常生活動作: 移動・移乗・更衣・整容・入浴）</div>
+ <textarea id="csAdl" class="form-control summary-textarea" rows="3" placeholder="寝返り、起き上がり、立ち上がり、車椅子移乗、歩行・移動形態、更衣・整容、入浴自立度など"></textarea>
+ </div>
+
+ <!-- 5. 食事・水分摂取 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">5. 食事・水分摂取 (食形態・自立度・嚥下・むせ込み・水分目標量)</div>
+ <textarea id="csMealsHydration" class="form-control summary-textarea" rows="2" placeholder="食形態(普通食/一口大/刻み/ペースト)、とろみ、自力摂取/介助、むせ込み状況、1日水分目標量など"></textarea>
+ </div>
+
+ <!-- 6. 排泄 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">6. 排泄 (排尿・排便リズム・トイレ誘導・オムツ/パッド・失禁状況)</div>
+ <textarea id="csExcretion" class="form-control summary-textarea" rows="2" placeholder="トイレ排泄自立度、誘導間隔、ポータブルトイレ、夜間オムツ・パッドサイズ、便秘傾向など"></textarea>
+ </div>
+
+ <!-- 7. 睡眠 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">7. 睡眠 (就寝起床リズム・夜間覚醒・不眠時対応・センサーマット)</div>
+ <textarea id="csSleep" class="form-control summary-textarea" rows="2" placeholder="就寝・起床時間、夜間中途覚醒頻度、離床センサー使用、不眠時の対応など"></textarea>
+ </div>
+
+ <!-- 8. 服薬 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">8. 服薬 (内服方法・粉砕/とろみ・自己管理/職員管理・注意点)</div>
+ <textarea id="csMeds" class="form-control summary-textarea" rows="2" placeholder="内服管理状況、粉砕・簡易懸濁、服薬拒否時の工夫、定期薬・頓服薬の注意点など"></textarea>
+ </div>
+
+ <!-- 9. 医療的な処置 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">9. 医療的な処置 (創傷・褥瘡・吸引・インスリン・在宅酸素・カテーテル)</div>
+ <textarea id="csMedicalCare" class="form-control summary-textarea" rows="2" placeholder="褥瘡処置、創傷被覆、痰吸引、インスリン注射、在宅酸素、留置カテーテルなど"></textarea>
+ </div>
+
+ <!-- 10. 認知症の症状や行動 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">10. 認知症の症状や行動 (BPSD: 徘徊・不穏・帰宅願望・落ち着く対応法)</div>
+ <textarea id="csDementiaBehavior" class="form-control summary-textarea" rows="2" placeholder="徘徊、夕暮れ症候群、物盗られ妄想、帰宅願望、拒否の誘因、気持ちが落ち着く声かけ対応など"></textarea>
+ </div>
+
+ <!-- 11. 介助方法・注意点 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">11. 介助方法・注意点 (移乗時の配慮・好む話題・嫌がること・転倒予防)</div>
+ <textarea id="csCareNotes" class="form-control summary-textarea" rows="2" placeholder="移乗・立ち上がり支援時の注意、声かけの工夫、好きな話題、嫌がること、転倒リスク要因など"></textarea>
+ </div>
+
+ <!-- 12. 家族の状況 -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">12. 家族の状況 (キーパーソン・面会頻度・家族の介護力・看取り意向)</div>
+ <textarea id="csFamilyInfo" class="form-control summary-textarea" rows="2" placeholder="キーパーソン連絡体制、面会状況、家族の意向、ACP・看取り方針、自宅受入れ可能性など"></textarea>
+ </div>
+
+ <!-- 13. 今後の支援で気をつけること -->
+ <div class="summary-section-box">
+ <div class="summary-section-title">13. 今後の支援で気をつけること (生活目標・事故防止重点事項・自立支援)</div>
+ <textarea id="csFutureGoals" class="form-control summary-textarea" rows="2" placeholder="施設生活での目標、残存機能の維持、重点事故防止策、次回見直し予定など"></textarea>
+ </div>
+ </div>
+
+ <!-- フッター操作ボタン -->
+ <div style="margin-top:20px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px; flex-wrap:wrap; gap:8px;">
+ <div>
+ <button type="button" class="btn btn-secondary" onclick="printCareSummary()">A4用紙に印刷 (サマリー帳票)</button>
+ </div>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" onclick="closeModal('careSummaryModal')">閉じる</button>
+ <button type="button" class="btn btn-primary" onclick="submitCareSummary()">サマリーを保存する</button>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 緊急搬送・受診申し送りサマリー モーダル -->
+ <div class="modal-overlay" id="emergencySummaryModal" style="display:none; z-index:9998;">
+ <div class="modal-card" style="max-width:920px; max-height:92vh; overflow-y:auto; padding:22px;">
+ <!-- ヘッダー -->
+ <div class="modal-header" style="border-bottom:2px solid #ef4444; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+ <div>
+ <div style="display:flex; align-items:center; gap:8px;">
+ <h3 style="margin:0; color:#b91c1c; font-size:19px;">緊急搬送・受診 申し送りサマリー</h3>
+ <span id="emgResidentBadge" class="badge" style="background:#dc2626; color:white; font-size:12px; padding:3px 8px;">救急隊・医療機関提出用</span>
+ </div>
+ <p style="font-size:12px; color:#64748b; margin:4px 0 0 0;">
+ 救急要請時や急変受診時に、救急隊員および搬送先医師へ即座に手渡す情報集約サマリーシートです。
+ </p>
+ </div>
+ <button class="modal-close-btn" onclick="closeModal('emergencySummaryModal')">&times;</button>
+ </div>
+
+ <!-- 急変・搬送理由の入力欄 -->
+ <div style="background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:12px; margin-bottom:14px;">
+ <label style="font-size:13px; font-weight:bold; color:#991b1b; display:block; margin-bottom:4px;">
+ 本日の救急搬送・受診理由 ＆ 発生時の状況 (印刷用紙に即座に反映されます):
+ </label>
+ <textarea id="emgReasonInput" class="form-control" rows="2" style="width:100%; font-size:13px;" placeholder="例: 14:15 居室にて意識レベル低下。呼びかけに開眼するも応答鈍い。バイタル測定: 血圧85/50、SpO2 91%、体温37.8℃。往診医へ電話報告の上、119番救急搬送を要請。" oninput="updateEmergencyPreviewReason()"></textarea>
+ </div>
+
+ <!-- 申し送りシートのリアルタイムプレビュー -->
+ <div id="emergencySummarySheetPreview" style="background:#ffffff; border:2px solid #cbd5e1; border-radius:8px; padding:16px; margin-bottom:16px;">
+ <!-- JSで動的に集約描画 -->
+ </div>
+
+ <!-- フッターボタン -->
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:12px; flex-wrap:wrap; gap:8px;">
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" onclick="copyEmergencySummaryText()">申し送り文をコピー</button>
+ </div>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" onclick="closeModal('emergencySummaryModal')">閉じる</button>
+ <button type="button" class="btn btn-primary" style="background:#dc2626; border-color:#dc2626;" onclick="printEmergencySummary()">A4用紙に印刷 (救急隊・医師提出用)</button>
+ </div>
  </div>
  </div>
  </div>

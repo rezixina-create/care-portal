@@ -293,6 +293,44 @@
  const isIpModalClosed = ipModal && win.getComputedStyle(ipModal).display === "none";
  report("職員自己暗証番号設定モーダルが正常に閉じられること", isIpModalClosed);
 
+ // 18. 定型文テンプレート管理モーダルの動作確認
+ win.openTemplateManageModal();
+ await new Promise(r => setTimeout(r, 200));
+ const tmModal = doc.getElementById("templateManageModal");
+ const isTmModalOpen = tmModal && win.getComputedStyle(tmModal).display === "flex";
+ report("定型文テンプレート管理モーダルが開くこと", isTmModalOpen);
+ win.closeModal("templateManageModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isTmModalClosed = tmModal && win.getComputedStyle(tmModal).display === "none";
+ report("定型文テンプレート管理モーダルが正常に閉じられること", isTmModalClosed);
+
+ // 19. 介護サマリー (生活・ADL詳細) モーダルの動作確認
+ win.openCareSummaryModal(1);
+ await new Promise(r => setTimeout(r, 200));
+ const csModal = doc.getElementById("careSummaryModal");
+ const isCsModalOpen = csModal && win.getComputedStyle(csModal).display === "flex";
+ report("介護サマリー (生活・ADL詳細) モーダルが開くこと", isCsModalOpen);
+ const csBasicInfo = doc.getElementById("csBasicInfo");
+ const csAdl = doc.getElementById("csAdl");
+ report("介護サマリー内に基本情報・ADL等の13項目が存在すること", !!(csBasicInfo && csAdl));
+ win.closeModal("careSummaryModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isCsModalClosed = csModal && win.getComputedStyle(csModal).display === "none";
+ report("介護サマリーモーダルが正常に閉じられること", isCsModalClosed);
+
+ // 20. 緊急搬送・受診サマリー モーダルの動作確認
+ win.openEmergencySummaryModal(1);
+ await new Promise(r => setTimeout(r, 200));
+ const emgModal = doc.getElementById("emergencySummaryModal");
+ const isEmgModalOpen = emgModal && win.getComputedStyle(emgModal).display === "flex";
+ report("緊急搬送・受診サマリー モーダルが開くこと", isEmgModalOpen);
+ const emgPreview = doc.getElementById("emergencySummarySheetPreview");
+ report("緊急搬送サマリー内にプレビューシートが生成されていること", !!(emgPreview && emgPreview.innerHTML.length > 50));
+ win.closeModal("emergencySummaryModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isEmgModalClosed = emgModal && win.getComputedStyle(emgModal).display === "none";
+ report("緊急搬送サマリーモーダルが正常に閉じられること", isEmgModalClosed);
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

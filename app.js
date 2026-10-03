@@ -78,11 +78,57 @@ class LocalDB {
  "meals", "oral_cares", "baths", "meds", "turns", "linens",
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
- "daily_schedules", "monthly_notices"
+ "daily_schedules", "monthly_notices", "care_summaries"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
  });
+ if (!Array.isArray(d.care_summaries) || d.care_summaries.length === 0) {
+ d.care_summaries = [
+ {
+ id: 1,
+ resident_id: 1,
+ created_at: "2026-10-01",
+ updated_at: "2026-10-01",
+ staff_name: "山田 孝之",
+ summary_type: "新規入所時サマリー",
+ basic_info: "要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男・佐藤 一郎様 (090-1111-2222)。認知症高齢者の日常生活自立度IIb。障害高齢者の日常生活自立度B1。",
+ background: "自宅にて長男家族と同居していたが、2026年8月に自宅内で転倒し右大腿骨頸部骨折。急性期病院にて骨接合術施行。リハビリ継続の上、在宅介護困難となり当施設へ新規入所。",
+ physical_cognitive: "右股関節可動域制限・右下肢軽度筋力低下あり。歩行時にすり足・ふらつき認める。短期記憶の低下あるが、見当識はおおむね保たれており穏やかに意思疎通可能。",
+ adl: "寝返り・起き上がり自立。立ち上がり・車椅子移乗は見守り・一部軽介助。歩行器歩行にて20m程度自立移動可能。更衣・整容は一部介助（ボタン留め・靴下着脱等）。入浴は一般浴にて洗身・洗髪見守り介助。",
+ meals_hydration: "普通食 (一口大)。スプーンおよび箸使用にて自力摂取可能（むせ込み見守り）。水分目標量1,200ml/日。下顎軽度引き気味での嚥下を声かけ。",
+ excretion: "日中はトイレ誘導にて排尿自立・見守り。夜間はリハビリパンツ＋尿取りパッド使用。定時声かけにて失禁ほぼなし。便秘傾向のため水分摂取促す。",
+ sleep: "21:00就寝、6:00起床。夜間1〜2回トイレ覚醒あり。中途覚醒時は転倒注意のため離床センサーマット使用。声かけにて再入眠良好。",
+ meds: "降圧薬・血糖降下薬内服中。朝・夕食後。看護師・介護職員による配薬・服薬確認にて全量自己内服。",
+ medical_care: "右大腿骨部術創治癒・異常なし。毎日のバイタルチェック（血圧・体温・脈拍・SpO2）。褥瘡・皮膚剥離なし。保湿剤塗布継続。",
+ dementia_behavior: "夕方時に「そろそろ帰らないと」と帰宅願望が時折出現。お茶を勧め、大工職人時代の仕事や大相撲の話題を傾聴することで落ち着かれる。",
+ care_notes: "急がせる声かけは焦りを生み転倒リスクとなるため、ゆっくりとしたペースで対応する。右側からの声かけ・介助時は荷重痛に配慮。大工道具や相撲の話題を好まれる。",
+ family_info: "長男様が週1回程度面会来訪。何かあれば長男様へ連絡希望。看取り方針については自然な経過での見守りを希望（施設での看取り・DNAR合意済）。",
+ future_goals: "歩行器による安全な自立歩行を維持し、転倒防止を図る。食事摂取量を維持し低血糖・脱水を予防。他入所者とのレクリエーション参加を促す。"
+ },
+ {
+ id: 2,
+ resident_id: 4,
+ created_at: "2026-10-02",
+ updated_at: "2026-10-02",
+ staff_name: "鈴木 美智子",
+ summary_type: "入院後再入所サマリー",
+ basic_info: "要介護1。生年月日: 1942-08-01 (84歳)。キーパーソン: 長男・高橋 健様 (090-7777-8888)。現在一時入院中（大腿骨経過観察・点滴加療）。退院復帰予定。",
+ background: "骨粗鬆症の治療および精査のため協力病院へ一時入院。病状軽快に伴い再入所調整中。",
+ physical_cognitive: "四肢麻痺なし。軽度認知機能低下あるが会話明瞭。歩行器使用にて自立歩行可能。",
+ adl: "移動・更衣・排泄自立。入浴時見守り。立ち上がり時のふらつき予防。",
+ meals_hydration: "普通食全量摂取。むせ込みなし。水分摂取良好。",
+ excretion: "トイレ排泄自立。夜間念のためパッド使用。",
+ sleep: "睡眠良好。夜間覚醒時も自力トイレ歩行可能。",
+ meds: "骨粗鬆症治療薬・ビタミン剤内服。",
+ medical_care: "特別な医療処置なし。定期受診・骨密度測定フォロー。",
+ dementia_behavior: "目立ったBPSDなし。明るく社交的。",
+ care_notes: "活動的なため無理な早歩きによる転倒に留意。適度な休憩を促す。",
+ family_info: "長男様がこまめに連絡対応。退院日決定次第共有いただく手はず。",
+ future_goals: "再入所後のADL低下を防ぎ、自立した日常動作を維持する。"
+ }
+ ];
+ }
  if (Array.isArray(d.stamps)) {
  const nameMap = {
  "施設長": "木村 健一",
@@ -603,7 +649,8 @@ class LocalDB {
  orders: [],
  deposits: [],
  complaints: [],
- incidents: []
+ incidents: [],
+ care_summaries: []
  };
  localStorage.setItem(this.key, JSON.stringify(seed));
  return seed;
@@ -622,6 +669,7 @@ let gState = {
  templates: db.data.templates,
  recreations: db.data.recreations,
  emergencySupplies: db.data.emergency_supplies,
+ care_summaries: db.data.care_summaries,
  selectedResidentId: 1,
  selectedDate: new Date().toISOString().split("T")[0],
  currentMonth: new Date().toISOString().slice(0, 7),
@@ -2103,6 +2151,27 @@ function renderResidentDetail() {
  </div>
  </div>
 
+ <!-- 介護サマリー ＆ 緊急搬送・受診申し送りサマリー アクションバー -->
+ <div style="background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%); border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+ <div>
+ <div style="font-weight:bold; color:#1e40af; font-size:13.5px; display:flex; align-items:center; gap:6px;">
+ <span>介護サマリー ＆ 緊急搬送・受診申し送り</span>
+ <span class="badge" style="background:#2563eb; color:#ffffff; font-size:11px; padding:1px 6px;">生活・ADL・救急連携</span>
+ </div>
+ <div style="font-size:12px; color:#475569; margin-top:3px;">
+ ${getResidentSummaryStatusText(r.id)}
+ </div>
+ </div>
+ <div style="display:flex; gap:6px; flex-wrap:wrap;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
+ 介護サマリー (詳細・新規・変更)
+ </button>
+ <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
+ 緊急搬送・受診サマリー
+ </button>
+ </div>
+ </div>
+
  <!-- 1. 基本方針・見守り注意・ケアプラン目標 (アコーディオン) -->
  <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
@@ -2287,6 +2356,19 @@ function renderResidentDetail() {
  <strong> 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
  <p style="margin-top:3px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
  </div>
+ </details>
+
+ <!-- 7. 介護サマリー (生活・ADL・介助注意点 13項目一覧) -->
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f0fdf4; font-weight:bold; cursor:pointer; font-size:13px; color:#166534; border-bottom:1px solid #bbf7d0; display:flex; justify-content:space-between; align-items:center;">
+ <span> 介護サマリー要約 (生活・ADL・介助注意点 13項目)</span>
+ <div style="display:flex; align-items:center; gap:8px;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">サマリー編集・新規</button>
+ <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ </div>
+ </summary>
+ <div style="padding:12px; font-size:12.5px;">
+ ${renderResidentSummaryAccordionContent(r.id)}
  </div>
  </details>
 
@@ -2718,6 +2800,775 @@ function clearRecordForm() {
  if (customTime) customTime.value = "";
  if (fsArea) fsArea.value = "";
  updateRecordCharCount();
+ }
+}
+
+// ======================================================================
+// よく使う定型文テンプレート管理・追加・変更機能
+// ======================================================================
+const DEFAULT_CARE_TEMPLATES = [
+ { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
+ { category: "巡視", label: "左側臥位", phrase: "確認のため訪室。左側臥位にて入眠中。" },
+ { category: "巡視", label: "ナースコール対応", phrase: "ナースコールあり訪室。排泄介助実施。" },
+ { category: "食事", label: "全量摂取", phrase: "主食・副食ともに全量摂取。むせ込みなし。" },
+ { category: "食事", label: "むせ込みあり", phrase: "水分摂取時に軽度のむせ込みあり。とろみ濃度を一段階上げて対応。誤嚥徴候なし。" },
+ { category: "排泄", label: "普通便中量", phrase: "トイレ誘導にて排尿あり。普通便中等量排便あり。" },
+ { category: "入浴", label: "軟膏塗布", phrase: "一般浴実施。背部・両下腿に保湿軟膏塗布。皮膚状態異常なし。" },
+ { category: "バイタル", label: "発熱クーリング", phrase: "37.8度の発熱あり。悪寒なし。水分補給実施し頸部クーリング対応。" },
+ { category: "特変", label: "ふらつき見守り", phrase: "立ち上がり時に軽度のふらつきを認める。転倒なし。付き添い見守りを強化。" },
+ { category: "申し送り", label: "受診指示引継ぎ", phrase: "往診医より指示あり。次回採血まで水分摂取を促し経過観察。" }
+];
+
+function openTemplateManageModal() {
+ cancelTemplateEdit();
+ renderTemplateManageList();
+ const modal = document.getElementById("templateManageModal");
+ if (modal) modal.style.display = "flex";
+}
+
+function renderTemplateManageList() {
+ const tbody = document.getElementById("templateManageTableBody");
+ const countLabel = document.getElementById("tplCountLabel");
+ const templates = gState.templates || [];
+ if (countLabel) countLabel.textContent = templates.length;
+ if (!tbody) return;
+
+ if (templates.length === 0) {
+ tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:16px;">登録された定型文はありません。</td></tr>';
+ return;
+ }
+
+ tbody.innerHTML = templates.map((t, idx) => `
+ <tr>
+ <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-size:11px;">${escapeHtml(t.category || "共通")}</span></td>
+ <td><strong>${escapeHtml(t.label || "")}</strong></td>
+ <td style="color:#334155; line-height:1.4;">${escapeHtml(t.phrase || "")}</td>
+ <td style="text-align:center; white-space:nowrap;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="startEditTemplate(${idx})">編集</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteTemplate(${idx})">削除</button>
+ </td>
+ </tr>
+ `).join("");
+}
+
+function submitTemplateForm() {
+ const catEl = document.getElementById("tplCategorySelect");
+ const labelEl = document.getElementById("tplLabelInput");
+ const phraseEl = document.getElementById("tplPhraseInput");
+ const editIdxEl = document.getElementById("tplEditIndex");
+
+ const category = catEl ? catEl.value.trim() : "その他";
+ const label = labelEl ? labelEl.value.trim() : "";
+ const phrase = phraseEl ? phraseEl.value.trim() : "";
+ const editIdx = editIdxEl ? parseInt(editIdxEl.value, 10) : -1;
+
+ if (!label || !phrase) {
+ alert("ボタン表示名と定型文章の両方を入力してください。");
+ return;
+ }
+
+ if (!Array.isArray(db.data.templates)) db.data.templates = [];
+
+ if (editIdx >= 0 && editIdx < db.data.templates.length) {
+ db.data.templates[editIdx] = { category, label, phrase };
+ } else {
+ db.data.templates.push({ category, label, phrase });
+ }
+
+ gState.templates = db.data.templates;
+ db.save();
+ renderQuickTemplates();
+ renderFsQuickTemplates();
+ renderTemplateManageList();
+ cancelTemplateEdit();
+}
+
+function startEditTemplate(idx) {
+ const templates = gState.templates || [];
+ const t = templates[idx];
+ if (!t) return;
+
+ const catEl = document.getElementById("tplCategorySelect");
+ const labelEl = document.getElementById("tplLabelInput");
+ const phraseEl = document.getElementById("tplPhraseInput");
+ const editIdxEl = document.getElementById("tplEditIndex");
+ const headingEl = document.getElementById("tplFormHeading");
+ const badgeEl = document.getElementById("tplEditingBadge");
+ const saveBtn = document.getElementById("btnSaveTemplate");
+ const cancelBtn = document.getElementById("btnCancelEditTemplate");
+
+ if (catEl) catEl.value = t.category || "巡視";
+ if (labelEl) labelEl.value = t.label || "";
+ if (phraseEl) phraseEl.value = t.phrase || "";
+ if (editIdxEl) editIdxEl.value = idx;
+ if (headingEl) headingEl.textContent = `定型文の変更・編集 (${t.label})`;
+ if (badgeEl) badgeEl.style.display = "inline-block";
+ if (saveBtn) saveBtn.textContent = "変更を保存する";
+ if (cancelBtn) cancelBtn.style.display = "inline-block";
+}
+
+function cancelTemplateEdit() {
+ const labelEl = document.getElementById("tplLabelInput");
+ const phraseEl = document.getElementById("tplPhraseInput");
+ const editIdxEl = document.getElementById("tplEditIndex");
+ const headingEl = document.getElementById("tplFormHeading");
+ const badgeEl = document.getElementById("tplEditingBadge");
+ const saveBtn = document.getElementById("btnSaveTemplate");
+ const cancelBtn = document.getElementById("btnCancelEditTemplate");
+
+ if (labelEl) labelEl.value = "";
+ if (phraseEl) phraseEl.value = "";
+ if (editIdxEl) editIdxEl.value = -1;
+ if (headingEl) headingEl.textContent = "＋ 新しい定型文の登録";
+ if (badgeEl) badgeEl.style.display = "none";
+ if (saveBtn) saveBtn.textContent = "定型文を保存する";
+ if (cancelBtn) cancelBtn.style.display = "none";
+}
+
+function deleteTemplate(idx) {
+ const templates = gState.templates || [];
+ const t = templates[idx];
+ if (!t) return;
+ if (!confirm(`定型文「${t.label}」を削除してもよろしいですか？`)) return;
+
+ db.data.templates.splice(idx, 1);
+ gState.templates = db.data.templates;
+ db.save();
+ renderQuickTemplates();
+ renderFsQuickTemplates();
+ renderTemplateManageList();
+ cancelTemplateEdit();
+}
+
+function resetDefaultTemplates() {
+ if (!confirm("定型文を標準の初期テンプレート一覧にリセットしますか？\n（追加された定型文は初期化されます）")) return;
+
+ db.data.templates = JSON.parse(JSON.stringify(DEFAULT_CARE_TEMPLATES));
+ gState.templates = db.data.templates;
+ db.save();
+ renderQuickTemplates();
+ renderFsQuickTemplates();
+ renderTemplateManageList();
+ cancelTemplateEdit();
+}
+
+// ======================================================================
+// 介護サマリー (生活・ADLアセスメント詳細 13項目)
+// ======================================================================
+function getResidentSummaryStatusText(residentId) {
+ const rId = Number(residentId);
+ const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ if (list.length === 0) {
+ return "サマリー未登録 (入所時・入院後サマリーを新規作成できます)";
+ }
+ const latest = list[0];
+ return `最新サマリー: ［${escapeHtml(latest.summary_type || "介護サマリー")}］ ${escapeHtml(latest.created_at || "")} 作成 (作成者: ${escapeHtml(latest.staff_name || "職員")})`;
+}
+
+function renderResidentSummaryAccordionContent(residentId) {
+ const rId = Number(residentId);
+ const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ if (list.length === 0) {
+ return `
+ <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; padding:14px; text-align:center; color:#64748b;">
+ 介護サマリーがまだ登録されていません。<br>
+ 「サマリー編集・新規」ボタンから、新規入所時または入院後再入所の生活・ADLアセスメントを作成できます。
+ </div>
+ `;
+ }
+
+ const s = list[0];
+ return `
+ <div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px;">
+ <div>
+ <strong style="color:#1e40af;">［${escapeHtml(s.summary_type || "介護サマリー")}］</strong>
+ <span style="color:#475569; margin-left:6px;">作成日: ${escapeHtml(s.created_at || "")} (作成者: ${escapeHtml(s.staff_name || "職員")})</span>
+ </div>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openCareSummaryModal(${rId}, ${s.id})">詳細確認・変更</button>
+ </div>
+ <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">1. 基本情報:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.basic_info || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">2. これまでの経過:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.background || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">3. 現在の身体・認知状態:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.physical_cognitive || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">4. ADL (日常生活動作):</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.adl || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">5. 食事・水分摂取:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.meals_hydration || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">6. 排泄:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.excretion || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">7. 睡眠:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.sleep || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">8. 服薬:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.meds || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">9. 医療的な処置:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.medical_care || "特記事項なし")}</div>
+ </div>
+ <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#991b1b; font-size:12px;">10. 認知症の症状や行動 (BPSD):</strong>
+ <div style="margin-top:2px; color:#7f1d1d;">${escapeHtml(s.dementia_behavior || "特記事項なし")}</div>
+ </div>
+ <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#92400e; font-size:12px;">11. 介助方法・注意点:</strong>
+ <div style="margin-top:2px; color:#78350f;">${escapeHtml(s.care_notes || "特記事項なし")}</div>
+ </div>
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#1e3a8a; font-size:12px;">12. 家族の状況:</strong>
+ <div style="margin-top:2px; color:#334155;">${escapeHtml(s.family_info || "特記事項なし")}</div>
+ </div>
+ </div>
+ <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 10px; margin-top:10px;">
+ <strong style="color:#166534; font-size:12px;">13. 今後の支援で気をつけること:</strong>
+ <div style="margin-top:2px; color:#14532d;">${escapeHtml(s.future_goals || "特記事項なし")}</div>
+ </div>
+ `;
+}
+
+function openCareSummaryModal(resId, summaryId) {
+ const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+ if (!r) {
+ alert("利用者を選択してください。");
+ return;
+ }
+
+ const badgeEl = document.getElementById("csResidentBadge");
+ if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${r.care_level})`;
+
+ const resIdEl = document.getElementById("csResidentId");
+ if (resIdEl) resIdEl.value = r.id;
+
+ // 担当職員セレクトボックス
+ const staffSelect = document.getElementById("csStaff");
+ if (staffSelect) {
+ staffSelect.innerHTML = (gState.stamps || []).map(s => {
+ const name = s.name || s;
+ return `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${escapeHtml(s.role || "職員")})</option>`;
+ }).join("");
+ const curStaff = document.getElementById("currentStaff")?.value;
+ if (curStaff) staffSelect.value = curStaff;
+ }
+
+ // 過去サマリー履歴セレクト
+ const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === r.id);
+ const historySelect = document.getElementById("careSummaryHistorySelect");
+ if (historySelect) {
+ historySelect.innerHTML = "";
+ if (list.length > 0) {
+ list.forEach((s, idx) => {
+ const opt = document.createElement("option");
+ opt.value = String(s.id);
+ opt.textContent = `${idx === 0 ? "［最新］" : ""} ${s.created_at} - ${s.summary_type} (${s.staff_name})`;
+ historySelect.appendChild(opt);
+ });
+ const newOpt = document.createElement("option");
+ newOpt.value = "new";
+ newOpt.textContent = "＋ 新規サマリー作成 (新規入所・入院後再入所等)";
+ historySelect.appendChild(newOpt);
+ } else {
+ const opt = document.createElement("option");
+ opt.value = "new";
+ opt.textContent = "新規サマリー作成 (未登録)";
+ historySelect.appendChild(opt);
+ }
+ }
+
+ if (summaryId) {
+ switchCareSummaryRecord(String(summaryId));
+ } else if (list.length > 0) {
+ switchCareSummaryRecord(String(list[0].id));
+ } else {
+ startNewCareSummary("新規入所時サマリー");
+ }
+
+ const modal = document.getElementById("careSummaryModal");
+ if (modal) modal.style.display = "flex";
+}
+
+function switchCareSummaryRecord(summaryVal) {
+ const historySelect = document.getElementById("careSummaryHistorySelect");
+ if (historySelect) historySelect.value = summaryVal;
+
+ if (summaryVal === "new") {
+ startNewCareSummary("新規入所時サマリー");
+ return;
+ }
+
+ const sid = Number(summaryVal);
+ const s = (db.data.care_summaries || []).find(x => x.id === sid);
+ if (!s) return;
+
+ const idEl = document.getElementById("csSummaryId");
+ const typeEl = document.getElementById("csSummaryType");
+ const dateEl = document.getElementById("csDate");
+ const staffEl = document.getElementById("csStaff");
+
+ if (idEl) idEl.value = s.id;
+ if (typeEl) typeEl.value = s.summary_type || "新規入所時サマリー";
+ if (dateEl) dateEl.value = s.created_at || new Date().toISOString().split("T")[0];
+ if (staffEl && s.staff_name) staffEl.value = s.staff_name;
+
+ const fields = [
+ "csBasicInfo", "csBackground", "csPhysicalCognitive", "csAdl",
+ "csMealsHydration", "csExcretion", "csSleep", "csMeds",
+ "csMedicalCare", "csDementiaBehavior", "csCareNotes", "csFamilyInfo", "csFutureGoals"
+ ];
+ const keys = [
+ "basic_info", "background", "physical_cognitive", "adl",
+ "meals_hydration", "excretion", "sleep", "meds",
+ "medical_care", "dementia_behavior", "care_notes", "family_info", "future_goals"
+ ];
+
+ fields.forEach((fId, i) => {
+ const el = document.getElementById(fId);
+ if (el) el.value = s[keys[i]] || "";
+ });
+}
+
+function startNewCareSummary(summaryType = "新規入所時サマリー") {
+ const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === rId) : null;
+ const historySelect = document.getElementById("careSummaryHistorySelect");
+ if (historySelect) historySelect.value = "new";
+
+ const idEl = document.getElementById("csSummaryId");
+ const typeEl = document.getElementById("csSummaryType");
+ const dateEl = document.getElementById("csDate");
+
+ if (idEl) idEl.value = "";
+ if (typeEl) typeEl.value = summaryType;
+ if (dateEl) dateEl.value = new Date().toISOString().split("T")[0];
+
+ const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ const prev = list.length > 0 ? list[0] : null;
+
+ const basicText = prev ? prev.basic_info : `${r ? r.name : ""} 様。${r ? r.care_level : ""}。生年月日: ${r ? (r.birth_date || "未登録") : ""}。緊急連絡先: ${r ? (r.emergency_contact || "未登録") : ""}。看取り方針: ［${r ? (r.policy_stamp || "未設定") : ""}］。`;
+ const backgroundText = prev ? prev.background : `${summaryType === "入院後再入所サマリー" ? "協力病院へ一時入院後、病状軽快に伴い退院・再入所。" : "自宅での生活が困難となり当施設へ入所。"}`;
+ const physicalText = prev ? prev.physical_cognitive : `麻痺: ${r ? (r.paralysis || "特記なし") : "特記なし"}。病歴: ${r ? (r.diseases || "特記なし") : "特記なし"}。`;
+ const adlText = prev ? prev.adl : "寝返り・起き上がり自立。立ち上がり・車椅子移乗は見守り。歩行器歩行にて室内移動。更衣一部介助。入浴見守り。";
+ const mealsText = prev ? prev.meals_hydration : `食形態: ${r ? (r.diet_type || "普通食") : "普通食"}。口腔: ${r ? (r.oral_state || "良好") : "良好"}。アレルギー: ${r ? (r.allergies || "なし") : "なし"}。水分目標1200ml/日。`;
+ const excretionText = prev ? prev.excretion : "日中はトイレ誘導にて排泄見守り。夜間はパッド使用。定時声かけ。";
+ const sleepText = prev ? prev.sleep : "21:00就寝、6:00起床。夜間中途覚醒1〜2回あり。センサー対応。";
+ const medsText = prev ? prev.meds : "内服薬あり。看護師・職員による配薬管理および確認。";
+ const medicalText = prev ? prev.medical_care : `${r ? (r.dr_instructions || "定期採血・バイタルチェック") : "定期バイタルチェック"}`;
+ const dementiaText = prev ? prev.dementia_behavior : "夕方に軽度の帰宅願望や不穏が見られることがある。昔の話題の傾聴により落ち着かれる。";
+ const notesText = prev ? prev.care_notes : `急がせる声かけは避ける。${r ? (r.life_history ? "人生歴: " + r.life_history : "") : ""}`;
+ const familyText = prev ? prev.family_info : `${r ? (r.family_wishes ? "家族の意向: " + r.family_wishes : "定期面会あり") : "定期面会あり"}`;
+ const goalsText = prev ? prev.future_goals : `${r ? (r.care_plan_goal || "安全な日常生活の維持・自立支援") : "安全な日常生活の維持・自立支援"}`;
+
+ const fields = [
+ { id: "csBasicInfo", val: basicText },
+ { id: "csBackground", val: backgroundText },
+ { id: "csPhysicalCognitive", val: physicalText },
+ { id: "csAdl", val: adlText },
+ { id: "csMealsHydration", val: mealsText },
+ { id: "csExcretion", val: excretionText },
+ { id: "csSleep", val: sleepText },
+ { id: "csMeds", val: medsText },
+ { id: "csMedicalCare", val: medicalText },
+ { id: "csDementiaBehavior", val: dementiaText },
+ { id: "csCareNotes", val: notesText },
+ { id: "csFamilyInfo", val: familyText },
+ { id: "csFutureGoals", val: goalsText }
+ ];
+
+ fields.forEach(f => {
+ const el = document.getElementById(f.id);
+ if (el) el.value = f.val;
+ });
+}
+
+function submitCareSummary() {
+ const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
+ const sid = document.getElementById("csSummaryId")?.value;
+ const summaryType = document.getElementById("csSummaryType")?.value || "新規入所時サマリー";
+ const dateVal = document.getElementById("csDate")?.value || new Date().toISOString().split("T")[0];
+ const staffVal = document.getElementById("csStaff")?.value || "職員";
+
+ const basicInfo = document.getElementById("csBasicInfo")?.value || "";
+ const background = document.getElementById("csBackground")?.value || "";
+ const physicalCognitive = document.getElementById("csPhysicalCognitive")?.value || "";
+ const adl = document.getElementById("csAdl")?.value || "";
+ const mealsHydration = document.getElementById("csMealsHydration")?.value || "";
+ const excretion = document.getElementById("csExcretion")?.value || "";
+ const sleep = document.getElementById("csSleep")?.value || "";
+ const meds = document.getElementById("csMeds")?.value || "";
+ const medicalCare = document.getElementById("csMedicalCare")?.value || "";
+ const dementiaBehavior = document.getElementById("csDementiaBehavior")?.value || "";
+ const careNotes = document.getElementById("csCareNotes")?.value || "";
+ const familyInfo = document.getElementById("csFamilyInfo")?.value || "";
+ const futureGoals = document.getElementById("csFutureGoals")?.value || "";
+
+ if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
+
+ if (sid && sid.trim() !== "") {
+ const existing = db.data.care_summaries.find(x => x.id === Number(sid));
+ if (existing) {
+ existing.summary_type = summaryType;
+ existing.updated_at = dateVal;
+ existing.staff_name = staffVal;
+ existing.basic_info = basicInfo;
+ existing.background = background;
+ existing.physical_cognitive = physicalCognitive;
+ existing.adl = adl;
+ existing.meals_hydration = mealsHydration;
+ existing.excretion = excretion;
+ existing.sleep = sleep;
+ existing.meds = meds;
+ existing.medical_care = medicalCare;
+ existing.dementia_behavior = dementiaBehavior;
+ existing.care_notes = careNotes;
+ existing.family_info = familyInfo;
+ existing.future_goals = futureGoals;
+ }
+ } else {
+ const newSummary = {
+ id: Date.now(),
+ resident_id: rId,
+ created_at: dateVal,
+ updated_at: dateVal,
+ staff_name: staffVal,
+ summary_type: summaryType,
+ basic_info: basicInfo,
+ background: background,
+ physical_cognitive: physicalCognitive,
+ adl: adl,
+ meals_hydration: mealsHydration,
+ excretion: excretion,
+ sleep: sleep,
+ meds: meds,
+ medical_care: medicalCare,
+ dementia_behavior: dementiaBehavior,
+ care_notes: careNotes,
+ family_info: familyInfo,
+ future_goals: futureGoals
+ };
+ db.data.care_summaries.unshift(newSummary);
+ }
+
+ gState.care_summaries = db.data.care_summaries;
+ db.save();
+ renderResidentDetail();
+ alert("介護サマリーを保存しました。");
+ closeModal("careSummaryModal");
+}
+
+function printCareSummary() {
+ const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === rId) : null;
+ const printArea = document.getElementById("printArea");
+ if (!printArea) {
+ alert("印刷コンテナが見つかりません。");
+ return;
+ }
+
+ const summaryType = document.getElementById("csSummaryType")?.value || "介護サマリー";
+ const dateVal = document.getElementById("csDate")?.value || new Date().toISOString().split("T")[0];
+ const staffVal = document.getElementById("csStaff")?.value || "職員";
+ const basicInfo = document.getElementById("csBasicInfo")?.value || "-";
+ const background = document.getElementById("csBackground")?.value || "-";
+ const physicalCognitive = document.getElementById("csPhysicalCognitive")?.value || "-";
+ const adl = document.getElementById("csAdl")?.value || "-";
+ const mealsHydration = document.getElementById("csMealsHydration")?.value || "-";
+ const excretion = document.getElementById("csExcretion")?.value || "-";
+ const sleep = document.getElementById("csSleep")?.value || "-";
+ const meds = document.getElementById("csMeds")?.value || "-";
+ const medicalCare = document.getElementById("csMedicalCare")?.value || "-";
+ const dementiaBehavior = document.getElementById("csDementiaBehavior")?.value || "-";
+ const careNotes = document.getElementById("csCareNotes")?.value || "-";
+ const familyInfo = document.getElementById("csFamilyInfo")?.value || "-";
+ const futureGoals = document.getElementById("csFutureGoals")?.value || "-";
+
+ printArea.innerHTML = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000; padding:10px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:8px; margin-bottom:12px;">
+ <div>
+ <h1 style="font-size:22px; margin:0; color:#1e3a8a;">介護サマリー (生活・ADLアセスメント詳細)</h1>
+ <p style="font-size:13px; color:#334155; margin:4px 0 0 0;">
+ 対象利用者: <strong>${r ? escapeHtml(r.name) : ""} 様</strong> (${r ? escapeHtml(r.room_no) : ""}号室 / ${r ? escapeHtml(r.care_level) : ""})
+ / サマリー種別: <strong>${escapeHtml(summaryType)}</strong>
+ </p>
+ </div>
+ <div style="text-align:right; font-size:12px; color:#475569;">
+ <div>作成日: ${escapeHtml(dateVal)}</div>
+ <div>作成者: ${escapeHtml(staffVal)}</div>
+ </div>
+ </div>
+
+ <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
+ <tr>
+ <th style="width:160px; background:#f1f5f9; padding:6px; text-align:left;">1. 基本情報</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(basicInfo)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">2. これまでの経過</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(background)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">3. 現在の身体・認知状態</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(physicalCognitive)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">4. ADL (日常生活動作)</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(adl)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">5. 食事・水分摂取</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(mealsHydration)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">6. 排泄</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(excretion)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">7. 睡眠</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(sleep)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">8. 服薬</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(meds)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">9. 医療的な処置</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(medicalCare)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">10. 認知症の症状や行動</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(dementiaBehavior)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">11. 介助方法・注意点</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(careNotes)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">12. 家族の状況</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(familyInfo)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f1f5f9; padding:6px; text-align:left;">13. 今後の支援で気をつけること</th>
+ <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(futureGoals)}</td>
+ </tr>
+ </table>
+ </div>
+ `;
+ window.print();
+}
+
+// ======================================================================
+// 緊急搬送・受診申し送りサマリー機能
+// ======================================================================
+function openEmergencySummaryModal(resId) {
+ const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+ if (!r) {
+ alert("利用者を選択してください。");
+ return;
+ }
+
+ const badgeEl = document.getElementById("emgResidentBadge");
+ if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${r.care_level}) 救急隊・受診医療機関提出用`;
+
+ const reasonInput = document.getElementById("emgReasonInput");
+ if (reasonInput) {
+ if (!reasonInput.value) {
+ reasonInput.value = "";
+ }
+ }
+
+ renderEmergencySummaryPreview(r);
+
+ const modal = document.getElementById("emergencySummaryModal");
+ if (modal) modal.style.display = "flex";
+}
+
+function updateEmergencyPreviewReason() {
+ const rId = gState.selectedResidentId;
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === Number(rId)) : null;
+ if (r) renderEmergencySummaryPreview(r);
+}
+
+function renderEmergencySummaryPreview(r) {
+ const container = document.getElementById("emergencySummarySheetPreview");
+ if (!container || !r) return;
+
+ const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入・特変発生状況または受診理由を記載してください）";
+ const nowStr = new Date().toLocaleString("ja-JP");
+ const staffName = document.getElementById("currentStaff")?.value || "職員";
+ const facility = gState.facilityName || "介護老人保健施設 ケアポータル";
+
+ const vitals = (db.data.vitals || []).filter(v => Number(v.resident_id) === Number(r.id));
+ const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
+ const vitalStr = latestVital ? `体温: ${latestVital.temperature || "-"}℃ / 血圧: ${latestVital.bp_high || "-"}/${latestVital.bp_low || "-"} mmHg / 脈拍: ${latestVital.pulse || "-"} / SpO2: ${latestVital.spo2 || "-"}% (${latestVital.measured_at || latestVital.date || ""})` : "記録なし";
+
+ const records = (db.data.care_records || []).filter(c => Number(c.resident_id) === Number(r.id) && (c.category === "特変" || c.category === "バイタル" || c.category === "巡視")).slice(0, 3);
+ const recordsHtml = records.length > 0 ? records.map(rc => `<div>・[${escapeHtml(rc.recorded_at || "")}] [${escapeHtml(rc.category || "")}] ${escapeHtml(rc.content || "")} (${escapeHtml(rc.staff_name || "")})</div>`).join("") : "<div>特変記録なし</div>";
+
+ const summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+ const latestSummary = summaries.length > 0 ? summaries[0] : null;
+
+ container.innerHTML = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#0f172a;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #dc2626; padding-bottom:8px; margin-bottom:12px;">
+ <div>
+ <h2 style="font-size:20px; font-weight:bold; margin:0; color:#b91c1c;">緊急搬送・受診 申し送りサマリー</h2>
+ <div style="font-size:12.5px; color:#475569; margin-top:2px;">施設名: <strong>${escapeHtml(facility)}</strong></div>
+ </div>
+ <div style="text-align:right; font-size:12px; color:#64748b;">
+ <div>作成日時: <strong>${nowStr}</strong></div>
+ <div>作成担当職員: <strong>${escapeHtml(staffName)}</strong></div>
+ </div>
+ </div>
+
+ <div style="background:#fef2f2; border:2px solid #ef4444; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
+ <div style="font-weight:bold; color:#991b1b; font-size:13px; margin-bottom:3px;">【本日の救急搬送・受診理由 ＆ 発生状況】</div>
+ <div style="font-size:13px; color:#1e293b; white-space:pre-wrap; line-height:1.5;">${escapeHtml(reasonText)}</div>
+ </div>
+
+ <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
+ <tr>
+ <th style="width:120px; background:#f8fafc; padding:6px; text-align:left;">氏名</th>
+ <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${r.room_no}号室)</td>
+ <th style="width:100px; background:#f8fafc; padding:6px; text-align:left;">要介護度</th>
+ <td style="padding:6px; font-weight:bold;">${escapeHtml(r.care_level)}</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">生年月日 / 年齢</th>
+ <td style="padding:6px;">${escapeHtml(r.birth_date || "-")}</td>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">基本方針</th>
+ <td style="padding:6px; font-weight:bold; color:${r.policy_stamp === '看取り' ? '#b91c1c' : '#1d4ed8'};">［ ${escapeHtml(r.policy_stamp || "未設定")} ］</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">緊急連絡先</th>
+ <td colspan="3" style="padding:6px; font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">家族要望・ACP</th>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.family_wishes || "特記事項なし")}</td>
+ </tr>
+ </table>
+
+ <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
+ <tr style="background:#fff1f2;">
+ <th style="width:120px; color:#991b1b; padding:6px; text-align:left;">アレルギー</th>
+ <td colspan="3" style="padding:6px; color:#dc2626; font-weight:bold; font-size:13px;">${escapeHtml(r.allergies || "なし")}</td>
+ </tr>
+ <tr>
+ <th style="width:120px; background:#f8fafc; padding:6px; text-align:left;">既往歴・病歴</th>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.diseases || "特記なし")}</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">往診医・受診指示</th>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.dr_instructions || "特記なし")}</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">身体麻痺・状態</th>
+ <td style="padding:6px;">${escapeHtml(r.paralysis || "特記なし")}</td>
+ <th style="width:100px; background:#f8fafc; padding:6px; text-align:left;">食形態・口腔</th>
+ <td style="padding:6px;">${escapeHtml(r.diet_type || "普通食")} / ${escapeHtml(r.oral_state || "良好")}</td>
+ </tr>
+ <tr>
+ <th style="background:#f8fafc; padding:6px; text-align:left;">最新バイタル</th>
+ <td colspan="3" style="padding:6px; font-weight:bold;">${escapeHtml(vitalStr)}</td>
+ </tr>
+ </table>
+
+ <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px;">
+ <strong style="color:#1e3a8a;">【生活動作・ADL・介助注意点 (介護サマリー抜粋)】:</strong>
+ <div style="margin-top:3px; line-height:1.4;">
+ <strong>ADL:</strong> ${latestSummary ? escapeHtml(latestSummary.adl) : '寝返り・起き上がり自立、移動見守り'} /
+ <strong>排泄:</strong> ${latestSummary ? escapeHtml(latestSummary.excretion) : 'トイレ誘導見守り'} /
+ <strong>認知症・BPSD:</strong> ${latestSummary ? escapeHtml(latestSummary.dementia_behavior) : '特記なし'}
+ </div>
+ </div>
+
+ <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:12px;">
+ <strong style="color:#1e3a8a;">【施設内 直近の経過・特変記録抜粋】:</strong>
+ <div style="margin-top:3px; line-height:1.4;">${recordsHtml}</div>
+ </div>
+ </div>
+ `;
+}
+
+function printEmergencySummary() {
+ const container = document.getElementById("emergencySummarySheetPreview");
+ const printArea = document.getElementById("printArea");
+ if (!container || !printArea) {
+ alert("印刷コンテナが見つかりません。");
+ return;
+ }
+ printArea.innerHTML = container.innerHTML;
+ window.print();
+}
+
+function copyEmergencySummaryText() {
+ const rId = gState.selectedResidentId;
+ const r = gState.residents ? gState.residents.find(x => Number(x.id) === Number(rId)) : null;
+ if (!r) return;
+
+ const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入）";
+ const facility = gState.facilityName || "介護老人保健施設 ケアポータル";
+ const nowStr = new Date().toLocaleString("ja-JP");
+ const staffName = document.getElementById("currentStaff")?.value || "職員";
+
+ const summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+ const s = summaries.length > 0 ? summaries[0] : null;
+
+ const text = `【緊急搬送・受診 申し送り書】
+施設名: ${facility}
+作成日時: ${nowStr}
+作成者: ${staffName}
+
+■ 救急要請・受診理由
+${reasonText}
+
+■ 基本情報
+氏名: ${r.name} 様 (${r.room_no}号室)
+要介護度: ${r.care_level}
+生年月日: ${r.birth_date || "-"}
+基本方針: ［${r.policy_stamp || "未設定"}］
+緊急連絡先: ${r.emergency_contact || "未登録"}
+家族要望: ${r.family_wishes || "特記事項なし"}
+
+■ 医療・身体状態
+アレルギー: ${r.allergies || "なし"}
+既往歴: ${r.diseases || "特記なし"}
+麻痺: ${r.paralysis || "特記なし"}
+食形態・口腔: ${r.diet_type || "普通食"} / ${r.oral_state || "良好"}
+往診医指示: ${r.dr_instructions || "特記なし"}
+
+■ 生活・ADL抜粋
+ADL: ${s ? s.adl : "寝返り・起き上がり自立、移動見守り"}
+排泄: ${s ? s.excretion : "トイレ誘導"}
+認知機能・注意点: ${s ? s.care_notes : "急がせる声かけを避ける"}
+`;
+
+ if (navigator.clipboard && navigator.clipboard.writeText) {
+ navigator.clipboard.writeText(text).then(() => {
+ alert("緊急搬送・申し送りサマリーをクリップボードにコピーしました。");
+ }).catch(() => {
+ alert("コピーに失敗しました。画面のプレビューより選択してコピーしてください。");
+ });
+ } else {
+ alert("クリップボードAPI非対応環境です。");
  }
 }
 
@@ -7695,7 +8546,10 @@ function reloadStateFromDb() {
  gState.templates = db.data.templates;
  gState.recreations = db.data.recreations;
  gState.emergencySupplies = db.data.emergency_supplies;
+ gState.care_summaries = db.data.care_summaries;
 
+ if (typeof renderQuickTemplates === 'function') renderQuickTemplates();
+ if (typeof renderFsQuickTemplates === 'function') renderFsQuickTemplates();
  if (typeof renderStaffSelect === 'function') renderStaffSelect();
  if (typeof renderResidentsStrip === 'function') renderResidentsStrip();
  if (typeof renderResidentDetail === 'function') renderResidentDetail();
@@ -9923,4 +10777,23 @@ if (typeof window !== "undefined") {
  window.selectTargetForReset = selectTargetForReset;
  window.submitTwoPersonReset = submitTwoPersonReset;
  window.resetStaffPin = resetStaffPin;
+ window.openTemplateManageModal = openTemplateManageModal;
+ window.renderTemplateManageList = renderTemplateManageList;
+ window.submitTemplateForm = submitTemplateForm;
+ window.startEditTemplate = startEditTemplate;
+ window.cancelTemplateEdit = cancelTemplateEdit;
+ window.deleteTemplate = deleteTemplate;
+ window.resetDefaultTemplates = resetDefaultTemplates;
+ window.getResidentSummaryStatusText = getResidentSummaryStatusText;
+ window.renderResidentSummaryAccordionContent = renderResidentSummaryAccordionContent;
+ window.openCareSummaryModal = openCareSummaryModal;
+ window.switchCareSummaryRecord = switchCareSummaryRecord;
+ window.startNewCareSummary = startNewCareSummary;
+ window.submitCareSummary = submitCareSummary;
+ window.printCareSummary = printCareSummary;
+ window.openEmergencySummaryModal = openEmergencySummaryModal;
+ window.updateEmergencyPreviewReason = updateEmergencyPreviewReason;
+ window.renderEmergencySummaryPreview = renderEmergencySummaryPreview;
+ window.printEmergencySummary = printEmergencySummary;
+ window.copyEmergencySummaryText = copyEmergencySummaryText;
 }
