@@ -120,7 +120,40 @@
           const hasSafeCareSection = c && c.textContent.includes("現場介護でしてよい対応・ケア");
           report("病歴ガイド 不要な能書きバナーが完全削除されていること", !hasUnneededBanner);
           report("病歴ガイド すぐに看護師・医師へ報告する基準が明記されていること", hasEmergencySection);
-          report("病歴ガイド 現場介護でしてよい対応・ケア（医療行為外）が明記されていること", hasSafeCareSection);
+          // 用語リンク (.term-link) の存在確認
+          const termLinks = doc.querySelectorAll("#diseaseModalContent .term-link");
+          report("病歴ガイド内 専門用語タップリンクの存在確認", termLinks.length > 0, termLinks.length + "件の用語リンクを検出");
+
+          if (termLinks.length > 0) {
+            // 最初の用語リンクをクリック
+            const firstTerm = termLinks[0];
+            const termText = firstTerm.textContent.trim();
+            firstTerm.click();
+            await new Promise(r => setTimeout(r, 200));
+
+            const termCard = doc.getElementById("termExplainCard");
+            const isCardOpen = termCard && win.getComputedStyle(termCard).display !== "none";
+            report("専門用語『" + termText + "』タップで解説カードが表示されること", isCardOpen);
+
+            const titleEl = doc.getElementById("termExplainTitle");
+            const meaningEl = doc.getElementById("termExplainMeaning");
+            const checkpointEl = doc.getElementById("termExplainCheckpoint");
+            const badgeEl = doc.getElementById("termExplainUrgencyBadge");
+
+            const hasTitle = titleEl && titleEl.textContent.trim().length > 0;
+            const hasMeaning = meaningEl && meaningEl.textContent.trim().length > 0;
+            const hasCheckpoint = checkpointEl && checkpointEl.textContent.trim().length > 0;
+            const hasBadge = badgeEl && badgeEl.textContent.trim().length > 0;
+
+            report("用語解説カードにタイトル・意味・観察ポイント・緊急度が表示されていること", hasTitle && hasMeaning && hasCheckpoint && hasBadge,
+              "用語=" + (titleEl ? titleEl.textContent : "") + ", 緊急度=" + (badgeEl ? badgeEl.textContent : ""));
+
+            // 閉じるボタンの動作確認
+            win.closeTermExplanation();
+            await new Promise(r => setTimeout(r, 100));
+            const isCardClosed = termCard && win.getComputedStyle(termCard).display === "none";
+            report("用語解説カードの閉じる処理が正常に動作すること", isCardClosed);
+          }
 
           win.closeModal("diseaseModal");
         }

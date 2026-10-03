@@ -607,6 +607,482 @@ let gState = {
   dismissedAlerts: []
 };
 
+// ======================================================================
+// 🩺 現場介護向け 医療・症状・ケア専門用語 やさしい解説辞書
+// ======================================================================
+const MEDICAL_TERMS_DICTIONARY = {
+  // 呼吸・循環器
+  "起座呼吸": {
+    term: "起座呼吸",
+    ruby: "きざこきゅう",
+    meaning: "横になると息苦しくなり、体を起こして座ると呼吸が楽になる状態。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "ベッドに横になるのを嫌がり前かがみで座りたがるときは心不全の悪化が疑われます。無理に寝かせず、背上げ（起座・座位）を保ち、直ちに看護師へ連絡してください。",
+    isDisease: false
+  },
+  "チアノーゼ": {
+    term: "チアノーゼ",
+    ruby: "ちあのーぜ",
+    meaning: "血液中の酸素が不足し、唇・爪・顔色が青紫色になる危険サイン。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "直ちに酸素吸入（指示がある場合）の確認、呼吸状態の確保、SpO2測定を行い、大至急看護師または医師へ報告してください。",
+    isDisease: false
+  },
+  "湿性嗄声": {
+    term: "湿性嗄声",
+    ruby: "しっせいさせい",
+    meaning: "声帯や喉に唾液・痰・水分が絡んでガラガラ・ゴロゴロ鳴る湿った声。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "喉に食物や痰が溜まって誤嚥の危険が極めて高い状態です。飲食を直ちに止め、前傾姿勢で咳払いを促し、必要に応じて看護師へ吸引を依頼してください。",
+    isDisease: false
+  },
+  "ガラガラ声": {
+    term: "ガラガラ声",
+    ruby: "がらがらごえ",
+    meaning: "喉に唾液や食べ物、痰が残留しているときの湿った声（湿性嗄声）。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "誤嚥の典型的な初期サインです。飲食を中断し、頭を前に倒して咳き込ませ、看護師へ連絡してください。",
+    isDisease: false
+  },
+  "喘鳴": {
+    term: "喘鳴",
+    ruby: "ぜんめい",
+    meaning: "呼吸をするときに『ゼーゼー』『ヒューヒュー』と苦しそうな音がすること。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "気道が狭くなっているか心不全で肺に水が溜まっているサインです。衣類を緩め、背上げ（座位）にして直ちに看護師へ連絡してください。",
+    isDisease: false
+  },
+  "SpO2": {
+    term: "SpO2",
+    ruby: "えすぴーおーつー",
+    meaning: "パルスオキシメーターで指先等から測定する『動脈血酸素飽和度』。",
+    urgency: "⚠️ 93%未満は要注意・90%以下は即報告",
+    urgencyType: "danger",
+    checkPoint: "正常値は96〜99%です。普段より3%以上低下、または93%未満のときは直ちに看護師へ報告。測定時は指先の冷えや血流不良がないかも確認します。",
+    isDisease: false
+  },
+  "HOT": {
+    term: "HOT",
+    ruby: "ほっと (ざいたくさんそりょうほう)",
+    meaning: "在宅酸素療法。機械やボンベから鼻カニューラを通して持続的に酸素を吸入する治療。",
+    urgency: "ℹ️ 現場ケア知識・火気厳禁",
+    urgencyType: "info",
+    checkPoint: "カニューラが鼻から外れていないか、チューブが折れ曲がっていないか毎時確認。周囲2m以内は火気厳禁です。流量変更は介護職では行わず看護師へ伝えます。",
+    isDisease: false
+  },
+  "在宅酸素療法": {
+    term: "在宅酸素療法",
+    ruby: "ざいたくさんそりょうほう",
+    meaning: "機械やボンベから鼻カニューラを通して持続的に酸素を吸入する治療（HOT）。",
+    urgency: "ℹ️ 現場ケア知識・火気厳禁",
+    urgencyType: "info",
+    checkPoint: "カニューラのズレ・チューブの折れ曲がり・流量設定を毎時確認します。火気厳禁を徹底してください。",
+    isDisease: false
+  },
+  "起座位": {
+    term: "起座位",
+    ruby: "きざい",
+    meaning: "ベッドの背を70〜90度近くまで起こし、前かがみ等で座らせる姿勢。",
+    urgency: "🤝 現場介護でしてよい安全ケア",
+    urgencyType: "info",
+    checkPoint: "心不全や呼吸困難があるとき、横たわるより座る方が肺が広がり呼吸が楽になります。オーバーテーブルにクッションを置きもたれかからせる姿勢も有効です。",
+    isDisease: false
+  },
+  "ファーラー位": {
+    term: "ファーラー位",
+    ruby: "ふぁーらーい",
+    meaning: "ベッドの背上げを45度程度にした半座位（安楽な半身起こし姿勢）。",
+    urgency: "🤝 現場介護でしてよい安全ケア",
+    urgencyType: "info",
+    checkPoint: "食後の逆流・誤嚥予防や、呼吸が少し苦しいときの安静姿勢として安全・最適です。膝裏にも軽くクッションを入れて体がずり落ちないように支えます。",
+    isDisease: false
+  },
+  "放散痛": {
+    term: "放散痛",
+    ruby: "ほうさんつう",
+    meaning: "心臓など痛みの原因箇所から離れた場所（左肩・背中・顎・みぞおち）に広がる痛み。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "『左肩が急に重痛い』『顎や歯が痛い』と訴える場合、心筋梗塞・狭心症の放散痛の可能性があります。直ちにバイタルを測り看護師・救急要請を検討します。",
+    isDisease: false
+  },
+  "不整脈": {
+    term: "不整脈",
+    ruby: "ふせいみゃく",
+    meaning: "心臓の拍動リズムが不規則になったり、脈が極端に速い（頻脈）・遅い（徐脈）状態。",
+    urgency: "⚠️ めまい・動悸・胸痛伴う時は即報告",
+    urgencyType: "warning",
+    checkPoint: "検脈でリズムがバラバラ、または安静時脈拍が120以上または45以下の場合は直ちに看護師へ連絡。ふらつき・転倒に厳重警戒してください。",
+    isDisease: false
+  },
+  "ヒートショック": {
+    term: "ヒートショック",
+    ruby: "ひーとしょっく",
+    meaning: "暖かい居室から寒い脱衣所・浴室への移動で血圧が急変動し、脳卒中や心筋梗塞を起こす現象。",
+    urgency: "🤝 現場介護での予防が重要",
+    urgencyType: "info",
+    checkPoint: "冬場の入浴時は脱衣所・浴室をあらかじめ暖房等で温めておく、湯船の温度を40度以下にする、急に立ち上がらせない等の予防が必須です。",
+    isDisease: false
+  },
+  "肺水腫": {
+    term: "肺水腫",
+    ruby: "はいすいしゅ",
+    meaning: "心不全などが原因で肺に水が染み出し、溺れたような激しい呼吸苦を起こす危険状態。",
+    urgency: "🚨 即時報告レベル (緊急搬送)",
+    urgencyType: "danger",
+    checkPoint: "横になれず激しく息苦しがる、ピンク色の泡状痰、ゼーゼー音がサイン。直ちに体を起こして座らせ（起座位）、大至急看護師・救急要請してください。",
+    isDisease: false
+  },
+
+  // 脳・神経・意識
+  "片麻痺": {
+    term: "片麻痺",
+    ruby: "かたまひ",
+    meaning: "身体の左右どちらか半分（右手と右足、または左手と左足）に力が入らない状態。",
+    urgency: "⚠️ 急な悪化・新規出現は即報告 (脳梗塞疑い)",
+    urgencyType: "danger",
+    checkPoint: "普段より急に力が入らなくなった、腕が上がらない、顔の半分が下がっている場合は脳血管障害の再発疑い。直ちに看護師・救急要請します。日常ケアは健側から介助します。",
+    isDisease: false
+  },
+  "構音障害": {
+    term: "構音障害",
+    ruby: "こうおんしょうがい",
+    meaning: "舌や唇の筋肉麻痺により、ろれつが回らなくなったり言葉が不明瞭になる状態。",
+    urgency: "🚨 急な出現・悪化は即報告",
+    urgencyType: "danger",
+    checkPoint: "『イー』『パ・タ・カ・ラ』を発音してもらい、急にろれつが回らないときは脳梗塞の疑い。直ちに看護師へ報告してください。",
+    isDisease: false
+  },
+  "ろれつ不良": {
+    term: "ろれつ不良",
+    ruby: "ろれつふりょう",
+    meaning: "舌がもつれて言葉がはっきりと喋れなくなる症状（構音障害）。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "脳梗塞の代表的サインです。片麻痺や顔面のゆがみがないかも確認し、直ちに安静を保ち看護師へ報告してください。",
+    isDisease: false
+  },
+  "意識混濁": {
+    term: "意識混濁",
+    ruby: "いしきこんだく",
+    meaning: "呼びかけに対する反応が鈍い、ボーッとして辻褄が合わない、意識が朦朧としている状態。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "低血糖、脳血管障害、重篤な脱水、高熱などの危険なサインです。安全な姿勢（誤嚥防止の横向き・側臥位）にし直ちに看護師・医師へ連絡します。",
+    isDisease: false
+  },
+  "意識障害": {
+    term: "意識障害",
+    ruby: "いしきしょうがい",
+    meaning: "目を開けない、呼びかけに反応しない、会話が成り立たないなど意識レベルが低下した状態。",
+    urgency: "🚨 即時報告レベル (緊急)",
+    urgencyType: "danger",
+    checkPoint: "飲食は絶対に避け、気道確保（横向き寝・側臥位）を行い、大声で周囲の職員・看護師を呼び直ちに医師連絡・救急要請を行います。",
+    isDisease: false
+  },
+  "せん妄": {
+    term: "せん妄",
+    ruby: "せんもう",
+    meaning: "脱水・感染症・環境変化等で、数時間〜数日の間に急に時間や場所がわからなくなり幻覚や興奮が起きる一時的な意識障害。",
+    urgency: "⚠️ 看護師へ報告 (原因疾患の探索)",
+    urgencyType: "warning",
+    checkPoint: "認知症の悪化に見えますが、発熱・尿路感染・脱水・便秘・薬剤副作用が原因であることが多いです。体温測定・水分摂取確認を行い看護師へ報告します。",
+    isDisease: false
+  },
+  "半側空間無視": {
+    term: "半側空間無視",
+    ruby: "はんそくくうかんむし",
+    meaning: "脳の損傷により、麻痺側（多くは左側）にある人や物、配膳された食事に気づかなくなる障害。",
+    urgency: "ℹ️ 現場ケア知識",
+    urgencyType: "info",
+    checkPoint: "本人は見えていない自覚がありません。声かけや食事の配膳は気づきやすい側（健側）から行い、麻痺側にある食事や障害物へ優しく注意を促します。",
+    isDisease: false
+  },
+  "感情失禁": {
+    term: "感情失禁",
+    ruby: "かんじょうしっきん",
+    meaning: "脳血管障害などの後遺症で、些細な刺激や理由もないのに急に泣いたり大笑いしたりする症状。",
+    urgency: "ℹ️ 現場ケア知識",
+    urgencyType: "info",
+    checkPoint: "本人の意思でコントロールできません。動揺せず『大丈夫ですよ』と落ち着いた声かけをし、背中を優しくさすって安心感を促します。",
+    isDisease: false
+  },
+  "悪性症候群": {
+    term: "悪性症候群",
+    ruby: "あくせいしょうこうぐん",
+    meaning: "向精神薬や抗パーキンソン病薬の副作用・急な服薬中断等で起きる高熱・全身のこわばり・意識障害。",
+    urgency: "🚨 即時報告レベル (生命の危険)",
+    urgencyType: "danger",
+    checkPoint: "38℃以上の急な高熱、筋肉の強い硬直、大量の発汗、意識低下が見られたら直ちに看護師・医師へ連絡。冷却処置を行い救急対応が必要です。",
+    isDisease: false
+  },
+
+  // 運動・パーキンソン
+  "振戦": {
+    term: "振戦",
+    ruby: "しんせん",
+    meaning: "手や指、足、顎などが自分の意思と無関係に細かくリズミカルに震える症状。",
+    urgency: "⚠️ 低血糖の震えは即報告 / パーキンソン症状は観察",
+    urgencyType: "warning",
+    checkPoint: "冷汗や脱力を伴う場合は低血糖の疑い（即報告）。安静時に手をもみほぐすように震える場合はパーキンソン病の症状で、内服時間通りに服薬できているか確認します。",
+    isDisease: false
+  },
+  "筋固縮": {
+    term: "筋固縮",
+    ruby: "きんこしゅく",
+    meaning: "他人が関節を曲げ伸ばししようとした際、筋肉が鉛の管のように硬く抵抗する症状。",
+    urgency: "ℹ️ 現場ケア知識",
+    urgencyType: "info",
+    checkPoint: "移乗や更衣の際に無理に力を入れて引っ張ると骨折や筋損傷の原因になります。ゆっくりと本人の動きに合わせて優しく介助します。",
+    isDisease: false
+  },
+  "すくみ足": {
+    term: "すくみ足",
+    ruby: "すくみあし",
+    meaning: "歩き始めや方向転換の際に、足の裏が床に接着剤で張り付いたように一歩目が出なくなる症状。",
+    urgency: "🤝 現場介護でしてよい安全ケア",
+    urgencyType: "info",
+    checkPoint: "無理に引っ張ると転倒します。『いち、に』とリズムカルに声をかけたり、職員の足をまたいでもらう、床に線を引くなど視覚・聴覚の合図が極めて有効です。",
+    isDisease: false
+  },
+  "突進現象": {
+    term: "突進現象",
+    ruby: "とっしんげんしょう",
+    meaning: "歩き始めると前傾姿勢のまま小刻みに足が加速し、自分の意思で止まれなくなる症状。",
+    urgency: "⚠️ 転倒高リスク (見守り必須)",
+    urgencyType: "warning",
+    checkPoint: "壁や物に激突して重傷を負うリスクがあります。歩行時は必ず前方・側方に付き添い、止まる際は正面から肩を優しく支えて制動します。",
+    isDisease: false
+  },
+
+  // 代謝・消化・嚥下
+  "低血糖発作": {
+    term: "低血糖発作",
+    ruby: "ていけっとうほっさ",
+    meaning: "血糖値が過度に低下し、冷汗・手指の震え・動悸・激しい空腹感・生あくび・ふらつきを起こす状態。",
+    urgency: "🚨 即時報告レベル (昏睡リスク)",
+    urgencyType: "danger",
+    checkPoint: "放置すると意識消失・脳障害に繋がります。直ちに安静を保ち看護師へ報告。指示に基づきブドウ糖やジュース等の糖分を迅速に補給します。",
+    isDisease: false
+  },
+  "チョークサイン": {
+    term: "チョークサイン",
+    ruby: "ちょーくさいん",
+    meaning: "食べ物が喉に詰まり声が出せないとき、自分の喉元を両手で強く押さえる窒息の世界共通サイン。",
+    urgency: "🚨 超緊急 (即時窒息解除・救急)",
+    urgencyType: "danger",
+    checkPoint: "1分1秒を争う窒息状態です。直ちに大声で周囲を呼び、背部叩打法（肩甲骨の間を手のひらで強く叩く）やハイムリック法を実施し、119番通報してください。",
+    isDisease: false
+  },
+  "交互嚥下": {
+    term: "交互嚥下",
+    ruby: "こうごえんげ",
+    meaning: "主食やおかずを食べたあとに、お茶やゼリー、とろみ水を挟んで飲み込ませる介助法。",
+    urgency: "🤝 現場介護でしてよい安全ケア",
+    urgencyType: "info",
+    checkPoint: "喉の奥に残留した固形物を水分やゼリーが押し流してくれるため、食後のむせや誤嚥性肺炎の予防に極めて高い効果があります。",
+    isDisease: false
+  },
+  "爪白癬": {
+    term: "爪白癬",
+    ruby: "つめはくせん",
+    meaning: "爪の水虫。爪が白濁・肥厚して脆くなる真菌感染症。",
+    urgency: "ℹ️ 現場ケア知識 (足病変チェック)",
+    urgencyType: "info",
+    checkPoint: "糖尿病の利用者は足の感覚が鈍く、爪の割れや靴擦れから細菌が入り足壊疽（切断）に繋がることがあります。入浴時に足先の傷や赤みがないか必ず観察します。",
+    isDisease: false
+  },
+  "シャント": {
+    term: "シャント",
+    ruby: "しゃんと",
+    meaning: "人工透析のために、手術で腕の動脈と静脈を直接つなぎ合わせて血流を増やした血管。",
+    urgency: "⚠️ 圧迫厳禁 / 拍動停止時は即報告",
+    urgencyType: "warning",
+    checkPoint: "シャントがある腕での血圧測定、採血、腕枕、重い荷物の把持、腕時計・ゴムバンドの装着は厳禁。耳を近づけて『ザーザー』という血流音が聞こえるか確認します。",
+    isDisease: false
+  },
+  "宿便性イレウス": {
+    term: "宿便性イレウス",
+    ruby: "しゅくべんせいいれうす",
+    meaning: "直腸に硬い便が大量に詰まり、腸閉塞を起こして激しい腹痛や嘔吐を起こす状態。",
+    urgency: "🚨 即時報告レベル",
+    urgencyType: "danger",
+    checkPoint: "数日間排便がない、下腹部がパンパンに張っている、吐き気や嘔吐がある場合は直ちに看護師へ連絡。摘便や浣腸、受診の判断を仰ぎます。",
+    isDisease: false
+  },
+
+  // 外傷・骨
+  "圧迫骨折": {
+    term: "圧迫骨折",
+    ruby: "あっぱくこっせつ",
+    meaning: "骨粗鬆症で弱くなった背骨が、尻もちやくしゃみ等の軽微な衝撃でつぶれる骨折。",
+    urgency: "⚠️ 腰背部の急な激痛は即報告",
+    urgencyType: "warning",
+    checkPoint: "『起き上がるときに腰や背中が激痛で動けない』と訴えたら無理に立たせず、横向きで膝を曲げて丸くなる姿勢で安静を保ち、看護師へ報告します。",
+    isDisease: false
+  },
+  "大腿骨頸部骨折": {
+    term: "大腿骨頸部骨折",
+    ruby: "だいたいこつけいぶこっせつ",
+    meaning: "太ももの骨の付け根の骨折。転倒によって発生し、歩行困難になる重大骨折。",
+    urgency: "🚨 即時報告レベル (無理に動かさない)",
+    urgencyType: "danger",
+    checkPoint: "転倒後、立ち上がれない、足の向きが外側を向いて左右の長さが違う、足の付け根を押すと激痛があるときは骨折確定疑い。絶対に歩かせず看護師・医師へ連絡します。",
+    isDisease: false
+  },
+  "良肢位": {
+    term: "良肢位",
+    ruby: "りょうしい",
+    meaning: "万が一関節が固まって動かなくなっても、日常生活の支障が最も少なくなる自然な姿勢。",
+    urgency: "🤝 現場介護でしてよい安全ケア",
+    urgencyType: "info",
+    checkPoint: "肩は軽く広げ、肘は直角に近く、手首は少し反らせ、足首は直角（つま先が下を向かない）にクッション等で保ちます。尖足（つま先下向き）予防が特に重要です。",
+    isDisease: false
+  },
+  "免荷": {
+    term: "免荷",
+    ruby: "めんか",
+    meaning: "骨折や傷のある手足に体重や負荷をかけないようにすること。",
+    urgency: "🤝 現場介護で守るべき介助ルール",
+    urgencyType: "info",
+    checkPoint: "医師から『左足免荷』の指示がある場合、立ち上がりや移乗時に患側の足で床を踏ん張らせてはいけません。健側の足だけで支える介助を行います。",
+    isDisease: false
+  },
+  "褥瘡": {
+    term: "褥瘡",
+    ruby: "じょくそう (とこづれ)",
+    meaning: "寝たきり等で骨の出っ張り部分が長時間圧迫され、皮膚の血流が途絶えて組織が壊死する傷。",
+    urgency: "⚠️ 赤み・水疱発見時は即報告",
+    urgencyType: "warning",
+    checkPoint: "仙骨部（お尻中央）やかかと、大転子（腰横）の皮膚に『赤み（除圧しても消えない赤色）』を発見したら初期段階。2時間毎の体位変換とクッション除圧を徹底します。",
+    isDisease: false
+  },
+  "脱水": {
+    term: "脱水",
+    ruby: "だっすい",
+    meaning: "体内の水分や電解質が不足した状態。高齢者は自覚症状なく進行しやすい。",
+    urgency: "⚠️ 微熱・活気低下時は即報告",
+    urgencyType: "warning",
+    checkPoint: "口腔内の乾燥、手の甲の皮膚をつまんで戻りが遅い（ツルゴール低下）、微熱、ぼんやりしている、尿の色が濃く量が少ない時は要注意。水分補給と看護師共有を行います。",
+    isDisease: false
+  },
+
+  // 主要関連病名 (isDisease: true)
+  "糖尿病": {
+    term: "糖尿病",
+    ruby: "とうにょうびょう",
+    meaning: "すい臓から出るインスリンが不足し、血液中のブドウ糖が増え続ける生活習慣病。",
+    urgency: "⚠️ 低血糖発作は即報告",
+    urgencyType: "warning",
+    checkPoint: "冷汗・手の震えなどの低血糖、足先の傷、食事の欠食・残食に注意します。",
+    isDisease: true
+  },
+  "心不全": {
+    term: "心不全",
+    ruby: "しんふぜん",
+    meaning: "心臓のポンプ機能が低下し、全身に十分な血液を送り出せなくなる心臓の病態。",
+    urgency: "🚨 息切れ・起座呼吸・体重急増時は即報告",
+    urgencyType: "danger",
+    checkPoint: "横になると苦しい起座呼吸、足の急激なむくみ、1週間で2kg以上の急な体重増加が兆候です。",
+    isDisease: true
+  },
+  "誤嚥性肺炎": {
+    term: "誤嚥性肺炎",
+    ruby: "ごえんせいはいえん",
+    meaning: "唾液や食物が誤って気管に入り、細菌が肺で繁殖して起こる高齢者に極めて多い肺炎。",
+    urgency: "🚨 37.5℃以上の発熱・痰急増時は即報告",
+    urgencyType: "danger",
+    checkPoint: "食事時の姿勢保持（背上げ・顎引き）、食形態の厳守、食後30分以上の座位保持、口腔ケアが最重要です。",
+    isDisease: true
+  },
+  "嚥下障害": {
+    term: "嚥下障害",
+    ruby: "えんげしょうがい",
+    meaning: "食べ物や水分を噛んで喉へ送り込み、胃へスムーズに飲み込む働きが低下した状態。",
+    urgency: "⚠️ むせ・湿性嗄声は要注意",
+    urgencyType: "warning",
+    checkPoint: "一口量を少なくする、とろみをつける、食事に集中できる環境を整えます。",
+    isDisease: true
+  },
+  "脳梗塞": {
+    term: "脳梗塞",
+    ruby: "のうこうそく",
+    meaning: "脳の血管が詰まり、脳細胞へ酸素が届かなくなって麻痺や言語障害が起きる病気。",
+    urgency: "🚨 片麻痺・ろれつ不良の新規出現は即救急要請",
+    urgencyType: "danger",
+    checkPoint: "『顔のゆがみ』『腕の脱力』『ろれつ不良』のいずれかが出たら一刻を争う救急搬送が必要です。",
+    isDisease: true
+  },
+  "パーキンソン病": {
+    term: "パーキンソン病",
+    ruby: "ぱーきんそんびょう",
+    meaning: "脳の神経伝達物質（ドパミン）が減少し、手足の震えや筋肉のこわばり、歩行障害が起きる難病。",
+    urgency: "⚠️ 転倒・すくみ足・内服時間厳守",
+    urgencyType: "warning",
+    checkPoint: "薬の効き目時間によって動ける時間と動けない時間が分かれます。移動時の見守り徹底が大切です。",
+    isDisease: true
+  },
+  "骨粗鬆症": {
+    term: "骨粗鬆症",
+    ruby: "こつそしょうしょう",
+    meaning: "骨の密度が低下してスカスカになり、わずかな衝撃でも骨折しやすくなる病気。",
+    urgency: "⚠️ 転倒予防徹底 / 骨折疑いは即報告",
+    urgencyType: "warning",
+    checkPoint: "ベッドからの起き上がりや移乗介助時に腕や足を強く引っ張ったりひねったりしてはいけません。",
+    isDisease: true
+  },
+  "認知症": {
+    term: "認知症",
+    ruby: "にんちしょう",
+    meaning: "脳の病気や障害により、記憶力や判断力が低下して日常生活に支障をきたす状態。",
+    urgency: "ℹ️ 傾聴・安心感の提供 / 急変時は報告",
+    urgencyType: "info",
+    checkPoint: "否定や説得をせず共感して接します。急なせん妄や興奮は感染症や脱水が原因のことがあります。",
+    isDisease: true
+  },
+  "COPD": {
+    term: "COPD",
+    ruby: "しーおーぴーでぃー (まんせいへいそくせいはいしっかん)",
+    meaning: "長年の喫煙等で気道や肺胞が破壊され、慢性的な息切れや咳・痰が続く肺の病気。",
+    urgency: "🚨 SpO2低下・呼吸苦は即報告",
+    urgencyType: "danger",
+    checkPoint: "動作を急がせず深呼吸を誘導。HOT（在宅酸素）のカニューラ外れがないか確認します。",
+    isDisease: true
+  },
+  "狭心症": {
+    term: "狭心症",
+    ruby: "きょうしんしょう",
+    meaning: "冠動脈（心臓の血管）が動脈硬化等で狭くなり、一時的に心筋へ血液が不足して胸痛が起きる病気。",
+    urgency: "🚨 締め付けられる胸痛は直ちに報告・安静",
+    urgencyType: "danger",
+    checkPoint: "胸の圧迫感や左肩への放散痛が典型的。発作時は安静にし、指示薬（ニトロ舌下錠等）を確認します。",
+    isDisease: true
+  },
+  "心筋梗塞": {
+    term: "心筋梗塞",
+    ruby: "しんきんこうそく",
+    meaning: "冠動脈が完全に閉塞し、心筋の一部が壊死する極めて危険な急性疾患。",
+    urgency: "🚨 激しい胸痛・冷汗・顔面蒼白は即救急要請",
+    urgencyType: "danger",
+    checkPoint: "ニトロが効かない15分以上続く激痛、冷汗、嘔吐、意識朦朧は心筋梗塞疑い。直ちに119番です。",
+    isDisease: true
+  },
+  "慢性腎不全": {
+    term: "慢性腎不全",
+    ruby: "まんせいじんふぜん",
+    meaning: "腎臓の老廃物排泄や水分調整の機能が何ヶ月・何年もかけて徐々に低下した状態。",
+    urgency: "⚠️ 浮腫・呼吸苦・倦怠感時は報告",
+    urgencyType: "warning",
+    checkPoint: "水分制限や塩分制限の指示を守る。透析を行っている場合はシャント肢の保護が絶対です。",
+    isDisease: true
+  }
+};
+
 // 高齢者施設 現場ケア辞書 (30大主要疾患・症候群)
 const DISEASE_GUIDE = {
   "糖尿病": {
@@ -1716,8 +2192,92 @@ function renderResidentDetail() {
   `;
 }
 
+// ======================================================================
+// 🩺 現場介護向け 医療・症状・病名専門用語 アノテーション ＆ やさしい解説表示
+// ======================================================================
+function annotateMedicalTerms(text) {
+  if (!text || typeof text !== "string") return "";
+  const escaped = escapeHtml(text);
+  
+  // 長い用語から順にマッチさせて部分一致破壊（例: 大腿骨頸部骨折 vs 骨折）を確実に防止
+  const termKeys = Object.keys(MEDICAL_TERMS_DICTIONARY).sort((a, b) => b.length - a.length);
+  if (termKeys.length === 0) return escaped;
+
+  const escapeRegex = s => s.replace(/[-/\\^$*+?.()|[\]{}]/g, '\\$&');
+  const pattern = new RegExp(termKeys.map(escapeRegex).join("|"), "g");
+
+  return escaped.replace(pattern, (match) => {
+    return `<span class="term-link" onclick="openTermExplanation('${match}')" title="クリックしてやさしい解説・判断基準を表示">${match}</span>`;
+  });
+}
+
+function openTermExplanation(termKey) {
+  const info = MEDICAL_TERMS_DICTIONARY[termKey];
+  if (!info) return;
+
+  const card = document.getElementById("termExplainCard");
+  if (!card) return;
+
+  const titleEl = document.getElementById("termExplainTitle");
+  if (titleEl) titleEl.textContent = info.term;
+
+  const rubyEl = document.getElementById("termExplainRuby");
+  if (rubyEl) rubyEl.textContent = info.ruby ? `(${info.ruby})` : "";
+
+  const badgeEl = document.getElementById("termExplainUrgencyBadge");
+  if (badgeEl) {
+    badgeEl.textContent = info.urgency;
+    if (info.urgencyType === "danger") {
+      badgeEl.style.background = "#fee2e2";
+      badgeEl.style.color = "#991b1b";
+      badgeEl.style.border = "1px solid #fca5a5";
+    } else if (info.urgencyType === "warning") {
+      badgeEl.style.background = "#fef3c7";
+      badgeEl.style.color = "#92400e";
+      badgeEl.style.border = "1px solid #fcd34d";
+    } else {
+      badgeEl.style.background = "#e0f2fe";
+      badgeEl.style.color = "#0369a1";
+      badgeEl.style.border = "1px solid #bae6fd";
+    }
+  }
+
+  const meaningEl = document.getElementById("termExplainMeaning");
+  if (meaningEl) meaningEl.textContent = info.meaning;
+
+  const checkpointEl = document.getElementById("termExplainCheckpoint");
+  if (checkpointEl) checkpointEl.textContent = info.checkPoint;
+
+  const linkArea = document.getElementById("termDiseaseLinkArea");
+  const btnJump = document.getElementById("btnJumpToDiseaseGuide");
+  if (linkArea && btnJump) {
+    if (info.isDisease) {
+      linkArea.style.display = "block";
+      btnJump.onclick = () => {
+        openDiseaseGuide(info.term);
+      };
+      btnJump.textContent = `🩺 『${info.term}』の現場ケアガイドを開く`;
+    } else {
+      linkArea.style.display = "none";
+    }
+  }
+
+  card.style.display = "block";
+  try {
+    card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  } catch (e) {}
+}
+
+function closeTermExplanation() {
+  const card = document.getElementById("termExplainCard");
+  if (card) {
+    card.style.display = "none";
+  }
+}
+
 // 病歴ガイド モーダル (現場実践・看護連携マニュアル＆施設独自編集対応)
 function openDiseaseGuide(diseaseName) {
+  closeTermExplanation();
   const name = (diseaseName || "").trim();
   const res = resolveDiseaseGuide(name);
   const guide = res ? res.guide : {
@@ -1750,7 +2310,7 @@ function openDiseaseGuide(diseaseName) {
         <h4 style="font-size:13.5px; color:#991b1b; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🚨 すぐに看護師・医師へ報告する基準（危険レベル・具体的症状）:</span>
         </h4>
-        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;" id="dispGuideEmergency">${escapeHtml(guide.emergency)}</p>
+        <p style="font-size:13px; color:#7f1d1d; margin:0; line-height:1.6;" id="dispGuideEmergency">${annotateMedicalTerms(guide.emergency)}</p>
       </div>
 
       <!-- 2. 現場介護でしてよい対応・ケア (医療行為外の安全対応) -->
@@ -1758,7 +2318,7 @@ function openDiseaseGuide(diseaseName) {
         <h4 style="font-size:13.5px; color:#166534; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🤝 現場介護でしてよい対応・ケア（医療行為以外の安全な初期対応）:</span>
         </h4>
-        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;" id="dispGuideCare">${escapeHtml(guide.care_points)}</p>
+        <p style="font-size:13px; color:#14532d; margin:0; line-height:1.6;" id="dispGuideCare">${annotateMedicalTerms(guide.care_points)}</p>
       </div>
 
       <!-- 3. 主な症状・見守りの観察サイン -->
@@ -1766,7 +2326,7 @@ function openDiseaseGuide(diseaseName) {
         <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
           <span>🔍 主な症状 ＆ 日常ケア時の観察サイン:</span>
         </h4>
-        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${escapeHtml(guide.symptoms)}</p>
+        <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${annotateMedicalTerms(guide.symptoms)}</p>
       </div>
 
       <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
@@ -6152,7 +6712,11 @@ function renderCareExpiryNotes() {
 }
 
 function closeModal(id) {
-  document.getElementById(id).style.display = "none";
+  const el = document.getElementById(id);
+  if (el) el.style.display = "none";
+  if (id === "diseaseModal" && typeof closeTermExplanation === "function") {
+    closeTermExplanation();
+  }
 }
 
 function openShareModal() {
@@ -7543,4 +8107,8 @@ if (typeof window !== "undefined") {
   window.toggleCustomDiseaseEdit = toggleCustomDiseaseEdit;
   window.saveCustomDiseaseGuide = saveCustomDiseaseGuide;
   window.resetCustomDiseaseGuide = resetCustomDiseaseGuide;
+  window.annotateMedicalTerms = annotateMedicalTerms;
+  window.openTermExplanation = openTermExplanation;
+  window.closeTermExplanation = closeTermExplanation;
+  window.MEDICAL_TERMS_DICTIONARY = MEDICAL_TERMS_DICTIONARY;
 }
