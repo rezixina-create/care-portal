@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html>
 <head>
  <meta charset="utf-8">
@@ -228,6 +228,24 @@
  await new Promise(r => setTimeout(r, 100));
  const isDjModalClosed = djModal && win.getComputedStyle(djModal).display === "none";
  report("業務日誌モーダルが正常に閉じられること", isDjModalClosed);
+
+ // 13. 希望休・要望登録モーダルの動作確認
+ win.openShiftHopeModal();
+ await new Promise(r => setTimeout(r, 200));
+ const hopeModal = doc.getElementById("shiftHopeModal");
+ const isHopeModalOpen = hopeModal && win.getComputedStyle(hopeModal).display === "flex";
+ report("希望休・事前要望登録モーダルが開くこと", isHopeModalOpen);
+
+ const hopeStaff = doc.getElementById("shiftHopeStaff");
+ const hopeDay = doc.getElementById("shiftHopeDay");
+ const hopeReason = doc.getElementById("shiftHopeReason");
+ const hopeList = doc.getElementById("shiftHopeList");
+ report("希望休モーダル内に対象職員・希望日・理由・一覧が存在すること", !!(hopeStaff && hopeDay && hopeReason && hopeList));
+
+ win.closeModal("shiftHopeModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isHopeModalClosed = hopeModal && win.getComputedStyle(hopeModal).display === "none";
+ report("希望休モーダルが正常に閉じられること", isHopeModalClosed);
 
  const fin = document.createElement("div");
  fin.id = "testComplete";

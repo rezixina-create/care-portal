@@ -890,6 +890,7 @@
  </div>
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="generateMonthlyShiftAction()"> 1ヶ月シフト自動生成</button>
+ <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#fef2f2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;" onclick="openShiftHopeModal()"> 希望休・要望の登録</button>
  <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#f8fafc;" onclick="openShiftNgModal()"> 特例配慮設定 (同番NG)</button>
  <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="window.print()"> A4横 印刷</button>
  </div>
@@ -905,6 +906,7 @@
  <span class="shift-badge-legend" style="background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; padding:2px 6px; border-radius:4px; font-weight:bold;">夜 夜勤 (毎日2名)</span>
  <span class="shift-badge-legend" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; padding:2px 6px; border-radius:4px; font-weight:bold;">明 明け</span>
  <span class="shift-badge-legend" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; padding:2px 6px; border-radius:4px; font-weight:bold;">休 公休 (週休2日)</span>
+ <span class="shift-badge-legend" style="background:#fef2f2; color:#b91c1c; border:1.5px solid #dc2626; padding:2px 6px; border-radius:4px; font-weight:bold;">休[希望] 希望休</span>
  </div>
  <div style="color:#64748b; font-size:11.5px; font-weight:500;">
  各セルをクリックして手動でシフトを変更・修正できます。
@@ -2198,6 +2200,57 @@
 
  <!-- シフトセル即時変更 クイック選択ポップオーバー -->
  <div id="shiftCellPopover" class="shift-cell-popover" style="display:none;"></div>
+
+  <!-- 職員の希望休・事前要望設定モーダル -->
+ <div class="modal-overlay" id="shiftHopeModal" style="display:none;">
+ <div class="modal-card" style="max-width:580px;">
+ <div class="modal-header">
+ <h4 style="margin:0; color:#1e3a8a;"> 職員の希望休・事前要望の登録</h4>
+ <button class="modal-close-btn" onclick="closeModal('shiftHopeModal')">&times;</button>
+ </div>
+ <div style="padding:14px 0;">
+ <p style="font-size:13px; color:#475569; margin-bottom:12px; line-height:1.5;">
+ 職員からの「この日に休みたい」という希望休を事前に登録できます。<br>
+ 1ヶ月シフトの自動生成時に、この希望日を最優先で<strong>公休「休」</strong>として確定し、夜勤・早番・遅番などへの配置を自動回避します。
+ </p>
+
+ <!-- 新規登録フォーム -->
+ <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:16px;">
+ <div style="font-weight:bold; font-size:13px; margin-bottom:8px; color:#1e293b;">＋ 新しい希望休を登録</div>
+ <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin-bottom:8px;">
+ <div style="flex:1; min-width:130px;">
+ <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">対象職員:</label>
+ <select id="shiftHopeStaff" class="form-control" style="width:100%; font-size:13px;"></select>
+ </div>
+ <div style="width:90px;">
+ <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">希望日:</label>
+ <select id="shiftHopeDay" class="form-control" style="width:100%; font-size:13px;"></select>
+ </div>
+ <div style="flex:1; min-width:150px;">
+ <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">理由・メモ (任意):</label>
+ <input type="text" id="shiftHopeReason" class="form-control" style="width:100%; font-size:12px;" placeholder="例: 冠婚葬祭・通院・私用">
+ </div>
+ <div style="margin-top:18px;">
+ <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="submitShiftHopeOff()">登録</button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 登録済み一覧 -->
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+ <div style="font-weight:bold; font-size:13px; color:#1e293b;" id="shiftHopeCountLabel">対象月の登録済み希望休一覧:</div>
+ <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;" onclick="applyHopeOffsAndRegenerate()">希望休を反映してシフト再生成</button>
+ </div>
+ <div id="shiftHopeList" style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px; background:#ffffff;">
+ <!-- JSで自動描画 -->
+ </div>
+ </div>
+ <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center;">
+ <span style="font-size:11.5px; color:#64748b;">※ 勤務表の各セルをクリックしても希望休の即時設定・解除が可能です。</span>
+ <button class="btn btn-secondary" onclick="closeModal('shiftHopeModal')">閉じる</button>
+ </div>
+ </div>
+ </div>
 
  <!-- 特例配慮設定 (同番NG) モーダル -->
  <div class="modal-overlay" id="shiftNgModal" style="display:none;">

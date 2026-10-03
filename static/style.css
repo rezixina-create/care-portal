@@ -1,4 +1,4 @@
-﻿/* ==============================================================
+/* ==============================================================
    介護施設 統合業務ポータルシステム (Care Portal) スタイルシート
    キントーン風の洗練されたモダンUI & タブレット向け大型タッチ対応
    ============================================================== */
@@ -1079,6 +1079,20 @@ body {
   text-decoration: underline solid #2563eb 2px;
   transform: translateY(-1px);
 }
-
-
+/* 勤務表 希望休表示スタイル */
+.shift-cell-hope {
+  background-color: #fef2f2 !important;
+  box-shadow: inset 0 0 0 1.5px #f87171 !important;
+}
+.shift-cell-hope:hover {
+  background-color: #fee2e2 !important;
+}
+.shift-hope-tag {
+  display: block;
+  font-size: 8.5px;
+  line-height: 1;
+  color: #dc2626;
+  font-weight: bold;
+  margin-top: 1px;
+}
 

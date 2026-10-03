@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 介護施設 統合業務ポータルシステム (Care Portal)
  * 【施設内Wi-Fiクラウド共有 ＆ スタンドアロン両対応版】
  * ・サーバー稼働時: 親機PCに全データが一元保存され、タブレット等の他端末とリアルタイム共有
@@ -133,6 +133,13 @@ class LocalDB {
 
  if (!d.monthly_shifts || typeof d.monthly_shifts !== "object") {
  d.monthly_shifts = {};
+ }
+ if (!Array.isArray(d.shift_hope_offs)) {
+  d.shift_hope_offs = [
+   { id: 1, year_month: "2026-10", staff_name: "佐藤 健太", day: 15, reason: "通院のため" },
+   { id: 2, year_month: "2026-10", staff_name: "小林 誠", day: 25, reason: "冠婚葬祭" },
+   { id: 3, year_month: "2026-10", staff_name: "渡辺 拓也", day: 8, reason: "家族行事" }
+  ];
  }
  if (!Array.isArray(d.shift_ng_pairs)) {
  d.shift_ng_pairs = [
@@ -7867,14 +7874,16 @@ function onShiftMonthChange() {
 function generateMonthlyShiftAction() {
  const ym = getShiftYearMonth();
  const [y, m] = ym.split("-");
+ const hopeCount = (db.data.shift_hope_offs || []).filter(h => h.year_month === ym).length;
+ const hopeNotice = hopeCount > 0 ? `\n（登録済みの希望休 ${hopeCount}件 も最優先公休として自動反映されます）` : "";
  if (db.data.monthly_shifts && db.data.monthly_shifts[ym]) {
- if (!confirm(`${y}年${parseInt(m, 10)}月の勤務表シフトを再生成しますか？\n（手動修正された内容もリセットされます）`)) {
- return;
- }
+  if (!confirm(`${y}年${parseInt(m, 10)}月の勤務表シフトを再生成しますか？${hopeNotice}\n（手動修正された内容もリセットされます）`)) {
+   return;
+  }
  }
  generateMonthlyShiftData(ym);
  renderShiftTable(ym);
- alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・早出・遅出：毎日必ず各1名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（土日祝・年末年始休み）\n・公休：全員週休2日配分`);
+ alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（土日祝・年末年始休み）\n・公休：全員週休2日配分`);
 }
 
 // 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
@@ -7972,7 +7981,7 @@ function generateMonthlyShiftData(yearMonth) {
  const month = parseInt(monthStr, 10);
  const daysInMonth = new Date(year, month, 0).getDate();
 
- // 1. スタッフ分類 (15名体制: 管理者1, 看護2, 介護10, 事務2)
+ // 1. スタッフ分類 (19名体制: 管理者1, 看護2, 介護14, 事務2)
  const allStamps = sortStaffList(db.data.stamps || []);
  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
 
@@ -7989,241 +7998,287 @@ function generateMonthlyShiftData(yearMonth) {
  // NGペアチェック関数
  const ngPairs = db.data.shift_ng_pairs || [];
  const isNgPair = (name1, name2) => {
- return ngPairs.some(p => 
- (p.staff1 === name1 && p.staff2 === name2) || 
- (p.staff1 === name2 && p.staff2 === name1)
- );
+  return ngPairs.some(p => 
+   (p.staff1 === name1 && p.staff2 === name2) || 
+   (p.staff1 === name2 && p.staff2 === name1)
+  );
+ };
+
+ // 希望休データの取得と索引化 (対象年月)
+ const hopeOffList = (db.data.shift_hope_offs || []).filter(h => h.year_month === yearMonth);
+ const staffHopeDays = {};
+ hopeOffList.forEach(h => {
+  if (!staffHopeDays[h.staff_name]) staffHopeDays[h.staff_name] = new Set();
+  staffHopeDays[h.staff_name].add(parseInt(h.day, 10));
+ });
+ const isHopeOff = (name, day) => {
+  return Boolean(staffHopeDays[name] && staffHopeDays[name].has(day));
  };
 
  const shiftData = {};
  staffList.forEach(s => {
- shiftData[s.name] = {};
+  shiftData[s.name] = {};
  });
 
- // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+ // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
  directors.forEach(s => {
- for (let d = 1; d <= daysInMonth; d++) {
- const dow = new Date(year, month - 1, d).getDay();
- const hol = isHolidayOrYearEnd(year, month, d);
- if (dow === 0 || dow === 6 || hol.isHoliday) {
- shiftData[s.name][d] = "休";
- } else {
- shiftData[s.name][d] = "日";
- }
- }
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const hol = isHolidayOrYearEnd(year, month, d);
+   if (dow === 0 || dow === 6 || hol.isHoliday || isHopeOff(s.name, d)) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
  });
 
- // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」)
+ // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
  officeStaff.forEach((s) => {
- for (let d = 1; d <= daysInMonth; d++) {
- const dow = new Date(year, month - 1, d).getDay();
- const hol = isHolidayOrYearEnd(year, month, d);
- if (dow === 0 || dow === 6 || hol.isHoliday) {
- shiftData[s.name][d] = "休";
- } else {
- shiftData[s.name][d] = "日";
- }
- }
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const hol = isHolidayOrYearEnd(year, month, d);
+   if (dow === 0 || dow === 6 || hol.isHoliday || isHopeOff(s.name, d)) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
  });
 
- // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置)
+ // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置、希望休配慮)
  nurses.forEach((s, idx) => {
- for (let d = 1; d <= daysInMonth; d++) {
- const dow = new Date(year, month - 1, d).getDay();
- if (idx === 0) {
- shiftData[s.name][d] = (dow === 0 || dow === 3) ? "休" : "日";
- } else {
- shiftData[s.name][d] = (dow === 4 || dow === 6) ? "休" : "日";
- }
- }
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const defOff = (idx === 0) ? (dow === 0 || dow === 3) : (dow === 4 || dow === 6);
+   if (isHopeOff(s.name, d) || defOff) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
  });
 
  // 5. 介護職員 (14名体制): 毎日必ず「早出2名」「遅出2名」「日勤2名」「夜勤2名」「明け2名」「公休4名」
  if (careStaff.length > 0) {
- const careNames = careStaff.map(s => s.name);
- const nightCount = {};
- const earlyCount = {};
- const lateCount = {};
- const dayCount = {};
- const holidayCount = {};
- careNames.forEach(n => {
- nightCount[n] = 0;
- earlyCount[n] = 0;
- lateCount[n] = 0;
- dayCount[n] = 0;
- holidayCount[n] = 0;
- });
+  const careNames = careStaff.map(s => s.name);
+  const nightCount = {};
+  const earlyCount = {};
+  const lateCount = {};
+  const dayCount = {};
+  const holidayCount = {};
+  careNames.forEach(n => {
+   nightCount[n] = 0;
+   earlyCount[n] = 0;
+   lateCount[n] = 0;
+   dayCount[n] = 0;
+   holidayCount[n] = 0;
+  });
 
- // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
- const totalMonthHolidays = daysInMonth * 4;
- const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
- const extraHolidays = totalMonthHolidays % careNames.length;
- const targetHolidays = {};
- careNames.forEach((n, idx) => {
- targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
- });
+  // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
+  const totalMonthHolidays = daysInMonth * 4;
+  const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
+  const extraHolidays = totalMonthHolidays % careNames.length;
+  const targetHolidays = {};
+  careNames.forEach((n, idx) => {
+   targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
+  });
 
- const dailyCareHolidays = {};
- for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
+  const dailyCareHolidays = {};
+  for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
 
- // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
- if (careNames.length >= 2) {
- const prevNightStaff = [careNames[careNames.length - 2], careNames[careNames.length - 1]];
- prevNightStaff.forEach(pn => {
- shiftData[pn][1] = "明";
- });
- }
+  // 【希望休の事前確定】介護職員の希望休を最優先で公休「休」としてロック
+  careNames.forEach(n => {
+   if (staffHopeDays[n]) {
+    staffHopeDays[n].forEach(d => {
+     if (d >= 1 && d <= daysInMonth) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    });
+   }
+  });
 
- // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
- for (let d = 1; d <= daysInMonth; d++) {
- // 候補者: 前日夜勤でない人（前日夜勤＝当日明のため夜勤不可）
- const candidates = careNames.filter(name => {
- if (d > 1 && shiftData[name][d - 1] === "夜") return false;
- if (shiftData[name][d] === "明") return false;
- return true;
- });
+  // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
+  // ※ 1日に希望休を出している職員は初日明けから除外
+  if (careNames.length >= 2) {
+   const availForAke1 = careNames.filter(n => !isHopeOff(n, 1));
+   const prevNightStaff = (availForAke1.length >= 2 ? availForAke1 : careNames).slice(-2);
+   prevNightStaff.forEach(pn => {
+    shiftData[pn][1] = "明";
+   });
+  }
 
- // 夜勤回数が少なく、前々日夜勤でない人を優先
- candidates.sort((a, b) => {
- const countDiff = nightCount[a] - nightCount[b];
- if (countDiff !== 0) return countDiff;
- const aPrev2 = (d > 2 && shiftData[a][d - 2] === "夜") ? 1 : 0;
- const bPrev2 = (d > 2 && shiftData[b][d - 2] === "夜") ? 1 : 0;
- if (aPrev2 !== bPrev2) return aPrev2 - bPrev2;
- return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
- });
+  // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
+  for (let d = 1; d <= daysInMonth; d++) {
+   // 候補者選定:
+   // ・当日すでに「休」（希望休等）または「明」でない人
+   // ・当日希望休でない人
+   // ・翌日希望休でない人 (※当夜勤に入ると翌日が「明」となり希望休が潰れるため回避)
+   // ・前日夜勤でない人 (※前日夜勤＝当日明のため夜勤不可)
+   let candidates = careNames.filter(name => {
+    if (isHopeOff(name, d)) return false;
+    if (d + 1 <= daysInMonth && isHopeOff(name, d + 1)) return false;
+    if (shiftData[name][d] === "休") return false;
+    if (shiftData[name][d] === "明") return false;
+    if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+    return true;
+   });
 
- // 特例配慮(NGペア: 佐藤 健太 高橋 直樹)を回避する2名を選出
- let selectedPair = null;
- for (let i = 0; i < candidates.length; i++) {
- for (let j = i + 1; j < candidates.length; j++) {
- const c1 = candidates[i];
- const c2 = candidates[j];
- if (!isNgPair(c1, c2)) {
- selectedPair = [c1, c2];
- break;
- }
- }
- if (selectedPair) break;
- }
- if (!selectedPair) {
- selectedPair = [candidates[0], candidates[1] || candidates[0]];
- }
+   // 万一候補が2名未満の場合は翌日希望休ガードのみ緩和
+   if (candidates.length < 2) {
+    candidates = careNames.filter(name => {
+     if (isHopeOff(name, d)) return false;
+     if (shiftData[name][d] === "休") return false;
+     if (shiftData[name][d] === "明") return false;
+     if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+     return true;
+    });
+   }
 
- selectedPair.forEach(n => {
- shiftData[n][d] = "夜";
- nightCount[n]++;
- if (d + 1 <= daysInMonth) {
- shiftData[n][d + 1] = "明";
- }
- });
- }
+   // 夜勤回数が少なく、前々日夜勤でない人を優先
+   candidates.sort((a, b) => {
+    const countDiff = nightCount[a] - nightCount[b];
+    if (countDiff !== 0) return countDiff;
+    const aPrev2 = (d > 2 && shiftData[a][d - 2] === "夜") ? 1 : 0;
+    const bPrev2 = (d > 2 && shiftData[b][d - 2] === "夜") ? 1 : 0;
+    if (aPrev2 !== bPrev2) return aPrev2 - bPrev2;
+    return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
+   });
 
- // Step B: 公休「休」の配分 (毎日必ず4名)
- // 優先1: 夜勤明けの翌日を優先して「休」とする
- for (let d = 1; d <= daysInMonth; d++) {
- careNames.forEach(n => {
- if (!shiftData[n][d]) {
- if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays[n] && dailyCareHolidays[d] < 4) {
- shiftData[n][d] = "休";
- holidayCount[n]++;
- dailyCareHolidays[d]++;
- }
- }
- });
- }
+   // 特例配慮(NGペア: 佐藤 健太 高橋 直樹)を回避する2名を選出
+   let selectedPair = null;
+   for (let i = 0; i < candidates.length; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+     const c1 = candidates[i];
+     const c2 = candidates[j];
+     if (!isNgPair(c1, c2)) {
+      selectedPair = [c1, c2];
+      break;
+     }
+    }
+    if (selectedPair) break;
+   }
+   if (!selectedPair) {
+    selectedPair = [candidates[0], candidates[1] || candidates[0]];
+   }
 
- // 優先2: 各日に公休をバランス配分 (1日4名になるまで)
- for (let d = 1; d <= daysInMonth; d++) {
- if (dailyCareHolidays[d] < 4) {
- const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
- for (const n of sortedCare) {
- if (holidayCount[n] < targetHolidays[n] && !shiftData[n][d] && dailyCareHolidays[d] < 4) {
- shiftData[n][d] = "休";
- holidayCount[n]++;
- dailyCareHolidays[d]++;
- }
- }
- }
- }
+   selectedPair.forEach(n => {
+    shiftData[n][d] = "夜";
+    nightCount[n]++;
+    if (d + 1 <= daysInMonth) {
+     shiftData[n][d + 1] = "明";
+    }
+   });
+  }
 
- // 4名未満の日があれば空いている人を公休に充当して毎日必ず4名にする
- for (let d = 1; d <= daysInMonth; d++) {
- while (dailyCareHolidays[d] < 4) {
- const unassigned = careNames.filter(n => !shiftData[n][d]);
- if (unassigned.length > 0) {
- unassigned.sort((a, b) => holidayCount[a] - holidayCount[b]);
- const pick = unassigned[0];
- shiftData[pick][d] = "休";
- holidayCount[pick]++;
- dailyCareHolidays[d]++;
- } else {
- break;
- }
- }
- }
+  // Step B: 公休「休」の配分 (毎日必ず4名)
+  // 優先1: 夜勤明けの翌日を優先して「休」とする
+  for (let d = 1; d <= daysInMonth; d++) {
+   careNames.forEach(n => {
+    if (!shiftData[n][d]) {
+     if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays[n] && dailyCareHolidays[d] < 4) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    }
+   });
+  }
 
- // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
- for (let d = 1; d <= daysInMonth; d++) {
- const avail = careNames.filter(n => !shiftData[n][d]);
+  // 優先2: 各日に公休をバランス配分 (1日4名になるまで)
+  for (let d = 1; d <= daysInMonth; d++) {
+   if (dailyCareHolidays[d] < 4) {
+    const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
+    for (const n of sortedCare) {
+     if (holidayCount[n] < targetHolidays[n] && !shiftData[n][d] && dailyCareHolidays[d] < 4) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    }
+   }
+  }
 
- // 早出の選定 (2名選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
- const earlyCandidates = [...avail].sort((a, b) => {
- const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
- const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
- if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate;
- const eDiff = earlyCount[a] - earlyCount[b];
- if (eDiff !== 0) return eDiff;
- return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
- });
- const pickedEarly = earlyCandidates.slice(0, 2);
- pickedEarly.forEach(n => {
- shiftData[n][d] = "早";
- earlyCount[n]++;
- });
+  // 4名未満の日があれば空いている人を公休に充当して毎日必ず4名にする
+  for (let d = 1; d <= daysInMonth; d++) {
+   while (dailyCareHolidays[d] < 4) {
+    const unassigned = careNames.filter(n => !shiftData[n][d]);
+    if (unassigned.length > 0) {
+     unassigned.sort((a, b) => holidayCount[a] - holidayCount[b]);
+     const pick = unassigned[0];
+     shiftData[pick][d] = "休";
+     holidayCount[pick]++;
+     dailyCareHolidays[d]++;
+    } else {
+     break;
+    }
+   }
+  }
 
- // 遅出の選定 (2名選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
- const lateCandidates = avail.filter(n => !pickedEarly.includes(n)).sort((a, b) => {
- const lDiff = lateCount[a] - lateCount[b];
- if (lDiff !== 0) return lDiff;
- return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
- });
- const pickedLate = lateCandidates.slice(0, 2);
- pickedLate.forEach(n => {
- shiftData[n][d] = "遅";
- lateCount[n]++;
- });
+  // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
+  for (let d = 1; d <= daysInMonth; d++) {
+   const avail = careNames.filter(n => !shiftData[n][d]);
 
- // 残りの介護職員（2名）はすべて「日」（日勤）
- const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
- remainingDay.forEach(n => {
- shiftData[n][d] = "日";
- dayCount[n]++;
- });
- }
+   // 早出の選定 (2名選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
+   const earlyCandidates = [...avail].sort((a, b) => {
+    const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
+    const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
+    if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate;
+    const eDiff = earlyCount[a] - earlyCount[b];
+    if (eDiff !== 0) return eDiff;
+    return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
+   });
+   const pickedEarly = earlyCandidates.slice(0, 2);
+   pickedEarly.forEach(n => {
+    shiftData[n][d] = "早";
+    earlyCount[n]++;
+   });
 
- // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
- for (let d = 1; d <= daysInMonth; d++) {
- let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
- let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
- let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
+   // 遅出の選定 (2名選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
+   const lateCandidates = avail.filter(n => !pickedEarly.includes(n)).sort((a, b) => {
+    const lDiff = lateCount[a] - lateCount[b];
+    if (lDiff !== 0) return lDiff;
+    return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
+   });
+   const pickedLate = lateCandidates.slice(0, 2);
+   pickedLate.forEach(n => {
+    shiftData[n][d] = "遅";
+    lateCount[n]++;
+   });
 
- // 早出を2名に
- while (eCount < 2) {
- const cand = careNames.find(n => shiftData[n][d] === "日");
- if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
- }
- // 遅出を2名に
- while (lCount < 2) {
- const cand = careNames.find(n => shiftData[n][d] === "日");
- if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
- }
- // 日勤を2名に
- while (dCount < 2) {
- const cand = careNames.find(n => shiftData[n][d] === "休");
- if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
- }
- }
+   // 残りの介護職員（2名）はすべて「日」（日勤）
+   const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
+   remainingDay.forEach(n => {
+    shiftData[n][d] = "日";
+    dayCount[n]++;
+   });
+  }
+
+  // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
+  // ※ 希望休の職員は絶対に日勤・早番・遅番へ転換しない
+  for (let d = 1; d <= daysInMonth; d++) {
+   let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
+   let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
+   let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
+
+   // 早出を2名に
+   while (eCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
+   }
+   // 遅出を2名に
+   while (lCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
+   }
+   // 日勤を2名に (希望休でない公休職員のみ日勤へ充当)
+   while (dCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "休" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
+   }
+  }
  }
 
  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
@@ -8252,6 +8307,13 @@ function renderShiftTable(yearMonth) {
  } else {
  const missingStaff = careStaffNames.some(name => !currentData[name]);
  if (missingStaff) {
+ needRegen = true;
+ }
+ }
+ if (!needRegen && currentData) {
+ const hopeList = (db.data.shift_hope_offs || []).filter(h => h.year_month === ym);
+ const unreflectedHope = hopeList.some(h => currentData[h.staff_name] && currentData[h.staff_name][h.day] !== "休");
+ if (unreflectedHope) {
  needRegen = true;
  }
  }
@@ -8321,6 +8383,11 @@ function renderShiftTable(yearMonth) {
  // 2. ボディ行（各職員）生成
  let tbodyHtml = "<tbody>";
 
+ const hopeOffs = (db.data.shift_hope_offs || []).filter(h => h.year_month === ym);
+ const hopeOffMap = {};
+ hopeOffs.forEach(h => {
+  hopeOffMap[`${h.staff_name}_${h.day}`] = h;
+ });
  staffList.forEach(st => {
  const staffShifts = shiftData[st.name] || {};
  const isCareStaff = getStaffRoleCategory(st.name) === "care";
@@ -8352,12 +8419,19 @@ function renderShiftTable(yearMonth) {
 
  for (let d = 1; d <= daysInMonth; d++) {
  const sym = staffShifts[d] || "";
+   const isHope = Boolean(hopeOffMap[`${st.name}_${d}`]);
+   const hopeInfo = hopeOffMap[`${st.name}_${d}`];
+   let hopeTag = "";
+   if (isHope) {
+    hopeTag = `<span class="shift-hope-tag">希望</span>`;
+   }
  const dow = new Date(year, month - 1, d).getDay();
  const hol = isHolidayOrYearEnd(year, month, d);
  const isSat = dow === 6;
  const isSun = dow === 0 || hol.isHoliday;
 
  let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
+   if (isHope) cellBg = "#fef2f2";
  let badgeClass = "";
  if (sym === "早") {
  badgeClass = "shift-badge shift-haya";
@@ -8389,8 +8463,8 @@ function renderShiftTable(yearMonth) {
 
  const safeName = escapeHtml(st.name);
  tbodyHtml += `
- <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: クリックして即時変更">
- ${sym ? `<span class="${badgeClass}">${sym}</span>` : `<span style="color:#cbd5e1;">-</span>`}
+   <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
+   ${sym ? `<span class="${badgeClass}">${sym}</span>${hopeTag}` : `<span style="color:#cbd5e1;">-</span>`}
  </td>
  `;
  }
@@ -8569,6 +8643,9 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  const hol = isHolidayOrYearEnd(year, month, day);
 
  gShiftEditingCell = { staffName, day, yearMonth: ym };
+ const isHope = (db.data.shift_hope_offs || []).some(h => 
+  h.year_month === ym && h.staff_name === staffName && parseInt(h.day, 10) === day
+ );
 
  let popover = document.getElementById("shiftCellPopover");
  if (!popover) {
@@ -8607,7 +8684,8 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
- <div style="margin-top:6px; text-align:right;">
+   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f8fafc; color:#475569;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
  <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
@@ -8633,7 +8711,8 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
- <div style="margin-top:6px; text-align:right;">
+   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f8fafc; color:#475569;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
  <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
@@ -8884,6 +8963,184 @@ function deleteShiftNgPair(id) {
  renderShiftNgList();
 }
 
+// 希望休・事前要望管理機能
+function openShiftHopeModal() {
+ const ym = getShiftYearMonth();
+ const [yearStr, monthStr] = ym.split("-");
+ const year = parseInt(yearStr, 10);
+ const month = parseInt(monthStr, 10);
+ const daysInMonth = new Date(year, month, 0).getDate();
+
+ const allStamps = sortStaffList(db.data.stamps || []);
+ const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+
+ const staffSel = document.getElementById("shiftHopeStaff");
+ if (staffSel) {
+  staffSel.innerHTML = staffList.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)} (${escapeHtml(s.role || "介護職員")})</option>`).join("");
+ }
+
+ const daySel = document.getElementById("shiftHopeDay");
+ if (daySel) {
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  let dayOptions = "";
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const hol = isHolidayOrYearEnd(year, month, d);
+   const label = hol.isHoliday ? `${d}日 (${dowNames[dow]}・祝)` : `${d}日 (${dowNames[dow]})`;
+   dayOptions += `<option value="${d}">${label}</option>`;
+  }
+  daySel.innerHTML = dayOptions;
+ }
+
+ renderShiftHopeList();
+ const modal = document.getElementById("shiftHopeModal");
+ if (modal) modal.style.display = "flex";
+}
+
+function renderShiftHopeList() {
+ const container = document.getElementById("shiftHopeList");
+ const countLabel = document.getElementById("shiftHopeCountLabel");
+ if (!container) return;
+
+ const ym = getShiftYearMonth();
+ const [yearStr, monthStr] = ym.split("-");
+ const year = parseInt(yearStr, 10);
+ const month = parseInt(monthStr, 10);
+ const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+
+ if (!Array.isArray(db.data.shift_hope_offs)) db.data.shift_hope_offs = [];
+ const hopeOffs = db.data.shift_hope_offs.filter(h => h.year_month === ym);
+
+ if (countLabel) {
+  countLabel.textContent = `${year}年${month}月の登録済み希望休一覧 (${hopeOffs.length}件):`;
+ }
+
+ if (hopeOffs.length === 0) {
+  container.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:12px;">今月の登録済み希望休はありません（各スタッフ月2〜3日程度の希望休を受け付けられます）。</div>`;
+  return;
+ }
+
+ const sorted = [...hopeOffs].sort((a, b) => {
+  if (a.day !== b.day) return a.day - b.day;
+  return a.staff_name.localeCompare(b.staff_name);
+ });
+
+ let html = `<ul style="list-style:none; padding:0; margin:0;">`;
+ sorted.forEach(h => {
+  const dow = new Date(year, month - 1, h.day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, h.day);
+  const dateStr = `${month}月${h.day}日 (${dowNames[dow]}${hol.isHoliday ? "・祝" : ""})`;
+  html += `
+   <li style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+     <span style="display:inline-block; font-weight:bold; color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 8px; font-size:11.5px;">
+      ${dateStr}
+     </span>
+     <strong style="color:#1e293b;">${escapeHtml(h.staff_name)}</strong>
+     <span style="color:#64748b; font-size:11.5px;">理由: ${escapeHtml(h.reason || "私用")}</span>
+    </div>
+    <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftHopeOff(${h.id})">削除</button>
+   </li>
+  `;
+ });
+ html += `</ul>`;
+ container.innerHTML = html;
+}
+
+function submitShiftHopeOff() {
+ const staffSel = document.getElementById("shiftHopeStaff");
+ const daySel = document.getElementById("shiftHopeDay");
+ const reasonInput = document.getElementById("shiftHopeReason");
+
+ if (!staffSel || !daySel) return;
+ const staffName = staffSel.value;
+ const day = parseInt(daySel.value, 10);
+ const reason = reasonInput ? (reasonInput.value.trim() || "希望休申請") : "希望休申請";
+ const ym = getShiftYearMonth();
+
+ if (!Array.isArray(db.data.shift_hope_offs)) db.data.shift_hope_offs = [];
+
+ const exists = db.data.shift_hope_offs.some(h => 
+  h.year_month === ym && h.staff_name === staffName && parseInt(h.day, 10) === day
+ );
+
+ if (exists) {
+  alert(`${staffName} さんの ${day}日はすでに希望休に登録されています。`);
+  return;
+ }
+
+ const newHope = {
+  id: Date.now(),
+  year_month: ym,
+  staff_name: staffName,
+  day: day,
+  reason: reason,
+  created_at: new Date().toISOString()
+ };
+
+ db.data.shift_hope_offs.push(newHope);
+
+ if (db.data.monthly_shifts && db.data.monthly_shifts[ym] && db.data.monthly_shifts[ym][staffName]) {
+  db.data.monthly_shifts[ym][staffName][day] = "休";
+ }
+
+ db.save();
+ if (reasonInput) reasonInput.value = "";
+ renderShiftHopeList();
+ renderShiftTable(ym);
+}
+
+function deleteShiftHopeOff(id) {
+ if (!confirm("この希望休設定を削除しますか？")) return;
+ const ym = getShiftYearMonth();
+ db.data.shift_hope_offs = (db.data.shift_hope_offs || []).filter(h => h.id !== id);
+ db.save();
+ renderShiftHopeList();
+ renderShiftTable(ym);
+}
+
+function toggleShiftHopeOff(staffName, day) {
+ const ym = getShiftYearMonth();
+ if (!Array.isArray(db.data.shift_hope_offs)) db.data.shift_hope_offs = [];
+
+ const existingIdx = db.data.shift_hope_offs.findIndex(h => 
+  h.year_month === ym && h.staff_name === staffName && parseInt(h.day, 10) === day
+ );
+
+ if (existingIdx >= 0) {
+  db.data.shift_hope_offs.splice(existingIdx, 1);
+ } else {
+  db.data.shift_hope_offs.push({
+   id: Date.now(),
+   year_month: ym,
+   staff_name: staffName,
+   day: day,
+   reason: "希望休申請",
+   created_at: new Date().toISOString()
+  });
+  if (db.data.monthly_shifts && db.data.monthly_shifts[ym] && db.data.monthly_shifts[ym][staffName]) {
+   db.data.monthly_shifts[ym][staffName][day] = "休";
+  }
+ }
+
+ db.save();
+ closeShiftPopover();
+ renderShiftTable(ym);
+}
+
+function applyHopeOffsAndRegenerate() {
+ const ym = getShiftYearMonth();
+ const [y, m] = ym.split("-");
+ const hopeCount = (db.data.shift_hope_offs || []).filter(h => h.year_month === ym).length;
+ if (!confirm(`${y}年${parseInt(m, 10)}月の希望休（全${hopeCount}件）を反映して、勤務表シフトを再生成しますか？`)) {
+  return;
+ }
+ generateMonthlyShiftData(ym);
+ renderShiftTable(ym);
+ renderShiftHopeList();
+ alert(`${y}年${parseInt(m, 10)}月の希望休（全${hopeCount}件）を全て優先公休「休」として反映し、勤務表シフトを再生成しました！`);
+}
+
 // グローバル関数公開 (インラインonclick等の即時呼出保証)
 if (typeof window !== "undefined") {
  window.openClinicInstructionModal = openClinicInstructionModal;
@@ -8915,4 +9172,10 @@ if (typeof window !== "undefined") {
  window.syncDailyJournalCategoryButtons = syncDailyJournalCategoryButtons;
  window.insertDailyJournalTemplate = insertDailyJournalTemplate;
  window.submitDailyJournalRecordModal = submitDailyJournalRecordModal;
+  window.openShiftHopeModal = openShiftHopeModal;
+  window.renderShiftHopeList = renderShiftHopeList;
+  window.submitShiftHopeOff = submitShiftHopeOff;
+  window.deleteShiftHopeOff = deleteShiftHopeOff;
+  window.toggleShiftHopeOff = toggleShiftHopeOff;
+  window.applyHopeOffsAndRegenerate = applyHopeOffsAndRegenerate;
 }

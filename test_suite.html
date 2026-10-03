@@ -1,4 +1,4 @@
-﻿<!DOCTYPE html>
+<!DOCTYPE html>
 <html lang="ja">
 <head>
   <meta charset="UTF-8">
@@ -437,7 +437,34 @@
       applyShiftCellEdit("夜"); // 事務員への夜勤設定を試行
       assert(db.data.monthly_shifts["2026-10"]["田中 慎一"][10] === originalTanakaShift, "Test 67: 事務員・施設長・看護師に対する夜勤 (夜) や早出・遅出への手動変更が職種制約ガードにより安全にブロックされること");
 
-      // 23. 総合結果判定
+      // 23. 希望休・事前要望設定および自動生成配慮テスト
+      assert(typeof openShiftHopeModal === "function" && typeof submitShiftHopeOff === "function" && typeof toggleShiftHopeOff === "function", "Test 68: 希望休・事前要望管理関数 (openShiftHopeModal, submitShiftHopeOff, toggleShiftHopeOff) が存在すること");
+
+      const octHopeOffs = (db.data.shift_hope_offs || []).filter(h => h.year_month === "2026-10");
+      assert(octHopeOffs.length > 0, "Test 69: 2026年10月の希望休テストデータが登録されていること");
+
+      // 希望休を反映した月間シフト自動生成を実行
+      generateMonthlyShiftData("2026-10");
+
+      let allHopeOffsGranted = true;
+      octHopeOffs.forEach(h => {
+        const staffShiftOnHopeDay = db.data.monthly_shifts["2026-10"][h.staff_name] ? db.data.monthly_shifts["2026-10"][h.staff_name][h.day] : null;
+        if (staffShiftOnHopeDay !== "休") {
+          allHopeOffsGranted = false;
+        }
+      });
+      assert(allHopeOffsGranted, "Test 70: 希望休を申請した全職員の該当日が最優先で公休『休』として確定配置されていること");
+
+      const testHopeStaff = "山田 孝之";
+      const testHopeDay = 20;
+      toggleShiftHopeOff(testHopeStaff, testHopeDay);
+      const isToggledHope = (db.data.shift_hope_offs || []).some(h => h.staff_name === testHopeStaff && h.day === testHopeDay);
+      assert(isToggledHope, "Test 71: toggleShiftHopeOff による希望休のワンタップ即時登録が正常に動作すること");
+      toggleShiftHopeOff(testHopeStaff, testHopeDay);
+      const isRevertedHope = (db.data.shift_hope_offs || []).some(h => h.staff_name === testHopeStaff && h.day === testHopeDay);
+      assert(!isRevertedHope, "Test 72: toggleShiftHopeOff による希望休のワンタップ解除が正常に動作すること");
+
+      // 24. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
