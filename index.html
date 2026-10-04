@@ -530,10 +530,11 @@
  <tbody></tbody>
  </table>
  <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
- <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位・巡視状態を選択。再度タップで選択解除できます。一括確定すると、巡視した全時刻（22:00, 00:00, 02:00, 04:00, 06:00等）が個別の介護記録としてタイムスタンプ付きで自動転記されます。</span>
- <div style="display:flex; gap:10px;">
+ <span style="font-size:12px; color:#64748b;">※ 選択した項目のみが保存・転記されます。入院中・不在の方は自動でロック・除外されます。全時刻（22:00, 00:00, 02:00, 04:00, 06:00等）が個別の介護記録としてタイムスタンプ付きで自動転記されます。</span>
+ <div style="display:flex; gap:10px; flex-wrap:wrap;">
+ <button id="btnOpenNightTurnTemplates" class="btn btn-secondary" style="font-size:12px; padding:6px 12px; background:#eff6ff; color:#1d4ed8; border:1px solid #bfdbfe;" onclick="openNightTurnTemplateModal()">巡視定型文の編集・設定</button>
  <button class="btn btn-outline" style="border-color:#fca5a5; color:#dc2626; font-size:12px; padding:6px 12px;" onclick="clearAllNightTurnsForDate()"> 本日のチェックをすべて解除</button>
- <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()"> 体位変換・夜間巡視を一括確定 (個人記録へ転記)</button>
+ <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()">チェック入力分を保存・カルテへ転記</button>
  </div>
  </div>
  </div>
@@ -3115,6 +3116,102 @@
  <div style="display:flex; gap:8px;">
  <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="closeModal('eyedropOrderModal')">キャンセル</button>
  <button type="button" id="btnSubmitEyedropOrder" class="btn btn-primary" style="font-size:12px;" onclick="submitEyedropOrder()">点眼指示を保存</button>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 介護記録・カルテ個別編集モーダル -->
+ <div class="modal-overlay" id="editCareRecordModal" style="display:none; z-index:9999;">
+ <div class="modal-card" style="max-width:580px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:10px; margin-bottom:16px;">
+ <h3 id="editCareRecordModalTitle" style="margin:0; font-size:17px; font-weight:bold; color:#1e293b;">介護記録の編集・加筆</h3>
+ <button class="modal-close-btn" onclick="closeModal('editCareRecordModal')">&times;</button>
+ </div>
+ <input type="hidden" id="editCrId">
+ <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">対象利用者</label>
+ <input type="text" id="editCrResidentName" class="form-control" style="font-size:13px; background:#f8fafc;" readonly>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">記録日時</label>
+ <input type="text" id="editCrDateTime" class="form-control" style="font-size:13px;">
+ </div>
+ </div>
+ <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">区分</label>
+ <select id="editCrCategory" class="form-control" style="font-size:13px; font-weight:bold;">
+ <option value="巡視">巡視</option>
+ <option value="特変">特変</option>
+ <option value="申送り">申送り</option>
+ <option value="連絡">連絡</option>
+ <option value="バイタル">バイタル</option>
+ <option value="食事">食事</option>
+ <option value="排泄">排泄</option>
+ <option value="入浴">入浴</option>
+ <option value="処置">処置</option>
+ <option value="介護記録">介護記録</option>
+ </select>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">記録者</label>
+ <input type="text" id="editCrStaff" class="form-control" style="font-size:13px;">
+ </div>
+ </div>
+ <div style="margin-bottom:16px;">
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">記録内容 (自動生成文の微調整・現場特変の加筆)</label>
+ <textarea id="editCrContent" class="form-control" rows="6" style="width:100%; font-size:14px; line-height:1.7; padding:10px; resize:vertical;"></textarea>
+ </div>
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px;">
+ <button type="button" id="btnDeleteCareRecord" class="btn btn-secondary" style="color:#dc2626; border-color:#fca5a5; font-size:12px;" onclick="deleteCareRecord()">この記録を削除</button>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="closeModal('editCareRecordModal')">キャンセル</button>
+ <button type="button" id="btnSaveCareRecord" class="btn btn-primary" style="font-size:12px; font-weight:bold;" onclick="updateCareRecord()">変更内容を保存</button>
+ </div>
+ </div>
+ </div>
+ </div>
+
+ <!-- 夜間巡視・体位変換 定型文設定モーダル -->
+ <div class="modal-overlay" id="nightTurnTemplateModal" style="display:none; z-index:9999;">
+ <div class="modal-card" style="max-width:680px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:10px; margin-bottom:16px;">
+ <h3 id="nightTurnTemplateModalTitle" style="margin:0; font-size:17px; font-weight:bold; color:#1e293b;">夜間巡視・体位変換 自動生成文の設定 (施設独自編集)</h3>
+ <button class="modal-close-btn" onclick="closeModal('nightTurnTemplateModal')">&times;</button>
+ </div>
+ <p style="font-size:12.5px; color:#64748b; margin-bottom:14px; line-height:1.5;">
+ ※ 巡視表で各動作を選択した際に自動生成される文章を、施設の申し送り基準や表現に合わせて編集できます。<br>
+ ※ 文中の <code>{time}</code> は、巡視時刻 (22:00, 00:00等) に自動置換されます。
+ </p>
+ <div style="display:flex; flex-direction:column; gap:12px;">
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#1e3a8a; display:block; margin-bottom:4px;">［安眠中］の生成文:</label>
+ <textarea id="tplNightSleep" class="form-control" rows="2" style="font-size:13px; line-height:1.5;"></textarea>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#1e3a8a; display:block; margin-bottom:4px;">［左側臥位］の生成文:</label>
+ <textarea id="tplNightLeft" class="form-control" rows="2" style="font-size:13px; line-height:1.5;"></textarea>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#1e3a8a; display:block; margin-bottom:4px;">［右側臥位］の生成文:</label>
+ <textarea id="tplNightRight" class="form-control" rows="2" style="font-size:13px; line-height:1.5;"></textarea>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#1e3a8a; display:block; margin-bottom:4px;">［仰臥位］の生成文:</label>
+ <textarea id="tplNightSupine" class="form-control" rows="2" style="font-size:13px; line-height:1.5;"></textarea>
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#1e3a8a; display:block; margin-bottom:4px;">［おむつ交換］の生成文:</label>
+ <textarea id="tplNightDiaper" class="form-control" rows="2" style="font-size:13px; line-height:1.5;"></textarea>
+ </div>
+ </div>
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:14px; margin-top:16px;">
+ <button type="button" id="btnResetNightTurnTemplates" class="btn btn-secondary" style="font-size:12px;" onclick="resetNightTurnTemplates()">標準初期設定に戻す</button>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="closeModal('nightTurnTemplateModal')">キャンセル</button>
+ <button type="button" id="btnSaveNightTurnTemplates" class="btn btn-primary" style="font-size:12px; font-weight:bold;" onclick="submitNightTurnTemplates()">定型文設定を保存</button>
  </div>
  </div>
  </div>

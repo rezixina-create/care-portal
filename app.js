@@ -41,6 +41,15 @@ function sortStaffList(list) {
  });
 }
 
+// 夜間巡視・体位変換 自動生成定型文の標準初期値 (施設・現場ごとのカスタマイズ対応)
+const DEFAULT_NIGHT_TURN_TEMPLATES = {
+ "安眠中": "【{time} 定時巡視】訪室確認。静かに安眠中、呼吸状態安定。掛物の乱れを整え、ナースコールを手元に確認。異常なし。",
+ "左側臥位": "【{time} 定時巡視・体位変換】訪室確認。仰臥位から左側臥位へ体位変換実施。仙骨部除圧クッションを背部・膝間に挿入。良肢位保持、寝具を整える。",
+ "右側臥位": "【{time} 定時巡視・体位変換】訪室確認。左側臥位から右側臥位へ体位変換実施。除圧クッション配置し安楽な姿勢を保持。呼吸落ち着き安眠継続。",
+ "仰臥位": "【{time} 定時巡視・体位変換】訪室確認。側臥位から仰臥位へ体位変換実施。背部・仙骨部の皮膚状態確認（発赤悪化なし）。膝下クッション配置。",
+ "おむつ交換": "【{time} 定時巡視・おむつ交換】訪室確認。おむつ汚染（排尿あり）確認しパッド交換実施。陰部清拭、皮膚保護処置。寝具交換なし、安眠。"
+};
+
 // データベース管理クラス (ハイブリッド: サーバー同期 ＋ ローカル保存)
 class LocalDB {
  constructor() {
@@ -84,6 +93,9 @@ class LocalDB {
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
  });
+ if (!d.night_turn_templates || typeof d.night_turn_templates !== "object") {
+ d.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
+ }
  if (!Array.isArray(d.care_summaries) || d.care_summaries.length === 0) {
  d.care_summaries = [
  {
@@ -5105,7 +5117,10 @@ function renderSelectedDateRecords() {
  <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
  ${isLong ? `<span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
  </div>
+ <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">編集</button>
+ </div>
  </div>
  <div class="care-record-body">${escapeHtml(displayContent)}</div>
  ${toggleBtnHtml}
@@ -5379,7 +5394,10 @@ function renderDailyJournal() {
  <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
  <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
  </div>
+ <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">編集</button>
+ </div>
  </div>
  <div class="care-record-body" style="margin-top:6px;">${escapeHtml(r.content || '')}</div>
  `;
