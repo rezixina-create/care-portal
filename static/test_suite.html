@@ -96,7 +96,30 @@
     <div id="searchResults" style="display:none;"></div>
     <table id="vitalsTable"></table>
     <table id="oralTable"></table>
-    <table id="medTable"></table>
+    <table id="medTable"><thead><tr id="medTableHeaderRow"></tr></thead><tbody></tbody></table>
+    <div id="medTimeFilterGroup">
+      <button id="btnMedFilterAll"></button>
+      <button id="btnMedFilterMorn"></button>
+      <button id="btnMedFilterNoon"></button>
+      <button id="btnMedFilterEve"></button>
+      <button id="btnMedFilterBed"></button>
+    </div>
+    <div id="eyedropOrderModal" style="display:none;">
+      <select id="eoResidentSelect"></select>
+      <input type="radio" name="eoEyeSide" id="eoEyeRight" value="右のみ">
+      <input type="radio" name="eoEyeSide" id="eoEyeLeft" value="左のみ">
+      <input type="radio" name="eoEyeSide" id="eoEyeBoth" value="両眼">
+      <input type="radio" name="eoEyeSide" id="eoEyeNone" value="指示なし">
+      <input type="text" id="eoMedicineName">
+      <input type="checkbox" id="eoSlotMorning" value="朝">
+      <input type="checkbox" id="eoSlotNoon" value="昼">
+      <input type="checkbox" id="eoSlotEvening" value="夕">
+      <input type="checkbox" id="eoSlotBed" value="眠前">
+      <input type="text" id="eoDosage">
+      <input type="text" id="eoDoctor">
+      <textarea id="eoNotes"></textarea>
+      <select id="eoStatus"></select>
+    </div>
     <table id="weightTable"></table>
     <div id="tabCareRecords"></div>
     <div id="tabCareVitals"></div>
@@ -425,6 +448,12 @@
       setNightTurnAction(2, "00:00", "安眠中");
       setNightTurnAction(2, "02:00", "左側臥位");
       submitNightTurnsBatch();
+      const sato2200Rec = (db.data.care_records || []).find(r => r.resident_id === 1 && r.recorded_at === "2026-10-02 22:00");
+      const sato0000Rec = (db.data.care_records || []).find(r => r.resident_id === 1 && r.recorded_at === "2026-10-02 00:00");
+      const tanaka0200Rec = (db.data.care_records || []).find(r => r.resident_id === 2 && r.recorded_at === "2026-10-02 02:00");
+      assert(sato2200Rec && sato0000Rec && tanaka0200Rec, "Test 43c: 夜間巡視・体位変換を一括確定した際、巡視した時刻ごとに個別の介護記録（タイムスタンプ付き）として全回数分が自動個別記録されること");
+      assert(typeof openEyedropOrderModal === "function" && typeof submitEyedropOrder === "function" && typeof deleteEyedropOrder === "function" && typeof toggleEyedrop === "function" && typeof setMedTimingFilter === "function", "Test 43d: 点眼指示の登録・変更・解除および時間帯別実施チェック・時間帯切替フィルター関数が存在すること");
+      assert(Array.isArray(db.data.eyedrop_orders) && db.data.eyedrop_orders.length >= 4, "Test 43e: 利用者4名分の点眼指示（右のみ/左のみ/両眼、薬剤名、時間帯）が正常保持されていること");
       assert(typeof submitGroomingsBatch === "function", "Test 44: 身だしなみ一括確定関数 (submitGroomingsBatch) が存在すること");
       assert(typeof onConsumeResidentChange === "function" && typeof executeConsume === "function", "Test 45: 現場クイック消費枠内利用者同期・確認モーダル関数が存在すること");
       assert(typeof openClinicInstructionModal === "function" && typeof submitClinicInstructions === "function", "Test 46: 往診医・受診時指示＆特殊指示の項目別クイック変更・保存関数が存在すること");

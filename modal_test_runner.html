@@ -331,6 +331,18 @@
  const isEmgModalClosed = emgModal && win.getComputedStyle(emgModal).display === "none";
  report("緊急搬送サマリーモーダルが正常に閉じられること", isEmgModalClosed);
 
+ // 21. 点眼指示の登録・処方変更モーダルの動作確認
+ const btnEyedropEdit = Array.from(doc.querySelectorAll("button")).find(b => b.textContent.includes("点眼指示を変更"));
+ report("点眼指示変更ボタン存在確認", !!btnEyedropEdit);
+ if (btnEyedropEdit) {
+ btnEyedropEdit.click();
+ await new Promise(r => setTimeout(r, 200));
+ const edModal = doc.getElementById("eyedropOrderModal");
+ const isEdOpen = edModal && win.getComputedStyle(edModal).display === "flex";
+ report("点眼指示変更ボタン クリックでモーダル表示", isEdOpen);
+ win.closeModal("eyedropOrderModal");
+ }
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

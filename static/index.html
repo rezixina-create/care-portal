@@ -470,19 +470,40 @@
 
  <!-- 7. 服薬 ＆ 点眼 -->
  <div id="tabCareMed" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> 服薬 ＆ 点眼チェック表 (ワンタップで［済］を記録)</span>
+ <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+ <span>服薬 ＆ 点眼チェック表 (処方指示・眼指定・時間帯別チェック・監査対応)</span>
+ <div style="display:flex; gap:8px;">
+ <button id="btnOpenEyedropModal" class="btn btn-primary" style="font-size:12px; padding:6px 12px;" onclick="openEyedropOrderModal()">点眼指示の登録・変更</button>
  </div>
+ </div>
+
+ <!-- 時間帯切り替えバー -->
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+ <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+ <span style="font-size:13px; font-weight:bold; color:#334155;">時間帯切替:</span>
+ <div class="btn-group" id="medTimeFilterGroup" style="display:inline-flex; gap:4px;">
+ <button id="btnMedFilterAll" class="btn btn-primary" style="font-size:12px; padding:5px 12px;" onclick="setMedTimingFilter('all')">すべて表示</button>
+ <button id="btnMedFilterMorn" class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="setMedTimingFilter('朝')">朝 (朝食後)</button>
+ <button id="btnMedFilterNoon" class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="setMedTimingFilter('昼')">昼 (昼食後)</button>
+ <button id="btnMedFilterEve" class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="setMedTimingFilter('夕')">夕 (夕食後)</button>
+ <button id="btnMedFilterBed" class="btn btn-secondary" style="font-size:12px; padding:5px 12px;" onclick="setMedTimingFilter('眠前')">就寝前 (眠前)</button>
+ </div>
+ </div>
+ <div style="font-size:12px; color:#64748b;">
+ ※点眼は【右のみ】【左のみ】【両眼】を高コントラスト明示。各時間帯ボタンをタップして［済］記録／解除できます。
+ </div>
+ </div>
+
  <table class="data-table" id="medTable">
  <thead>
- <tr>
+ <tr id="medTableHeaderRow">
  <th>居室</th>
  <th>氏名</th>
  <th>朝食後</th>
  <th>昼食後</th>
  <th>夕食後</th>
  <th>就寝前</th>
- <th>点眼 (指示内容)</th>
+ <th>点眼 (眼指定・指示内容・時間帯別実施)</th>
  </tr>
  </thead>
  <tbody></tbody>
@@ -492,7 +513,7 @@
  <!-- 8. 夜勤体位変換 -->
  <div id="tabCareNight" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 夜勤・体位変換チェック表 (入力すると個人記録へ自動転記・監査対応)</span>
+ <span> 夜勤・体位変換チェック表 (入力すると巡視した全時刻ごとに個人記録へ自動個別転記・監査対応)</span>
  </div>
  <table class="data-table" id="nightTable">
  <thead>
@@ -509,7 +530,7 @@
  <tbody></tbody>
  </table>
  <div style="margin-top:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
- <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位を選択。再度タップで選択解除できます。</span>
+ <span style="font-size:12px; color:#64748b;">※ 各枠をタップして体位・巡視状態を選択。再度タップで選択解除できます。一括確定すると、巡視した全時刻（22:00, 00:00, 02:00, 04:00, 06:00等）が個別の介護記録としてタイムスタンプ付きで自動転記されます。</span>
  <div style="display:flex; gap:10px;">
  <button class="btn btn-outline" style="border-color:#fca5a5; color:#dc2626; font-size:12px; padding:6px 12px;" onclick="clearAllNightTurnsForDate()"> 本日のチェックをすべて解除</button>
  <button id="btnSubmitNightTurns" class="btn btn-primary" onclick="submitNightTurnsBatch()"> 体位変換・夜間巡視を一括確定 (個人記録へ転記)</button>
@@ -2981,6 +3002,120 @@
  <!-- フッター -->
  <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px; border-top:1px solid #e2e8f0; padding-top:12px;">
  <button type="button" class="btn btn-secondary" onclick="closeModal('bodySchemaModal')">閉じる</button>
+ </div>
+ </div>
+ </div>
+
+ <!-- 点眼指示の登録・変更モーダル -->
+ <div class="modal-overlay" id="eyedropOrderModal" style="display:none; z-index:9999;">
+ <div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #e2e8f0; padding-bottom:10px; margin-bottom:16px;">
+ <h3 id="eyedropOrderModalTitle" style="margin:0; font-size:17px; font-weight:bold; color:#1e293b;">点眼指示の登録 ＆ 処方変更</h3>
+ <button class="modal-close-btn" onclick="closeModal('eyedropOrderModal')">&times;</button>
+ </div>
+
+ <div style="margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:#334155; display:block; margin-bottom:4px;">対象利用者</label>
+ <select id="eoResidentSelect" class="form-control" style="width:100%; font-size:13px; font-weight:bold;" onchange="onEyedropResidentChange()">
+ </select>
+ </div>
+
+ <!-- 眼の指定 (右のみ / 左のみ / 両眼) -->
+ <div style="background:#f1f5f9; border:1px solid #cbd5e1; border-radius:6px; padding:12px; margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:#0f172a; display:block; margin-bottom:6px;">
+ 点眼する眼の指定 (高コントラスト明示・誤認防止)
+ </label>
+ <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:13px;">
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="radio" name="eoEyeSide" id="eoEyeRight" value="右のみ" checked>
+ <span class="badge" style="background:#1e3a8a; color:#ffffff; font-weight:bold; font-size:12px; padding:3px 8px;">[右のみ]</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="radio" name="eoEyeSide" id="eoEyeLeft" value="左のみ">
+ <span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:12px; padding:3px 8px;">[左のみ]</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="radio" name="eoEyeSide" id="eoEyeBoth" value="両眼">
+ <span class="badge" style="background:#334155; color:#ffffff; font-weight:bold; font-size:12px; padding:3px 8px;">[両眼]</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="radio" name="eoEyeSide" id="eoEyeNone" value="指示なし">
+ <span style="color:#64748b; font-size:12px;">指示なし (点眼不要/休薬)</span>
+ </label>
+ </div>
+ </div>
+
+ <!-- 点眼薬名 -->
+ <div style="margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:#334155; display:block; margin-bottom:4px;">点眼薬の薬品名・規格</label>
+ <input type="text" id="eoMedicineName" class="form-control" placeholder="例: キサラタン点眼液 0.005%" style="width:100%; font-size:13px; margin-bottom:6px;">
+ <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+ <span style="font-size:11px; color:#64748b;">よく使う点眼薬:</span>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('キサラタン点眼液 0.005%')">キサラタン (緑内障)</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('ヒアレイン点眼液 0.1%')">ヒアレイン (角膜保護)</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('サンコバ点眼液 0.02%')">サンコバ (眼精疲労)</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('クラビット点眼液 1.5%')">クラビット (抗菌)</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('タフルプロスト点眼液 0.0015%')">タフルプロスト</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="quickFillEyedropMed('チモプトール点眼液 0.5%')">チモプトール</button>
+ </div>
+ </div>
+
+ <!-- 投与時間帯 (朝 / 昼 / 夕 / 眠前) -->
+ <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px; margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:#334155; display:block; margin-bottom:6px;">
+ 投与タイミング・時間帯 (複数選択可)
+ </label>
+ <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:13px;">
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="checkbox" id="eoSlotMorning" value="朝">
+ <span>朝 (朝食後)</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="checkbox" id="eoSlotNoon" value="昼">
+ <span>昼 (昼食後)</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="checkbox" id="eoSlotEvening" value="夕">
+ <span>夕 (夕食後)</span>
+ </label>
+ <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
+ <input type="checkbox" id="eoSlotBed" value="眠前">
+ <span>就寝前 (眠前)</span>
+ </label>
+ </div>
+ </div>
+
+ <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">1回用量・滴数</label>
+ <input type="text" id="eoDosage" class="form-control" value="1回1滴" placeholder="例: 1回1滴" style="width:100%; font-size:12px;">
+ </div>
+ <div>
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">処方医療機関・医師</label>
+ <input type="text" id="eoDoctor" class="form-control" placeholder="例: さくら眼科クリニック" style="width:100%; font-size:12px;">
+ </div>
+ </div>
+
+ <div style="margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">注意事項・点眼方法</label>
+ <textarea id="eoNotes" class="form-control" rows="2" placeholder="例: 点眼後1分間軽く目頭を押さえる。複数ある場合は5分以上間隔を空ける。まつ毛に容器先端を触れさせない。" style="width:100%; font-size:12px;"></textarea>
+ </div>
+
+ <div style="margin-bottom:16px;">
+ <label style="font-weight:bold; font-size:12px; color:#334155; display:block; margin-bottom:4px;">処方ステータス</label>
+ <select id="eoStatus" class="form-control" style="font-size:12px;">
+ <option value="継続中">継続中 (定期実施)</option>
+ <option value="休薬中">休薬中 (一時中止)</option>
+ <option value="終了">処方終了</option>
+ </select>
+ </div>
+
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #e2e8f0; padding-top:12px;">
+ <button type="button" id="btnDeleteEyedropOrder" class="btn btn-secondary" style="color:#dc2626; border-color:#fca5a5; font-size:12px;" onclick="deleteEyedropOrder()">点眼指示を解除 (指示なしにする)</button>
+ <div style="display:flex; gap:8px;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="closeModal('eyedropOrderModal')">キャンセル</button>
+ <button type="button" id="btnSubmitEyedropOrder" class="btn btn-primary" style="font-size:12px;" onclick="submitEyedropOrder()">点眼指示を保存</button>
+ </div>
  </div>
  </div>
  </div>

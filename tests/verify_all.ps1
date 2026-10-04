@@ -1,4 +1,4 @@
-# Care Portal Comprehensive Verification Runner (Pure ASCII)
+﻿# Care Portal Comprehensive Verification Runner (Pure ASCII)
 $ErrorActionPreference = "Continue"
 $testDir = $PSScriptRoot
 
@@ -11,11 +11,12 @@ $tests = @(
     "validate_json.ps1",
     "check_b5_features.ps1",
     "check_management_features.ps1",
-    "test_index_dom.ps1"
+    "test_index_dom.ps1",
+    "check_emojis.ps1"
 )
 
 Write-Host "==========================================================" -ForegroundColor Cyan
-Write-Host "  Care Portal Comprehensive Multi-Check (9 Tests)" -ForegroundColor Cyan
+Write-Host "  Care Portal Comprehensive Multi-Check (10 Tests)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 $passed = 0

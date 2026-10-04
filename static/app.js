@@ -78,7 +78,8 @@ class LocalDB {
  "meals", "oral_cares", "baths", "meds", "turns", "linens",
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
- "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins"
+ "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
+ "eyedrop_orders"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -338,6 +339,59 @@ class LocalDB {
  });
  }
  });
+
+ if (!Array.isArray(d.eyedrop_orders) || d.eyedrop_orders.length === 0) {
+ d.eyedrop_orders = [
+ {
+ id: 1,
+ resident_id: 1,
+ eye: "右のみ",
+ medicine_name: "キサラタン点眼液 0.005%",
+ timing_slots: ["眠前"],
+ dosage: "1回1滴",
+ notes: "緑内障治療。就寝前に右眼へ1滴点眼。点眼後しばらく目を閉じ涙嚢部を軽く圧迫。",
+ doctor_name: "さくら眼科クリニック",
+ status: "継続中",
+ updated_at: "2026-10-01"
+ },
+ {
+ id: 2,
+ resident_id: 2,
+ eye: "両眼",
+ medicine_name: "ヒアレイン点眼液 0.1%",
+ timing_slots: ["朝", "昼", "夕"],
+ dosage: "1回1滴",
+ notes: "角結膜上皮障害・ドライアイ。朝食後・昼食後・夕食後に両眼へ各1滴点眼。",
+ doctor_name: "中央眼科医院",
+ status: "継続中",
+ updated_at: "2026-10-01"
+ },
+ {
+ id: 3,
+ resident_id: 3,
+ eye: "左のみ",
+ medicine_name: "サンコバ点眼液 0.02%",
+ timing_slots: ["朝", "夕"],
+ dosage: "1回1滴",
+ notes: "調節機能改善・眼精疲労。朝食後・夕食後に左眼のみ1滴点眼。",
+ doctor_name: "さくら眼科クリニック",
+ status: "継続中",
+ updated_at: "2026-10-01"
+ },
+ {
+ id: 4,
+ resident_id: 4,
+ eye: "両眼",
+ medicine_name: "クラビット点眼液 1.5%",
+ timing_slots: ["朝", "昼", "夕"],
+ dosage: "1回1滴",
+ notes: "結膜炎・角膜感染症予防。朝食後・昼食後・夕食後に両眼へ各1滴点眼。容器先端がまつ毛に触れないよう清潔操作。",
+ doctor_name: "総合病院眼科",
+ status: "継続中",
+ updated_at: "2026-10-01"
+ }
+ ];
+ }
 
  return d;
  }
@@ -709,7 +763,8 @@ class LocalDB {
  complaints: [],
  incidents: [],
  care_summaries: [],
- body_schema_pins: []
+ body_schema_pins: [],
+ eyedrop_orders: []
  };
  localStorage.setItem(this.key, JSON.stringify(seed));
  return seed;
@@ -731,6 +786,8 @@ let gState = {
  care_summaries: db.data.care_summaries,
  body_schema_pins: db.data.body_schema_pins || [],
  schemaResidentId: 1,
+ eyedrop_orders: db.data.eyedrop_orders || [],
+ medTimingFilter: "all",
  selectedResidentId: 1,
  selectedDate: new Date().toISOString().split("T")[0],
  currentMonth: new Date().toISOString().slice(0, 7),
@@ -2192,6 +2249,24 @@ function renderResidentDetail() {
  const resDocs = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'documents');
  const resPhotos = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'personal');
 
+ // 点眼処方指示
+ const resEyedrops = (db.data.eyedrop_orders || []).filter(e => e.resident_id === r.id && e.status !== '終了');
+ let eyedropSummaryHtml = '';
+ if (resEyedrops.length === 0 || resEyedrops.every(e => e.eye === '指示なし')) {
+ eyedropSummaryHtml = '<span style="color:#64748b; font-size:12px;">定期点眼指示なし</span>';
+ } else {
+ eyedropSummaryHtml = resEyedrops.map(e => {
+ const bColor = e.eye === '右のみ' ? '#1e3a8a' : (e.eye === '左のみ' ? '#065f46' : '#334155');
+ const bText = `[${escapeHtml(e.eye)}]`;
+ const tStr = (e.timing_slots || []).join('・');
+ return `<div style="display:inline-flex; align-items:center; gap:4px; margin-right:8px; margin-top:2px;">
+ <span class="badge" style="background:${bColor}; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">${bText}</span>
+ <strong>${escapeHtml(e.medicine_name)}</strong>
+ <span style="color:#2563eb; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '1回1滴')})</span>
+ </div>`;
+ }).join('');
+ }
+
  container.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
  <div>
@@ -2305,6 +2380,14 @@ function renderResidentDetail() {
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
  シェーマ図を開く
+ </button>
+ </div>
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:12px; color:#1e293b; flex:1; min-width:200px;">
+ <strong>点眼処方指示:</strong> ${eyedropSummaryHtml}
+ </div>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#eff6ff; color:#1e40af; border-color:#93c5fd; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
+ 点眼指示を変更
  </button>
  </div>
  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
@@ -6198,32 +6281,167 @@ function saveOralCare(resId, timing) {
 }
 
 // 6. 服薬・点眼
+function setMedTimingFilter(slot) {
+ gState.medTimingFilter = slot;
+ renderMedTable();
+}
+
 function renderMedTable() {
  const tbody = document.querySelector("#medTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
+ const theadRow = document.getElementById("medTableHeaderRow");
+ const filter = gState.medTimingFilter || "all";
+
+ // テーブルヘッダーの動的切り替え
+ if (theadRow) {
+ if (filter === "all") {
+ theadRow.innerHTML = `
+ <th>居室</th>
+ <th>氏名</th>
+ <th>朝食後</th>
+ <th>昼食後</th>
+ <th>夕食後</th>
+ <th>就寝前</th>
+ <th>点眼 (眼指定・指示内容・時間帯別実施)</th>
+ `;
+ } else {
+ const slotLabel = filter === "朝" ? "朝食後" : (filter === "昼" ? "昼食後" : (filter === "夕" ? "夕食後" : "就寝前"));
+ theadRow.innerHTML = `
+ <th>居室</th>
+ <th>氏名</th>
+ <th>${slotLabel} (内服薬)</th>
+ <th>点眼 [${filter}] (眼指定・指示内容・実施)</th>
+ `;
+ }
+ }
+
+ // フィルターボタンのアクティブ表示切替
+ const filterBtns = [
+ { id: "btnMedFilterAll", key: "all" },
+ { id: "btnMedFilterMorn", key: "朝" },
+ { id: "btnMedFilterNoon", key: "昼" },
+ { id: "btnMedFilterEve", key: "夕" },
+ { id: "btnMedFilterBed", key: "眠前" }
+ ];
+ filterBtns.forEach(b => {
+ const el = document.getElementById(b.id);
+ if (el) {
+ if (filter === b.key) {
+ el.className = "btn btn-primary";
+ } else {
+ el.className = "btn btn-secondary";
+ }
+ }
+ });
+
  const meds = (db.data.meds || []).filter(m => m.date === gState.selectedDate);
+ const eyedropOrders = db.data.eyedrop_orders || [];
 
  gState.residents.forEach(r => {
  const tr = document.createElement("tr");
 
- const getMedBtn = (slot, label, isEyedrop = false) => {
+ // 内服薬ボタン生成
+ const getOralMedBtn = (slot, label) => {
  const done = meds.find(m => m.resident_id === r.id && m.slot === slot);
  if (done) {
- return `<span style="display:inline-block; padding:4px 8px; font-size:12px; font-weight:bold; color:#15803d; background:#dcfce7; border-radius:4px; border:1px solid #86efac;"> 済 (${done.staff_name || '済'})</span>`;
+ return `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 8px;" onclick="toggleMed(${r.id}, '${slot}')" title="クリックで解除">済 (${done.staff_name || '済'})</button>`;
  }
- const btnClass = isEyedrop ? "btn btn-primary" : "btn btn-secondary";
- return `<button class="${btnClass}" style="padding:4px 8px; font-size:12px;" onclick="saveMed(${r.id}, '${slot}')">${label}</button>`;
+ return `<button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="saveMed(${r.id}, '${slot}')">${label}</button>`;
  };
 
+ // 点眼欄生成 (絵ではなく「右のみ」「左のみ」「両眼」を高コントラストバッジ明示、時間帯別切り替え対応)
+ const order = eyedropOrders.find(e => e.resident_id === r.id && e.status !== "終了");
+ let eyedropCellHtml = "";
+
+ if (!order || order.eye === "指示なし") {
+ eyedropCellHtml = `
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+ <span style="color:#94a3b8; font-size:12px;">指示なし</span>
+ <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})">指示追加</button>
+ </div>
+ `;
+ } else {
+ const eyeBadge = order.eye === "右のみ"
+ ? `<span class="badge" style="background:#1e3a8a; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[右のみ]</span>`
+ : (order.eye === "左のみ"
+ ? `<span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[左のみ]</span>`
+ : `<span class="badge" style="background:#334155; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[両眼]</span>`);
+
+ const medTitle = `<span style="font-weight:bold; font-size:12px; margin-left:4px; color:#0f172a;">${escapeHtml(order.medicine_name)}</span>`;
+
+ if (filter === "all") {
+ // すべて表示時: 指示されている時間帯のボタンを並べて表示
+ const targetSlots = order.timing_slots && order.timing_slots.length > 0 ? order.timing_slots : ["眠前"];
+ const slotButtonsHtml = targetSlots.map(slot => {
+ const done = meds.find(m => m.resident_id === r.id && (m.slot === `点眼(${slot})` || m.slot === `点眼_${slot}` || (m.slot === "点眼" && slot === "眠前")));
+ if (done) {
+ return `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')" title="クリックで解除">済 ${slot} (${done.staff_name || '済'})</button>`;
+ }
+ return `<button class="btn btn-outline" style="border-color:#2563eb; color:#1d4ed8; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')">未 ${slot}</button>`;
+ }).join("");
+
+ eyedropCellHtml = `
+ <div>
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
+ <div>${eyeBadge} ${medTitle}</div>
+ <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
+ </div>
+ <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center;">
+ <span style="font-size:11px; color:#64748b; margin-right:2px;">実施:</span>
+ ${slotButtonsHtml}
+ </div>
+ </div>
+ `;
+ } else {
+ // 特定の時間帯フィルター時 (朝・昼・夕・眠前)
+ const isTargetSlot = order.timing_slots && order.timing_slots.includes(filter);
+ if (isTargetSlot) {
+ const done = meds.find(m => m.resident_id === r.id && (m.slot === `点眼(${filter})` || m.slot === `点眼_${filter}` || (m.slot === "点眼" && filter === "眠前")));
+ const actionBtn = done
+ ? `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 8px;" onclick="toggleEyedrop(${r.id}, '${filter}')" title="クリックで解除">済 [${filter}] (${done.staff_name || '済'})</button>`
+ : `<button class="btn btn-primary" style="font-size:11px; padding:3px 8px;" onclick="toggleEyedrop(${r.id}, '${filter}')">未 [${filter}] 実施する</button>`;
+
+ eyedropCellHtml = `
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+ <div>${eyeBadge} ${medTitle}</div>
+ <div style="display:flex; align-items:center; gap:4px;">
+ ${actionBtn}
+ <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
+ </div>
+ </div>
+ `;
+ } else {
+ eyedropCellHtml = `
+ <div style="display:flex; justify-content:space-between; align-items:center;">
+ <span style="color:#64748b; font-size:12px;">この時間帯の指示なし (${order.eye} ${order.timing_slots.join('・')})</span>
+ <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
+ </div>
+ `;
+ }
+ }
+ }
+
+ if (filter === "all") {
  tr.innerHTML = `
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
- <td>${getMedBtn("朝", "朝食後 ")}</td>
- <td>${getMedBtn("昼", "昼食後 ")}</td>
- <td>${getMedBtn("夕", "夕食後 ")}</td>
- <td>${getMedBtn("眠前", "眠前 ")}</td>
- <td>${getMedBtn("点眼", "点眼 (右キサラタン) ", true)}</td>
+ <td>${getOralMedBtn("朝", "朝食後")}</td>
+ <td>${getOralMedBtn("昼", "昼食後")}</td>
+ <td>${getOralMedBtn("夕", "夕食後")}</td>
+ <td>${getOralMedBtn("眠前", "眠前")}</td>
+ <td>${eyedropCellHtml}</td>
  `;
+ } else {
+ const slotLabel = filter === "朝" ? "朝食後" : (filter === "昼" ? "昼食後" : (filter === "夕" ? "夕食後" : "就寝前"));
+ tr.innerHTML = `
+ <td>${r.room_no}</td>
+ <td><strong>${r.name} 様</strong></td>
+ <td>${getOralMedBtn(filter, slotLabel)}</td>
+ <td>${eyedropCellHtml}</td>
+ `;
+ }
+
  tbody.appendChild(tr);
  });
 }
@@ -6232,7 +6450,7 @@ function saveMed(resId, slot) {
  const r = gState.residents.find(x => x.id === resId);
  const exists = (db.data.meds || []).some(m => m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
  if (exists) {
- alert(`この方の【${slot}】の服薬/点眼はすでに完了記録があります。`);
+ alert(`この方の【${slot}】の服薬はすでに完了記録があります。`);
  return;
  }
 
@@ -6243,7 +6461,210 @@ function saveMed(resId, slot) {
  db.save();
  renderMedTable();
  loadDateRecords(gState.selectedDate);
- alert(`${r ? r.name : '利用者'}様の【${slot}】服薬/点眼完了を記録しました！`);
+ alert(`${r ? r.name : '利用者'}様の【${slot}】服薬完了を記録しました！`);
+}
+
+function toggleMed(resId, slot) {
+ const r = gState.residents.find(x => x.id === resId);
+ const idx = (db.data.meds || []).findIndex(m => m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
+ if (idx >= 0) {
+ if (confirm(`${r ? r.name : '利用者'}様の【${slot}】服薬記録を取り消しますか？`)) {
+ db.data.meds.splice(idx, 1);
+ db.save();
+ renderMedTable();
+ loadDateRecords(gState.selectedDate);
+ }
+ return;
+ }
+ saveMed(resId, slot);
+}
+
+function toggleEyedrop(resId, slot) {
+ const r = gState.residents.find(x => x.id === resId);
+ const staff = document.getElementById("currentStaff")?.value || "職員";
+ const meds = db.data.meds || [];
+ const targetSlotKey = `点眼(${slot})`;
+ const altKey = `点眼_${slot}`;
+ const idx = meds.findIndex(m => m.date === gState.selectedDate && m.resident_id === resId && (m.slot === targetSlotKey || m.slot === altKey || (m.slot === "点眼" && slot === "眠前")));
+
+ if (idx >= 0) {
+ if (confirm(`${r ? r.name : '利用者'}様の【${slot}】点眼実施記録を取り消しますか？`)) {
+ db.data.meds.splice(idx, 1);
+ db.save();
+ renderMedTable();
+ loadDateRecords(gState.selectedDate);
+ }
+ return;
+ }
+
+ const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId);
+ const eyeSide = order ? order.eye : "指示";
+ const medName = order ? order.medicine_name : "点眼薬";
+
+ db.data.meds.push({
+ id: Date.now(),
+ date: gState.selectedDate,
+ slot: targetSlotKey,
+ resident_id: resId,
+ status: "済",
+ staff_name: staff,
+ eye: eyeSide,
+ medicine_name: medName
+ });
+ db.save();
+ renderMedTable();
+ loadDateRecords(gState.selectedDate);
+ alert(`${r ? r.name : '利用者'}様の【${slot}】点眼 (${eyeSide}・${medName}) 完了を記録しました！`);
+}
+
+// 点眼指示モーダル制御
+function openEyedropOrderModal(residentId) {
+ const modal = document.getElementById("eyedropOrderModal");
+ if (!modal) return;
+
+ const resSelect = document.getElementById("eoResidentSelect");
+ if (resSelect) {
+ resSelect.innerHTML = gState.residents.map(r => `
+ <option value="${r.id}" ${r.id === (residentId || gState.selectedResidentId) ? 'selected' : ''}>${r.room_no}号室: ${r.name} 様</option>
+ `).join("");
+ }
+
+ const targetId = residentId || (resSelect ? parseInt(resSelect.value, 10) : gState.selectedResidentId);
+ loadEyedropOrderFormData(targetId);
+
+ modal.style.display = "flex";
+}
+
+function onEyedropResidentChange() {
+ const sel = document.getElementById("eoResidentSelect");
+ if (sel) {
+ loadEyedropOrderFormData(parseInt(sel.value, 10));
+ }
+}
+
+function loadEyedropOrderFormData(resId) {
+ const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId) || {};
+
+ const eye = order.eye || "右のみ";
+ const rRight = document.getElementById("eoEyeRight");
+ const rLeft = document.getElementById("eoEyeLeft");
+ const rBoth = document.getElementById("eoEyeBoth");
+ const rNone = document.getElementById("eoEyeNone");
+ if (rRight) rRight.checked = (eye === "右のみ");
+ if (rLeft) rLeft.checked = (eye === "左のみ");
+ if (rBoth) rBoth.checked = (eye === "両眼");
+ if (rNone) rNone.checked = (eye === "指示なし");
+
+ const medEl = document.getElementById("eoMedicineName");
+ if (medEl) medEl.value = order.medicine_name || "";
+
+ const slots = order.timing_slots || [];
+ const cbMorn = document.getElementById("eoSlotMorning");
+ const cbNoon = document.getElementById("eoSlotNoon");
+ const cbEve = document.getElementById("eoSlotEvening");
+ const cbBed = document.getElementById("eoSlotBed");
+ if (cbMorn) cbMorn.checked = slots.includes("朝");
+ if (cbNoon) cbNoon.checked = slots.includes("昼");
+ if (cbEve) cbEve.checked = slots.includes("夕");
+ if (cbBed) cbBed.checked = slots.includes("眠前");
+
+ const doseEl = document.getElementById("eoDosage");
+ if (doseEl) doseEl.value = order.dosage || "1回1滴";
+ const docEl = document.getElementById("eoDoctor");
+ if (docEl) docEl.value = order.doctor_name || "眼科クリニック";
+ const noteEl = document.getElementById("eoNotes");
+ if (noteEl) noteEl.value = order.notes || "";
+ const stEl = document.getElementById("eoStatus");
+ if (stEl) stEl.value = order.status || "継続中";
+}
+
+function quickFillEyedropMed(medName) {
+ const el = document.getElementById("eoMedicineName");
+ if (el) el.value = medName;
+}
+
+function submitEyedropOrder() {
+ const sel = document.getElementById("eoResidentSelect");
+ if (!sel) return;
+ const resId = parseInt(sel.value, 10);
+ const r = gState.residents.find(x => x.id === resId);
+
+ let eyeSide = "右のみ";
+ if (document.getElementById("eoEyeLeft")?.checked) eyeSide = "左のみ";
+ else if (document.getElementById("eoEyeBoth")?.checked) eyeSide = "両眼";
+ else if (document.getElementById("eoEyeNone")?.checked) eyeSide = "指示なし";
+
+ const medName = document.getElementById("eoMedicineName")?.value.trim() || "";
+ if (eyeSide !== "指示なし" && !medName) {
+ alert("点眼薬の薬品名を入力してください（または『指示なし』を選択してください）。");
+ return;
+ }
+
+ const timingSlots = [];
+ if (document.getElementById("eoSlotMorning")?.checked) timingSlots.push("朝");
+ if (document.getElementById("eoSlotNoon")?.checked) timingSlots.push("昼");
+ if (document.getElementById("eoSlotEvening")?.checked) timingSlots.push("夕");
+ if (document.getElementById("eoSlotBed")?.checked) timingSlots.push("眠前");
+
+ if (eyeSide !== "指示なし" && timingSlots.length === 0) {
+ alert("投与する時間帯（朝・昼・夕・就寝前）を1つ以上選択してください。");
+ return;
+ }
+
+ const dosage = document.getElementById("eoDosage")?.value.trim() || "1回1滴";
+ const doctor = document.getElementById("eoDoctor")?.value.trim() || "";
+ const notes = document.getElementById("eoNotes")?.value.trim() || "";
+ const status = document.getElementById("eoStatus")?.value || "継続中";
+
+ if (!db.data.eyedrop_orders) db.data.eyedrop_orders = [];
+ const existingIdx = db.data.eyedrop_orders.findIndex(e => e.resident_id === resId);
+
+ const newOrder = {
+ id: existingIdx >= 0 ? db.data.eyedrop_orders[existingIdx].id : Date.now(),
+ resident_id: resId,
+ eye: eyeSide,
+ medicine_name: medName,
+ timing_slots: timingSlots,
+ dosage: dosage,
+ doctor_name: doctor,
+ notes: notes,
+ status: status,
+ updated_at: new Date().toISOString().split("T")[0]
+ };
+
+ if (existingIdx >= 0) {
+ db.data.eyedrop_orders[existingIdx] = newOrder;
+ } else {
+ db.data.eyedrop_orders.push(newOrder);
+ }
+
+ db.save();
+ closeModal("eyedropOrderModal");
+ renderMedTable();
+ if (typeof renderResidentDetail === "function" && gState.selectedResidentId === resId) {
+ renderResidentDetail();
+ }
+ alert(`${r ? r.name : '利用者'}様の点眼指示（${eyeSide}・${medName || '指示なし'}）を保存しました！`);
+}
+
+function deleteEyedropOrder() {
+ const sel = document.getElementById("eoResidentSelect");
+ if (!sel) return;
+ const resId = parseInt(sel.value, 10);
+ const r = gState.residents.find(x => x.id === resId);
+
+ if (!confirm(`${r ? r.name : '利用者'}様の点眼指示を解除（指示なし）にしますか？`)) return;
+
+ if (db.data.eyedrop_orders) {
+ db.data.eyedrop_orders = db.data.eyedrop_orders.filter(e => e.resident_id !== resId);
+ db.save();
+ }
+ closeModal("eyedropOrderModal");
+ renderMedTable();
+ if (typeof renderResidentDetail === "function" && gState.selectedResidentId === resId) {
+ renderResidentDetail();
+ }
+ alert(`${r ? r.name : '利用者'}様の点眼指示を解除しました。`);
 }
 
 // 7. 夜勤体位変換 トグル解除 ＆ 一括確定 (個人記録自動転記)
@@ -6324,32 +6745,68 @@ function submitNightTurnsBatch() {
  staff_name: staff
  });
  if (!resActionsMap[resId]) resActionsMap[resId] = [];
- resActionsMap[resId].push(`${time} ${action}`);
+ resActionsMap[resId].push({ time: time, action: action });
  }
  });
  }
 
- const nowTm = new Date().toTimeString().slice(0, 5);
+ const timeOrder = ["22:00", "00:00", "02:00", "04:00", "06:00"];
+ let totalRecordsCreated = 0;
+
  Object.keys(resActionsMap).forEach(resIdStr => {
  const resId = parseInt(resIdStr, 10);
- const actions = resActionsMap[resId];
- if (actions.length > 0) {
+ const actionsList = resActionsMap[resId];
+ if (!actionsList || actionsList.length === 0) return;
+
+ // 前回の自動生成レコード（定時巡視・夜間巡視）を削除して最新状態に更新
+ db.data.care_records = (db.data.care_records || []).filter(r => !(
+ r.resident_id === resId &&
+ r.category === "巡視" &&
+ r.recorded_at.startsWith(gState.selectedDate) &&
+ (r.content.includes("定時巡視") || r.content.includes("夜間巡視・体位変換") || r.content.includes("夜間巡視:"))
+ ));
+
+ // 時間順にソート (22:00 -> 00:00 -> 02:00 -> 04:00 -> 06:00)
+ actionsList.sort((a, b) => {
+ const idxA = timeOrder.indexOf(a.time);
+ const idxB = timeOrder.indexOf(b.time);
+ return (idxA >= 0 ? idxA : 99) - (idxB >= 0 ? idxB : 99);
+ });
+
+ // 巡視した時間すべてについて、1回ずつ個別に介護記録を作成
+ actionsList.forEach((item, index) => {
+ let contentText = "";
+ if (item.action === "安眠中") {
+ contentText = `【${item.time} 定時巡視】訪室確認。静かに安眠中、呼吸状態安定。掛物の乱れを整え、ナースコールを手元に確認。異常なし。`;
+ } else if (item.action === "左側臥位") {
+ contentText = `【${item.time} 定時巡視・体位変換】訪室確認。仰臥位から左側臥位へ体位変換実施。仙骨部除圧クッションを背部・膝間に挿入。良肢位保持、寝具を整える。`;
+ } else if (item.action === "右側臥位") {
+ contentText = `【${item.time} 定時巡視・体位変換】訪室確認。左側臥位から右側臥位へ体位変換実施。除圧クッション配置し安楽な姿勢を保持。呼吸落ち着き安眠継続。`;
+ } else if (item.action === "仰臥位") {
+ contentText = `【${item.time} 定時巡視・体位変換】訪室確認。側臥位から仰臥位へ体位変換実施。背部・仙骨部の皮膚状態確認（発赤悪化なし）。膝下クッション配置。`;
+ } else if (item.action === "おむつ交換") {
+ contentText = `【${item.time} 定時巡視・おむつ交換】訪室確認。おむつ汚染（排尿あり）確認しパッド交換実施。陰部清拭、皮膚保護処置。寝具交換なし、安眠。`;
+ } else {
+ contentText = `【${item.time} 定時巡視・体位変換】訪室確認。${item.action}実施。全身状態・呼吸安定、安眠。`;
+ }
+
  db.data.care_records.unshift({
- id: Date.now() + Math.floor(Math.random() * 10000),
- recorded_at: `${gState.selectedDate} ${nowTm}`,
+ id: Date.now() + Math.floor(Math.random() * 100000) + index,
+ recorded_at: `${gState.selectedDate} ${item.time}`,
  resident_id: resId,
  category: "巡視",
- content: `夜間巡視・体位変換: ${actions.join(", ")}`,
+ content: contentText,
  staff_name: staff
  });
- }
+ totalRecordsCreated++;
+ });
  });
 
  db.save();
  renderNightTable();
  loadDateRecords(gState.selectedDate);
- if (Object.keys(resActionsMap).length > 0) {
- alert("体位変換・夜間巡視を一括確定しました！個人記録へも反映されました。");
+ if (totalRecordsCreated > 0) {
+ alert(`体位変換・夜間巡視を一括確定しました！\n巡視した全${totalRecordsCreated}回分の巡視記録が個別に個人記録へ反映されました。`);
  } else {
  alert("体位変換・夜間巡視のチェック解除状態を確定・保存しました。");
  }

@@ -1,4 +1,4 @@
-# End-to-End Real Browser HTTP Test Runner
+﻿# End-to-End Real Browser HTTP Test Runner
 $carePortalDir = (Get-Item "$PSScriptRoot\..").FullName
 $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 if (-not (Test-Path $edgePath)) {
@@ -10,8 +10,7 @@ Write-Host "  Care Portal E2E Real Browser Test (Cycle 1)" -ForegroundColor Cyan
 Write-Host "==========================================================" -ForegroundColor Cyan
 
 # 1. サーバー起動
-Write-Host "`n[Step 1] Starting Care Portal Server on port 8888..." -ForegroundColor Yellow
-$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$carePortalDir\server.ps1`"", "-NoBrowser", "-NoTunnel" -PassThru -NoNewWindow
+$serverProcess = Start-Process -FilePath "powershell.exe" -ArgumentList "-ExecutionPolicy", "Bypass", "-File", "`"$carePortalDir\server.ps1`"", "-NoBrowser", "-NoTunnel" -PassThru -WindowStyle Hidden
 
 # 待機 (ポート8888が開くまで最大15秒)
 $ready = $false
