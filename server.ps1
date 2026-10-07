@@ -57,6 +57,235 @@ using System.Net.NetworkInformation;
 
 namespace CarePortal
 {
+    // [Claude修正] サーバー側でデータ (JSON) を読み書きするための最小限の解析器。
+    // Windows 標準の PowerShell 5.1 でもそのまま動くよう、外部ライブラリと新しい C# 構文は使わない。
+    public class JNum
+    {
+        public string Raw;
+        public JNum(string raw) { Raw = raw; }
+    }
+
+    public class JObj
+    {
+        public List<string> Keys = new List<string>();
+        public Dictionary<string, object> Map = new Dictionary<string, object>();
+
+        public object Get(string key)
+        {
+            object v;
+            if (Map.TryGetValue(key, out v)) return v;
+            return null;
+        }
+
+        public string GetStr(string key)
+        {
+            object v = Get(key);
+            if (v == null) return null;
+            if (v is string) return (string)v;
+            if (v is JNum) return ((JNum)v).Raw;
+            if (v is bool) return ((bool)v) ? "true" : "false";
+            return null;
+        }
+
+        public void Set(string key, object value)
+        {
+            if (!Map.ContainsKey(key)) Keys.Add(key);
+            Map[key] = value;
+        }
+    }
+
+    public static class MiniJson
+    {
+        public static object Parse(string s)
+        {
+            int i = 0;
+            object v = ParseValue(s, ref i);
+            SkipWs(s, ref i);
+            return v;
+        }
+
+        private static void SkipWs(string s, ref int i)
+        {
+            while (i < s.Length)
+            {
+                char c = s[i];
+                if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '﻿') i++;
+                else break;
+            }
+        }
+
+        private static object ParseValue(string s, ref int i)
+        {
+            SkipWs(s, ref i);
+            if (i >= s.Length) throw new Exception("JSON: unexpected end");
+            char c = s[i];
+            if (c == '{') return ParseObject(s, ref i);
+            if (c == '[') return ParseArray(s, ref i);
+            if (c == '"') return ParseString(s, ref i);
+            if (string.CompareOrdinal(s, i, "true", 0, 4) == 0) { i += 4; return true; }
+            if (string.CompareOrdinal(s, i, "false", 0, 5) == 0) { i += 5; return false; }
+            if (string.CompareOrdinal(s, i, "null", 0, 4) == 0) { i += 4; return null; }
+            int start = i;
+            while (i < s.Length && "+-0123456789.eE".IndexOf(s[i]) >= 0) i++;
+            if (i == start) throw new Exception("JSON: unexpected character at " + i);
+            return new JNum(s.Substring(start, i - start));
+        }
+
+        private static JObj ParseObject(string s, ref int i)
+        {
+            JObj obj = new JObj();
+            i++;
+            SkipWs(s, ref i);
+            if (i < s.Length && s[i] == '}') { i++; return obj; }
+            while (true)
+            {
+                SkipWs(s, ref i);
+                string key = ParseString(s, ref i);
+                SkipWs(s, ref i);
+                if (i >= s.Length || s[i] != ':') throw new Exception("JSON: ':' expected at " + i);
+                i++;
+                object val = ParseValue(s, ref i);
+                obj.Set(key, val);
+                SkipWs(s, ref i);
+                if (i < s.Length && s[i] == ',') { i++; continue; }
+                if (i < s.Length && s[i] == '}') { i++; break; }
+                throw new Exception("JSON: ',' or '}' expected at " + i);
+            }
+            return obj;
+        }
+
+        private static List<object> ParseArray(string s, ref int i)
+        {
+            List<object> list = new List<object>();
+            i++;
+            SkipWs(s, ref i);
+            if (i < s.Length && s[i] == ']') { i++; return list; }
+            while (true)
+            {
+                list.Add(ParseValue(s, ref i));
+                SkipWs(s, ref i);
+                if (i < s.Length && s[i] == ',') { i++; continue; }
+                if (i < s.Length && s[i] == ']') { i++; break; }
+                throw new Exception("JSON: ',' or ']' expected at " + i);
+            }
+            return list;
+        }
+
+        private static string ParseString(string s, ref int i)
+        {
+            if (i >= s.Length || s[i] != '"') throw new Exception("JSON: string expected at " + i);
+            i++;
+            StringBuilder sb = new StringBuilder();
+            while (i < s.Length)
+            {
+                char c = s[i];
+                if (c == '"') { i++; return sb.ToString(); }
+                if (c == '\\')
+                {
+                    i++;
+                    if (i >= s.Length) break;
+                    char e = s[i];
+                    switch (e)
+                    {
+                        case '"': sb.Append('"'); break;
+                        case '\\': sb.Append('\\'); break;
+                        case '/': sb.Append('/'); break;
+                        case 'b': sb.Append('\b'); break;
+                        case 'f': sb.Append('\f'); break;
+                        case 'n': sb.Append('\n'); break;
+                        case 'r': sb.Append('\r'); break;
+                        case 't': sb.Append('\t'); break;
+                        case 'u':
+                            sb.Append((char)Convert.ToInt32(s.Substring(i + 1, 4), 16));
+                            i += 4;
+                            break;
+                        default: sb.Append(e); break;
+                    }
+                    i++;
+                    continue;
+                }
+                sb.Append(c);
+                i++;
+            }
+            throw new Exception("JSON: unterminated string");
+        }
+
+        public static string Serialize(object v)
+        {
+            StringBuilder sb = new StringBuilder();
+            Write(sb, v);
+            return sb.ToString();
+        }
+
+        public static string Quote(string s)
+        {
+            StringBuilder sb = new StringBuilder();
+            WriteString(sb, s);
+            return sb.ToString();
+        }
+
+        private static void Write(StringBuilder sb, object v)
+        {
+            if (v == null) { sb.Append("null"); return; }
+            if (v is string) { WriteString(sb, (string)v); return; }
+            if (v is bool) { sb.Append(((bool)v) ? "true" : "false"); return; }
+            if (v is JNum) { sb.Append(((JNum)v).Raw); return; }
+            if (v is int || v is long) { sb.Append(Convert.ToString(v, System.Globalization.CultureInfo.InvariantCulture)); return; }
+            if (v is JObj)
+            {
+                JObj o = (JObj)v;
+                sb.Append('{');
+                bool first = true;
+                foreach (string k in o.Keys)
+                {
+                    if (!first) sb.Append(',');
+                    first = false;
+                    WriteString(sb, k);
+                    sb.Append(':');
+                    Write(sb, o.Map[k]);
+                }
+                sb.Append('}');
+                return;
+            }
+            if (v is List<object>)
+            {
+                List<object> list = (List<object>)v;
+                sb.Append('[');
+                for (int i = 0; i < list.Count; i++)
+                {
+                    if (i > 0) sb.Append(',');
+                    Write(sb, list[i]);
+                }
+                sb.Append(']');
+                return;
+            }
+            WriteString(sb, v.ToString());
+        }
+
+        private static void WriteString(StringBuilder sb, string s)
+        {
+            sb.Append('"');
+            foreach (char c in s)
+            {
+                switch (c)
+                {
+                    case '"': sb.Append("\\\""); break;
+                    case '\\': sb.Append("\\\\"); break;
+                    case '\n': sb.Append("\\n"); break;
+                    case '\r': sb.Append("\\r"); break;
+                    case '\t': sb.Append("\\t"); break;
+                    case '\b': sb.Append("\\b"); break;
+                    case '\f': sb.Append("\\f"); break;
+                    default:
+                        if (c < 0x20) sb.Append("\\u" + ((int)c).ToString("x4"));
+                        else sb.Append(c);
+                        break;
+                }
+            }
+            sb.Append('"');
+        }
+    }
+
     public class SimpleServer
     {
         private int _port;
@@ -66,6 +295,425 @@ namespace CarePortal
         private string _backupDir;
         private TcpListener _listener;
         private readonly object _fileLock = new object();
+
+        // [Claude修正] ログインの照合とセッション管理 (サーバー側)。
+        // 旧実装はログイン画面を画面側で表示するだけで、サーバーは誰にでもデータを渡していた。
+        private class SessionInfo
+        {
+            public string Staff;
+            public DateTime LastSeen;
+        }
+        private readonly Dictionary<string, SessionInfo> _sessions = new Dictionary<string, SessionInfo>();
+        private readonly Dictionary<string, int> _failCount = new Dictionary<string, int>();
+        private readonly Dictionary<string, DateTime> _lockUntil = new Dictionary<string, DateTime>();
+        private readonly object _authLock = new object();
+        private static readonly TimeSpan SessionIdle = TimeSpan.FromMinutes(60);
+        private const int MaxFails = 5;
+        private const int LockMinutes = 5;
+
+        private static string GetHeader(string[] lines, string name)
+        {
+            for (int i = 1; i < lines.Length; i++)
+            {
+                string l = lines[i];
+                if (l.Length == 0) break;
+                int c = l.IndexOf(':');
+                if (c > 0 && string.Equals(l.Substring(0, c).Trim(), name, StringComparison.OrdinalIgnoreCase))
+                {
+                    return l.Substring(c + 1).Trim();
+                }
+            }
+            return "";
+        }
+
+        private static string GetRequestToken(string[] lines)
+        {
+            string t = GetHeader(lines, "X-Session-Token");
+            if (!string.IsNullOrEmpty(t)) return t;
+            string cookie = GetHeader(lines, "Cookie");
+            foreach (string part in cookie.Split(';'))
+            {
+                string p = part.Trim();
+                if (p.StartsWith("cp_session=")) return p.Substring("cp_session=".Length);
+            }
+            return "";
+        }
+
+        private static string NewToken()
+        {
+            byte[] b = new byte[32];
+            using (System.Security.Cryptography.RandomNumberGenerator rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(b);
+            }
+            return BitConverter.ToString(b).Replace("-", "").ToLowerInvariant();
+        }
+
+        private string CheckSession(string[] lines)
+        {
+            string t = GetRequestToken(lines);
+            if (string.IsNullOrEmpty(t)) return null;
+            lock (_authLock)
+            {
+                SessionInfo si;
+                if (!_sessions.TryGetValue(t, out si)) return null;
+                if (DateTime.Now - si.LastSeen > SessionIdle)
+                {
+                    _sessions.Remove(t);
+                    return null;
+                }
+                si.LastSeen = DateTime.Now;
+                return si.Staff;
+            }
+        }
+
+        private JObj LoadDb()
+        {
+            string txt = null;
+            lock (_fileLock)
+            {
+                if (File.Exists(_dbFile)) txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+            }
+            if (string.IsNullOrEmpty(txt)) return null;
+            return MiniJson.Parse(txt) as JObj;
+        }
+
+        private static List<object> GetList(JObj o, string key)
+        {
+            if (o == null) return new List<object>();
+            List<object> l = o.Get(key) as List<object>;
+            return l ?? new List<object>();
+        }
+
+        private static JObj FindByField(List<object> list, string field, string value)
+        {
+            if (list == null) return null;
+            foreach (object x in list)
+            {
+                JObj j = x as JObj;
+                if (j != null && j.GetStr(field) == value) return j;
+            }
+            return null;
+        }
+
+        private static string StaffName(object x)
+        {
+            JObj j = x as JObj;
+            if (j != null) return j.GetStr("name");
+            return x as string;
+        }
+
+        private static JObj FindStamp(List<object> stamps, string name)
+        {
+            foreach (object st in stamps)
+            {
+                if (StaffName(st) == name) return st as JObj;
+            }
+            return null;
+        }
+
+        private static bool IsTrue(object v)
+        {
+            return (v is bool) && (bool)v;
+        }
+
+        // [0]=ID, [1]=パスワード, [2]=個別設定済み。職員マスタに居ない (退職等) 職員は null
+        private static string[] GetCredentials(JObj db, string name)
+        {
+            if (string.IsNullOrEmpty(name)) return null;
+            if (db == null) return new string[] { "aaaa", "0000", "false" };
+            bool inStamps = false;
+            foreach (object st in GetList(db, "stamps"))
+            {
+                if (StaffName(st) == name) { inStamps = true; break; }
+            }
+            if (!inStamps) return null;
+            JObj acc = FindByField(GetList(db, "staff_accounts"), "staff_name", name);
+            if (acc == null) return new string[] { "aaaa", "0000", "false" };
+            return new string[] { acc.GetStr("staff_id") ?? "aaaa", acc.GetStr("password") ?? "0000", IsTrue(acc.Get("is_custom")) ? "true" : "false" };
+        }
+
+        private int LockRemaining(string key)
+        {
+            lock (_authLock)
+            {
+                DateTime until;
+                if (_lockUntil.TryGetValue(key, out until))
+                {
+                    double s = (until - DateTime.Now).TotalSeconds;
+                    if (s > 0) return (int)Math.Ceiling(s);
+                    _lockUntil.Remove(key);
+                    _failCount.Remove(key);
+                }
+                return 0;
+            }
+        }
+
+        // 失敗を記録し、ロックまでの残り回数を返す (0 = ロックした)
+        private int RegisterFail(string key)
+        {
+            lock (_authLock)
+            {
+                int n;
+                _failCount.TryGetValue(key, out n);
+                n++;
+                if (n >= MaxFails)
+                {
+                    _lockUntil[key] = DateTime.Now.AddMinutes(LockMinutes);
+                    _failCount[key] = 0;
+                    return 0;
+                }
+                _failCount[key] = n;
+                return MaxFails - n;
+            }
+        }
+
+        private void ClearFail(string key)
+        {
+            lock (_authLock)
+            {
+                _failCount.Remove(key);
+                _lockUntil.Remove(key);
+            }
+        }
+
+        private void HandleLoginInfo(NetworkStream stream)
+        {
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            StringBuilder sb = new StringBuilder();
+            string fac = db != null ? db.GetStr("facility_name") : null;
+            sb.Append("{\"has_data\":" + (db != null ? "true" : "false") + ",\"facility_name\":" + MiniJson.Quote(fac ?? "") + ",\"staff\":[");
+            List<object> accs = GetList(db, "staff_accounts");
+            List<string> seen = new List<string>();
+            bool first = true;
+            foreach (object st in GetList(db, "stamps"))
+            {
+                string nm = StaffName(st);
+                if (string.IsNullOrEmpty(nm) || seen.Contains(nm)) continue;
+                seen.Add(nm);
+                JObj sj = st as JObj;
+                string role = sj != null ? (sj.GetStr("role") ?? "") : "";
+                JObj acc = FindByField(accs, "staff_name", nm);
+                bool custom = acc != null && IsTrue(acc.Get("is_custom"));
+                if (!first) sb.Append(',');
+                first = false;
+                sb.Append("{\"name\":" + MiniJson.Quote(nm) + ",\"role\":" + MiniJson.Quote(role) + ",\"is_custom\":" + (custom ? "true" : "false") + "}");
+            }
+            sb.Append("]}");
+            SendJsonResponse(stream, 200, sb.ToString());
+        }
+
+        private void HandleLogin(NetworkStream stream, string body)
+        {
+            JObj req = null;
+            try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string name = req.GetStr("staff_name") ?? "";
+            string sid = req.GetStr("staff_id") ?? "";
+            string pw = req.GetStr("password") ?? "";
+
+            int remain = LockRemaining(name);
+            if (remain > 0)
+            {
+                SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + remain + "}");
+                return;
+            }
+
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            string[] cred = GetCredentials(db, name);
+            if (cred == null || cred[0] != sid || cred[1] != pw)
+            {
+                int left = RegisterFail(name);
+                SendJsonResponse(stream, 401, "{\"error\":\"invalid\",\"remaining\":" + left + "}");
+                return;
+            }
+            ClearFail(name);
+
+            string token = NewToken();
+            lock (_authLock)
+            {
+                SessionInfo si = new SessionInfo();
+                si.Staff = name;
+                si.LastSeen = DateTime.Now;
+                _sessions[token] = si;
+            }
+            string json = "{\"token\":\"" + token + "\",\"staff_name\":" + MiniJson.Quote(name) + ",\"is_custom\":" + cred[2] + "}";
+            SendJsonResponse(stream, 200, json, "cp_session=" + token + "; Path=/; HttpOnly; SameSite=Strict");
+        }
+
+        private void HandleLogout(NetworkStream stream, string[] lines)
+        {
+            string t = GetRequestToken(lines);
+            lock (_authLock)
+            {
+                if (!string.IsNullOrEmpty(t)) _sessions.Remove(t);
+            }
+            SendJsonResponse(stream, 200, "{\"success\":true}", "cp_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+        }
+
+        // ID・パスワードの初期化 (管理者と事務員の2名承認)。ログイン前の画面から使うため、ここで承認者の暗証番号を照合する
+        private void HandleAccountReset(NetworkStream stream, string body)
+        {
+            JObj req = null;
+            try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string target = req.GetStr("target") ?? "";
+            string admin = req.GetStr("admin") ?? "";
+            string adminPin = req.GetStr("admin_pin") ?? "";
+            string office = req.GetStr("office") ?? "";
+            string officePin = req.GetStr("office_pin") ?? "";
+
+            string lockKey = "reset:" + admin + "/" + office;
+            int remain = LockRemaining(lockKey);
+            if (remain > 0)
+            {
+                SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + remain + "}");
+                return;
+            }
+            if (string.IsNullOrEmpty(target) || admin == office)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}");
+                return;
+            }
+
+            bool approved = false;
+            lock (_fileLock)
+            {
+                string txt = File.Exists(_dbFile) ? File.ReadAllText(_dbFile, Encoding.UTF8) : null;
+                JObj db = null;
+                try { db = string.IsNullOrEmpty(txt) ? null : MiniJson.Parse(txt) as JObj; } catch { db = null; }
+                if (db != null)
+                {
+                    List<object> stamps = GetList(db, "stamps");
+                    JObj a = FindStamp(stamps, admin);
+                    JObj o = FindStamp(stamps, office);
+                    bool targetOk = false;
+                    foreach (object st in stamps) { if (StaffName(st) == target) { targetOk = true; break; } }
+                    string aRole = a != null ? (a.GetStr("role") ?? "") : "";
+                    string oRole = o != null ? (o.GetStr("role") ?? "") : "";
+                    approved = a != null && o != null && targetOk
+                        && (aRole.Contains("管理者") || aRole.Contains("施設長"))
+                        && oRole.Contains("事務")
+                        && (a.GetStr("pin") ?? "0000") == adminPin
+                        && (o.GetStr("pin") ?? "0000") == officePin;
+                    if (approved)
+                    {
+                        List<object> accs = db.Get("staff_accounts") as List<object>;
+                        if (accs == null)
+                        {
+                            accs = new List<object>();
+                            db.Set("staff_accounts", accs);
+                        }
+                        JObj acc = FindByField(accs, "staff_name", target);
+                        if (acc == null)
+                        {
+                            acc = new JObj();
+                            acc.Set("id", target);
+                            acc.Set("staff_name", target);
+                            accs.Add(acc);
+                        }
+                        acc.Set("staff_id", "aaaa");
+                        acc.Set("password", "0000");
+                        acc.Set("is_custom", false);
+                        acc.Set("updated_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
+                        long rev = 0;
+                        JNum rn = db.Get("_rev") as JNum;
+                        if (rn != null) long.TryParse(rn.Raw, out rev);
+                        db.Set("_rev", new JNum((rev + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                        string outTxt = MiniJson.Serialize(db);
+                        File.WriteAllText(_dbFile, outTxt, Encoding.UTF8);
+                        try
+                        {
+                            string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+                            File.WriteAllText(Path.Combine(_backupDir, "backup_" + ts + ".json"), outTxt, Encoding.UTF8);
+                            File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), outTxt, Encoding.UTF8);
+                        }
+                        catch { }
+                    }
+                }
+            }
+
+            if (!approved)
+            {
+                RegisterFail(lockKey);
+                SendJsonResponse(stream, 403, "{\"error\":\"approval_failed\"}");
+                return;
+            }
+            ClearFail(lockKey);
+            ClearFail(target);
+            lock (_authLock)
+            {
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, SessionInfo> kv in _sessions)
+                {
+                    if (kv.Value.Staff == target) remove.Add(kv.Key);
+                }
+                foreach (string k in remove) _sessions.Remove(k);
+            }
+            SendJsonResponse(stream, 200, "{\"success\":true}");
+        }
+
+        // 端末から届いたデータでは、パスワードは伏せ字 (空) になっている。
+        // サーバーのファイルにある本物のID・パスワードを保ち、本人が変更した (更新日時が新しい) 場合だけ受け入れる。
+        private static string MergeAccountSecrets(string postData, string currentJson)
+        {
+            JObj posted = MiniJson.Parse(postData) as JObj;
+            if (posted == null) return postData;
+            List<object> pAcc = posted.Get("staff_accounts") as List<object>;
+            JObj cur = null;
+            if (!string.IsNullOrEmpty(currentJson))
+            {
+                try { cur = MiniJson.Parse(currentJson) as JObj; } catch { cur = null; }
+            }
+            List<object> cAcc = cur != null ? (cur.Get("staff_accounts") as List<object>) : null;
+            if (pAcc == null)
+            {
+                if (cAcc == null) return postData;
+                pAcc = new List<object>();
+                posted.Set("staff_accounts", pAcc);
+            }
+            foreach (object x in pAcc)
+            {
+                JObj pa = x as JObj;
+                if (pa == null) continue;
+                string nm = pa.GetStr("staff_name");
+                JObj ca = cAcc != null ? FindByField(cAcc, "staff_name", nm) : null;
+                string pPw = pa.GetStr("password") ?? "";
+                if (ca == null)
+                {
+                    if (pPw == "") pa.Set("password", "0000");
+                    continue;
+                }
+                string pUpd = pa.GetStr("updated_at") ?? "";
+                string cUpd = ca.GetStr("updated_at") ?? "";
+                bool acceptPosted = pPw != "" && string.CompareOrdinal(pUpd, cUpd) > 0;
+                if (!acceptPosted)
+                {
+                    pa.Set("staff_id", ca.Get("staff_id"));
+                    pa.Set("password", ca.Get("password"));
+                    pa.Set("is_custom", ca.Get("is_custom"));
+                    pa.Set("updated_at", ca.Get("updated_at"));
+                }
+            }
+            if (cAcc != null)
+            {
+                foreach (object x in cAcc)
+                {
+                    JObj ca = x as JObj;
+                    if (ca == null) continue;
+                    if (FindByField(pAcc, "staff_name", ca.GetStr("staff_name")) == null) pAcc.Add(ca);
+                }
+            }
+            return MiniJson.Serialize(posted);
+        }
+
+        private static string MaskPasswords(string json)
+        {
+            return System.Text.RegularExpressions.Regex.Replace(json, "\"password\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"password\":\"\"");
+        }
+
 
         public SimpleServer(string baseDir, int port)
         {
@@ -162,6 +810,36 @@ namespace CarePortal
                         totalBodyRead += read;
                     }
 
+                    // [Claude修正] ログイン関連 (ログイン前でも使える入口)
+                    if (urlPath == "/api/login-info")
+                    {
+                        HandleLoginInfo(stream);
+                        return;
+                    }
+                    if (urlPath == "/api/login" && method == "POST")
+                    {
+                        HandleLogin(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+                    if (urlPath == "/api/logout" && method == "POST")
+                    {
+                        HandleLogout(stream, lines);
+                        return;
+                    }
+                    if (urlPath == "/api/account-reset" && method == "POST")
+                    {
+                        HandleAccountReset(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+
+                    // [Claude修正] これより下の API と写真は、ログイン済み (有効なセッション) の場合だけ応答する
+                    bool needsAuth = urlPath.StartsWith("/api/") || urlPath.StartsWith("/data/photos/");
+                    if (needsAuth && CheckSession(lines) == null)
+                    {
+                        SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}");
+                        return;
+                    }
+
                     if (urlPath == "/api/open-folder")
                     {
                         string fType = "documents";
@@ -221,7 +899,8 @@ namespace CarePortal
                         }
                         else
                         {
-                            SendJsonResponse(stream, 200, dataJson);
+                            // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
+                            SendJsonResponse(stream, 200, MaskPasswords(dataJson));
                         }
                         return;
                     }
@@ -237,9 +916,10 @@ namespace CarePortal
                                 // [Claude修正] 版番号 (_rev) の照合。保存データの _rev は「取得時の版 + 1」でなければならない。
                                 // 取得後に他端末が保存して版が進んでいれば 409 を返し、端末側で合流をやり直させる。
                                 long currentRev = -1;
+                                string currentJson = null;
                                 if (File.Exists(_dbFile))
                                 {
-                                    string currentJson = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                    currentJson = File.ReadAllText(_dbFile, Encoding.UTF8);
                                     var mc = System.Text.RegularExpressions.Regex.Match(currentJson, "\"_rev\":(\\d+)");
                                     if (mc.Success) currentRev = long.Parse(mc.Groups[1].Value);
                                 }
@@ -250,6 +930,8 @@ namespace CarePortal
                                 }
                                 if (!revConflict)
                                 {
+                                // [Claude修正] 伏せ字で届いたパスワードを、サーバー側の本物で補う
+                                try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
                                 File.WriteAllText(_dbFile, postData, Encoding.UTF8);
                                 try
                                 {
@@ -294,8 +976,27 @@ namespace CarePortal
                 urlPath = "/index.html";
             }
 
+            // [Claude修正] 配信してよいファイルだけを返す。データ・設定・.git・スクリプト等は配信しない。
+            // 旧実装はフォルダ内の全ファイル (全利用者のデータを含む) と、「..」でフォルダ外のファイルまで返していた。
+            string lowerPath = urlPath.ToLowerInvariant();
+            bool allowedPath = lowerPath == "/index.html" || lowerPath == "/app.js" || lowerPath == "/style.css"
+                || lowerPath == "/favicon.ico" || lowerPath.StartsWith("/assets/") || lowerPath.StartsWith("/data/photos/");
+            if (!allowedPath || urlPath.Contains("..") || urlPath.Contains("\\") || urlPath.Contains(":"))
+            {
+                byte[] deniedBytes = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes);
+                return;
+            }
+
             string relativePath = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            string filePath = Path.Combine(_baseDir, relativePath);
+            string filePath = Path.GetFullPath(Path.Combine(_baseDir, relativePath));
+            string baseFull = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (!filePath.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] deniedBytes2 = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes2);
+                return;
+            }
 
             if (!File.Exists(filePath))
             {
@@ -324,13 +1025,31 @@ namespace CarePortal
 
         private static void SendJsonResponse(NetworkStream stream, int statusCode, string json)
         {
+            SendJsonResponse(stream, statusCode, json, null);
+        }
+
+        private static void SendJsonResponse(NetworkStream stream, int statusCode, string json, string setCookie)
+        {
             byte[] bytes = Encoding.UTF8.GetBytes(json);
-            SendCorsResponse(stream, statusCode, statusCode == 200 ? "OK" : (statusCode == 409 ? "Conflict" : "Bad Request"), "application/json; charset=utf-8", bytes);
+            string msg = "Bad Request";
+            if (statusCode == 200) msg = "OK";
+            else if (statusCode == 401) msg = "Unauthorized";
+            else if (statusCode == 403) msg = "Forbidden";
+            else if (statusCode == 409) msg = "Conflict";
+            else if (statusCode == 423) msg = "Locked";
+            else if (statusCode == 500) msg = "Internal Server Error";
+            SendCorsResponse(stream, statusCode, msg, "application/json; charset=utf-8", bytes, setCookie);
         }
 
         private static void SendCorsResponse(NetworkStream stream, int statusCode, string statusMsg, string contentType, byte[] body)
         {
+            SendCorsResponse(stream, statusCode, statusMsg, contentType, body, null);
+        }
+
+        private static void SendCorsResponse(NetworkStream stream, int statusCode, string statusMsg, string contentType, byte[] body, string setCookie)
+        {
             string headers = "HTTP/1.1 " + statusCode + " " + statusMsg + "\r\n" +
+                             (string.IsNullOrEmpty(setCookie) ? "" : "Set-Cookie: " + setCookie + "\r\n") +
                              "Content-Type: " + contentType + "\r\n" +
                              "Content-Length: " + body.Length + "\r\n" +
                              "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
@@ -339,7 +1058,7 @@ namespace CarePortal
                              "Connection: close\r\n" +
                              "Access-Control-Allow-Origin: *\r\n" +
                              "Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n" +
-                             "Access-Control-Allow-Headers: Content-Type\r\n\r\n";
+                             "Access-Control-Allow-Headers: Content-Type, X-Session-Token\r\n\r\n";
             byte[] headerBytes = Encoding.UTF8.GetBytes(headers);
             stream.Write(headerBytes, 0, headerBytes.Length);
             if (body.Length > 0)

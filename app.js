@@ -51,6 +51,42 @@ const DEFAULT_NIGHT_TURN_TEMPLATES = {
 };
 
 // ======================================================================
+// [Claude修正] サーバー側ログイン (セッション) の共通処理
+// ログインに成功するとサーバーが発行する鍵 (トークン) をこのタブに保持し、
+// データの取得・保存などの通信に付けて送る。鍵が無い・期限切れの場合、サーバーはデータを渡さない。
+// ======================================================================
+function cpGetToken() {
+ try { return sessionStorage.getItem("carePortalToken") || ""; } catch (e) { return ""; }
+}
+
+function cpSetToken(token) {
+ try {
+ if (token) sessionStorage.setItem("carePortalToken", token);
+ else sessionStorage.removeItem("carePortalToken");
+ } catch (e) {}
+}
+
+async function cpApiFetch(url, options) {
+ const opts = Object.assign({}, options || {});
+ opts.headers = Object.assign({}, opts.headers || {}, { "X-Session-Token": cpGetToken() });
+ opts.credentials = "same-origin";
+ const res = await fetch(url, opts);
+ if (res.status === 401 && typeof handleSessionExpired === "function") {
+ handleSessionExpired();
+ }
+ return res;
+}
+
+let cpSessionExpiredShown = false;
+function handleSessionExpired() {
+ if (!gState || !gState.session || cpSessionExpiredShown) return;
+ cpSessionExpiredShown = true;
+ alert("ログインの有効期限が切れたか、サーバーが再起動されました。\nお手数ですが、もう一度ログインしてください。");
+ handleLogout();
+ setTimeout(() => { cpSessionExpiredShown = false; }, 3000);
+}
+
+// ======================================================================
 // [Claude修正] 3者比較による合流 (マージ)
 // local = この端末のデータ, base = 前回サーバーと同期した時点のデータ, server = サーバーの最新
 // ・片方だけが変えた部分は、変えた側を採用
@@ -153,7 +189,8 @@ class LocalDB {
  this.lastSavedJson = JSON.stringify(this.data);
  this.baseJson = this.lastSavedJson;
 
- if (this.isServerMode) {
+ // [Claude修正] サーバーのデータはログイン後に取得する (ログイン前はサーバーが渡さないため)
+ if (this.isServerMode && cpGetToken()) {
  this.initServerSync();
  }
  }
@@ -566,7 +603,7 @@ class LocalDB {
  for (let attempt = 1; attempt <= 5; attempt++) {
  let serverRev = 0;
  let remoteChanged = false;
- const resGet = await fetch('/api/data', { cache: 'no-store' });
+ const resGet = await cpApiFetch('/api/data', { cache: 'no-store' });
  if (resGet.ok) {
  const text = await resGet.text();
  if (text && text.trim() !== "" && text.trim() !== "{}") {
@@ -581,7 +618,7 @@ class LocalDB {
  }
  this.data._rev = serverRev + 1;
  const payload = JSON.stringify(this.data);
- const res = await fetch('/api/save', {
+ const res = await cpApiFetch('/api/save', {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: payload
@@ -658,9 +695,11 @@ class LocalDB {
  }
 
  async initServerSync() {
+ if (this._syncStartedFor === cpGetToken()) return;
+ this._syncStartedFor = cpGetToken();
  // サーバーのローカルIP一覧を取得
  try {
- const resIp = await fetch('/api/ip');
+ const resIp = await cpApiFetch('/api/ip');
  if (resIp.ok) {
  const ipData = await resIp.json();
  this.serverIPs = ipData.ips || [];
@@ -677,7 +716,7 @@ class LocalDB {
 
  // サーバー上の最新DBを取得
  try {
- const res = await fetch('/api/data');
+ const res = await cpApiFetch('/api/data');
  if (res.ok) {
  const text = await res.text();
  if (text && text.trim() !== "" && text.trim() !== "{}") {
@@ -708,13 +747,13 @@ class LocalDB {
  }
 
  // 5秒ごとのバックグラウンド同期 (他端末からの入力を反映)
- setInterval(() => this.pollServerUpdates(), 5000);
+ if (!this._pollTimer) this._pollTimer = setInterval(() => this.pollServerUpdates(), 5000);
  }
 
  async retryFetchTunnelUrl(attempt) {
  if (attempt > 3) return;
  try {
- const res = await fetch('/api/ip');
+ const res = await cpApiFetch('/api/ip');
  if (res.ok) {
  const data = await res.json();
  if (data.tunnel_url && data.tunnel_url.trim() !== "") {
@@ -731,12 +770,13 @@ class LocalDB {
 
  async pollServerUpdates() {
  if (!this.isServerMode) return;
+ if (!cpGetToken()) return;
 
  // トンネル接続先URLの変更検知とQRコード自動更新 (サーバー側のtunnel_url.txtの変更に自動追従)
  this.pollCycleCount = (this.pollCycleCount || 0) + 1;
  if (this.pollCycleCount % 2 === 0) {
  try {
- const resIp = await fetch('/api/ip');
+ const resIp = await cpApiFetch('/api/ip');
  if (resIp.ok) {
  const ipData = await resIp.json();
  if (ipData.tunnel_url && ipData.tunnel_url.trim() !== "") {
@@ -752,7 +792,7 @@ class LocalDB {
 
  try {
  const epochAtFetch = this._syncEpoch;
- const res = await fetch('/api/data', { cache: 'no-store' });
+ const res = await cpApiFetch('/api/data', { cache: 'no-store' });
  if (!res.ok) return;
  const text = await res.text();
  if (!text || text.trim() === "" || text === "{}") return;
@@ -9085,7 +9125,7 @@ function renderOfficeOrders() {
  }
 
  tr.innerHTML = `
- <td>${o.ordered_at || o.order_date || '-'}</td>
+ <td>${o.ordered_at || o.order_date || '-'}${o.received_at ? `<div style="font-size:11px; color:#166534;">受取: ${o.received_at}</div>` : ''}</td>
  <td><strong>${o.item_name}</strong></td>
  <td>${o.quantity}</td>
  <td>¥${(o.total_price || 0).toLocaleString()}</td>
@@ -9128,7 +9168,16 @@ function receiveOrder(id) {
  const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (o) {
+ // [Claude修正] 誤タップで在庫が増えないよう確認を入れ、受取日と受取者を記録する
+ if (o.status !== "承認済") {
+ alert("この発注はすでに処理済みです。");
+ return;
+ }
+ const recvStaff = (gState.session && gState.session.staffName) ? gState.session.staffName : staff;
+ if (!confirm(`【納品受取の確認】\n・品名: ${o.item_name}\n・数量: ${o.quantity}\n・発注日: ${o.ordered_at || o.order_date || '-'}\n\n品物が届いたことを確認し、在庫に加算します。よろしいですか？`)) return;
  o.status = "納品完了";
+ o.received_at = toLocalDateStr(now);
+ o.received_by = recvStaff;
  const item = gState.inventory.find(i => i.name === o.item_name);
  if (item) {
  item.current_stock += o.quantity;
@@ -10803,7 +10852,7 @@ async function openShareModal() {
  if (db) {
  db.renderShareModalUrls();
  try {
- const res = await fetch('/api/ip');
+ const res = await cpApiFetch('/api/ip');
  if (res.ok) {
  const data = await res.json();
  if (data.tunnel_url && data.tunnel_url.trim() !== "") {
@@ -10838,7 +10887,7 @@ async function promptChangeTunnelUrl() {
  localStorage.setItem("care_portal_tunnel_url", cleanUrl);
  if (db) db.renderShareModalUrls();
  try {
- await fetch('/api/ip', {
+ await cpApiFetch('/api/ip', {
  method: 'POST',
  headers: { 'Content-Type': 'text/plain; charset=utf-8' },
  body: cleanUrl
@@ -11120,7 +11169,7 @@ function deletePhoto(id) {
 }
 
 function openPCFolder() {
- fetch("/api/open-folder?type=" + encodeURIComponent(currentPhotoCategory))
+ cpApiFetch("/api/open-folder?type=" + encodeURIComponent(currentPhotoCategory))
  .then(r => r.json())
  .then(data => {
  if (data && data.success) {
@@ -13200,6 +13249,28 @@ function initStaffAccounts() {
 function renderLoginStaffSelect() {
   const sel = document.getElementById("loginStaffSelect");
   if (!sel) return;
+
+  // [Claude修正] サーバー稼働時は、ログイン前でも取得できる職員一覧 (名前と役職のみ) をサーバーから取得する
+  if (db && db.isServerMode) {
+    cpApiFetch('/api/login-info', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(info => {
+      if (!info || !Array.isArray(info.staff)) return;
+      gState.loginStaffInfo = info.staff;
+      const prev = sel.value;
+      sel.innerHTML = "";
+      info.staff.forEach(st => {
+        const opt = document.createElement("option");
+        opt.value = st.name;
+        opt.textContent = `${st.name} 様` + (st.is_custom ? "" : " (初期設定)");
+        sel.appendChild(opt);
+      });
+      if (prev && info.staff.some(st => st.name === prev)) sel.value = prev;
+      const facEl = document.getElementById("loginFacilityNameDisplay");
+      if (facEl && info.facility_name) facEl.textContent = info.facility_name;
+      renderResetStaffSelects();
+    }).catch(() => {});
+    return;
+  }
+
   sel.innerHTML = "";
   initStaffAccounts();
 
@@ -13230,8 +13301,80 @@ function onLoginStaffSelectChange(staffName) {
   }
 }
 
-// ログイン実行
-function handleLoginSubmit() {
+// [Claude修正] サーバー稼働時は、ID・パスワードをサーバーで照合する
+// (旧実装は端末内のデータで照合していたため、画面を通さずにデータを取得できた)
+async function handleLoginSubmit() {
+  if (!db || !db.isServerMode) return handleLoginSubmitLocal();
+  const staffName = document.getElementById("loginStaffSelect").value;
+  const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
+  const password = (document.getElementById("loginPasswordInput").value || "").trim();
+  if (!staffName) { alert("職員名を選択してください。"); return; }
+  if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
+    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。（初期IDは aaaa です）");
+    return;
+  }
+  if (!password || !/^\d{4}$/.test(password)) {
+    alert("パスワードは半角数字4桁で入力してください。（初期パスワードは 0000 です）");
+    return;
+  }
+  let res;
+  try {
+    res = await fetch('/api/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ staff_name: staffName, staff_id: staffId, password: password })
+    });
+  } catch (e) {
+    alert("サーバーに接続できませんでした。親機PCのサーバーが起動しているか確認してください。");
+    return;
+  }
+  let info = {};
+  try { info = await res.json(); } catch (e) {}
+  if (res.status === 423) {
+    alert(`ログインに続けて失敗したため、一時的にロックしています。\n約${Math.ceil((info.retry_after || 300) / 60)}分後にもう一度お試しください。`);
+    return;
+  }
+  if (!res.ok || !info.token) {
+    const left = (typeof info.remaining === "number") ? `\n（あと${info.remaining}回失敗すると、5分間ログインできなくなります）` : "";
+    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は「ID・パスワード初期化申請」をご利用ください。" + left);
+    return;
+  }
+  cpSetToken(info.token);
+  await db.initServerSync();
+  if (typeof reloadStateFromDb === "function") reloadStateFromDb();
+  finishLoginUi(staffName, staffId, !!info.is_custom);
+}
+
+// ログイン成功後の画面切り替え (サーバー照合・端末照合で共通)
+function finishLoginUi(staffName, staffId, isCustom) {
+  gState.session = {
+    staffName: staffName,
+    staffId: staffId,
+    is_custom: isCustom,
+    loggedInAt: toLocalDateTimeStr(new Date())
+  };
+  try {
+    sessionStorage.setItem("carePortalSession", JSON.stringify(gState.session));
+  } catch(e) {}
+  const curStaffSelect = document.getElementById("currentStaff");
+  if (curStaffSelect) curStaffSelect.value = staffName;
+  const headerName = document.getElementById("headerStaffName");
+  if (headerName) headerName.textContent = `${staffName} 様`;
+  const btnSettings = document.getElementById("btnHeaderAccountSettings");
+  if (btnSettings) btnSettings.style.display = !isCustom ? "inline-block" : "none";
+  const loginSec = document.getElementById("loginSection");
+  const mainWrap = document.getElementById("appMainWrapper");
+  if (loginSec) loginSec.style.display = "none";
+  if (mainWrap) mainWrap.style.display = "block";
+  const pwInput = document.getElementById("loginPasswordInput");
+  if (pwInput) pwInput.value = "";
+  goToHome();
+  startAutoLogoutTimer();
+}
+
+// ログイン実行 (サーバーを使わない単体動作時)
+function handleLoginSubmitLocal() {
   const staffName = document.getElementById("loginStaffSelect").value;
   const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
   const password = (document.getElementById("loginPasswordInput").value || "").trim();
@@ -13311,6 +13454,11 @@ function handleLoginSubmit() {
 // ログアウト実行
 function handleLogout() {
   clearAutoLogoutTimer();
+  // [Claude修正] サーバー側のセッションも破棄する
+  if (db && db.isServerMode && cpGetToken()) {
+    try { fetch('/api/logout', { method: 'POST', headers: { 'X-Session-Token': cpGetToken() }, credentials: 'same-origin' }); } catch (e) {}
+  }
+  cpSetToken("");
   gState.session = null;
   try {
     sessionStorage.removeItem("carePortalSession");
@@ -13456,7 +13604,9 @@ function renderResetStaffSelects() {
   adminSel.innerHTML = "";
   officeSel.innerHTML = "";
 
-  const accounts = db.data.staff_accounts || [];
+  // [Claude修正] サーバー稼働時は、サーバーから取得した職員一覧 (名前と役職) を使う
+  const useServerList = db && db.isServerMode && Array.isArray(gState.loginStaffInfo);
+  const accounts = useServerList ? gState.loginStaffInfo.map(x => ({ staff_name: x.name })) : (db.data.staff_accounts || []);
   accounts.forEach(a => {
     const opt1 = document.createElement("option");
     opt1.value = a.staff_name;
@@ -13466,6 +13616,10 @@ function renderResetStaffSelects() {
 
   // [Claude修正] 承認者は職員マスタの役職で絞り込む (旧実装は全職員が「管理者」「事務員」として表示されていた)
   const roleOf = (name) => {
+    if (useServerList) {
+      const si = gState.loginStaffInfo.find(x => x.name === name);
+      return si ? (si.role || "") : "";
+    }
     const st = (db.data.stamps || []).find(x => (x.name || x) === name);
     return (st && st.role) ? st.role : "";
   };
@@ -13519,6 +13673,12 @@ function executeAccountReset() {
     return;
   }
 
+  // [Claude修正] サーバー稼働時は、承認者の暗証番号の照合と初期化をサーバーで行う
+  if (db && db.isServerMode) {
+    executeAccountResetOnServer(targetStaff, adminStaff, adminPin, officeStaff, officePin);
+    return;
+  }
+
   // [Claude修正] 旧実装は4桁であればどの番号でも通っていた。承認者それぞれの暗証番号 (職員マスタ) と照合する
   const stampOf = (name) => (db.data.stamps || []).find(x => (x.name || x) === name);
   const adminObj = stampOf(adminStaff);
@@ -13557,6 +13717,33 @@ function executeAccountReset() {
   }
 
   db.save();
+  closeModal("accountResetModal");
+  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期ID「aaaa」/ 初期パスワード「0000」でログイン後、再設定を行ってください。`);
+  renderLoginStaffSelect();
+}
+
+async function executeAccountResetOnServer(targetStaff, adminStaff, adminPin, officeStaff, officePin) {
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後: ID「aaaa」/ パスワード「0000」\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  if (!confirm(confirmMsg)) return;
+  let res;
+  try {
+    res = await fetch('/api/account-reset', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ target: targetStaff, admin: adminStaff, admin_pin: adminPin, office: officeStaff, office_pin: officePin })
+    });
+  } catch (e) {
+    alert("サーバーに接続できませんでした。");
+    return;
+  }
+  if (res.status === 423) {
+    alert("承認の失敗が続いたため、一時的にロックしています。5分ほどおいてからお試しください。");
+    return;
+  }
+  if (!res.ok) {
+    alert("承認者の暗証番号が一致しないか、承認者の役職が正しくありません。初期化は行っていません。");
+    return;
+  }
   closeModal("accountResetModal");
   alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期ID「aaaa」/ 初期パスワード「0000」でログイン後、再設定を行ってください。`);
   renderLoginStaffSelect();
@@ -13705,7 +13892,10 @@ function restoreAlert(logId) {
 function restoreSessionOnLoad() {
   try {
     const saved = sessionStorage.getItem("carePortalSession");
-    if (saved) {
+    // [Claude修正] サーバー稼働時は、サーバーの鍵 (トークン) が無ければログイン画面に戻す
+    if (saved && db && db.isServerMode && !cpGetToken()) {
+      sessionStorage.removeItem("carePortalSession");
+    } else if (saved) {
       const sess = JSON.parse(saved);
       if (sess && sess.staffName) {
         gState.session = sess;
