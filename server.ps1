@@ -655,6 +655,226 @@ namespace CarePortal
             SendJsonResponse(stream, 200, "{\"success\":true}");
         }
 
+        // [Claude修正] 暗証番号 (職員マスタ stamps の pin) はサーバーの中だけで管理する。
+        // 端末には伏せ字で渡し、照合・変更・初期化はここで行う。施設名の変更 (2名承認) も同様。
+        private delegate bool DbMutator(JObj db);
+
+        // データを読み込み、変更を加えて版番号を進めて保存する。mutate が false を返した場合は保存しない
+        private bool UpdateDb(DbMutator mutate)
+        {
+            lock (_fileLock)
+            {
+                if (!File.Exists(_dbFile)) return false;
+                string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+                JObj db = null;
+                try { db = MiniJson.Parse(txt) as JObj; } catch { db = null; }
+                if (db == null) return false;
+                if (!mutate(db)) return false;
+                long rev = 0;
+                JNum rn = db.Get("_rev") as JNum;
+                if (rn != null) long.TryParse(rn.Raw, out rev);
+                db.Set("_rev", new JNum((rev + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                string outTxt = MiniJson.Serialize(db);
+                File.WriteAllText(_dbFile, outTxt, Encoding.UTF8);
+                try
+                {
+                    string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+                    File.WriteAllText(Path.Combine(_backupDir, "backup_" + ts + ".json"), outTxt, Encoding.UTF8);
+                    File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), outTxt, Encoding.UTF8);
+                }
+                catch { }
+                return true;
+            }
+        }
+
+        private static string PinOf(JObj stamp)
+        {
+            if (stamp == null) return "0000";
+            string p = stamp.GetStr("pin");
+            return string.IsNullOrEmpty(p) ? "0000" : p;
+        }
+
+        private static bool IsAdminRole(JObj stamp)
+        {
+            string r = stamp != null ? (stamp.GetStr("role") ?? "") : "";
+            return r.Contains("管理者") || r.Contains("施設長");
+        }
+
+        private static bool IsClerkRole(JObj stamp)
+        {
+            string r = stamp != null ? (stamp.GetStr("role") ?? "") : "";
+            return r.Contains("事務");
+        }
+
+        // 暗証番号の照合 (連続失敗でロック)。true = 一致
+        private bool CheckPinWithLock(JObj db, string name, string pin, out bool locked)
+        {
+            locked = false;
+            string key = "pin:" + name;
+            if (LockRemaining(key) > 0) { locked = true; return false; }
+            JObj st = FindStamp(GetList(db, "stamps"), name);
+            if (st == null || PinOf(st) != pin)
+            {
+                RegisterFail(key);
+                return false;
+            }
+            ClearFail(key);
+            return true;
+        }
+
+        private void SendPinResult(NetworkStream stream, bool ok, bool locked, string okJson)
+        {
+            if (locked) { SendJsonResponse(stream, 423, "{\"error\":\"locked\"}"); return; }
+            if (!ok) { SendJsonResponse(stream, 403, "{\"error\":\"pin_mismatch\"}"); return; }
+            SendJsonResponse(stream, 200, okJson);
+        }
+
+        private JObj ParseBody(string body)
+        {
+            try { return MiniJson.Parse(body) as JObj; } catch { return null; }
+        }
+
+        // 職員本人の暗証番号の照合 (職員切り替えなど)
+        private void HandleVerifyPin(NetworkStream stream, string body)
+        {
+            JObj req = ParseBody(body);
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (req == null || db == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            bool locked;
+            bool ok = CheckPinWithLock(db, req.GetStr("name") ?? "", req.GetStr("pin") ?? "", out locked);
+            SendPinResult(stream, ok, locked, "{\"success\":true}");
+        }
+
+        // 暗証番号の変更 (現在の暗証番号の一致で本人確認。連続失敗はロック)
+        private void HandlePinChange(NetworkStream stream, string body, string sessionStaff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string name = req.GetStr("name") ?? "";
+            string cur = req.GetStr("current") ?? "";
+            string nw = req.GetStr("new_pin") ?? "";
+            if (string.IsNullOrEmpty(sessionStaff) || string.IsNullOrEmpty(name)) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(nw, "^[0-9]{4}$")) { SendJsonResponse(stream, 400, "{\"error\":\"bad_pin\"}"); return; }
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (db == null) { SendJsonResponse(stream, 500, "{\"error\":\"no_data\"}"); return; }
+            bool locked;
+            bool ok = CheckPinWithLock(db, name, cur, out locked);
+            if (!ok) { SendPinResult(stream, false, locked, ""); return; }
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                JObj st = FindStamp(GetList(d, "stamps"), name);
+                if (st == null) return false;
+                st.Set("pin", nw);
+                st.Set("is_initial_pin", false);
+                return true;
+            });
+            SendJsonResponse(stream, saved ? 200 : 500, saved ? "{\"success\":true}" : "{\"error\":\"save_failed\"}");
+        }
+
+        // 2名承認 (管理者・事務員) による暗証番号の初期化。2名とも暗証番号で本人確認
+        private void HandlePinReset(NetworkStream stream, string body, string sessionStaff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string target = req.GetStr("target") ?? "";
+            string a1 = req.GetStr("approver1") ?? "";
+            string a1pin = req.GetStr("approver1_pin") ?? "";
+            string a2 = req.GetStr("approver2") ?? "";
+            string a2pin = req.GetStr("approver2_pin") ?? "";
+            if (string.IsNullOrEmpty(sessionStaff) || string.IsNullOrEmpty(a1) || a1 == a2 || string.IsNullOrEmpty(target)) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (db == null) { SendJsonResponse(stream, 500, "{\"error\":\"no_data\"}"); return; }
+            List<object> stamps = GetList(db, "stamps");
+            JObj s1 = FindStamp(stamps, a1);
+            JObj s2 = FindStamp(stamps, a2);
+            if (!(IsAdminRole(s1) || IsClerkRole(s1)) || !(IsAdminRole(s2) || IsClerkRole(s2)) || FindStamp(stamps, target) == null)
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"role\"}");
+                return;
+            }
+            bool locked1, locked2;
+            bool ok1 = CheckPinWithLock(db, a1, a1pin, out locked1);
+            bool ok2 = ok1 && CheckPinWithLock(db, a2, a2pin, out locked2);
+            if (!ok1) { SendPinResult(stream, false, locked1, ""); return; }
+            if (!ok2) { SendJsonResponse(stream, 403, "{\"error\":\"pin_mismatch_2\"}"); return; }
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                JObj st = FindStamp(GetList(d, "stamps"), target);
+                if (st == null) return false;
+                st.Set("pin", "0000");
+                st.Set("is_initial_pin", true);
+                return true;
+            });
+            ClearFail("pin:" + target);
+            SendJsonResponse(stream, saved ? 200 : 500, saved ? "{\"success\":true}" : "{\"error\":\"save_failed\"}");
+        }
+
+        // 施設名の変更 (管理者・事務員の2名承認)
+        private void HandleFacilityName(NetworkStream stream, string body)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string newName = (req.GetStr("name") ?? "").Trim();
+            string admin = req.GetStr("admin") ?? "";
+            string adminPin = req.GetStr("admin_pin") ?? "";
+            string office = req.GetStr("office") ?? "";
+            string officePin = req.GetStr("office_pin") ?? "";
+            if (newName.Length == 0 || newName.Length > 100 || admin == office) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (db == null) { SendJsonResponse(stream, 500, "{\"error\":\"no_data\"}"); return; }
+            List<object> stamps = GetList(db, "stamps");
+            if (!IsAdminRole(FindStamp(stamps, admin)) || !IsClerkRole(FindStamp(stamps, office)))
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"role\"}");
+                return;
+            }
+            bool l1, l2;
+            bool ok1 = CheckPinWithLock(db, admin, adminPin, out l1);
+            bool ok2 = ok1 && CheckPinWithLock(db, office, officePin, out l2);
+            if (!ok1 || !ok2) { SendPinResult(stream, false, l1, ""); return; }
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                d.Set("facility_name", newName);
+                return true;
+            });
+            SendJsonResponse(stream, saved ? 200 : 500, saved ? "{\"success\":true}" : "{\"error\":\"save_failed\"}");
+        }
+
+        // 端末から届いたデータの暗証番号・施設名は使わず、サーバーの値を保つ (新しく追加された職員は初期値)
+        private static void MergeServerOwnedFields(JObj posted, JObj cur)
+        {
+            List<object> pSt = posted.Get("stamps") as List<object>;
+            List<object> cSt = cur != null ? (cur.Get("stamps") as List<object>) : null;
+            if (pSt != null)
+            {
+                foreach (object x in pSt)
+                {
+                    JObj ps = x as JObj;
+                    if (ps == null) continue;
+                    JObj cs = cSt != null ? FindStamp(cSt, ps.GetStr("name")) : null;
+                    if (cs != null)
+                    {
+                        ps.Set("pin", PinOf(cs));
+                        object ini = cs.Get("is_initial_pin");
+                        ps.Set("is_initial_pin", ini is bool ? ini : (object)(PinOf(cs) == "0000"));
+                    }
+                    else
+                    {
+                        ps.Set("pin", "0000");
+                        ps.Set("is_initial_pin", true);
+                    }
+                }
+            }
+            if (cur != null && cur.Get("facility_name") is string)
+            {
+                posted.Set("facility_name", cur.Get("facility_name"));
+            }
+        }
+
         // 端末から届いたデータでは、パスワードは伏せ字 (空) になっている。
         // サーバーのファイルにある本物のID・パスワードを保ち、本人が変更した (更新日時が新しい) 場合だけ受け入れる。
         private static string MergeAccountSecrets(string postData, string currentJson)
@@ -668,9 +888,10 @@ namespace CarePortal
                 try { cur = MiniJson.Parse(currentJson) as JObj; } catch { cur = null; }
             }
             List<object> cAcc = cur != null ? (cur.Get("staff_accounts") as List<object>) : null;
+            MergeServerOwnedFields(posted, cur);
             if (pAcc == null)
             {
-                if (cAcc == null) return postData;
+                if (cAcc == null) return MiniJson.Serialize(posted);
                 pAcc = new List<object>();
                 posted.Set("staff_accounts", pAcc);
             }
@@ -711,7 +932,9 @@ namespace CarePortal
 
         private static string MaskPasswords(string json)
         {
-            return System.Text.RegularExpressions.Regex.Replace(json, "\"password\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"password\":\"\"");
+            string masked = System.Text.RegularExpressions.Regex.Replace(json, "\"password\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"password\":\"\"");
+            // [Claude修正] 職員マスタの暗証番号も端末に渡さない
+            return System.Text.RegularExpressions.Regex.Replace(masked, "\"pin\":\"(?:[^\"\\\\]|\\\\.)*\"", "\"pin\":\"\"");
         }
 
 
@@ -834,9 +1057,32 @@ namespace CarePortal
 
                     // [Claude修正] これより下の API と写真は、ログイン済み (有効なセッション) の場合だけ応答する
                     bool needsAuth = urlPath.StartsWith("/api/") || urlPath.StartsWith("/data/photos/");
-                    if (needsAuth && CheckSession(lines) == null)
+                    string sessStaff = needsAuth ? CheckSession(lines) : null;
+                    if (needsAuth && sessStaff == null)
                     {
                         SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}");
+                        return;
+                    }
+
+                    // [Claude修正] 暗証番号・施設名はサーバーで照合・変更する
+                    if (urlPath == "/api/verify-pin" && method == "POST")
+                    {
+                        HandleVerifyPin(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+                    if (urlPath == "/api/pin-change" && method == "POST")
+                    {
+                        HandlePinChange(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        return;
+                    }
+                    if (urlPath == "/api/pin-reset" && method == "POST")
+                    {
+                        HandlePinReset(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        return;
+                    }
+                    if (urlPath == "/api/facility-name" && method == "POST")
+                    {
+                        HandleFacilityName(stream, Encoding.UTF8.GetString(bodyBytes));
                         return;
                     }
 

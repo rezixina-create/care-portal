@@ -1179,6 +1179,14 @@
  施設内PCや外部メディアへのデータ保管、親機マスターへの即時同期、他端末接続管理を行います。<br>
  個人情報を含む全データを取り扱うため、管理者および事務員のみが操作可能です。
  </p>
+ <!-- [Claude修正] 施設名の変更 (2名承認)。ヘッダーからの変更を廃止した際に、移設先の入口が作られていなかった -->
+ <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:14px 16px; margin-bottom:16px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+ <div>
+ <div style="font-weight:bold; font-size:15px; color:#1e293b;">【施設名・事業所名の変更】</div>
+ <div style="font-size:12.5px; color:#475569; margin-top:4px;">現在の施設名: <strong id="backupFacilityNameDisplay"></strong>（変更には管理者と事務員の2名承認が必要です）</div>
+ </div>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:8px 16px;" onclick="openFacilityNameModal()">施設名を変更する (2名承認)</button>
+ </div>
  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(280px, 1fr)); gap:16px;">
  <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:16px; box-shadow:0 1px 3px rgba(0,0,0,0.05); display:flex; flex-direction:column; justify-content:space-between;">
  <div>

@@ -77,6 +77,226 @@ async function cpApiFetch(url, options) {
  return res;
 }
 
+// [Claude修正] 暗証番号はサーバーの中だけで管理する (端末に届くデータでは伏せ字)。
+// 初期番号のままかどうかは is_initial_pin で判断する
+// [Claude修正] 接続案内のQRコードを端末内で作成する (外部サービス api.qrserver.com へURLを送らない)。
+// 方式: QRコード (JIS X 0510) バイトモード・誤り訂正レベルM・型番1〜10 (英数字で最大約200文字まで)
+const CP_QR_EC_M = [null,
+ [10, 1, 16, 0, 0], [16, 1, 28, 0, 0], [26, 1, 44, 0, 0], [18, 2, 32, 0, 0], [24, 2, 43, 0, 0],
+ [16, 4, 27, 0, 0], [18, 4, 31, 0, 0], [22, 2, 38, 2, 39], [22, 3, 36, 2, 37], [26, 4, 43, 1, 44]];
+const CP_QR_ALIGN = [null, [], [6, 18], [6, 22], [6, 26], [6, 30], [6, 34], [6, 22, 38], [6, 24, 42], [6, 26, 46], [6, 28, 50]];
+
+function cpQrGfMul(x, y) {
+ let z = 0;
+ for (let i = 7; i >= 0; i--) {
+ z = (z << 1) ^ ((z >>> 7) * 0x11D);
+ z ^= ((y >>> i) & 1) * x;
+ }
+ return z & 0xFF;
+}
+
+function cpQrRsDivisor(degree) {
+ const r = new Array(degree).fill(0);
+ r[degree - 1] = 1;
+ let root = 1;
+ for (let i = 0; i < degree; i++) {
+ for (let j = 0; j < r.length; j++) {
+ r[j] = cpQrGfMul(r[j], root);
+ if (j + 1 < r.length) r[j] ^= r[j + 1];
+ }
+ root = cpQrGfMul(root, 0x02);
+ }
+ return r;
+}
+
+function cpQrRsRemainder(data, divisor) {
+ const r = new Array(divisor.length).fill(0);
+ data.forEach(b => {
+ const f = b ^ r.shift();
+ r.push(0);
+ divisor.forEach((d, i) => { r[i] ^= cpQrGfMul(d, f); });
+ });
+ return r;
+}
+
+// QRコードの白黒パターン (true=黒) の2次元配列を返す。入りきらない場合は null
+function cpQrMatrix(text) {
+ const bytes = Array.from(new TextEncoder().encode(String(text)));
+ let ver = 0;
+ for (let v = 1; v <= 10; v++) {
+ const t = CP_QR_EC_M[v];
+ const cap = t[1] * t[2] + t[3] * t[4];
+ const bits = 4 + (v < 10 ? 8 : 16) + bytes.length * 8;
+ if (bits <= cap * 8) { ver = v; break; }
+ }
+ if (!ver) return null;
+ const [ecLen, n1, d1, n2, d2] = CP_QR_EC_M[ver];
+ const dataCap = n1 * d1 + n2 * d2;
+
+ // データ部
+ const bb = [];
+ const put = (val, len) => { for (let i = len - 1; i >= 0; i--) bb.push((val >>> i) & 1); };
+ put(4, 4);
+ put(bytes.length, ver < 10 ? 8 : 16);
+ bytes.forEach(b => put(b, 8));
+ put(0, Math.min(4, dataCap * 8 - bb.length));
+ while (bb.length % 8) bb.push(0);
+ const data = [];
+ for (let i = 0; i < bb.length; i += 8) data.push(parseInt(bb.slice(i, i + 8).join(""), 2));
+ for (let pad = 0xEC; data.length < dataCap; pad ^= 0xEC ^ 0x11) data.push(pad);
+
+ // 誤り訂正 (ブロック分割・交互配置)
+ const div = cpQrRsDivisor(ecLen);
+ const blocks = [];
+ let k = 0;
+ for (let i = 0; i < n1 + n2; i++) {
+ const len = i < n1 ? d1 : d2;
+ const dat = data.slice(k, k + len);
+ k += len;
+ blocks.push({ dat, ecc: cpQrRsRemainder(dat, div) });
+ }
+ const cw = [];
+ const maxD = Math.max(d1, d2);
+ for (let i = 0; i < maxD; i++) blocks.forEach(b => { if (i < b.dat.length) cw.push(b.dat[i]); });
+ for (let i = 0; i < ecLen; i++) blocks.forEach(b => cw.push(b.ecc[i]));
+
+ // 機能パターン
+ const size = ver * 4 + 17;
+ const mod = [], fn = [];
+ for (let y = 0; y < size; y++) { mod.push(new Array(size).fill(false)); fn.push(new Array(size).fill(false)); }
+ const setF = (x, y, dark) => { mod[y][x] = dark; fn[y][x] = true; };
+ for (let i = 0; i < size; i++) { setF(6, i, i % 2 === 0); setF(i, 6, i % 2 === 0); }
+ [[3, 3], [size - 4, 3], [3, size - 4]].forEach(([cx, cy]) => {
+ for (let dy = -4; dy <= 4; dy++) for (let dx = -4; dx <= 4; dx++) {
+ const x = cx + dx, y = cy + dy;
+ if (x < 0 || y < 0 || x >= size || y >= size) continue;
+ const dist = Math.max(Math.abs(dx), Math.abs(dy));
+ setF(x, y, dist !== 2 && dist !== 4);
+ }
+ });
+ const al = CP_QR_ALIGN[ver];
+ const last = al.length - 1;
+ for (let i = 0; i < al.length; i++) for (let j = 0; j < al.length; j++) {
+ if ((i === 0 && j === 0) || (i === 0 && j === last) || (i === last && j === 0)) continue;
+ for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+ setF(al[i] + dx, al[j] + dy, Math.max(Math.abs(dx), Math.abs(dy)) !== 1);
+ }
+ }
+ const drawFormat = (mask) => {
+ const d = (0 << 3) | mask; // 誤り訂正レベルM = 0
+ let rem = d;
+ for (let i = 0; i < 10; i++) rem = (rem << 1) ^ ((rem >>> 9) * 0x537);
+ const bits = ((d << 10) | rem) ^ 0x5412;
+ const g = (i) => ((bits >>> i) & 1) !== 0;
+ for (let i = 0; i <= 5; i++) setF(8, i, g(i));
+ setF(8, 7, g(6)); setF(8, 8, g(7)); setF(7, 8, g(8));
+ for (let i = 9; i < 15; i++) setF(14 - i, 8, g(i));
+ for (let i = 0; i < 8; i++) setF(size - 1 - i, 8, g(i));
+ for (let i = 8; i < 15; i++) setF(8, size - 15 + i, g(i));
+ setF(8, size - 8, true);
+ };
+ drawFormat(0);
+ if (ver >= 7) {
+ let rem = ver;
+ for (let i = 0; i < 12; i++) rem = (rem << 1) ^ ((rem >>> 11) * 0x1F25);
+ const bits = (ver << 12) | rem;
+ for (let i = 0; i < 18; i++) {
+ const dark = ((bits >>> i) & 1) !== 0;
+ const a = size - 11 + (i % 3), b = Math.floor(i / 3);
+ setF(a, b, dark); setF(b, a, dark);
+ }
+ }
+
+ // データ配置 (右下からジグザグ)
+ let bi = 0;
+ for (let right = size - 1; right >= 1; right -= 2) {
+ if (right === 6) right = 5;
+ for (let vert = 0; vert < size; vert++) {
+ for (let j = 0; j < 2; j++) {
+ const x = right - j;
+ const upward = ((right + 1) & 2) === 0;
+ const y = upward ? size - 1 - vert : vert;
+ if (!fn[y][x] && bi < cw.length * 8) {
+ mod[y][x] = ((cw[bi >>> 3] >>> (7 - (bi & 7))) & 1) !== 0;
+ bi++;
+ }
+ }
+ }
+ }
+
+ // マスク (8種類から読み取りやすいものを選ぶ)
+ const maskFn = [
+ (x, y) => (x + y) % 2 === 0, (x, y) => y % 2 === 0, (x, y) => x % 3 === 0, (x, y) => (x + y) % 3 === 0,
+ (x, y) => (Math.floor(x / 3) + Math.floor(y / 2)) % 2 === 0, (x, y) => (x * y) % 2 + (x * y) % 3 === 0,
+ (x, y) => ((x * y) % 2 + (x * y) % 3) % 2 === 0, (x, y) => ((x + y) % 2 + (x * y) % 3) % 2 === 0];
+ const applyMask = (m) => {
+ for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+ if (!fn[y][x] && maskFn[m](x, y)) mod[y][x] = !mod[y][x];
+ }
+ };
+ const penalty = () => {
+ let p = 0, dark = 0;
+ for (let a = 0; a < 2; a++) {
+ for (let i = 0; i < size; i++) {
+ let run = 1;
+ for (let j = 1; j <= size; j++) {
+ const cur = j < size ? (a ? mod[j][i] : mod[i][j]) : null;
+ const prev = a ? mod[j - 1][i] : mod[i][j - 1];
+ if (cur === prev) run++;
+ else { if (run >= 5) p += run - 2; run = 1; }
+ }
+ }
+ }
+ for (let y = 0; y < size; y++) for (let x = 0; x < size; x++) {
+ if (mod[y][x]) dark++;
+ if (x < size - 1 && y < size - 1) {
+ const c = mod[y][x];
+ if (c === mod[y][x + 1] && c === mod[y + 1][x] && c === mod[y + 1][x + 1]) p += 3;
+ }
+ }
+ p += Math.floor(Math.abs(dark * 20 - size * size * 10) / (size * size)) * 10;
+ return p;
+ };
+ let best = 0, bestP = Infinity;
+ for (let m = 0; m < 8; m++) {
+ applyMask(m); drawFormat(m);
+ const p = penalty();
+ if (p < bestP) { bestP = p; best = m; }
+ applyMask(m);
+ }
+ applyMask(best); drawFormat(best);
+ return mod;
+}
+
+// QRコードをSVG文字列で返す (周囲に4マスの余白)。作れない場合は空文字
+function cpQrSvg(text, px) {
+ const m = cpQrMatrix(text);
+ if (!m) return "";
+ const n = m.length, q = 4, total = n + q * 2;
+ let d = "";
+ for (let y = 0; y < n; y++) for (let x = 0; x < n; x++) {
+ if (m[y][x]) d += `M${x + q},${y + q}h1v1h-1z`;
+ }
+ return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${px}" height="${px}" shape-rendering="crispEdges" role="img" aria-label="接続用QRコード"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${d}" fill="#000000"/></svg>`;
+}
+
+function cpIsInitialPin(s) {
+ if (!s || typeof s !== "object") return false;
+ if (db && db.isServerMode) return s.is_initial_pin !== false;
+ return (s.pin || "0000") === "0000" || s.is_initial_pin !== false;
+}
+
+async function cpPostJson(url, obj) {
+ const res = await cpApiFetch(url, {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify(obj)
+ });
+ let info = {};
+ try { info = await res.json(); } catch (e) {}
+ return { status: res.status, ok: res.ok, info: info };
+}
+
 let cpSessionExpiredShown = false;
 function handleSessionExpired() {
  if (!gState || !gState.session || cpSessionExpiredShown) return;
@@ -876,17 +1096,18 @@ class LocalDB {
  const localUrl = `http://${primaryIp}:${port}`;
 
  // トンネルURL（最新取得値 または 保存値）
- let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || "https://inside-mustang-test-demographic.trycloudflare.com";
+ let cloudflareUrl = localStorage.getItem("care_portal_tunnel_url") || (window.location.protocol === "https:" ? window.location.origin : "");
  const isTunnel = Boolean(cloudflareUrl && cloudflareUrl.trim() !== "");
  const unifiedUrl = isTunnel ? cloudflareUrl.trim() : localUrl;
- const unifiedQrUrl = "https://api.qrserver.com/v1/create-qr-code/?size=150x150&data=" + encodeURIComponent(unifiedUrl);
+ // [Claude修正] QRコードは端末内で作成する (接続URLを外部サービスへ送らない)
+ const unifiedQrSvg = cpQrSvg(unifiedUrl, 130);
 
  // スマホ・他端末 外部接続用（統一案内 1つに統合）
  const cardDiv = document.createElement("div");
  cardDiv.style.cssText = "display:flex; gap:18px; align-items:center; background:#f8fafc; border:2px solid #2563eb; border-radius:12px; padding:16px 18px; box-shadow:0 3px 10px rgba(37,99,235,0.12); flex-wrap:wrap;";
  cardDiv.innerHTML = `
  <div style="flex-shrink:0; text-align:center; margin:0 auto;">
- <img src="${unifiedQrUrl}" alt="統一接続QRコード" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px;">
+ <div class="cp-share-qr" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px; box-sizing:content-box;">${unifiedQrSvg || '<span style="font-size:11px; color:#991b1b;">URLが長すぎるためQRコードを作成できません</span>'}</div>
  <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">カメラでスキャン</span>
  </div>
  <div style="flex:1; min-width:260px;">
@@ -1871,6 +2092,20 @@ function executeFacilityNameChange() {
  }
 
  // 承認者の暗証番号照合
+ // [Claude修正] サーバー稼働時は、承認者の照合と施設名の変更をサーバーで行う
+ if (db && db.isServerMode) {
+ const confirmMsgSv = `【確認】\n施設名を以下の通り変更します。\n\n旧施設名: ${currentName}\n新施設名: ${newName}\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\nよろしいですか？`;
+ if (!confirm(confirmMsgSv)) return;
+ cpPostJson('/api/facility-name', { name: newName, admin: adminStaff, admin_pin: adminPin, office: officeStaff, office_pin: officePin }).then(r => {
+ if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
+ if (!r.ok) { alert("承認者の役職または暗証番号が一致しません。施設名は変更されませんでした。"); return; }
+ db.data.facility_name = newName;
+ updateFacilityNameUI();
+ closeModal("facilityNameModal");
+ alert(`施設名を「${newName}」に更新しました。\n全端末および各種印刷書類に反映されます。`);
+ });
+ return;
+ }
  const stampOf = (name) => (db.data.stamps || []).find(x => (x.name || x) === name);
  const adminObj = stampOf(adminStaff);
  const officeObj = stampOf(officeStaff);
@@ -1901,6 +2136,8 @@ function executeFacilityNameChange() {
 
 function updateFacilityNameUI() {
  const name = getFacilityName();
+ const backupFacEl = document.getElementById("backupFacilityNameDisplay");
+ if (backupFacEl) backupFacEl.textContent = name;
  const display = document.getElementById("facilityNameDisplay");
  if (display) display.textContent = name;
  document.title = `${name} 統合業務ポータルシステム`;
@@ -1986,7 +2223,7 @@ function updateStaffRoleUI() {
  // 2. 現在選択職員の暗証番号初回設定ボタン
  const currentStaffName = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "";
  const currentStaffObj = (gState.stamps || []).find(s => (s.name || s) === currentStaffName);
- const isInitial = currentStaffObj ? ((currentStaffObj.pin || "0000") === "0000" || currentStaffObj.is_initial_pin !== false) : false;
+ const isInitial = currentStaffObj ? cpIsInitialPin(currentStaffObj) : false;
  const btnInitial = document.getElementById("btnSetInitialPin");
  if (btnInitial) {
  btnInitial.style.display = isInitial ? "inline-block" : "none";
@@ -2222,6 +2459,12 @@ function findMojibakeTables() {
  return result;
 }
 
+// [Claude修正] お知らせの先頭の見出し【…】に notice-label を付ける (特殊指示の【特記】は除く)
+function cpDecorateNoticeLabels(html) {
+  if (!html) return html;
+  return html.replace(/(<strong>\s*)?(【(?!特記)[^】<]{1,40}】)(\s*<\/strong>)?/g, '<strong class="notice-label">$2</strong>');
+}
+
 function checkGlobalAlerts() {
   const careContainer = document.getElementById("careAlertsContainer");
   const officeContainer = document.getElementById("officeAlertsContainer");
@@ -2251,10 +2494,7 @@ function checkGlobalAlerts() {
   const isAdminOrClerk = isCurrentStaffAdminOrClerk();
   const pinWarnKey = `initial_pin_warning_${getRealTodayStr()}`;
   if (isAdminOrClerk && !isAlertDismissed(pinWarnKey)) {
-    const unconfigured = (gState.stamps || []).filter(s => {
-      const pin = s.pin || "0000";
-      return pin === "0000" || s.is_initial_pin !== false;
-    });
+    const unconfigured = (gState.stamps || []).filter(s => cpIsInitialPin(s));
     if (unconfigured.length > 0) {
       const staffNames = unconfigured.map(s => escapeHtml(s.name || s)).join("、");
       officeAlertHtml += `
@@ -2420,7 +2660,7 @@ function checkGlobalAlerts() {
     if (r.next_clinic_date) {
       const clinicDate = new Date(r.next_clinic_date);
       const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
-      const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;"> 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
+      const specialNoteBadge = r.clinic_special_notes ? `<span class="notice-special"> 【特記】特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
 
       if (diffDays === 0 || r.next_clinic_date === todayStr) {
         // 当日往診
@@ -2531,6 +2771,9 @@ function checkGlobalAlerts() {
   }
 
   // 介護現場ポータル コンテナへ描画
+  // [Claude修正] お知らせの見出し【…】を共通の形にそろえる (色は style.css で指定)
+  careAlertHtml = cpDecorateNoticeLabels(careAlertHtml);
+  officeAlertHtml = cpDecorateNoticeLabels(officeAlertHtml);
   if (careContainer && careContainer.innerHTML !== careAlertHtml) {
     careContainer.innerHTML = careAlertHtml;
   }
@@ -4091,26 +4334,26 @@ function submitCareSummary() {
 
  if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
 
- if (sid && sid.trim() !== "") {
- const existing = db.data.care_summaries.find(x => x.id === Number(sid));
- if (existing) {
- existing.summary_type = summaryType;
- existing.updated_at = dateVal;
- existing.staff_name = staffVal;
- existing.basic_info = basicInfo;
- existing.background = background;
- existing.physical_cognitive = physicalCognitive;
- existing.adl = adl;
- existing.meals_hydration = mealsHydration;
- existing.excretion = excretion;
- existing.sleep = sleep;
- existing.meds = meds;
- existing.medical_care = medicalCare;
- existing.dementia_behavior = dementiaBehavior;
- existing.care_notes = careNotes;
- existing.family_info = familyInfo;
- existing.future_goals = futureGoals;
+ // [Claude修正] 既存サマリーの「変更」は上書きせず、新しい版として保存する。
+ // 旧実装は上書きのため更新前の内容が消え、「新規時と更新時の比較」ができなかった。
+ const existingForVersion = (sid && sid.trim() !== "") ? db.data.care_summaries.find(x => Number(x.id) === Number(sid)) : null;
+ if (existingForVersion) {
+ const fieldsNow = { summary_type: summaryType, basic_info: basicInfo, background: background, physical_cognitive: physicalCognitive, adl: adl, meals_hydration: mealsHydration, excretion: excretion, sleep: sleep, meds: meds, medical_care: medicalCare, dementia_behavior: dementiaBehavior, care_notes: careNotes, family_info: familyInfo, future_goals: futureGoals };
+ const changed = Object.keys(fieldsNow).some(k => (existingForVersion[k] || "") !== (fieldsNow[k] || ""));
+ if (!changed) {
+ alert("変更された項目がないため、保存は行いませんでした。");
+ return;
  }
+ // 日付欄が元の版のままなら、更新した日 (今日) を新しい版の日付にする (同じ日付の版が並ぶと見分けられないため)
+ const versionDate = (dateVal === (existingForVersion.created_at || existingForVersion.date || "")) ? toLocalDateStr(new Date()) : dateVal;
+ db.data.care_summaries.unshift(Object.assign({
+ id: Date.now(),
+ resident_id: rId,
+ created_at: versionDate,
+ updated_at: versionDate,
+ staff_name: staffVal,
+ previous_id: existingForVersion.id
+ }, fieldsNow));
  } else {
  const newSummary = {
  id: Date.now(),
@@ -10900,7 +11143,7 @@ function copyShareUrl(url) {
 }
 
 async function promptChangeTunnelUrl() {
- const current = localStorage.getItem("care_portal_tunnel_url") || "https://inside-mustang-test-demographic.trycloudflare.com";
+ const current = localStorage.getItem("care_portal_tunnel_url") || (window.location.protocol === "https:" ? window.location.origin : "");
  const newUrl = prompt("外部接続用のCloudflare Tunnel URLを入力してください:", current);
  if (newUrl && newUrl.trim() !== "") {
  const cleanUrl = newUrl.trim();
@@ -12773,7 +13016,7 @@ function ensureStaffPinData() {
  let modified = false;
  gState.stamps.forEach(s => {
  if (typeof s === "object" && s !== null) {
- if (!s.pin) {
+ if (!s.pin && !(db && db.isServerMode)) {
  s.pin = "0000";
  modified = true;
  }
@@ -12886,7 +13129,25 @@ function updatePinDots() {
  }
 }
 
-function verifyStaffPin() {
+async function verifyStaffPin() {
+ if (db && db.isServerMode) {
+ const r = await cpPostJson('/api/verify-pin', { name: gAuthTargetStaff, pin: gEnteredPin });
+ if (r.ok) {
+ gState.currentStaff = gAuthTargetStaff;
+ const sel = document.getElementById("currentStaff");
+ if (sel) sel.value = gAuthTargetStaff;
+ closeModal("staffPinAuthModal");
+ onCurrentStaffChange();
+ gEnteredPin = "";
+ } else {
+ const err = document.getElementById("staffPinError");
+ if (err) err.textContent = r.status === 423 ? "失敗が続いたため5分間ロック中です" : "暗証番号が一致しません";
+ gEnteredPin = "";
+ updatePinDots();
+ renderRandomKeypad();
+ }
+ return;
+ }
  const staffObj = (gState.stamps || []).find(s => (s.name || s) === gAuthTargetStaff);
  const correctPin = staffObj && staffObj.pin ? staffObj.pin : "0000";
  if (gEnteredPin === correctPin) {
@@ -12932,6 +13193,21 @@ function submitInitialPinModal() {
  alert("職員が見つかりません。");
  return;
  }
+ if (db && db.isServerMode) {
+ if (!/^\d{4}$/.test(newPin)) { alert("新しい暗証番号は数字4桁で入力してください。"); return; }
+ if (newPin !== confPin) { alert("新しい暗証番号と確認入力が一致しません。"); return; }
+ cpPostJson('/api/pin-change', { name: staffName, current: curPin, new_pin: newPin }).then(r => {
+ if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
+ if (r.info && r.info.error === "not_self") { alert("暗証番号は本人がログインしている時だけ変更できます。"); return; }
+ if (!r.ok) { alert("現在の暗証番号が一致しません。"); return; }
+ staffObj.is_initial_pin = false;
+ closeModal("initialPinModal");
+ updateStaffRoleUI();
+ checkGlobalAlerts();
+ alert(`【${staffName}】の暗証番号を更新しました。次回から新しい暗証番号をご使用ください。`);
+ });
+ return;
+ }
  const realCurrent = staffObj.pin || "0000";
  if (curPin !== realCurrent) {
  alert("現在の暗証番号が一致しません。");
@@ -12972,7 +13248,7 @@ function renderOfficeStaffAuth() {
 
  const stamps = sortStaffList(gState.stamps || []);
  stamps.forEach(s => {
- const isInit = (s.pin || "0000") === "0000" || s.is_initial_pin !== false;
+ const isInit = cpIsInitialPin(s);
  const tr = document.createElement("tr");
  tr.innerHTML = `
  <td><strong>${escapeHtml(s.name)}</strong></td>
@@ -13056,6 +13332,28 @@ function submitTwoPersonReset() {
  return;
  }
 
+ // [Claude修正] サーバー稼働時は、承認者2名の暗証番号の照合と初期化をサーバーで行う
+ if (db && db.isServerMode) {
+ if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？\nリセット後は対象者本人が新しい暗証番号を初回設定します。`)) return;
+ cpPostJson('/api/pin-reset', { target: targetName, approver1: currentStaff, approver1_pin: app1Pin, approver2: app2Name, approver2_pin: app2Pin }).then(r => {
+ if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
+ if (r.info && r.info.error === "pin_mismatch_2") { alert("承認者2（立ち会い承認者）の暗証番号が正しくありません。"); return; }
+ if (r.info && r.info.error === "pin_mismatch") { alert("承認者1（操作者）の暗証番号が正しくありません。"); return; }
+ if (!r.ok) { alert("承認者の役職または入力内容が正しくありません。初期化は行っていません。"); return; }
+ const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
+ if (targetObj) targetObj.is_initial_pin = true;
+ const p1 = document.getElementById("staffAuthApprover1Pin");
+ if (p1) p1.value = "";
+ const p2 = document.getElementById("staffAuthApprover2Pin");
+ if (p2) p2.value = "";
+ renderOfficeStaffAuth();
+ updateStaffRoleUI();
+ checkGlobalAlerts();
+ alert(`【2名承認リセット完了】\n【${targetName}】の暗証番号を「0000」に初期化しました。\n対象職員本人が新しい暗証番号を設定できるようになりました。`);
+ });
+ return;
+ }
+
  // 承認者1の認証
  const app1Obj = (gState.stamps || []).find(s => (s.name || s) === currentStaff);
  const realApp1Pin = app1Obj ? (app1Obj.pin || "0000") : "0000";
@@ -13098,6 +13396,10 @@ function submitTwoPersonReset() {
 
 // 後方互換・直接呼び出し用
 function resetStaffPin(staffName) {
+ if (db && db.isServerMode) {
+ alert("暗証番号の初期化は、2名承認の画面から行ってください。");
+ return;
+ }
  const targetObj = (gState.stamps || []).find(s => (s.name || s) === staffName);
  if (!targetObj) return;
  targetObj.pin = "0000";
@@ -13998,72 +14300,24 @@ function openCareSummaryCompareModal(targetResId) {
   // 対象利用者のサマリー履歴を取得
   let summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(gState.selectedResidentId));
 
-  // もし1件以下なら、比較確認用の自然な日本語例文を追加（文字化けなし）
-  if (summaries.length < 2) {
-    const resName = r ? r.name : "利用者";
-    const sample1 = {
-      id: Date.now() - 100000,
-      resident_id: gState.selectedResidentId,
-      created_at: "2026-04-01",
-      updated_at: "2026-04-01",
-      staff_name: "山田 孝之",
-      summary_type: "新規入所時サマリー",
-      basic_info: `要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男様。認知症自立度IIb。障害自立度B1。`,
-      background: "自宅内での転倒・右大腿骨頸部骨折により急性期病院入院。リハビリ継続の上、在宅療養見守り困難となり新規入所。",
-      physical_cognitive: "右股関節可動域制限・右下肢筋力低下あり。すり足歩行。短期記憶低下あるが見当識保たれ穏やかに意思疎通可能。",
-      adl: "立ち上がり・移乗は見守り・一部軽介助。歩行器使用にて20m程度自立移動。更衣・整容はボタン留め等一部介助。入浴は一般浴見守り。",
-      meals_hydration: "普通食 (一口大)。自力摂取良好（むせ見守り）。水分目標1,200ml/日。下顎引き気味での嚥下声かけ。",
-      excretion: "日中はトイレ誘導にて自立・見守り。夜間はリハビリパンツ＋尿取りパッド使用。定時声かけにて失禁ほぼなし。",
-      sleep: "21:00就寝、6:00起床。夜間1〜2回トイレ覚醒あり。離床センサーマット使用。声かけにて再入眠良好。",
-      meds: "降圧薬・血糖降下薬内服中。職員による配薬・服薬確認にて全量確実内服。",
-      medical_care: "術創部異常なし。毎日のバイタルチェック実施。褥瘡・皮膚剥離なし。保湿剤塗布継続。",
-      dementia_behavior: "夕方に帰宅願望が時折出現するが、お茶を勧め傾聴することで穏やかに落ち着かれる。暴言なし。",
-      care_notes: "急がせる声かけは焦りを生み転倒リスクとなるためゆっくり対応。右側からの介助時は荷重痛に配慮。",
-      family_info: "長男様が週1回程度面会。緊急時連絡先確認済。看取り方針合意済（施設での平穏な看取り希望）。",
-      future_goals: "歩行器による安全な自立歩行を維持し転倒防止を図る。食事摂取量を維持し低血糖・脱水を予防。"
-    };
-
-    const sample2 = {
-      id: Date.now(),
-      resident_id: gState.selectedResidentId,
-      created_at: "2026-10-01",
-      updated_at: "2026-10-01",
-      staff_name: "鈴木 美智子",
-      summary_type: "定期見直しサマリー (入所6ヶ月後)",
-      basic_info: `要介護3（変更なし）。86歳。認知症自立度IIb（安定維持）。日常会話・意思疎通良好。`,
-      background: "入所後6ヶ月経過。施設生活に大変よく適応され、他入所者との歓談やレクリエーション参加も活発。",
-      physical_cognitive: "歩行安定性が向上しシルバーカー歩行自立。ふらつき減少。下肢筋力維持リハビリを継続中。",
-      adl: "立ち上がり・車椅子移乗は手すり使用にて自立。更衣・整容も上着着脱は自力可能に改善。入浴は機械浴から一般浴軽介助へ移行。",
-      meals_hydration: "普通食全量摂取継続。むせ込みほぼ消失。水分摂取量も日平均1,300mlと目標達成良好。",
-      excretion: "日中トイレ自立。夜間覚醒時もナースコール押下にて安全にトイレ移動可能。失禁回数大幅減少。",
-      sleep: "21:00就寝、6:30起床。中途覚醒1回のみ。朝まで良眠。センサーマット作動良好。",
-      meds: "血圧安定（120/70前後）。血糖値安定のため内服薬一部減量。服薬ゼリーなしで自己内服可能。",
-      medical_care: "創部完全治癒。皮膚乾燥に対してヒルドイド塗布を継続。バイタル毎日安定。",
-      dementia_behavior: "帰宅願望の出現頻度が激減（月1回程度）。習字や合唱レクに積極的に参加され笑顔多い。",
-      care_notes: "活動性が向上しているため早歩きによる転倒予防を見守る。自立動作を尊重した声かけ。",
-      family_info: "長男様ご家族が隔週面会来訪。ご本人の元気な様子に家族一同大変安心・感謝されている。",
-      future_goals: "屋外散歩や園芸活動への参加を促し、活動的な生活意欲を支援。自立歩行と安全な生活を維持。"
-    };
-
-    if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
-    if (!summaries.some(s => s.summary_type.includes("新規入所"))) db.data.care_summaries.push(sample1);
-    if (!summaries.some(s => s.summary_type.includes("定期見直し"))) db.data.care_summaries.push(sample2);
-    db.save();
-    summaries = db.data.care_summaries.filter(s => s.resident_id === gState.selectedResidentId);
+  // [Claude修正] 旧実装は履歴が1件以下だと、架空の例文サマリー (別人の生年月日・既往歴を含む) を
+  // その利用者の実データとして保存していた。実データには一切書き込まず、手持ちの履歴だけで比較する。
+  if (summaries.length === 0) {
+    alert("この利用者の介護サマリーはまだありません。サマリーを作成すると新旧比較ができます。");
+    return;
   }
-
   // ソート (古い順)
-  summaries.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+  summaries.sort((a, b) => (a.created_at || a.date || "").localeCompare(b.created_at || b.date || "") || (Number(a.id) - Number(b.id)));
 
   summaries.forEach((s, idx) => {
     const optLeft = document.createElement("option");
     optLeft.value = s.id;
-    optLeft.textContent = `[${s.created_at || '-'}] ${s.summary_type} (${s.staff_name || '担当'})`;
+    optLeft.textContent = `[${s.created_at || s.date || '-'}] ${s.summary_type || 'サマリー'}${s.previous_id ? ' (更新版)' : ''} (${s.staff_name || '担当'})`;
     selLeft.appendChild(optLeft);
 
     const optRight = document.createElement("option");
     optRight.value = s.id;
-    optRight.textContent = `[${s.created_at || '-'}] ${s.summary_type} (${s.staff_name || '担当'})`;
+    optRight.textContent = `[${s.created_at || s.date || '-'}] ${s.summary_type || 'サマリー'}${s.previous_id ? ' (更新版)' : ''} (${s.staff_name || '担当'})`;
     selRight.appendChild(optRight);
   });
 
@@ -14073,6 +14327,9 @@ function openCareSummaryCompareModal(targetResId) {
 
   renderCompareView();
   openModal("careSummaryCompareModal");
+  if (summaries.length === 1) {
+    alert("この利用者の介護サマリーは1件のみです。サマリーを更新（新規作成）すると、新旧を比較できます。");
+  }
 }
 
 function renderCompareView() {

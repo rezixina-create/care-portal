@@ -1230,3 +1230,39 @@ body {
 #compareContentContainer table tr:last-child td {
   border-bottom: none;
 }
+
+/* [Claude修正] お知らせは白い背景・黒い文字に統一する (利用者の要望)。
+   対応が必要なお知らせ (notice-card-urgent / warning) は、先頭の見出し【…】だけを赤にする。
+   受診前の特殊指示【特記】は赤字で強調する。 */
+.alert-banner,
+.alert-banner.notice-card-urgent,
+.alert-banner.notice-card-warning,
+.alert-banner.notice-card-info,
+.alert-banner.notice-card-success {
+  background: #ffffff !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+  border-left: 4px solid #9ca3af !important;
+}
+.alert-banner *:not(button):not(.notice-label):not(.notice-special) {
+  color: #111827 !important;
+  background: transparent !important;
+}
+.alert-banner .notice-label {
+  color: #111827 !important;
+  font-weight: bold;
+}
+.alert-banner.notice-card-urgent .notice-label,
+.alert-banner.notice-card-warning .notice-label {
+  color: #dc2626 !important;
+}
+.alert-banner .notice-special {
+  color: #dc2626 !important;
+  font-weight: bold;
+  margin-left: 8px;
+}
+.alert-banner button {
+  background: #f3f4f6 !important;
+  color: #111827 !important;
+  border: 1px solid #d1d5db !important;
+}
