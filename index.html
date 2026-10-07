@@ -24,13 +24,13 @@
       </div>
 
       <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:13px; font-weight:bold; color:#334155; margin-bottom:6px;">職員ID (ローマ字4文字以上) <span style="color:#dc2626;">*</span>:</label>
-        <input type="text" id="loginStaffIdInput" class="form-control" placeholder="例: aaaa または 登録ID" style="width:100%; font-size:14px; padding:8px 10px;">
+        <label style="display:block; font-size:13px; font-weight:bold; color:#334155; margin-bottom:6px;">職員ID (半角英字4文字以上) <span style="color:#dc2626;">*</span>:</label>
+        <input type="text" id="loginStaffIdInput" class="form-control" placeholder="例: aaaa または 登録ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false">
       </div>
 
       <div style="margin-bottom:20px;">
-        <label style="display:block; font-size:13px; font-weight:bold; color:#334155; margin-bottom:6px;">パスワード (数字4文字) <span style="color:#dc2626;">*</span>:</label>
-        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control" placeholder="数字4桁 (例: 0000)" style="width:100%; font-size:16px; padding:8px 10px; letter-spacing:4px;">
+        <label style="display:block; font-size:13px; font-weight:bold; color:#334155; margin-bottom:6px;">パスワード (半角数字4桁) <span style="color:#dc2626;">*</span>:</label>
+        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control" placeholder="数字4桁 (例: 0000)" style="width:100%; font-size:18px; padding:10px 12px; letter-spacing:6px;" inputmode="numeric" pattern="[0-9]*">
       </div>
 
       <button type="button" class="btn btn-primary" style="width:100%; padding:12px; font-size:15px; font-weight:bold; background:#1e40af; border-color:#1e40af;" onclick="handleLoginSubmit()">ログイン</button>
@@ -53,10 +53,9 @@
  <!-- 1. 最上部ヘッダー -->
  <header class="portal-header">
  <div class="portal-title">
- <span id="facilityTitleSpan" onclick="openFacilityNameModal()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="クリックして施設名を変更">
- <span id="facilityNameDisplay">陽だまりの家</span> 統合ポータル
- <span style="font-size:11px; opacity:0.8; padding:1px 5px; background:rgba(255,255,255,0.25); border-radius:4px; font-weight:normal;">施設名変更</span>
- </span>
+ <span id="facilityTitleSpan" style="display:inline-flex; align-items:center; gap:6px;">
+          <span id="facilityNameDisplay">陽だまりの家</span> 統合ポータル
+        </span>
  <span class="badge" id="syncStatusBadge" onclick="openShareModal()" style="cursor:pointer; background:#2563eb;" title="クリックして他端末接続URLを確認"> クラウド共有中</span>
  <span class="badge" id="backupStatusBadge" onclick="openBackupStatusModal()" style="background:#10b981; cursor:pointer;" title="クリックして自動バックアップの稼働状況を確認">自動バックアップ稼働中</span>
  </div>
@@ -89,13 +88,7 @@
   </nav>
 
  <!-- 4. アラートバナー群 (在庫補充・非常食2週前・前月誕生日・受診2週/1週前・要介護期限) -->
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; padding:0 4px;">
-    <span style="font-size:12.5px; font-weight:bold; color:#b91c1c;">重要アラート・通知</span>
-    <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="openAlertLogModal()">閉じたアラートの対応ログ・復旧</button>
-  </div>
-  <div class="alerts-container" id="alertsContainer">
- <!-- JSで条件に応じて動的に警告バナーを表示 -->
- </div>
+ <!-- アラートはホーム画面では出さず、各ポータル内へ完全分離配置 -->
 
  <main class="portal-content">
 
@@ -142,6 +135,15 @@
  <!-- 【A】介護現場ポータル -->
  <!-- ============================================================ -->
  <div id="portalCareSection">
+
+      <!-- 介護現場ポータル専用アラート (ケア・体調直結アラート) -->
+      <div id="careAlertsArea" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding:0 4px;">
+          <span style="font-size:12.5px; font-weight:bold; color:#b91c1c;">ケア・体調 重要アラート</span>
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="openAlertLogModal()">閉じたアラートの対応ログ・復旧</button>
+        </div>
+        <div class="alerts-container" id="careAlertsContainer"></div>
+      </div>
  <!-- 共通日付選択バー (横スライドカレンダー廃止・各タブ共通連動) -->
  <section class="calendar-bar" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:10px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
@@ -815,6 +817,15 @@
  <!-- 【B】事務所ポータル (在庫・発注・預かり金・車両・監査) -->
  <!-- ============================================================ -->
  <div id="portalOfficeSection" style="display:none;">
+
+      <!-- 事務ポータル専用アラート (申請・期限・在庫・発注アラート) -->
+      <div id="officeAlertsArea" style="margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; padding:0 4px;">
+          <span style="font-size:12.5px; font-weight:bold; color:#b91c1c;">事務・申請・在庫 重要アラート</span>
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="openAlertLogModal()">閉じたアラートの対応ログ・復旧</button>
+        </div>
+        <div class="alerts-container" id="officeAlertsContainer"></div>
+      </div>
 
  <!-- 事務所サブタブ (普段使う業務 ＆ 定期・監査業務) -->
  <div style="background:#ffffff; border-radius:8px; padding:10px 14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
@@ -2826,6 +2837,7 @@
  <button type="button" class="btn btn-secondary" style="font-size:12px; background:#eff6ff; color:#1d4ed8; border-color:#93c5fd;" onclick="startNewCareSummary('新規入所時サマリー')">＋ 新規入所時</button>
  <button type="button" class="btn btn-secondary" style="font-size:12px; background:#f0fdf4; color:#166534; border-color:#86efac;" onclick="startNewCareSummary('入院後再入所サマリー')">＋ 入院後再入所</button>
  <button type="button" class="btn btn-secondary" style="font-size:12px; background:#fff7ed; color:#c2410c; border-color:#fed7aa;" onclick="startNewCareSummary('状態変化・見直しサマリー')">＋ 状態変化見直し</button>
+          <button type="button" class="btn btn-secondary" style="font-size:12px; background:#e0e7ff; color:#3730a3; border-color:#a5b4fc; font-weight:bold;" onclick="openCareSummaryCompareModal()">新旧比較プレビュー</button>
  </div>
  </div>
 
@@ -3544,6 +3556,46 @@
       <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
         <button type="button" class="btn btn-secondary" onclick="closeModal('facilityNameModal')">キャンセル</button>
         <button type="button" class="btn btn-primary" style="background:#1e40af; border-color:#1e40af;" onclick="executeFacilityNameChange()">2名承認で施設名を更新</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 6. 介護サマリー新旧比較モーダル (左右任意日付選択・例文プレビュー) -->
+  <div class="modal-overlay" id="careSummaryCompareModal" style="display:none; z-index:9999;">
+    <div class="modal-card" style="max-width:1100px; width:95%; max-height:92vh; overflow-y:auto; padding:22px;">
+      <div class="modal-header" style="border-bottom:2px solid #4338ca; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+        <div>
+          <div style="display:flex; align-items:center; gap:8px;">
+            <h3 style="margin:0; color:#312e81; font-size:19px;">介護サマリー 新旧比較ビュー</h3>
+            <span id="compareResidentBadge" class="badge" style="background:#4338ca; color:white; font-size:12px; padding:3px 8px;"></span>
+          </div>
+          <p style="font-size:12px; color:#64748b; margin:4px 0 0 0;">
+            左右それぞれで過去のサマリー履歴を選択し、心身状況やケア方針の変化を横並びで比較・確認できます。
+          </p>
+        </div>
+        <button type="button" class="modal-close-btn" onclick="closeModal('careSummaryCompareModal')">&times;</button>
+      </div>
+
+      <!-- 左右選択コントロールバー -->
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+        <div style="background:#eff6ff; border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px;">
+          <label style="font-size:12.5px; font-weight:bold; color:#1e40af; display:block; margin-bottom:4px;">比較元サマリー（左側）を選択:</label>
+          <select id="compareSelectLeft" class="form-control" style="font-size:13px; font-weight:bold;" onchange="renderCompareView()"></select>
+        </div>
+        <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px;">
+          <label style="font-size:12.5px; font-weight:bold; color:#166534; display:block; margin-bottom:4px;">比較先サマリー（右側）を選択:</label>
+          <select id="compareSelectRight" class="form-control" style="font-size:13px; font-weight:bold;" onchange="renderCompareView()"></select>
+        </div>
+      </div>
+
+      <!-- 比較テーブル表示コンテナ -->
+      <div id="compareContentContainer" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; overflow:hidden;">
+        <!-- JSで項目別左右比較を描画 -->
+      </div>
+
+      <div style="margin-top:16px; display:flex; justify-content:flex-end;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('careSummaryCompareModal')">閉じる</button>
       </div>
     </div>
   </div>

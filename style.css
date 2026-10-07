@@ -1201,3 +1201,32 @@ body {
   transform: translateY(-2px);
   box-shadow: 0 8px 16px rgba(0, 0, 0, 0.08);
 }
+/* お知らせ・通知 統一配色スタイル */
+.notice-card-urgent {
+  background: #fef2f2 !important;
+  border-left: 4px solid #ef4444 !important;
+  color: #991b1b !important;
+}
+.notice-card-warning {
+  background: #fffbeb !important;
+  border-left: 4px solid #f59e0b !important;
+  color: #92400e !important;
+}
+.notice-card-info {
+  background: #eff6ff !important;
+  border-left: 4px solid #3b82f6 !important;
+  color: #1e40af !important;
+}
+.notice-card-success {
+  background: #f0fdf4 !important;
+  border-left: 4px solid #22c55e !important;
+  color: #166534 !important;
+}
+
+/* サマリー比較テーブル スタイル */
+#compareContentContainer table td {
+  border-bottom: 1px solid #e2e8f0;
+}
+#compareContentContainer table tr:last-child td {
+  border-bottom: none;
+}

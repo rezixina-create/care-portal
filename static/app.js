@@ -2223,328 +2223,347 @@ function findMojibakeTables() {
 }
 
 function checkGlobalAlerts() {
- const container = document.getElementById("alertsContainer");
- if (!container) return;
- let alertHtml = "";
- const today = new Date();
- const todayStr = gState.selectedDate || toLocalDateStr(today);
+  const careContainer = document.getElementById("careAlertsContainer");
+  const officeContainer = document.getElementById("officeAlertsContainer");
+  const legacyContainer = document.getElementById("alertsContainer");
+  if (!careContainer && !officeContainer && !legacyContainer) return;
 
- // [Claude修正] 文字化け (日本語が「???」になったデータ) の検出。
- // スクリプト等で文字コードを誤って書き込むと、日本語が「?」に置き換わり元に戻せなくなる。
- // 早く気付けるよう、保存データに「???」を含む項目があれば警告する。
- const mojibake = findMojibakeTables();
- const mojibakeKey = `mojibake_${toLocalDateStr(new Date())}_${mojibake.total}`;
- if (mojibake.total > 0 && !isAlertDismissed(mojibakeKey)) {
- alertHtml += `
- <div class="alert-banner alert-danger">
- <span> <strong>【文字化け検出】</strong> 保存データに「???」に化けた文字が ${mojibake.total} か所あります（${escapeHtml(mojibake.list)}）。スクリプト等でデータを書き込む場合は、必ずUTF-8で保存してください。</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${mojibakeKey}')"> 確認済・閉じる</button>
- </div>
- `;
- }
+  let careAlertHtml = "";
+  let officeAlertHtml = "";
+  const today = new Date();
+  const todayStr = gState.selectedDate || toLocalDateStr(today);
 
- // 0.0 【管理者・事務員専用：初期パスワード未変更セキュリティ警告】
- const isAdminOrClerk = isCurrentStaffAdminOrClerk();
- const pinWarnKey = `initial_pin_warning_${getRealTodayStr()}`;
- if (isAdminOrClerk && !isAlertDismissed(pinWarnKey)) {
- const unconfigured = (gState.stamps || []).filter(s => {
- const pin = s.pin || "0000";
- return pin === "0000" || s.is_initial_pin !== false;
- });
- if (unconfigured.length > 0) {
- const staffNames = unconfigured.map(s => escapeHtml(s.name || s)).join("、");
- alertHtml += `
- <div class="alert-banner alert-warning" style="background:#fef2f2; border-left:5px solid #dc2626; color:#991b1b;">
- <div style="width:100%;">
- <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
- <div style="display:flex; gap:6px; align-items:center;">
- <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${pinWarnKey}')">閉じる</button>
- </div>
- </div>
- </div>
- </div>
- `;
- }
- }
+  // [Claude修正] 文字化け (日本語が「???」になったデータ) の検出
+  const mojibake = findMojibakeTables();
+  const mojibakeKey = `mojibake_${toLocalDateStr(new Date())}_${mojibake.total}`;
+  if (mojibake.total > 0 && !isAlertDismissed(mojibakeKey)) {
+    const mHtml = `
+      <div class="alert-banner alert-danger notice-card-urgent">
+        <span> <strong>【文字化け検出】</strong> 保存データに「???」に化けた文字が ${mojibake.total} か所あります（${escapeHtml(mojibake.list)}）。スクリプト等でデータを書き込む場合は、必ずUTF-8で保存してください。</span>
+        <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${mojibakeKey}')"> 確認済・閉じる</button>
+      </div>
+    `;
+    careAlertHtml += mHtml;
+    officeAlertHtml += mHtml;
+  }
 
- // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
- const isAdmin = isCurrentStaffAdmin();
- const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
- if (isAdmin && pendingOrders.length > 0 && !isAlertDismissed('admin_pending_orders')) {
- const currentStaffName = (document.getElementById("currentStaff")?.value) || "管理者";
- const orderItemsSummary = pendingOrders.map(o => {
- return `
- <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; padding:6px 12px; border-radius:6px; border:1px solid #fed7aa; margin-top:4px;">
- <div>
- <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
- <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
- <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
- <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '補充発注')} / 申請日: ${o.ordered_at || '-'}</div>
- </div>
- <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
- <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')"> 承認する</button>
- <button class="btn btn-danger" style="padding:3px 8px; font-size:12px; background:#ef4444; border-color:#dc2626; color:#fff;" onclick="approveOrder(${o.id}, '差戻し')"> 差戻し</button>
- </div>
- </div>
- `;
- }).join("");
+  // 0.0 【事務専用：初期パスワード未変更セキュリティ警告】
+  const isAdminOrClerk = isCurrentStaffAdminOrClerk();
+  const pinWarnKey = `initial_pin_warning_${getRealTodayStr()}`;
+  if (isAdminOrClerk && !isAlertDismissed(pinWarnKey)) {
+    const unconfigured = (gState.stamps || []).filter(s => {
+      const pin = s.pin || "0000";
+      return pin === "0000" || s.is_initial_pin !== false;
+    });
+    if (unconfigured.length > 0) {
+      const staffNames = unconfigured.map(s => escapeHtml(s.name || s)).join("、");
+      officeAlertHtml += `
+        <div class="alert-banner alert-warning notice-card-warning" style="background:#fef2f2; border-left:5px solid #dc2626; color:#991b1b;">
+          <div style="width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+              <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${pinWarnKey}')">閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
 
- alertHtml += `
- <div class="alert-banner alert-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
- <div style="width:100%;">
- <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <span>  <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
- <div style="display:flex; gap:6px; align-items:center;">
- <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');"> 発注台帳を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'admin_pending_orders')"> 閉じる</button>
- </div>
- </div>
- <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
- ${orderItemsSummary}
- </div>
- </div>
- </div>
- `;
- }
+  // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
+  const isAdmin = isCurrentStaffAdmin();
+  const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");
+  if (isAdmin && pendingOrders.length > 0 && !isAlertDismissed('admin_pending_orders')) {
+    const currentStaffName = (document.getElementById("currentStaff")?.value) || "管理者";
+    const orderItemsSummary = pendingOrders.map(o => {
+      return `
+        <div style="display:flex; justify-content:space-between; align-items:center; background:#ffffff; padding:6px 12px; border-radius:6px; border:1px solid #fed7aa; margin-top:4px;">
+          <div>
+            <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
+            <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
+            <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
+            <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '補充発注')} / 申請日: ${o.ordered_at || '-'}</div>
+          </div>
+          <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')"> 承認する</button>
+            <button class="btn btn-danger" style="padding:3px 8px; font-size:12px; background:#ef4444; border-color:#dc2626; color:#fff;" onclick="approveOrder(${o.id}, '差戻し')"> 差戻し</button>
+          </div>
+        </div>
+      `;
+    }).join("");
 
- // 1. 【前月誕生日事前アラート】
- const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
- const birthdayKey = `birthday_${today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()}_${nextMonthNum}`;
- if (!isAlertDismissed(birthdayKey)) {
- const nextMonthBirthdays = [];
- gState.residents.forEach(r => {
- if (r.birth_date && typeof r.birth_date === 'string' && r.birth_date.includes("-")) {
- const parts = r.birth_date.split("-");
- if (parts.length >= 2) {
- const birthMonth = parseInt(parts[1], 10);
- if (birthMonth === nextMonthNum) {
- nextMonthBirthdays.push({ name: r.name, room: r.room_no, date: r.birth_date.slice(5) });
- }
- }
- }
- });
- if (nextMonthBirthdays.length > 0) {
- const list = nextMonthBirthdays.map(b => `${b.room}号室 ${b.name} 様 (${b.date})`).join(", ");
- alertHtml += `
- <div class="alert-banner alert-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
- <span> 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${birthdayKey}')"> 準備確認・閉じる</button>
- </div>
- `;
- }
- }
+    officeAlertHtml += `
+      <div class="alert-banner alert-warning notice-card-warning" style="background:#fff7ed; border-left:5px solid #ea580c; color:#9a3412;">
+        <div style="width:100%;">
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+            <span>  <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
+            <div style="display:flex; gap:6px; align-items:center;">
+              <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');"> 発注台帳を開く</button>
+              <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'admin_pending_orders')"> 閉じる</button>
+            </div>
+          </div>
+          <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+            ${orderItemsSummary}
+          </div>
+        </div>
+      </div>
+    `;
+  }
 
- // 2. 【非常食・防災備蓄 賞味期限2週間前アラート】
- (gState.emergencySupplies || []).forEach(item => {
- const emKey = `emergency_${item.id}_${item.expiry_date || ""}`;
- if (!isAlertDismissed(emKey) && item.expiry_date) {
- const expDate = new Date(item.expiry_date);
- const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
- if (diffDays > 0 && diffDays <= 14) {
- alertHtml += `
- <div class="alert-banner alert-warning">
- <span> 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${emKey}')"> 確認済・閉じる</button>
- </div>
- `;
- }
- }
- });
+  // 1. 【介護専用：前月誕生日事前アラート】
+  const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
+  const birthdayKey = `birthday_${today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()}_${nextMonthNum}`;
+  if (!isAlertDismissed(birthdayKey)) {
+    const nextMonthBirthdays = [];
+    gState.residents.forEach(r => {
+      if (r.birth_date && typeof r.birth_date === 'string' && r.birth_date.includes("-")) {
+        const parts = r.birth_date.split("-");
+        if (parts.length >= 2) {
+          const birthMonth = parseInt(parts[1], 10);
+          if (birthMonth === nextMonthNum) {
+            nextMonthBirthdays.push({ name: r.name, room: r.room_no, date: r.birth_date.slice(5) });
+          }
+        }
+      }
+    });
+    if (nextMonthBirthdays.length > 0) {
+      const list = nextMonthBirthdays.map(b => `${b.room}号室 ${b.name} 様 (${b.date})`).join(", ");
+      careAlertHtml += `
+        <div class="alert-banner alert-info notice-card-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
+          <span> 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${birthdayKey}')"> 準備確認・閉じる</button>
+        </div>
+      `;
+    }
+  }
 
- // 3. 【在庫補充アラート (要発注)】
- // すでに発注申請中・承認済の品目は「発注手配中」として要発注アラートから自動解除
- const pendingOrderNames = (db.data.orders || [])
- .filter(o => o.status === "申請中" || o.status === "承認済")
- .map(o => o.item_name);
+  // 2. 【事務専用：非常食・防災備蓄 賞味期限2週間前アラート】
+  (gState.emergencySupplies || []).forEach(item => {
+    const emKey = `emergency_${item.id}_${item.expiry_date || ""}`;
+    if (!isAlertDismissed(emKey) && item.expiry_date) {
+      const expDate = new Date(item.expiry_date);
+      const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
+      if (diffDays > 0 && diffDays <= 14) {
+        officeAlertHtml += `
+          <div class="alert-banner alert-warning notice-card-warning">
+            <span> 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${emKey}')"> 確認済・閉じる</button>
+          </div>
+        `;
+      }
+    }
+  });
 
- const lowStockItems = (gState.inventory || []).filter(i => {
-  const threshold = (i.alert_threshold !== undefined && i.alert_threshold !== null && !isNaN(i.alert_threshold)) ? Number(i.alert_threshold) : i.safety_stock;
-  if (i.current_stock > threshold) return false;
- if (pendingOrderNames.includes(i.name)) return false; // すでに発注済ならアラート解除
- if (isAlertDismissed(`stock_${i.id}_${i.current_stock}`)) return false; // スタッフが手動完了・非表示にした場合
- return true;
- });
+  // 3. 【事務専用：在庫補充アラート (要発注)】
+  const pendingOrderNames = (db.data.orders || [])
+    .filter(o => o.status === "申請中" || o.status === "承認済")
+    .map(o => o.item_name);
 
- gState.lastLowStockAlertKeys = lowStockItems.map(i => `stock_${i.id}_${i.current_stock}`);
- if (lowStockItems.length > 0) {
- if (lowStockItems.length === 1) {
- const item = lowStockItems[0];
- const normalStock = item.normal_stock || (item.safety_stock * 2);
- const deficit = Math.max(1, normalStock - item.current_stock);
- alertHtml += `
- <div class="alert-banner alert-danger">
- <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
- <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
- <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'stock_${item.id}_${item.current_stock}')"> 閉じる</button>
- </div>
- </div>
- `;
- } else {
- const itemListHtml = lowStockItems.map(item => {
- const normalStock = item.normal_stock || (item.safety_stock * 2);
- const deficit = Math.max(1, normalStock - item.current_stock);
- return `
- <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
- <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
- <div style="display:flex; gap:4px;">
- <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 発注申請 (+${deficit})</button>
- </div>
- </div>
- `;
- }).join("");
+  const lowStockItems = (gState.inventory || []).filter(i => {
+    const threshold = (i.alert_threshold !== undefined && i.alert_threshold !== null && !isNaN(i.alert_threshold)) ? Number(i.alert_threshold) : i.safety_stock;
+    if (i.current_stock > threshold) return false;
+    if (pendingOrderNames.includes(i.name)) return false;
+    if (isAlertDismissed(`stock_${i.id}_${i.current_stock}`)) return false;
+    return true;
+  });
 
- alertHtml += `
- <div class="alert-banner alert-danger">
- <div style="width:100%;">
- <span> <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
- <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
- ${itemListHtml}
- </div>
- </div>
- <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastLowStockAlertKeys || [])"> 全て閉じる</button>
- </div>
- </div>
- `;
- }
- }
+  gState.lastLowStockAlertKeys = lowStockItems.map(i => `stock_${i.id}_${i.current_stock}`);
+  if (lowStockItems.length > 0) {
+    if (lowStockItems.length === 1) {
+      const item = lowStockItems[0];
+      const normalStock = item.normal_stock || (item.safety_stock * 2);
+      const deficit = Math.max(1, normalStock - item.current_stock);
+      officeAlertHtml += `
+        <div class="alert-banner alert-danger notice-card-urgent">
+          <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'stock_${item.id}_${item.current_stock}')"> 閉じる</button>
+          </div>
+        </div>
+      `;
+    } else {
+      const itemListHtml = lowStockItems.map(item => {
+        const normalStock = item.normal_stock || (item.safety_stock * 2);
+        const deficit = Math.max(1, normalStock - item.current_stock);
+        return `
+          <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
+            <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
+            <div style="display:flex; gap:4px;">
+              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 発注申請 (+${deficit})</button>
+            </div>
+          </div>
+        `;
+      }).join("");
 
+      officeAlertHtml += `
+        <div class="alert-banner alert-danger notice-card-urgent">
+          <div style="width:100%;">
+            <span> <strong>【要発注アラート】</strong> 以下の消耗品が安全基準を下回っています（平常時定数まで発注申請を行ってください）：</span>
+            <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
+              ${itemListHtml}
+            </div>
+          </div>
+          <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastLowStockAlertKeys || [])"> 全て閉じる</button>
+          </div>
+        </div>
+      `;
+    }
+  }
 
- // 4. 受診2週前・1週前事前告知 ＆ 往診特殊指示アラート (絶食・薬のみ等)
- gState.residents.forEach(r => {
- if (r.next_clinic_date) {
- const clinicDate = new Date(r.next_clinic_date);
- const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
- const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;"> 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
- 
- if (diffDays === 0 || r.next_clinic_date === todayStr) {
- // 当日往診
- const todayClinicKey = `clinic_today_${r.id}_${r.next_clinic_date}`;
- if (!isAlertDismissed(todayClinicKey)) {
- alertHtml += `
- <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
- <span><strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
- <div style="display:flex; gap:6px; align-items:center;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${todayClinicKey}')"> 受診対応完了</button>
- </div>
- </div>
- `;
- }
- } else if (diffDays > 0 && diffDays <= 14) {
- const upcomingKey = `clinic_upcoming_${r.id}_${r.next_clinic_date}_${diffDays <= 7 ? "w1" : "w2"}`;
- if (!isAlertDismissed(upcomingKey)) {
- const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
- const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
- alertHtml += `
- <div class="alert-banner ${alertType}">
- <span> ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${upcomingKey}')"> 確認済・閉じる</button>
- </div>
- `;
- }
- }
- }
- });
+  // 4. 【介護専用：受診2週前・1週前事前告知 ＆ 往診特殊指示アラート】
+  gState.residents.forEach(r => {
+    if (r.next_clinic_date) {
+      const clinicDate = new Date(r.next_clinic_date);
+      const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
+      const specialNoteBadge = r.clinic_special_notes ? `<span style="background:#dc2626; color:#ffffff; padding:2px 8px; border-radius:4px; font-weight:bold; margin-left:8px;"> 特殊指示: ${escapeHtml(r.clinic_special_notes)}</span>` : "";
 
- // 5. 【排便3日以上なしアラート (便秘コントロール)】
- const excretions = db.data.excretions || [];
- gState.residents.forEach(r => {
- if (r.status !== "在所") return;
- const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
- resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
- // [Claude修正] 利用者ごと・最終排便日ごとのキー。対応完了は その利用者の今回分 だけを閉じる
- const stoolKey = `stool_${r.id}_${resExcs.length > 0 ? resExcs[0].date : "none"}`;
- if (isAlertDismissed(stoolKey)) return;
+      if (diffDays === 0 || r.next_clinic_date === todayStr) {
+        // 当日往診
+        const todayClinicKey = `clinic_today_${r.id}_${r.next_clinic_date}`;
+        if (!isAlertDismissed(todayClinicKey)) {
+          careAlertHtml += `
+            <div class="alert-banner alert-danger notice-card-urgent" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
+              <span><strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
+              <div style="display:flex; gap:6px; align-items:center;">
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
+                <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${todayClinicKey}')"> 受診対応完了</button>
+              </div>
+            </div>
+          `;
+        }
+      } else if (diffDays > 0 && diffDays <= 14) {
+        const upcomingKey = `clinic_upcoming_${r.id}_${r.next_clinic_date}_${diffDays <= 7 ? "w1" : "w2"}`;
+        if (!isAlertDismissed(upcomingKey)) {
+          const alertClass = diffDays <= 7 ? "alert-danger notice-card-urgent" : "alert-warning notice-card-warning";
+          const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
+          careAlertHtml += `
+            <div class="alert-banner ${alertClass}">
+              <span> ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
+              <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${upcomingKey}')"> 確認済・閉じる</button>
+            </div>
+          `;
+        }
+      }
+    }
+  });
 
- let daysNoStool = 0;
- if (resExcs.length > 0) {
- const latestDateStr = resExcs[0].date;
- const latestDate = new Date(latestDateStr);
- const curDate = new Date(todayStr);
- daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
- } else {
- daysNoStool = 3;
- }
+  // 5. 【介護専用：排便3日以上なしアラート (便秘コントロール)】
+  const excretions = db.data.excretions || [];
+  gState.residents.forEach(r => {
+    if (r.status !== "在所") return;
+    const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
+    resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+    const stoolKey = `stool_${r.id}_${resExcs.length > 0 ? resExcs[0].date : "none"}`;
+    if (isAlertDismissed(stoolKey)) return;
 
- if (daysNoStool >= 3) {
- alertHtml += `
- <div class="alert-banner alert-danger" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
- <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
- <div style="display:flex; gap:6px; align-items:center;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="requestDismissAlertFromButton(this, '${stoolKey}')"> 処置・対応完了</button>
- </div>
- </div>
- `;
- }
- });
+    let daysNoStool = 0;
+    if (resExcs.length > 0) {
+      const latestDateStr = resExcs[0].date;
+      const latestDate = new Date(latestDateStr);
+      const curDate = new Date(todayStr);
+      daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
+    } else {
+      daysNoStool = 3;
+    }
 
- // 6. 【月間業務連絡 未確認アラート】
- const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
- const curMonth = todayStr.slice(0, 7);
- const monthlyNotices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
- if (currentStaff && monthlyNotices.length > 0) {
- const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
- if (unconfirmed.length > 0 && !isAlertDismissed('monthly_notices_' + currentStaff)) {
- alertHtml += `
- <div class="alert-banner alert-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
- <span>  <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
- <div style="display:flex; gap:6px; align-items:center;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#5b21b6;" onclick="confirmAllMonthlyNoticesForStaff()"> 一括確認済にする</button>
- </div>
- </div>
- `;
- }
- }
+    if (daysNoStool >= 3) {
+      careAlertHtml += `
+        <div class="alert-banner alert-danger notice-card-urgent" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
+          <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="requestDismissAlertFromButton(this, '${stoolKey}')"> 処置・対応完了</button>
+          </div>
+        </div>
+      `;
+    }
+  });
 
- // 7. 要介護認定有効期限 (満了60日以内)
- {
- const expiringResidents = [];
- gState.residents.forEach(r => {
- if (r.care_expiry_date) {
- const expiryDate = new Date(r.care_expiry_date);
- const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
- if (diffDays > 0 && diffDays <= 60) {
- const expKey = `care_expiry_${r.id}_${r.care_expiry_date}`;
- if (!isAlertDismissed(expKey)) {
- expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays, key: expKey });
- }
- }
- }
- });
- gState.lastCareExpiryAlertKeys = expiringResidents.map(e => e.key);
- if (expiringResidents.length > 0) {
- const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
- alertHtml += `
- <div class="alert-banner alert-warning">
- <span> 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastCareExpiryAlertKeys || [])"> 申請手配済・閉じる</button>
- </div>
- `;
- }
- }
+  // 6. 【介護専用：月間業務連絡 未確認アラート】
+  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+  const curMonth = todayStr.slice(0, 7);
+  const monthlyNotices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  if (currentStaff && monthlyNotices.length > 0) {
+    const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
+    if (unconfirmed.length > 0 && !isAlertDismissed('monthly_notices_' + currentStaff)) {
+      careAlertHtml += `
+        <div class="alert-banner alert-warning notice-card-warning" style="background:#f5f3ff; border-left:5px solid #8b5cf6; color:#5b21b6;">
+          <span>  <strong>【業務連絡 未確認】</strong> ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の月間業務連絡に未確認が <strong>${unconfirmed.length}件</strong> あります！内容を確認し「確認済」を押してください。</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ede9fe; color:#5b21b6; border-color:#8b5cf6;" onclick="switchCareTab('notebook')">連絡表を開く</button>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#5b21b6;" onclick="confirmAllMonthlyNoticesForStaff()"> 一括確認済にする</button>
+          </div>
+        </div>
+      `;
+    }
+  }
 
- if (container.innerHTML !== alertHtml) {
- container.innerHTML = alertHtml;
- }
+  // 7. 【事務専用：要介護認定有効期限 (満了60日以内)】
+  {
+    const expiringResidents = [];
+    gState.residents.forEach(r => {
+      if (r.care_expiry_date) {
+        const expiryDate = new Date(r.care_expiry_date);
+        const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
+        if (diffDays > 0 && diffDays <= 60) {
+          const expKey = `care_expiry_${r.id}_${r.care_expiry_date}`;
+          if (!isAlertDismissed(expKey)) {
+            expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays, key: expKey });
+          }
+        }
+      }
+    });
+    gState.lastCareExpiryAlertKeys = expiringResidents.map(e => e.key);
+    if (expiringResidents.length > 0) {
+      const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
+      officeAlertHtml += `
+        <div class="alert-banner alert-warning notice-card-warning">
+          <span> 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastCareExpiryAlertKeys || [])"> 申請手配済・閉じる</button>
+        </div>
+      `;
+    }
+  }
+
+  // 介護現場ポータル コンテナへ描画
+  if (careContainer && careContainer.innerHTML !== careAlertHtml) {
+    careContainer.innerHTML = careAlertHtml;
+  }
+  // 事務ポータル コンテナへ描画
+  if (officeContainer && officeContainer.innerHTML !== officeAlertHtml) {
+    officeContainer.innerHTML = officeAlertHtml;
+  }
+  // 旧コンテナが存在する場合の後方互換
+  if (legacyContainer) {
+    const combined = careAlertHtml + officeAlertHtml;
+    if (legacyContainer.innerHTML !== combined) {
+      legacyContainer.innerHTML = combined;
+    }
+  }
 }
 
 // ポータル切り替え
 function switchPortal(portal) {
- gState.activePortal = portal;
- document.getElementById("btnNavCare").classList.toggle("active", portal === "care");
- document.getElementById("btnNavOffice").classList.toggle("active", portal === "office");
- document.getElementById("portalCareSection").style.display = portal === "care" ? "block" : "none";
- document.getElementById("portalOfficeSection").style.display = portal === "office" ? "block" : "none";
+	gState.activePortal = portal;
+	const homeSec = document.getElementById("portalHomeSection");
+	if (homeSec) homeSec.style.display = "none";
+	const btnCare = document.getElementById("btnNavCare");
+	if (btnCare) btnCare.classList.toggle("active", portal === "care");
+	const btnOffice = document.getElementById("btnNavOffice");
+	if (btnOffice) btnOffice.classList.toggle("active", portal === "office");
+	const careSec = document.getElementById("portalCareSection");
+	if (careSec) careSec.style.display = portal === "care" ? "block" : "none";
+	const officeSec = document.getElementById("portalOfficeSection");
+	if (officeSec) officeSec.style.display = portal === "office" ? "block" : "none";
 
- if (portal === "office") {
- loadOfficeData();
- }
+	if (portal === "office") {
+		loadOfficeData();
+	}
 }
 
 // 介護サブタブ切り替え
@@ -2862,6 +2881,7 @@ function renderResidentDetail() {
  <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
  介護サマリー (詳細・新規・変更)
  </button>
+				<button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryCompareModal(${r.id}); return false;">介護サマリー 新旧比較</button>
  <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
  緊急搬送・受診サマリー
  </button>
@@ -13956,3 +13976,169 @@ window.onLoginStaffSelectChange = onLoginStaffSelectChange;
 window.openFacilityNameModal = openFacilityNameModal;
 window.executeFacilityNameChange = executeFacilityNameChange;
 window.updateItemAlertThreshold = updateItemAlertThreshold;
+// =====================================================================
+// 介護サマリー 新旧比較機能 (左右任意日付選択・例文プレビュー)
+// =====================================================================
+
+function openCareSummaryCompareModal(targetResId) {
+  if (targetResId !== undefined && targetResId !== null && targetResId !== "") {
+    gState.selectedResidentId = Number(targetResId);
+  }
+  const r = (gState.residents || []).find(x => Number(x.id) === Number(gState.selectedResidentId));
+  const badge = document.getElementById("compareResidentBadge");
+  if (badge) badge.textContent = r ? `${r.room_no}号室 ${r.name} 様` : "利用者";
+
+  const selLeft = document.getElementById("compareSelectLeft");
+  const selRight = document.getElementById("compareSelectRight");
+  if (!selLeft || !selRight) return;
+
+  selLeft.innerHTML = "";
+  selRight.innerHTML = "";
+
+  // 対象利用者のサマリー履歴を取得
+  let summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(gState.selectedResidentId));
+
+  // もし1件以下なら、比較確認用の自然な日本語例文を追加（文字化けなし）
+  if (summaries.length < 2) {
+    const resName = r ? r.name : "利用者";
+    const sample1 = {
+      id: Date.now() - 100000,
+      resident_id: gState.selectedResidentId,
+      created_at: "2026-04-01",
+      updated_at: "2026-04-01",
+      staff_name: "山田 孝之",
+      summary_type: "新規入所時サマリー",
+      basic_info: `要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男様。認知症自立度IIb。障害自立度B1。`,
+      background: "自宅内での転倒・右大腿骨頸部骨折により急性期病院入院。リハビリ継続の上、在宅療養見守り困難となり新規入所。",
+      physical_cognitive: "右股関節可動域制限・右下肢筋力低下あり。すり足歩行。短期記憶低下あるが見当識保たれ穏やかに意思疎通可能。",
+      adl: "立ち上がり・移乗は見守り・一部軽介助。歩行器使用にて20m程度自立移動。更衣・整容はボタン留め等一部介助。入浴は一般浴見守り。",
+      meals_hydration: "普通食 (一口大)。自力摂取良好（むせ見守り）。水分目標1,200ml/日。下顎引き気味での嚥下声かけ。",
+      excretion: "日中はトイレ誘導にて自立・見守り。夜間はリハビリパンツ＋尿取りパッド使用。定時声かけにて失禁ほぼなし。",
+      sleep: "21:00就寝、6:00起床。夜間1〜2回トイレ覚醒あり。離床センサーマット使用。声かけにて再入眠良好。",
+      meds: "降圧薬・血糖降下薬内服中。職員による配薬・服薬確認にて全量確実内服。",
+      medical_care: "術創部異常なし。毎日のバイタルチェック実施。褥瘡・皮膚剥離なし。保湿剤塗布継続。",
+      dementia_behavior: "夕方に帰宅願望が時折出現するが、お茶を勧め傾聴することで穏やかに落ち着かれる。暴言なし。",
+      care_notes: "急がせる声かけは焦りを生み転倒リスクとなるためゆっくり対応。右側からの介助時は荷重痛に配慮。",
+      family_info: "長男様が週1回程度面会。緊急時連絡先確認済。看取り方針合意済（施設での平穏な看取り希望）。",
+      future_goals: "歩行器による安全な自立歩行を維持し転倒防止を図る。食事摂取量を維持し低血糖・脱水を予防。"
+    };
+
+    const sample2 = {
+      id: Date.now(),
+      resident_id: gState.selectedResidentId,
+      created_at: "2026-10-01",
+      updated_at: "2026-10-01",
+      staff_name: "鈴木 美智子",
+      summary_type: "定期見直しサマリー (入所6ヶ月後)",
+      basic_info: `要介護3（変更なし）。86歳。認知症自立度IIb（安定維持）。日常会話・意思疎通良好。`,
+      background: "入所後6ヶ月経過。施設生活に大変よく適応され、他入所者との歓談やレクリエーション参加も活発。",
+      physical_cognitive: "歩行安定性が向上しシルバーカー歩行自立。ふらつき減少。下肢筋力維持リハビリを継続中。",
+      adl: "立ち上がり・車椅子移乗は手すり使用にて自立。更衣・整容も上着着脱は自力可能に改善。入浴は機械浴から一般浴軽介助へ移行。",
+      meals_hydration: "普通食全量摂取継続。むせ込みほぼ消失。水分摂取量も日平均1,300mlと目標達成良好。",
+      excretion: "日中トイレ自立。夜間覚醒時もナースコール押下にて安全にトイレ移動可能。失禁回数大幅減少。",
+      sleep: "21:00就寝、6:30起床。中途覚醒1回のみ。朝まで良眠。センサーマット作動良好。",
+      meds: "血圧安定（120/70前後）。血糖値安定のため内服薬一部減量。服薬ゼリーなしで自己内服可能。",
+      medical_care: "創部完全治癒。皮膚乾燥に対してヒルドイド塗布を継続。バイタル毎日安定。",
+      dementia_behavior: "帰宅願望の出現頻度が激減（月1回程度）。習字や合唱レクに積極的に参加され笑顔多い。",
+      care_notes: "活動性が向上しているため早歩きによる転倒予防を見守る。自立動作を尊重した声かけ。",
+      family_info: "長男様ご家族が隔週面会来訪。ご本人の元気な様子に家族一同大変安心・感謝されている。",
+      future_goals: "屋外散歩や園芸活動への参加を促し、活動的な生活意欲を支援。自立歩行と安全な生活を維持。"
+    };
+
+    if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
+    if (!summaries.some(s => s.summary_type.includes("新規入所"))) db.data.care_summaries.push(sample1);
+    if (!summaries.some(s => s.summary_type.includes("定期見直し"))) db.data.care_summaries.push(sample2);
+    db.save();
+    summaries = db.data.care_summaries.filter(s => s.resident_id === gState.selectedResidentId);
+  }
+
+  // ソート (古い順)
+  summaries.sort((a, b) => (a.created_at || "").localeCompare(b.created_at || ""));
+
+  summaries.forEach((s, idx) => {
+    const optLeft = document.createElement("option");
+    optLeft.value = s.id;
+    optLeft.textContent = `[${s.created_at || '-'}] ${s.summary_type} (${s.staff_name || '担当'})`;
+    selLeft.appendChild(optLeft);
+
+    const optRight = document.createElement("option");
+    optRight.value = s.id;
+    optRight.textContent = `[${s.created_at || '-'}] ${s.summary_type} (${s.staff_name || '担当'})`;
+    selRight.appendChild(optRight);
+  });
+
+  // 初期選択: 左側は最古(初回)、右側は最新
+  if (selLeft.options.length > 0) selLeft.selectedIndex = 0;
+  if (selRight.options.length > 1) selRight.selectedIndex = selRight.options.length - 1;
+
+  renderCompareView();
+  openModal("careSummaryCompareModal");
+}
+
+function renderCompareView() {
+  const leftId = Number(document.getElementById("compareSelectLeft").value);
+  const rightId = Number(document.getElementById("compareSelectRight").value);
+  const container = document.getElementById("compareContentContainer");
+  if (!container) return;
+
+  const leftSum = (db.data.care_summaries || []).find(s => Number(s.id) === leftId);
+  const rightSum = (db.data.care_summaries || []).find(s => Number(s.id) === rightId);
+
+  const sections = [
+    { title: "1. サマリー基本情報・区分", key: "basic_info", sub: "要介護度、生年月日、キーパーソン、自立度区分" },
+    { title: "2. 入所の経緯・病歴", key: "background", sub: "既往歴、骨折・入院経緯、在宅時状況" },
+    { title: "3. 身体機能 ＆ 認知機能", key: "physical_cognitive", sub: "麻痺、拘縮、歩行能力、記憶、見当識" },
+    { title: "4. ADL (日常生活動作)", key: "adl", sub: "移動、移乗、立ち上がり、更衣、整容、入浴" },
+    { title: "5. 食事 ＆ 水分摂取", key: "meals_hydration", sub: "食形態、自力摂取、むせ、嚥下、目標水分量" },
+    { title: "6. 排泄状況", key: "excretion", sub: "トイレ誘導、リハパン・パッド、排便リズム、失禁状況" },
+    { title: "7. 睡眠リズム", key: "sleep", sub: "就寝・起床時間、夜間覚醒、センサーマット、良眠度" },
+    { title: "8. 定期服薬", key: "meds", sub: "処方薬、配薬確認、自己内服、服薬ゼリー等" },
+    { title: "9. 医療処置・創傷ケア", key: "medical_care", sub: "バイタル測定、術創、褥瘡・発赤、軟膏・湿布" },
+    { title: "10. 認知症BPSD・心理特徴", key: "dementia_behavior", sub: "帰宅願望、せん妄、不安時の対応方法" },
+    { title: "11. ケア上の留意事項", key: "care_notes", sub: "転倒予防、声かけの注意点、好み・職人歴等" },
+    { title: "12. 家族意向・連絡方針", key: "family_info", sub: "面会頻度、緊急連絡先、看取り合意方針" },
+    { title: "13. 今後のケア目標", key: "future_goals", sub: "自立支援、ADL維持目標、社会参加・レク" }
+  ];
+
+  let rowsHtml = "";
+  sections.forEach((sec, idx) => {
+    const lVal = leftSum ? (leftSum[sec.key] || "（未記入）") : "—";
+    const rVal = rightSum ? (rightSum[sec.key] || "（未記入）") : "—";
+    const isDiff = lVal !== rVal;
+
+    rowsHtml += `
+      <tr style="${idx % 2 === 1 ? 'background:#f8fafc;' : 'background:#ffffff;'}">
+        <td style="width:180px; vertical-align:top; border-right:1px solid #e2e8f0; padding:12px 14px;">
+          <div style="font-weight:bold; font-size:13px; color:#1e293b;">${escapeHtml(sec.title)}</div>
+          <div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(sec.sub)}</div>
+          ${isDiff ? '<span style="display:inline-block; font-size:10.5px; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">変化あり</span>' : ''}
+        </td>
+        <td style="vertical-align:top; border-right:1px solid #e2e8f0; padding:12px 14px; font-size:12.5px; color:#334155; line-height:1.6; background:${isDiff ? '#eff6ff' : 'transparent'};">
+          ${escapeHtml(lVal).replace(/\n/g, '<br>')}
+        </td>
+        <td style="vertical-align:top; padding:12px 14px; font-size:12.5px; color:#334155; line-height:1.6; background:${isDiff ? '#f0fdf4' : 'transparent'};">
+          ${escapeHtml(rVal).replace(/\n/g, '<br>')}
+        </td>
+      </tr>
+    `;
+  });
+
+  container.innerHTML = `
+    <table class="data-table" style="margin:0; width:100%; border-collapse:collapse;">
+      <thead>
+        <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+          <th style="width:180px; font-size:12.5px;">評価項目</th>
+          <th style="font-size:12.5px; color:#1e40af;">【比較元】 ${escapeHtml(leftSum ? leftSum.summary_type + ' (' + leftSum.created_at + ')' : '-')}</th>
+          <th style="font-size:12.5px; color:#166534;">【比較先】 ${escapeHtml(rightSum ? rightSum.summary_type + ' (' + rightSum.created_at + ')' : '-')}</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rowsHtml}
+      </tbody>
+    </table>
+  `;
+}
+
+// グローバル公開
+window.openCareSummaryCompareModal = openCareSummaryCompareModal;
+window.renderCompareView = renderCompareView;
