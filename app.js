@@ -280,6 +280,17 @@ function cpQrSvg(text, px) {
  return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${total} ${total}" width="${px}" height="${px}" shape-rendering="crispEdges" role="img" aria-label="接続用QRコード"><rect width="${total}" height="${total}" fill="#ffffff"/><path d="${d}" fill="#000000"/></svg>`;
 }
 
+// [Claude修正] 期限日までの日数 (端末の日付で計算。当日=0、過ぎたら負)
+// new Date("YYYY-MM-DD") は世界標準時の0時(日本の朝9時)扱いのため、日数が1日ずれていた
+function cpDaysUntil(dateStr) {
+ const m = String(dateStr || "").match(/^(\d{4})-(\d{2})-(\d{2})/);
+ if (!m) return null;
+ const t = new Date();
+ const today = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+ const d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]));
+ return Math.round((d - today) / 86400000);
+}
+
 function cpIsInitialPin(s) {
  if (!s || typeof s !== "object") return false;
  if (db && db.isServerMode) return s.is_initial_pin !== false;
@@ -2584,12 +2595,15 @@ function checkGlobalAlerts() {
   (gState.emergencySupplies || []).forEach(item => {
     const emKey = `emergency_${item.id}_${item.expiry_date || ""}`;
     if (!isAlertDismissed(emKey) && item.expiry_date) {
-      const expDate = new Date(item.expiry_date);
-      const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
-      if (diffDays > 0 && diffDays <= 14) {
+      // [Claude修正] 日数を日付単位で計算し、当日・期限切れもアラートに出す (旧実装は期限切れが出なかった)
+      const diffDays = cpDaysUntil(item.expiry_date);
+      if (diffDays !== null && diffDays <= 14) {
+        const emLabel = diffDays < 0 ? `【非常食・備蓄品 賞味期限切れ】『${escapeHtml(item.name)}』の賞味期限が${-diffDays}日過ぎています (${escapeHtml(item.expiry_date)})`
+          : diffDays === 0 ? `【非常食・備蓄品 本日賞味期限】『${escapeHtml(item.name)}』の賞味期限は本日です (${escapeHtml(item.expiry_date)})`
+          : `【非常食・備蓄品 賞味期限間近】『${escapeHtml(item.name)}』の賞味期限まであと${diffDays}日 (${escapeHtml(item.expiry_date)})`;
         officeAlertHtml += `
-          <div class="alert-banner alert-warning notice-card-warning">
-            <span> 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
+          <div class="alert-banner ${diffDays <= 0 ? 'alert-urgent notice-card-urgent' : 'alert-warning notice-card-warning'}">
+            <span> ${emLabel} 〜消費・入れ替えを行ってください〜</span>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${emKey}')"> 確認済・閉じる</button>
           </div>
         `;
@@ -8160,7 +8174,7 @@ function renderWeightChart(selectedResId = null) {
  }
  dotsHtml += `
  <circle cx="${xPos}" cy="${yPos}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2" />
- <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#1e3a8a" text-anchor="middle">${pt.weight}kg</text>
+ <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#1e3a8a" text-anchor="middle">${Number(pt.weight).toFixed(1)}kg</text>
  `;
  }
  });
@@ -8498,7 +8512,7 @@ function openRecreationModal(editId = null) {
 		dateEl.value = rec.date || toLocalDateStr(new Date());
 		typeEl.value = rec.program_type || "機能訓練体操";
 		titleEl.value = rec.title || "";
-		partEl.value = rec.participants_count || "12";
+		partEl.value = rec.participants_count || "";
 		contEl.value = rec.content || "";
 		reactEl.value = rec.reaction || "";
 		notesEl.value = rec.notes || "";
@@ -8507,7 +8521,7 @@ function openRecreationModal(editId = null) {
 		dateEl.value = gState.selectedDate || toLocalDateStr(new Date());
 		typeEl.value = "機能訓練体操";
 		titleEl.value = "";
-		partEl.value = "12";
+		partEl.value = "";
 		contEl.value = "";
 		reactEl.value = "";
 		notesEl.value = "";
@@ -8538,7 +8552,10 @@ function submitRecreationRecord() {
 		if (rec) {
 			rec.date = date; rec.program_type = type; rec.title = title;
 			rec.participants_count = part; rec.content = cont; rec.reaction = react;
-			rec.notes = notes; rec.staff_name = staff;
+			rec.notes = notes;
+			// [Claude修正] 記録者は最初の記録者のまま残し、訂正者は別に記録する
+			if (!rec.staff_name) rec.staff_name = staff;
+			rec.updated_by = staff; rec.updated_at = toLocalDateTimeStr(new Date());
 		}
 	} else {
 		db.data.recreations.unshift({
@@ -9277,14 +9294,16 @@ function renderOfficeEmergencySupplies() {
 	}
 
 	list.forEach(item => {
-		const expDate = item.expiry_date ? new Date(item.expiry_date) : null;
-		const diffDays = expDate ? Math.ceil((expDate - today) / (1000 * 60 * 60 * 24)) : 999;
+		// [Claude修正] 日付単位で計算 (旧実装は1日ずれ、当日が「あと1日」と表示されていた)
+		const dd = cpDaysUntil(item.expiry_date);
+		const diffDays = dd === null ? 999 : dd;
 		const isExpired = diffDays < 0;
 		const isClose = diffDays >= 0 && diffDays <= 14;
-
 		let statusHtml = '<span style="color:#16a34a; font-weight:bold;">正常保管</span>';
 		if (isExpired) {
 			statusHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:bold;">期限切れ (${Math.abs(diffDays)}日超過)</span>`;
+		} else if (diffDays === 0) {
+			statusHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:bold;">本日期限</span>`;
 		} else if (isClose) {
 			statusHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-weight:bold;">期限間近 (あと${diffDays}日)</span>`;
 		}
@@ -9337,7 +9356,7 @@ function openEmergencySupplyModal(editId = null) {
 		qtyEl.value = "";
 		unitEl.value = "食";
 		expEl.value = "";
-		placeEl.value = "1F防災備蓄倉庫";
+		placeEl.value = "";
 		notesEl.value = "";
 	}
 	openModal("emergencySupplyModal");
@@ -9455,7 +9474,8 @@ function renderOfficeFireDrills() {
 			<td>${d.duration ? `<strong>${escapeHtml(d.duration)}</strong>` : '-'}</td>
 			<td>${escapeHtml(d.scenario || '-')}</td>
 			<td>${escapeHtml(d.notes || '-')}</td>
-			<td>${escapeHtml(d.supervisor || '施設長')}</td>
+			<td>${escapeHtml(d.reported_to_fire_dept || '-')}</td>
+			<td>${escapeHtml(d.supervisor || '-')}</td>
 			<td style="text-align:center; white-space:nowrap;">
 				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openFireDrillModal(${d.id})">訂正</button>
 				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteFireDrillRecord(${d.id})">削除</button>
@@ -9492,11 +9512,13 @@ function openFireDrillModal(editId = null) {
 		idEl.value = "";
 		dateEl.value = toLocalDateStr(new Date());
 		typeEl.value = "昼間火災想定訓練";
-		partEl.value = "28名 (入所者16, 職員12)";
-		durEl.value = "6分45秒";
-		scenEl.value = "1F厨房ガスコンロ出火想定、初期消火失敗、非常ベル吹鳴";
-		notesEl.value = "車椅子誘導連携良好。夜間想定の訓練計画を次回継続。";
-		repEl.value = "事前通報済";
+		// [Claude修正] 旧実装は参加人数・所要時間・所見・通報状況に例文が入っており、
+		// そのまま保存すると実施していない内容が公式記録になっていた。空欄で開く
+		partEl.value = "";
+		durEl.value = "";
+		scenEl.value = "";
+		notesEl.value = "";
+		repEl.value = "";
 		supEl.value = "施設長";
 	}
 	openModal("fireDrillModal");
@@ -10364,6 +10386,9 @@ function openIncidentFromRecord() {
 	const nowStr = toLocalDateTimeStr(now).replace(" ", "T");
 
 	document.getElementById("incId").value = "";
+	// [Claude修正] 前回開いた報告書の種別・場所が残っていたため初期化する
+	document.getElementById("incType").value = "ヒヤリハット";
+	document.getElementById("incPlace").value = "";
 	document.getElementById("incOccurredAt").value = nowStr;
 	document.getElementById("incSituation").value = content;
 	document.getElementById("incCause").value = "";
@@ -10640,6 +10665,11 @@ function saveIncidentInjuryPin() {
 		alert("負傷部位名（例: 右膝、左手首など）を入力してください。");
 		return;
 	}
+	// [Claude修正] 図をクリックせずに登録すると、図の中央 (50%, 50%) に誤ったピンが立っていた
+	if (!editId && !document.getElementById("incInjuryTempPin")) {
+		alert("先に人体図をクリックして、負傷した位置を指定してください。");
+		return;
+	}
 
 	if (!Array.isArray(gState.currentIncidentInjuryPins)) {
 		gState.currentIncidentInjuryPins = [];
@@ -10800,7 +10830,7 @@ function printIncidentReport(incId) {
 
 			<table>
 				<tr><th style="background:#f1f5f9;">5. 施設長・管理者コメント ＆ 指導事項</th></tr>
-				<tr><td style="min-height:40px; padding:8px;">${escapeHtml(inc.supervisor_comment || '確認・承認済。カンファレンスにて周知のこと。').replace(/\n/g, '<br>')}</td></tr>
+				<tr><td style="min-height:40px; padding:8px;">${escapeHtml(inc.supervisor_comment || '').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 		</body>
 		</html>
@@ -10811,7 +10841,14 @@ function printIncidentReport(incId) {
 		win.document.open();
 		win.document.write(printHtml);
 		win.document.close();
-		setTimeout(() => { win.print(); }, 400);
+		// [Claude修正] 人体図の読み込みを待ってから印刷 (読み込み前だと図が白紙になる)
+		let printed = false;
+		const doPrint = () => { if (!printed) { printed = true; win.focus(); win.print(); } };
+		const img = win.document.querySelector("img");
+		if (img && !img.complete) { img.onload = doPrint; img.onerror = doPrint; setTimeout(doPrint, 3000); }
+		else setTimeout(doPrint, 300);
+	} else {
+		alert("印刷用の画面を開けませんでした。ブラウザのポップアップ設定を確認してください。");
 	}
 }
 
@@ -10824,17 +10861,14 @@ function renderOfficeVaccines() {
 	if (!tbody) return;
 	tbody.innerHTML = "";
 
-	if (!Array.isArray(db.data.vaccines) || db.data.vaccines.length === 0) {
-		db.data.vaccines = [
-			{ id: 1, resident_id: 1, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "同意受領済", date: "2026-10-15予定", doctor: "施設配置医・中央医院", lot: "FL8291", reactions: "異常なし。経過観察良好", status: "準備完了" },
-			{ id: 2, resident_id: 2, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "同意受領済", date: "2026-10-15予定", doctor: "施設配置医・中央医院", lot: "FL8291", reactions: "異常なし。経過観察良好", status: "準備完了" },
-			{ id: 3, resident_id: 3, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "未返送 (確認中)", date: "-", doctor: "施設配置医・中央医院", lot: "", reactions: "家族へ同意書再送・確認中", status: "家族へ連絡中" },
-			{ id: 4, resident_id: 4, vaccine_name: "新型コロナウイルス (定期)", dose: "令和8年度定期", consent: "同意受領済", date: "2026-10-22予定", doctor: "さくらクリニック", lot: "CV4410", reactions: "接種後30分間アナフィラキシー徴候なし", status: "準備完了" }
-		];
-		db.save();
-	}
+	// [Claude修正] 旧実装は台帳が空になると例文の接種記録 (同意済・ロット番号・副反応なし等) を
+	// 実データとして書き込んでいた。全件削除しても例文が復活していた。空のまま表示する
 
 	const list = db.data.vaccines || [];
+	if (list.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:16px;">予防接種の記録はありません。</td></tr>`;
+		return;
+	}
 	list.forEach(v => {
 		const res = (gState.residents || []).find(r => r.id === v.resident_id);
 		const consentColor = v.consent === "同意受領済" ? "#16a34a" : (v.consent === "接種見送り (辞退)" ? "#dc2626" : "#b45309");
@@ -10887,20 +10921,23 @@ function openVaccineModal(editId = null) {
 		typeEl.value = v.vaccine_name || "季節性インフルエンザ";
 		doseEl.value = v.dose || "定期接種";
 		conEl.value = v.consent || "同意受領済";
-		dateEl.value = (v.date && !v.date.includes("予定")) ? v.date : toLocalDateStr(new Date());
-		docEl.value = v.doctor || "施設配置医・中央医院";
+		// [Claude修正] 「2026-10-15予定」のような予定日を今日の日付に書き換えていたため、日付部分を残す
+		const vd = String(v.date || "").match(/\d{4}-\d{2}-\d{2}/);
+		dateEl.value = vd ? vd[0] : "";
+		docEl.value = v.doctor || "";
 		lotEl.value = v.lot || "";
-		reactEl.value = v.reactions || "異常なし";
+		reactEl.value = v.reactions || "";
 	} else {
 		idEl.value = "";
 		selEl.value = gState.selectedResidentId || (gState.residents[0] ? gState.residents[0].id : 1);
 		typeEl.value = "季節性インフルエンザ";
 		doseEl.value = "定期接種";
-		conEl.value = "同意受領済";
-		dateEl.value = toLocalDateStr(new Date());
-		docEl.value = "施設配置医・中央医院";
-		lotEl.value = "FL8291";
-		reactEl.value = "異常なし、経過観察良好";
+		// [Claude修正] 同意・ロット番号・副反応に例文が入っていたため、確認前の内容が記録される恐れがあった
+		conEl.value = "未返送 (確認中)";
+		dateEl.value = "";
+		docEl.value = "";
+		lotEl.value = "";
+		reactEl.value = "";
 	}
 	openModal("vaccineModal");
 }
@@ -10923,18 +10960,24 @@ function submitVaccineRecord() {
 
 	if (!Array.isArray(db.data.vaccines)) db.data.vaccines = [];
 
+	// [Claude修正] 状態の判定: 同意済でも接種日が未来・未入力なら「接種予定」。旧実装は同意済なら一律「接種完了」だった
+	const vacDays = cpDaysUntil(date);
+	const vacStatus = con === "接種見送り (辞退)" ? "見送り"
+		: con !== "同意受領済" ? "確認中"
+		: (vacDays !== null && vacDays <= 0) ? "接種完了" : "接種予定";
+
 	if (editId) {
 		const v = db.data.vaccines.find(x => x.id === Number(editId));
 		if (v) {
 			v.resident_id = resId; v.vaccine_name = type; v.dose = dose;
 			v.consent = con; v.date = date; v.doctor = doc; v.lot = lot;
-			v.reactions = react; v.status = con === "同意受領済" ? "接種完了" : "確認中";
+			v.reactions = react; v.status = vacStatus;
 		}
 	} else {
 		db.data.vaccines.unshift({
 			id: Date.now(), resident_id: resId, vaccine_name: type, dose: dose,
 			consent: con, date: date, doctor: doc, lot: lot, reactions: react,
-			status: con === "同意受領済" ? "接種完了" : "確認中"
+			status: vacStatus
 		});
 	}
 
