@@ -185,6 +185,18 @@ class LocalDB {
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
  });
+ // [Claude修正] ログイン用アカウントは、職員マスタ (stamps) から全端末で同じ内容になるよう生成する。
+ // 旧実装は各端末がログイン時にばらばらに作成していたため、ある端末でID・パスワードを変更しても、
+ // 別の端末の保存で初期値 (aaaa/0000) に戻されることがあった。職員名をIDにして1件ずつ合流できるようにする。
+ if (!Array.isArray(d.staff_accounts)) d.staff_accounts = [];
+ d.staff_accounts.forEach(a => { if (a && a.staff_name && !a.id) a.id = a.staff_name; });
+ (Array.isArray(d.stamps) ? d.stamps : []).forEach(st => {
+ const nm = (st && st.name) ? st.name : st;
+ if (!nm || typeof nm !== "string") return;
+ if (!d.staff_accounts.some(a => a && a.staff_name === nm)) {
+ d.staff_accounts.push({ id: nm, staff_name: nm, staff_id: "aaaa", password: "0000", is_custom: false, updated_at: "" });
+ }
+ });
  if (!d.night_turn_templates || typeof d.night_turn_templates !== "object") {
  d.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
  }
@@ -2094,7 +2106,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner alert-danger">
  <span> <strong>【文字化け検出】</strong> 保存データに「???」に化けた文字が ${mojibake.total} か所あります（${escapeHtml(mojibake.list)}）。スクリプト等でデータを書き込む場合は、必ずUTF-8で保存してください。</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${mojibakeKey}')"> 確認済・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${mojibakeKey}')"> 確認済・閉じる</button>
  </div>
  `;
  }
@@ -2116,7 +2128,7 @@ function checkGlobalAlerts() {
  <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${pinWarnKey}')">閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${pinWarnKey}')">閉じる</button>
  </div>
  </div>
  </div>
@@ -2154,7 +2166,7 @@ function checkGlobalAlerts() {
  <span>  <strong>【要認証アラート】</strong> 管理者（<strong>${escapeHtml(currentStaffName)}</strong>）：スタッフから発注認証が求められています（承認待ち <strong>${pendingOrders.length}件</strong>）。<strong>誤承認防止のため、品名・数量・金額を1件ずつ目視確認の上で認証を行ってください。</strong></span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#ffedd5; color:#9a3412; border-color:#fdba74;" onclick="switchPortal('office'); switchOfficeTab('orders');"> 発注台帳を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('admin_pending_orders')"> 閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'admin_pending_orders')"> 閉じる</button>
  </div>
  </div>
  <div style="margin-top:6px; display:flex; flex-direction:column; gap:4px;">
@@ -2186,7 +2198,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner alert-info" style="background:#e0e7ff; color:#3730a3; border-left:5px solid #6366f1;">
  <span> 【来月お誕生日事前アラート】来月(${nextMonthNum}月)お誕生日の利用者様：${list} 〜プレゼントや色紙等の準備を行ってください〜</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${birthdayKey}')"> 準備確認・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${birthdayKey}')"> 準備確認・閉じる</button>
  </div>
  `;
  }
@@ -2202,7 +2214,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner alert-warning">
  <span> 【非常食・備蓄品 賞味期限間近】『${item.name}』の賞味期限まであと${diffDays}日 (${item.expiry_date}) 〜消費・入れ替えを行ってください〜</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${emKey}')"> 確認済・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${emKey}')"> 確認済・閉じる</button>
  </div>
  `;
  }
@@ -2233,7 +2245,7 @@ function checkGlobalAlerts() {
  <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
  <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}_${item.current_stock}')"> 閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'stock_${item.id}_${item.current_stock}')"> 閉じる</button>
  </div>
  </div>
  `;
@@ -2260,7 +2272,7 @@ function checkGlobalAlerts() {
  </div>
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissLowStockAll()"> 全て閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastLowStockAlertKeys || [])"> 全て閉じる</button>
  </div>
  </div>
  `;
@@ -2284,7 +2296,7 @@ function checkGlobalAlerts() {
  <span><strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${todayClinicKey}')"> 受診対応完了</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${todayClinicKey}')"> 受診対応完了</button>
  </div>
  </div>
  `;
@@ -2297,7 +2309,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner ${alertType}">
  <span> ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${upcomingKey}')"> 確認済・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${upcomingKey}')"> 確認済・閉じる</button>
  </div>
  `;
  }
@@ -2331,7 +2343,7 @@ function checkGlobalAlerts() {
  <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="dismissAlert('${stoolKey}')"> 処置・対応完了</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="requestDismissAlertFromButton(this, '${stoolKey}')"> 処置・対応完了</button>
  </div>
  </div>
  `;
@@ -2378,7 +2390,7 @@ function checkGlobalAlerts() {
  alertHtml += `
  <div class="alert-banner alert-warning">
  <span> 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissCareExpiryAll()"> 申請手配済・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastCareExpiryAlertKeys || [])"> 申請手配済・閉じる</button>
  </div>
  `;
  }
@@ -10707,6 +10719,15 @@ async function promptChangeTunnelUrl() {
 function reloadStateFromDb() {
  if (!db || !db.data) return;
  updateFacilityNameUI();
+ // [Claude修正] ログイン画面の表示中にサーバーのデータが届いたら、職員一覧を最新に作り直す
+ // (起動直後は端末内の古いデータで一覧が作られ、新しい職員がログインできないことがあった)
+ const loginSecEl = document.getElementById("loginSection");
+ if (loginSecEl && loginSecEl.style.display !== "none" && typeof renderLoginStaffSelect === "function") {
+ const selEl = document.getElementById("loginStaffSelect");
+ const prevSel = selEl ? selEl.value : "";
+ renderLoginStaffSelect();
+ if (selEl && prevSel && [...selEl.options].some(o => o.value === prevSel)) selEl.value = prevSel;
+ }
  gState.residents = db.data.residents;
  gState.inventory = db.data.inventory;
  gState.suppliers = db.data.suppliers;
@@ -13033,6 +13054,7 @@ function initStaffAccounts() {
       "斉藤 翼", "吉田 誠", "清水 翔平", "田中 慎一", "松本 陽子"
     ];
     db.data.staff_accounts = defaults.map(name => ({
+      id: name,
       staff_name: name,
       staff_id: "aaaa",
       password: "0000",
@@ -13310,21 +13332,24 @@ function renderResetStaffSelects() {
     targetSel.appendChild(opt1);
   });
 
-  // 管理者候補 (木村等)
-  const admins = accounts.filter(a => a.staff_name.includes("木村") || a.staff_name.includes("管理者") || true);
+  // [Claude修正] 承認者は職員マスタの役職で絞り込む (旧実装は全職員が「管理者」「事務員」として表示されていた)
+  const roleOf = (name) => {
+    const st = (db.data.stamps || []).find(x => (x.name || x) === name);
+    return (st && st.role) ? st.role : "";
+  };
+  const admins = accounts.filter(a => /管理者|施設長/.test(roleOf(a.staff_name)));
   admins.forEach(a => {
     const opt = document.createElement("option");
     opt.value = a.staff_name;
-    opt.textContent = `${a.staff_name} (管理者)`;
+    opt.textContent = `${a.staff_name} (${roleOf(a.staff_name) || "管理者"})`;
     adminSel.appendChild(opt);
   });
 
-  // 事務員候補 (田中等)
-  const offices = accounts.filter(a => a.staff_name.includes("田中") || a.staff_name.includes("事務") || true);
+  const offices = accounts.filter(a => /事務/.test(roleOf(a.staff_name)));
   offices.forEach(a => {
     const opt = document.createElement("option");
     opt.value = a.staff_name;
-    opt.textContent = `${a.staff_name} (事務員)`;
+    opt.textContent = `${a.staff_name} (${roleOf(a.staff_name) || "事務員"})`;
     officeSel.appendChild(opt);
   });
 }
@@ -13359,6 +13384,23 @@ function executeAccountReset() {
 
   if (adminStaff === officeStaff) {
     alert("承認者1と承認者2には別の職員を選択してください（2名による承認が必要です）。");
+    return;
+  }
+
+  // [Claude修正] 旧実装は4桁であればどの番号でも通っていた。承認者それぞれの暗証番号 (職員マスタ) と照合する
+  const stampOf = (name) => (db.data.stamps || []).find(x => (x.name || x) === name);
+  const adminObj = stampOf(adminStaff);
+  const officeObj = stampOf(officeStaff);
+  if (!adminObj || !/管理者|施設長/.test(adminObj.role || "")) {
+    alert("承認者1には管理者（施設長）を選択してください。");
+    return;
+  }
+  if (!officeObj || !/事務/.test(officeObj.role || "")) {
+    alert("承認者2には事務員を選択してください。");
+    return;
+  }
+  if (adminPin !== String(adminObj.pin || "0000") || officePin !== String(officeObj.pin || "0000")) {
+    alert("承認者の暗証番号が一致しません。初期化は行っていません。");
     return;
   }
 
@@ -13422,12 +13464,7 @@ function executeDismissAlert() {
   const detail = pendingDismissAlertData.detail;
   const staffName = (gState.session && gState.session.staffName) ? gState.session.staffName : "担当者";
 
-  // 1. アラートを閉じる (dismissAlert)
-  if (typeof dismissAlert === "function") {
-    dismissAlert(key);
-  }
-
-  // 2. 対応ログに記録
+  // 1. 対応ログに記録 (誰が・いつ閉じたか)
   if (!Array.isArray(db.data.alert_logs)) {
     db.data.alert_logs = [];
   }
@@ -13441,7 +13478,13 @@ function executeDismissAlert() {
     dismissed_at: toLocalDateTimeStr(new Date())
   });
 
-  db.save();
+  // 2. アラートを閉じる (保存も行われる)。「全て閉じる」は複数のキーをまとめて閉じる
+  const keys = Array.isArray(key) ? key : [key];
+  if (typeof dismissAlerts === "function") {
+    dismissAlerts(keys);
+  } else {
+    db.save();
+  }
   closeModal("alertConfirmModal");
   pendingDismissAlertData = null;
 
@@ -13466,7 +13509,7 @@ function openAlertLogModal() {
       tr.innerHTML = `
         <td>
           <div style="font-weight:bold; font-size:12.5px; color:#1e293b;">${escapeHtml(l.alert_title)}</div>
-          <div style="font-size:11.5px; color:#64748b; margin-top:2px;">${escapeHtml(l.alert_detail || l.alert_key)}</div>
+          <div style="font-size:11.5px; color:#64748b; margin-top:2px;">${escapeHtml(l.alert_detail || String(l.alert_key))}</div>
         </td>
         <td style="font-size:12px; font-weight:bold; color:#0f172a;">${escapeHtml(l.staff_name)}</td>
         <td style="font-size:11.5px; color:#64748b;">${escapeHtml(l.dismissed_at)}</td>
@@ -13481,6 +13524,22 @@ function openAlertLogModal() {
   openModal("alertLogModal");
 }
 
+// [Claude修正] アラートの「閉じる」ボタンから確認画面を開く。
+// (確認画面と対応ログの仕組みは作られていたが、どのボタンからも呼ばれておらず、
+//  閉じても確認が出ず、対応ログにも記録されていなかった)
+function requestDismissAlertFromButton(btn, keyOrKeys) {
+  const banner = btn && btn.closest ? btn.closest(".alert-banner") : null;
+  let detail = "";
+  if (banner) {
+    const clone = banner.cloneNode(true);
+    clone.querySelectorAll("button").forEach(b => b.remove());
+    detail = (clone.innerText || clone.textContent || "").replace(/\s+/g, " ").trim();
+  }
+  const m = detail.match(/【([^】]+)】/);
+  const title = m ? m[1] : "警告アラート";
+  requestDismissAlert(keyOrKeys, title, detail);
+}
+
 // アラートの復旧 (未対応状態に戻す)
 function restoreAlert(logId) {
   const logs = db.data.alert_logs || [];
@@ -13491,9 +13550,9 @@ function restoreAlert(logId) {
     return;
   }
 
-  // undismissAlert で復旧
+  // undismissAlert で復旧 (複数キーの場合はすべて)
   if (typeof undismissAlert === "function") {
-    undismissAlert(target.alert_key);
+    (Array.isArray(target.alert_key) ? target.alert_key : [target.alert_key]).forEach(k => undismissAlert(k));
   }
 
   // ログから削除
