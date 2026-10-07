@@ -327,7 +327,9 @@ class LocalDB {
  // 取引先 (suppliers) の取扱品目同期
  if (Array.isArray(d.suppliers)) {
  const careSupp = d.suppliers.find(s => s.id === 1 || (s.name || "").includes("ケアサポート"));
- if (careSupp && Array.isArray(careSupp.items)) {
+ // [Claude修正] 初期品目の自動追加は1回だけにする (毎回追加すると、削除した商品が再読み込みで復活していた)
+ if (careSupp && Array.isArray(careSupp.items) && !d.supplier_items_seeded_v1) {
+ d.supplier_items_seeded_v1 = true;
  careSupp.items.forEach(i => {
  if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
  });
@@ -341,6 +343,27 @@ class LocalDB {
  careSupp.items.push({ name: "使い捨てプラスチック手袋 L", unit_price: 650, unit: "箱" });
  }
  }
+ }
+
+ // [Claude修正] 取扱商品にIDが無いと「編集」「削除」が効かなかった (ID=0 扱いで新規追加画面が開き、削除もされない)。
+ // IDの無い商品に、全端末で同じになる固定IDを付与する。
+ if (Array.isArray(d.suppliers)) {
+ d.suppliers.forEach(sp => {
+ if (!Array.isArray(sp.items)) return;
+ sp.items.forEach((it, idx) => {
+ if (it && (it.id === undefined || it.id === null || it.id === 0 || it.id === "")) {
+ let cand = Number(sp.id) * 1000 + idx + 1;
+ while (sp.items.some(o => o !== it && Number(o.id) === cand)) cand++;
+ it.id = cand;
+ }
+ });
+ });
+ }
+ // [Claude修正] 食事の時間帯は「朝食/昼食/夕食」で保存する (業務日誌・個人記録はこの表記で集計している)。
+ // 旧表記 (朝/昼/夕) で保存された記録を読み替える。
+ if (Array.isArray(d.meals)) {
+ const mealMap = { "朝": "朝食", "昼": "昼食", "夕": "夕食" };
+ d.meals.forEach(m => { if (m && mealMap[m.meal_type]) m.meal_type = mealMap[m.meal_type]; });
  }
 
  // 過去履歴内の旧表記更新
@@ -650,7 +673,7 @@ class LocalDB {
 
  initSeedData() {
  const today = new Date();
- const todayStr = today.toISOString().split("T")[0];
+ const todayStr = toLocalDateStr(today);
  const nowStr = `${todayStr} ${today.toTimeString().slice(0, 5)}`;
 
  const seed = {
@@ -801,12 +824,12 @@ let gState = {
  eyedrop_orders: db.data.eyedrop_orders || [],
  medTimingFilter: "all",
  selectedResidentId: 1,
- selectedDate: new Date().toISOString().split("T")[0],
- currentMonth: new Date().toISOString().slice(0, 7),
+ selectedDate: toLocalDateStr(new Date()),
+ currentMonth: toLocalDateStr(new Date()).slice(0, 7),
  activePortal: "care",
  activeCareTab: "record",
  activeOfficeTab: "inventory",
- currentShiftMonth: new Date().toISOString().slice(0, 7),
+ currentShiftMonth: toLocalDateStr(new Date()).slice(0, 7),
  recordScope: "today"
 };
 
@@ -1516,6 +1539,18 @@ function resolveDiseaseGuide(diseaseName) {
  };
 }
 
+// [Claude修正] 日付は日本時間 (端末のローカル時刻) で求める。
+// 旧実装の toISOString() は世界標準時のため、日本時間の 0:00〜8:59 は「前日」になり、
+// 「今日」ボタンや初期表示日、深夜帯の記録日付が1日ずれていた。
+function toLocalDateStr(d) {
+ const x = (d instanceof Date) ? d : new Date(d);
+ return `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+}
+function toLocalDateTimeStr(d) {
+ const x = (d instanceof Date) ? d : new Date(d);
+ return `${toLocalDateStr(x)} ${String(x.getHours()).padStart(2, "0")}:${String(x.getMinutes()).padStart(2, "0")}`;
+}
+
 // [Claude修正] 施設名の取得を1か所にまとめ、画面・全帳票で「変更した施設名」が使われるようにする
 function getFacilityName() {
  return (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
@@ -1719,7 +1754,7 @@ function quickReplenishStock(itemId) {
 
  const staff = (document.getElementById("currentStaff")?.value) || "現場担当";
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
  
  const normalStock = item.normal_stock || (item.safety_stock * 2);
  const addQty = Math.max(normalStock - item.current_stock, item.safety_stock);
@@ -1748,7 +1783,7 @@ function quickReplenishStock(itemId) {
 function quickReplenishAllStock() {
  const staff = (document.getElementById("currentStaff")?.value) || "現場担当";
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
  let replenishedNames = [];
 
  (gState.inventory || []).forEach(item => {
@@ -1783,7 +1818,7 @@ function quickReplenishAllStock() {
 function confirmAllMonthlyNoticesForStaff() {
  const staff = (document.getElementById("currentStaff")?.value) || "";
  if (!staff) return;
- const curMonth = (gState.selectedDate || new Date().toISOString()).slice(0, 7);
+ const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
  (db.data.monthly_notices || []).forEach(n => {
  if (n.month === curMonth) {
  if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
@@ -1802,7 +1837,7 @@ function checkGlobalAlerts() {
  if (!container) return;
  let alertHtml = "";
  const today = new Date();
- const todayStr = gState.selectedDate || today.toISOString().split("T")[0];
+ const todayStr = gState.selectedDate || toLocalDateStr(today);
 
  // 0.0 【管理者・事務員専用：初期パスワード未変更セキュリティ警告】
  const isAdminOrClerk = isCurrentStaffAdminOrClerk();
@@ -2243,7 +2278,7 @@ function syncGlobalDatePicker(dt) {
  const days = ["日", "月", "火", "水", "木", "金", "土"];
  const dObj = new Date(dt + "T00:00:00");
  const dayName = !isNaN(dObj.getDay()) ? days[dObj.getDay()] : "";
- const isToday = (dt === new Date().toISOString().split("T")[0]);
+ const isToday = (dt === toLocalDateStr(new Date()));
  label.textContent = `${dt} (${dayName})` + (isToday ? " [本日]" : "");
 
  // 当日の記録件数を集計してバッジ表示
@@ -2269,7 +2304,7 @@ function onGlobalDateChange(newDate) {
 }
 
 function changeDateByDays(offset) {
- const cur = gState.selectedDate || new Date().toISOString().split("T")[0];
+ const cur = gState.selectedDate || toLocalDateStr(new Date());
  const d = new Date(cur + "T00:00:00");
  d.setDate(d.getDate() + offset);
  const y = d.getFullYear();
@@ -2280,7 +2315,7 @@ function changeDateByDays(offset) {
 }
 
 function setTodayDate() {
- const today = new Date().toISOString().split("T")[0];
+ const today = toLocalDateStr(new Date());
  onGlobalDateChange(today);
 }
 
@@ -3535,7 +3570,7 @@ function switchCareSummaryRecord(summaryVal) {
 
  if (idEl) idEl.value = s.id;
  if (typeEl) typeEl.value = s.summary_type || "新規入所時サマリー";
- if (dateEl) dateEl.value = s.created_at || new Date().toISOString().split("T")[0];
+ if (dateEl) dateEl.value = s.created_at || toLocalDateStr(new Date());
  if (staffEl && s.staff_name) staffEl.value = s.staff_name;
 
  const fields = [
@@ -3567,7 +3602,7 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
 
  if (idEl) idEl.value = "";
  if (typeEl) typeEl.value = summaryType;
- if (dateEl) dateEl.value = new Date().toISOString().split("T")[0];
+ if (dateEl) dateEl.value = toLocalDateStr(new Date());
 
  const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
  const prev = list.length > 0 ? list[0] : null;
@@ -3612,7 +3647,7 @@ function submitCareSummary() {
  const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
  const sid = document.getElementById("csSummaryId")?.value;
  const summaryType = document.getElementById("csSummaryType")?.value || "新規入所時サマリー";
- const dateVal = document.getElementById("csDate")?.value || new Date().toISOString().split("T")[0];
+ const dateVal = document.getElementById("csDate")?.value || toLocalDateStr(new Date());
  const staffVal = document.getElementById("csStaff")?.value || "職員";
 
  const basicInfo = document.getElementById("csBasicInfo")?.value || "";
@@ -3814,7 +3849,7 @@ function printCareSummary() {
  }
 
  const summaryType = document.getElementById("csSummaryType")?.value || "介護サマリー";
- const dateVal = document.getElementById("csDate")?.value || new Date().toISOString().split("T")[0];
+ const dateVal = document.getElementById("csDate")?.value || toLocalDateStr(new Date());
  const staffVal = document.getElementById("csStaff")?.value || "職員";
  const basicInfo = document.getElementById("csBasicInfo")?.value || "-";
  const background = document.getElementById("csBackground")?.value || "-";
@@ -6540,9 +6575,9 @@ function renderMealsTable() {
  <td style="font-size:12px;">${r.diet_type} / <span style="color:#dc2626;">${r.allergies || 'なし'}</span></td>
  <td>
  <select id="mType_${r.id}" class="form-control" style="width:95px;">
-  <option value="朝">朝食</option>
-  <option value="昼">昼食</option>
-  <option value="夕">夕食</option>
+  <option value="朝食">朝食</option>
+  <option value="昼食">昼食</option>
+  <option value="夕食">夕食</option>
   <option value="おやつ">おやつ</option>
   <option value="その他">その他</option>
 </select>
@@ -7039,7 +7074,7 @@ function submitEyedropOrder() {
  doctor_name: doctor,
  notes: notes,
  status: status,
- updated_at: new Date().toISOString().split("T")[0]
+ updated_at: toLocalDateStr(new Date())
  };
 
  if (existingIdx >= 0) {
@@ -7599,7 +7634,8 @@ function deleteLinenRecord(linenId) {
  db.data.linens = (db.data.linens || []).filter(l => l.id !== linenId);
 
  // 連動する介護記録を削除
- db.data.care_records = (db.data.care_records || []).filter(c => c.source_linen_id !== linenId && c.id !== (linenId + 1));
+ // [Claude修正] 旧条件 (ID が linenId+1 の記録も削除) では、無関係の介護記録を消す恐れがあった。連動IDが一致する記録だけを削除する
+ db.data.care_records = (db.data.care_records || []).filter(c => c.source_linen_id !== linenId);
 
  db.save();
  loadDateRecords(gState.selectedDate);
@@ -7738,7 +7774,7 @@ function submitVisitation() {
  const notes = document.getElementById("visitNotes").value.trim();
  const staff = document.getElementById("currentStaff").value;
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (!visitor) {
  alert("面会者のお名前・続柄を入力してください。");
@@ -7899,7 +7935,7 @@ function renderMonthlyNotices() {
  container.innerHTML = "";
  if (alertArea) alertArea.innerHTML = "";
 
- const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+ const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
  const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
  const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
@@ -7972,7 +8008,7 @@ function renderMonthlyNotices() {
 }
 
 function openMonthlyNoticeModal() {
- const curMonth = (gState.selectedDate || new Date().toISOString().split("T")[0]).slice(0, 7);
+ const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
  document.getElementById("noticeMonth").value = curMonth;
  document.getElementById("noticePriority").value = "重要";
  document.getElementById("noticeTitle").value = "";
@@ -7993,7 +8029,7 @@ function submitMonthlyNotice() {
  }
 
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (!Array.isArray(db.data.monthly_notices)) db.data.monthly_notices = [];
  db.data.monthly_notices.unshift({
@@ -8143,7 +8179,7 @@ function executeConsume() {
  const res = gState.residents.find(r => r.id === resId);
  const staff = document.getElementById("currentStaff").value;
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (item) {
  item.current_stock -= qty;
@@ -8229,7 +8265,7 @@ function rollbackConsume(logId) {
  const log = (db.data.inventory_logs || []).find(x => x.id === logId);
  const staff = document.getElementById("currentStaff").value;
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (log && log.action_type === "消費") {
  const item = gState.inventory.find(i => i.id === log.item_id);
@@ -8389,7 +8425,7 @@ function submitInventoryAdjust() {
  const staff = document.getElementById("currentStaff").value;
  const item = gState.inventory.find(i => i.id === itemId);
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (item) {
  const diff = actual - item.current_stock;
@@ -8468,7 +8504,7 @@ function submitVehicleLog() {
  }
 
  db.data.vehicle_logs.unshift({
- id: Date.now(), date: new Date().toISOString().split("T")[0], vehicle_name: vname,
+ id: Date.now(), date: toLocalDateStr(new Date()), vehicle_name: vname,
  driver_name: driver, purpose: purpose, start_km: startKm, end_km: endKm,
  distance_km: endKm - startKm, key_returned: 1, notes: ""
  });
@@ -8542,7 +8578,7 @@ function renderOfficeCommittees() {
 }
 
 function openCommitteeModal() {
- const today = new Date().toISOString().split("T")[0];
+ const today = toLocalDateStr(new Date());
  const dateInput = document.getElementById("comDate");
  if (dateInput) dateInput.value = today;
  const nameInput = document.getElementById("comName");
@@ -8585,7 +8621,7 @@ function submitCommittee() {
  attendees: attendees,
  agenda: agenda,
  content: content,
- created_at: new Date().toISOString().replace("T", " ").slice(0, 16)
+ created_at: toLocalDateTimeStr(new Date())
  };
  db.data.committees.unshift(newRecord);
  db.save();
@@ -8662,7 +8698,7 @@ function approveOrder(id, status) {
 
  o.status = status;
  o.approver = staff;
- o.approved_at = new Date().toISOString().split("T")[0];
+ o.approved_at = toLocalDateStr(new Date());
  db.save();
  if (gState.activePortal === "office") loadOfficeData();
  checkGlobalAlerts();
@@ -8673,7 +8709,7 @@ function receiveOrder(id) {
  const o = db.data.orders.find(x => x.id === id);
  const staff = document.getElementById("currentStaff").value;
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  if (o) {
  o.status = "納品完了";
@@ -8731,8 +8767,8 @@ function renderOfficeSuppliers() {
            <td style="font-weight:bold; font-size:13px; color:#0284c7;">¥${Number(it.unit_price || 0).toLocaleString()}</td>
            <td style="font-size:12.5px; color:#475569;">${escapeHtml(it.unit || '個')}</td>
            <td style="text-align:right; white-space:nowrap;">
-             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; margin-right:4px;" onclick="openSupplierItemModal(${s.id}, ${it.id || 0})">編集</button>
-             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteSupplierItem(${s.id}, ${it.id || 0})">削除</button>
+             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; margin-right:4px;" onclick="openSupplierItemModal(${s.id}, ${Number(it.id)})">編集</button>
+             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteSupplierItem(${s.id}, ${Number(it.id)})">削除</button>
            </td>
          </tr>
        `;
@@ -8882,7 +8918,7 @@ function openSupplierItemModal(suppId, itemId) {
  const unitEl = document.getElementById("itemModalUnit");
 
  if (itemId) {
-   const it = (s.items || []).find(x => (x.id === itemId || x.name === itemId));
+   const it = (s.items || []).find(x => (Number(x.id) === Number(itemId) || x.name === itemId));
    if (it) {
      if (titleEl) titleEl.textContent = "取扱商品の編集";
      idEl.value = it.id || it.name;
@@ -8951,12 +8987,16 @@ function submitSupplierItemModal() {
 function deleteSupplierItem(suppId, itemId) {
  const s = gState.suppliers.find(x => x.id === suppId);
  if (!s || !Array.isArray(s.items)) return;
- const it = s.items.find(x => (x.id === itemId || x.name === itemId));
- const itemName = it ? it.name : "商品";
+ const it = s.items.find(x => (Number(x.id) === Number(itemId) || x.name === itemId));
+ if (!it) {
+   alert("対象の商品が見つかりません。画面を再読み込みしてから操作してください。");
+   return;
+ }
+ const itemName = it.name;
 
  if (!confirm(`取扱商品「${itemName}」を削除しますか？`)) return;
 
- s.items = s.items.filter(x => !(x.id === itemId || x.name === itemId));
+ s.items = s.items.filter(x => x !== it);
  db.data.suppliers = gState.suppliers;
  db.save();
  renderOfficeSuppliers();
@@ -9068,7 +9108,7 @@ function renderOfficeDepositTable() {
  // 日付の初期セット (選択中の日付に連動)
  const dateInput = document.getElementById("depDate");
  if (dateInput && !dateInput.value) {
- dateInput.value = gState.selectedDate || new Date().toISOString().split("T")[0];
+ dateInput.value = gState.selectedDate || toLocalDateStr(new Date());
  }
 
  // 選択中の利用者情報と残高サマリー更新
@@ -9139,7 +9179,7 @@ function renderOfficeDepositTable() {
 function submitDeposit() {
  const resId = parseInt(document.getElementById("depResidentSelect").value, 10);
  const dateInput = document.getElementById("depDate");
- const depDate = (dateInput && dateInput.value) ? dateInput.value : new Date().toISOString().split("T")[0];
+ const depDate = (dateInput && dateInput.value) ? dateInput.value : toLocalDateStr(new Date());
  const type = document.getElementById("depType").value;
  const category = document.getElementById("depCategory").value;
  const amount = parseInt(document.getElementById("depAmount").value, 10);
@@ -9222,7 +9262,7 @@ function submitComplaint() {
  }
 
  db.data.complaints.unshift({
- id: Date.now(), received_at: new Date().toISOString().split("T")[0], claimant: claimant,
+ id: Date.now(), received_at: toLocalDateStr(new Date()), claimant: claimant,
  resident_id: resId ? parseInt(resId) : null, content: content, investigation: investigation,
  improvement_plan: improvement, reported_at: "", status: "対応中", staff_name: staff
  });
@@ -9266,7 +9306,7 @@ function openIncidentFromRecord() {
  const content = document.getElementById("recordContent").value;
  const resId = gState.selectedResidentId;
  const now = new Date();
- const nowStr = now.toISOString().slice(0, 16);
+ const nowStr = toLocalDateTimeStr(now).replace(" ", "T");
 
  document.getElementById("incId").value = "";
  document.getElementById("incOccurredAt").value = nowStr;
@@ -9548,7 +9588,7 @@ function submitFamilyHistory() {
 
  const staff = (document.getElementById("currentStaff")?.value) || "担当職員";
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  const newContact = document.getElementById("fhEmergencyContact").value.trim();
  const newStamp = document.getElementById("fhPolicyStamp").value;
@@ -9803,7 +9843,7 @@ function submitClinicInstructions() {
  // 介護記録にも往診・受診指示変更の記録を自動記録（変更履歴の保持）
  const staff = (document.getElementById("currentStaff")?.value) || "看護師";
  const now = new Date();
- const nowStr = `${now.toISOString().split("T")[0]} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
  if (!db.data.care_records) db.data.care_records = [];
  db.data.care_records.unshift({
  id: Date.now(),
@@ -10243,7 +10283,7 @@ function submitOrderApply() {
  const applicant = document.getElementById("currentStaff").value;
 
  db.data.orders.unshift({
- id: Date.now(), ordered_at: new Date().toISOString().split("T")[0], supplier_id: suppId,
+ id: Date.now(), ordered_at: toLocalDateStr(new Date()), supplier_id: suppId,
  supplier_name: supp ? supp.name : "", item_name: itemName, quantity: qty,
  unit_price: unitPrice, total_price: totalPrice, reason: reason, status: "申請中",
  });
@@ -10677,7 +10717,7 @@ function getShiftYearMonth() {
  gState.currentShiftMonth = sel.value;
  return sel.value;
  }
- const defaultYm = gState.currentShiftMonth || new Date().toISOString().slice(0, 7);
+ const defaultYm = gState.currentShiftMonth || toLocalDateStr(new Date()).slice(0, 7);
  gState.currentShiftMonth = defaultYm;
  if (sel) sel.value = defaultYm;
  return defaultYm;
