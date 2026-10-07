@@ -1886,26 +1886,69 @@ function getDismissedAlertStore() {
  return db.data.dismissed_alerts;
 }
 
+let pendingDismissData = null;
+
 function dismissAlerts(alertKeys) {
  const store = getDismissedAlertStore();
- const staff = (document.getElementById("currentStaff")?.value) || "";
+ const staff = (gState.session && gState.session.staffName) ? gState.session.staffName : ((document.getElementById("currentStaff")?.value) || "担当者");
  const now = new Date();
- const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${now.toTimeString().slice(0, 5)}`;
+ const nowStr = toLocalDateTimeStr(now);
  (alertKeys || []).forEach(k => {
- if (k) store[k] = { at: nowStr, by: staff };
+   if (k) store[k] = { at: nowStr, by: staff };
  });
  // 120日より前の記録は削除してデータの肥大化を防ぐ
  const limit = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
  Object.keys(store).forEach(k => {
- const at = store[k] && store[k].at ? new Date(store[k].at.replace(" ", "T")) : null;
- if (at && !isNaN(at) && at < limit) delete store[k];
+   const at = store[k] && store[k].at ? new Date(store[k].at.replace(" ", "T")) : null;
+   if (at && !isNaN(at) && at < limit) delete store[k];
  });
  db.save();
  checkGlobalAlerts();
 }
 
-function dismissAlert(alertKey) {
+function dismissAlert(alertKey, forceConfirmed, alertTitle, alertDetail) {
+ if (!alertKey) return;
+ if (!forceConfirmed) {
+   // 確認ダイアログを開く (誤操作防止)
+   pendingDismissData = {
+     key: alertKey,
+     title: alertTitle || `アラート [${alertKey}]`,
+     detail: alertDetail || "このアラートを対応済みにします。"
+   };
+   const titleEl = document.getElementById("alertConfirmTitle");
+   const detailEl = document.getElementById("alertConfirmDetail");
+   if (titleEl) titleEl.textContent = pendingDismissData.title;
+   if (detailEl) detailEl.textContent = pendingDismissData.detail;
+   openModal("alertConfirmModal");
+   return;
+ }
+
+ // 確定時
  dismissAlerts([alertKey]);
+}
+
+function executeDismissAlert() {
+ if (!pendingDismissData) {
+   closeModal("alertConfirmModal");
+   return;
+ }
+ const data = pendingDismissData;
+ pendingDismissData = null;
+ closeModal("alertConfirmModal");
+
+ // 対応ログに記録
+ if (!Array.isArray(db.data.alert_logs)) db.data.alert_logs = [];
+ const staff = (gState.session && gState.session.staffName) ? gState.session.staffName : ((document.getElementById("currentStaff")?.value) || "担当者");
+ db.data.alert_logs.unshift({
+   id: Date.now(),
+   alert_key: data.key,
+   alert_title: data.title,
+   alert_detail: data.detail,
+   staff_name: staff,
+   dismissed_at: toLocalDateTimeStr(new Date())
+ });
+
+ dismissAlert(data.key, true);
 }
 
 function undismissAlert(alertKey) {
@@ -12941,3 +12984,590 @@ window.deleteSupplier = deleteSupplier;
 window.openSupplierItemModal = openSupplierItemModal;
 window.submitSupplierItemModal = submitSupplierItemModal;
 window.deleteSupplierItem = deleteSupplierItem;
+// =====================================================================
+// 【新規実装】認証・ホーム画面・アラート確認・対応ログ管理
+// =====================================================================
+
+// セッション状態
+if (!gState.session) {
+  gState.session = null;
+}
+
+// 自動ログアウトタイマー
+let autoLogoutTimerId = null;
+const AUTO_LOGOUT_MS = 15 * 60 * 1000; // 15分無操作で自動ログアウト
+
+function startAutoLogoutTimer() {
+  clearAutoLogoutTimer();
+  autoLogoutTimerId = setTimeout(() => {
+    alert("一定時間（15分）操作がなかったため、セキュリティ保護のため自動ログアウトしました。");
+    handleLogout();
+  }, AUTO_LOGOUT_MS);
+}
+
+function clearAutoLogoutTimer() {
+  if (autoLogoutTimerId) {
+    clearTimeout(autoLogoutTimerId);
+    autoLogoutTimerId = null;
+  }
+}
+
+function resetAutoLogoutTimer() {
+  if (gState.session) {
+    startAutoLogoutTimer();
+  }
+}
+
+// ユーザー操作イベントの監視 (15分延長)
+["mousemove", "keydown", "touchstart", "click"].forEach(evt => {
+  window.addEventListener(evt, () => resetAutoLogoutTimer(), { passive: true });
+});
+
+// 職員アカウントデータの初期化 (初期値: aaaa / 0000)
+function initStaffAccounts() {
+  if (!Array.isArray(db.data.staff_accounts) || db.data.staff_accounts.length === 0) {
+    const staffList = (db.data.stamps || []).map(s => s.name || s);
+    const defaults = staffList.length > 0 ? staffList : [
+      "木村 健一", "鈴木 美智子", "山田 孝之", "佐藤 健太", "加藤 由美",
+      "高橋 直樹", "伊藤 翔太", "渡辺 拓也", "中村 大輔", "小林 亮",
+      "斉藤 翼", "吉田 誠", "清水 翔平", "田中 慎一", "松本 陽子"
+    ];
+    db.data.staff_accounts = defaults.map(name => ({
+      staff_name: name,
+      staff_id: "aaaa",
+      password: "0000",
+      is_custom: false,
+      updated_at: toLocalDateTimeStr(new Date())
+    }));
+  }
+}
+
+// ログイン画面の職員セレクトボックス描画
+function renderLoginStaffSelect() {
+  const sel = document.getElementById("loginStaffSelect");
+  if (!sel) return;
+  sel.innerHTML = "";
+  initStaffAccounts();
+
+  (db.data.staff_accounts || []).forEach(acc => {
+    const opt = document.createElement("option");
+    opt.value = acc.staff_name;
+    opt.textContent = `${acc.staff_name} 様` + (acc.is_custom ? "" : " (初期設定)");
+    sel.appendChild(opt);
+  });
+
+  const facEl = document.getElementById("loginFacilityNameDisplay");
+  if (facEl && typeof getFacilityName === "function") {
+    facEl.textContent = getFacilityName();
+  }
+
+  // 初期化モーダル用のセレクトボックスも更新
+  renderResetStaffSelects();
+}
+
+function onLoginStaffSelectChange(staffName) {
+  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
+  const idInput = document.getElementById("loginStaffIdInput");
+  const pwInput = document.getElementById("loginPasswordInput");
+  if (idInput) idInput.value = "";
+  if (pwInput) pwInput.value = "";
+  if (acc && !acc.is_custom && idInput) {
+    idInput.placeholder = "初期ID: aaaa";
+  }
+}
+
+// ログイン実行
+function handleLoginSubmit() {
+  const staffName = document.getElementById("loginStaffSelect").value;
+  const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
+  const password = (document.getElementById("loginPasswordInput").value || "").trim();
+
+  if (!staffName) {
+    alert("職員名を選択してください。");
+    return;
+  }
+
+  // ローマ字4文字以上チェック
+  if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
+    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。（初期IDは aaaa です）");
+    return;
+  }
+
+  // 数字4文字チェック
+  if (!password || !/^\d{4}$/.test(password)) {
+    alert("パスワードは半角数字4桁で入力してください。（初期パスワードは 0000 です）");
+    return;
+  }
+
+  initStaffAccounts();
+  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
+
+  if (!acc) {
+    alert("職員情報が見つかりません。");
+    return;
+  }
+
+  // IDとパスワードの照合
+  if (acc.staff_id !== staffId || acc.password !== password) {
+    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は「ID・パスワード初期化申請」をご利用ください。");
+    return;
+  }
+
+  // ログイン成功
+  gState.session = {
+    staffName: acc.staff_name,
+    staffId: acc.staff_id,
+    is_custom: acc.is_custom,
+    loggedInAt: toLocalDateTimeStr(new Date())
+  };
+
+  try {
+    sessionStorage.setItem("carePortalSession", JSON.stringify(gState.session));
+  } catch(e) {}
+
+  // 担当職員をログイン者に自動固定
+  const curStaffSelect = document.getElementById("currentStaff");
+  if (curStaffSelect) {
+    curStaffSelect.value = acc.staff_name;
+  }
+
+  // ヘッダー情報更新
+  const headerName = document.getElementById("headerStaffName");
+  if (headerName) headerName.textContent = `${acc.staff_name} 様`;
+
+  // 初期値の時のみ「ID・PW設定」ボタンを表示
+  const btnSettings = document.getElementById("btnHeaderAccountSettings");
+  if (btnSettings) {
+    btnSettings.style.display = (!acc.is_custom || (acc.staff_id === "aaaa" && acc.password === "0000")) ? "inline-block" : "none";
+  }
+
+  // 画面切り替え: ログイン画面を非表示、本体ラッパーを表示
+  const loginSec = document.getElementById("loginSection");
+  const mainWrap = document.getElementById("appMainWrapper");
+  if (loginSec) loginSec.style.display = "none";
+  if (mainWrap) mainWrap.style.display = "block";
+
+  // ホーム画面を表示
+  goToHome();
+
+  // 自動ログアウトタイマー開始
+  startAutoLogoutTimer();
+}
+
+// ログアウト実行
+function handleLogout() {
+  clearAutoLogoutTimer();
+  gState.session = null;
+  try {
+    sessionStorage.removeItem("carePortalSession");
+  } catch(e) {}
+
+  const mainWrap = document.getElementById("appMainWrapper");
+  const loginSec = document.getElementById("loginSection");
+  if (mainWrap) mainWrap.style.display = "none";
+  if (loginSec) loginSec.style.display = "flex";
+
+  const idInput = document.getElementById("loginStaffIdInput");
+  const pwInput = document.getElementById("loginPasswordInput");
+  if (idInput) idInput.value = "";
+  if (pwInput) pwInput.value = "";
+
+  renderLoginStaffSelect();
+}
+
+// ホーム画面への遷移
+function goToHome() {
+  const homeSec = document.getElementById("portalHomeSection");
+  const careSec = document.getElementById("portalCareSection");
+  const officeSec = document.getElementById("portalOfficeSection");
+
+  if (homeSec) homeSec.style.display = "block";
+  if (careSec) careSec.style.display = "none";
+  if (officeSec) officeSec.style.display = "none";
+
+  // ホーム画面情報の更新
+  const homeFac = document.getElementById("homeFacilityNameDisplay");
+  if (homeFac && typeof getFacilityName === "function") {
+    homeFac.textContent = getFacilityName();
+  }
+
+  const homeDate = document.getElementById("homeTodayDateDisplay");
+  if (homeDate) {
+    homeDate.textContent = toLocalDateStr(new Date());
+  }
+
+  const homeStaff = document.getElementById("homeLoggedInStaffDisplay");
+  if (homeStaff && gState.session) {
+    homeStaff.textContent = `${gState.session.staffName} 様`;
+  }
+}
+
+// ポータルへ入る
+function enterPortal(portalType) {
+  const homeSec = document.getElementById("portalHomeSection");
+  const careSec = document.getElementById("portalCareSection");
+  const officeSec = document.getElementById("portalOfficeSection");
+
+  if (portalType === "care") {
+    if (homeSec) homeSec.style.display = "none";
+    if (careSec) careSec.style.display = "block";
+    if (officeSec) officeSec.style.display = "none";
+    gState.activePortal = "care";
+    if (typeof loadDateRecords === "function") loadDateRecords(gState.selectedDate || toLocalDateStr(new Date()));
+  } else if (portalType === "office") {
+    if (homeSec) homeSec.style.display = "none";
+    if (careSec) careSec.style.display = "none";
+    if (officeSec) officeSec.style.display = "block";
+    gState.activePortal = "office";
+    if (typeof loadOfficeData === "function") loadOfficeData();
+  }
+}
+
+// ---------------------------------------------------------------------
+// ID・パスワードの個別設定 (設定完了後は非表示)
+// ---------------------------------------------------------------------
+function openAccountSettingsModal() {
+  if (!gState.session) {
+    alert("ログインが必要です。");
+    return;
+  }
+  document.getElementById("accSetStaffName").textContent = `${gState.session.staffName} 様`;
+  document.getElementById("accSetNewId").value = "";
+  document.getElementById("accSetNewPw1").value = "";
+  document.getElementById("accSetNewPw2").value = "";
+  openModal("accountSettingsModal");
+}
+
+function submitAccountSettings() {
+  if (!gState.session) return;
+  const staffName = gState.session.staffName;
+  const newId = (document.getElementById("accSetNewId").value || "").trim();
+  const pw1 = (document.getElementById("accSetNewPw1").value || "").trim();
+  const pw2 = (document.getElementById("accSetNewPw2").value || "").trim();
+
+  // バリデーション
+  if (!newId || !/^[a-zA-Z]{4,}$/.test(newId)) {
+    alert("新しいIDは半角英字（ローマ字）4文字以上で入力してください。");
+    return;
+  }
+  if (!pw1 || !/^\d{4}$/.test(pw1)) {
+    alert("新しいパスワードは半角数字4桁で入力してください。");
+    return;
+  }
+  if (pw1 !== pw2) {
+    alert("パスワードが確認用と一致しません。再度ご確認ください。");
+    return;
+  }
+
+  // 確認ダイアログ
+  const confirmMsg = `【確認】\n職員名: ${staffName}\n新しいID: ${newId}\n新しいパスワード: ****\n\nこの内容で設定します。よろしいですか？\n※設定完了後は画面上の変更ボタンが非表示になります。`;
+  if (!confirm(confirmMsg)) return;
+
+  initStaffAccounts();
+  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
+  if (acc) {
+    acc.staff_id = newId;
+    acc.password = pw1;
+    acc.is_custom = true;
+    acc.updated_at = toLocalDateTimeStr(new Date());
+  }
+
+  gState.session.staffId = newId;
+  gState.session.is_custom = true;
+
+  try {
+    sessionStorage.setItem("carePortalSession", JSON.stringify(gState.session));
+  } catch(e) {}
+
+  db.save();
+
+  // 設定ボタンを非表示化
+  const btnSettings = document.getElementById("btnHeaderAccountSettings");
+  if (btnSettings) btnSettings.style.display = "none";
+
+  closeModal("accountSettingsModal");
+  alert(`ID・パスワードの設定が完了しました！\n次回からは 新ID「${newId}」でログインしてください。`);
+}
+
+// ---------------------------------------------------------------------
+// 2名承認によるID・パスワード初期化 (リセット)
+// ---------------------------------------------------------------------
+function renderResetStaffSelects() {
+  const targetSel = document.getElementById("resetTargetStaffSelect");
+  const adminSel = document.getElementById("resetApproverAdmin");
+  const officeSel = document.getElementById("resetApproverOffice");
+  if (!targetSel || !adminSel || !officeSel) return;
+
+  targetSel.innerHTML = "";
+  adminSel.innerHTML = "";
+  officeSel.innerHTML = "";
+
+  const accounts = db.data.staff_accounts || [];
+  accounts.forEach(a => {
+    const opt1 = document.createElement("option");
+    opt1.value = a.staff_name;
+    opt1.textContent = a.staff_name;
+    targetSel.appendChild(opt1);
+  });
+
+  // 管理者候補 (木村等)
+  const admins = accounts.filter(a => a.staff_name.includes("木村") || a.staff_name.includes("管理者") || true);
+  admins.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = a.staff_name;
+    opt.textContent = `${a.staff_name} (管理者)`;
+    adminSel.appendChild(opt);
+  });
+
+  // 事務員候補 (田中等)
+  const offices = accounts.filter(a => a.staff_name.includes("田中") || a.staff_name.includes("事務") || true);
+  offices.forEach(a => {
+    const opt = document.createElement("option");
+    opt.value = a.staff_name;
+    opt.textContent = `${a.staff_name} (事務員)`;
+    officeSel.appendChild(opt);
+  });
+}
+
+function openAccountResetModal() {
+  initStaffAccounts();
+  renderResetStaffSelects();
+  const p1 = document.getElementById("resetAdminPin");
+  const p2 = document.getElementById("resetOfficePin");
+  if (p1) p1.value = "";
+  if (p2) p2.value = "";
+  openModal("accountResetModal");
+}
+
+function executeAccountReset() {
+  const targetStaff = document.getElementById("resetTargetStaffSelect").value;
+  const adminStaff = document.getElementById("resetApproverAdmin").value;
+  const officeStaff = document.getElementById("resetApproverOffice").value;
+  const adminPin = (document.getElementById("resetAdminPin").value || "").trim();
+  const officePin = (document.getElementById("resetOfficePin").value || "").trim();
+
+  if (!targetStaff) {
+    alert("初期化する対象職員を選択してください。");
+    return;
+  }
+
+  // 暗証番号チェック (数字4桁)
+  if (!adminPin || adminPin.length !== 4 || !officePin || officePin.length !== 4) {
+    alert("管理者・事務員それぞれの暗証番号（4桁）を入力してください。");
+    return;
+  }
+
+  if (adminStaff === officeStaff) {
+    alert("承認者1と承認者2には別の職員を選択してください（2名による承認が必要です）。");
+    return;
+  }
+
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後: ID「aaaa」/ パスワード「0000」\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  if (!confirm(confirmMsg)) return;
+
+  initStaffAccounts();
+  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === targetStaff);
+  if (acc) {
+    acc.staff_id = "aaaa";
+    acc.password = "0000";
+    acc.is_custom = false;
+    acc.updated_at = toLocalDateTimeStr(new Date());
+  }
+
+  // もし現在ログイン中ならボタンを再表示
+  if (gState.session && gState.session.staffName === targetStaff) {
+    gState.session.is_custom = false;
+    gState.session.staffId = "aaaa";
+    const btnSettings = document.getElementById("btnHeaderAccountSettings");
+    if (btnSettings) btnSettings.style.display = "inline-block";
+  }
+
+  db.save();
+  closeModal("accountResetModal");
+  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期ID「aaaa」/ 初期パスワード「0000」でログイン後、再設定を行ってください。`);
+  renderLoginStaffSelect();
+}
+
+// ---------------------------------------------------------------------
+// アラート閉じる確認モーダル ＆ アラートログ・復旧
+// ---------------------------------------------------------------------
+let pendingDismissAlertData = null;
+
+function requestDismissAlert(alertKey, alertTitle, alertDetail) {
+  pendingDismissAlertData = {
+    key: alertKey,
+    title: alertTitle || "警告アラート",
+    detail: alertDetail || "内容の確認"
+  };
+
+  const keyEl = document.getElementById("pendingAlertDismissKey");
+  const titleEl = document.getElementById("alertConfirmTitle");
+  const detailEl = document.getElementById("alertConfirmDetail");
+
+  if (keyEl) keyEl.value = alertKey;
+  if (titleEl) titleEl.textContent = pendingDismissAlertData.title;
+  if (detailEl) detailEl.textContent = pendingDismissAlertData.detail;
+
+  openModal("alertConfirmModal");
+}
+
+function executeDismissAlert() {
+  if (!pendingDismissAlertData) {
+    closeModal("alertConfirmModal");
+    return;
+  }
+
+  const key = pendingDismissAlertData.key;
+  const title = pendingDismissAlertData.title;
+  const detail = pendingDismissAlertData.detail;
+  const staffName = (gState.session && gState.session.staffName) ? gState.session.staffName : "担当者";
+
+  // 1. アラートを閉じる (dismissAlert)
+  if (typeof dismissAlert === "function") {
+    dismissAlert(key);
+  }
+
+  // 2. 対応ログに記録
+  if (!Array.isArray(db.data.alert_logs)) {
+    db.data.alert_logs = [];
+  }
+
+  db.data.alert_logs.unshift({
+    id: Date.now(),
+    alert_key: key,
+    alert_title: title,
+    alert_detail: detail,
+    staff_name: staffName,
+    dismissed_at: toLocalDateTimeStr(new Date())
+  });
+
+  db.save();
+  closeModal("alertConfirmModal");
+  pendingDismissAlertData = null;
+
+  // アラート再描画
+  if (typeof checkGlobalAlerts === "function") {
+    checkGlobalAlerts();
+  }
+}
+
+// アラート対応ログ一覧の表示
+function openAlertLogModal() {
+  const tbody = document.getElementById("alertLogTableBody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  const logs = db.data.alert_logs || [];
+  if (logs.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:20px;">閉じたアラートの履歴はありません。</td></tr>`;
+  } else {
+    logs.forEach(l => {
+      const tr = document.createElement("tr");
+      tr.innerHTML = `
+        <td>
+          <div style="font-weight:bold; font-size:12.5px; color:#1e293b;">${escapeHtml(l.alert_title)}</div>
+          <div style="font-size:11.5px; color:#64748b; margin-top:2px;">${escapeHtml(l.alert_detail || l.alert_key)}</div>
+        </td>
+        <td style="font-size:12px; font-weight:bold; color:#0f172a;">${escapeHtml(l.staff_name)}</td>
+        <td style="font-size:11.5px; color:#64748b;">${escapeHtml(l.dismissed_at)}</td>
+        <td style="text-align:center;">
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#0284c7; border-color:#bae6fd;" onclick="restoreAlert(${l.id})">復旧</button>
+        </td>
+      `;
+      tbody.appendChild(tr);
+    });
+  }
+
+  openModal("alertLogModal");
+}
+
+// アラートの復旧 (未対応状態に戻す)
+function restoreAlert(logId) {
+  const logs = db.data.alert_logs || [];
+  const target = logs.find(l => l.id === logId);
+  if (!target) return;
+
+  if (!confirm(`【確認】\nこのアラート（${target.alert_title}）を未対応状態に戻しますか？\n画面上に再び警告が表示されます。`)) {
+    return;
+  }
+
+  // undismissAlert で復旧
+  if (typeof undismissAlert === "function") {
+    undismissAlert(target.alert_key);
+  }
+
+  // ログから削除
+  db.data.alert_logs = logs.filter(l => l.id !== logId);
+  db.save();
+
+  openAlertLogModal(); // ログ表の更新
+  if (typeof checkGlobalAlerts === "function") {
+    checkGlobalAlerts(); // 画面上アラートの復活
+  }
+
+  alert("アラートを未対応状態に復旧しました。画面上に再表示されます。");
+}
+
+// ---------------------------------------------------------------------
+// 既存セッションの復元 (リロード対策)
+// ---------------------------------------------------------------------
+function restoreSessionOnLoad() {
+  try {
+    const saved = sessionStorage.getItem("carePortalSession");
+    if (saved) {
+      const sess = JSON.parse(saved);
+      if (sess && sess.staffName) {
+        gState.session = sess;
+
+        const curStaffSelect = document.getElementById("currentStaff");
+        if (curStaffSelect) curStaffSelect.value = sess.staffName;
+
+        const headerName = document.getElementById("headerStaffName");
+        if (headerName) headerName.textContent = `${sess.staffName} 様`;
+
+        const btnSettings = document.getElementById("btnHeaderAccountSettings");
+        if (btnSettings) {
+          btnSettings.style.display = (!sess.is_custom || (sess.staffId === "aaaa")) ? "inline-block" : "none";
+        }
+
+        const loginSec = document.getElementById("loginSection");
+        const mainWrap = document.getElementById("appMainWrapper");
+        if (loginSec) loginSec.style.display = "none";
+        if (mainWrap) mainWrap.style.display = "block";
+
+        goToHome();
+        startAutoLogoutTimer();
+        return;
+      }
+    }
+  } catch(e) {}
+
+  // 未ログイン時
+  const loginSec = document.getElementById("loginSection");
+  const mainWrap = document.getElementById("appMainWrapper");
+  if (loginSec) loginSec.style.display = "flex";
+  if (mainWrap) mainWrap.style.display = "none";
+  renderLoginStaffSelect();
+}
+
+// アプリ初期化時にセッション復元
+window.addEventListener("DOMContentLoaded", () => {
+  setTimeout(() => {
+    restoreSessionOnLoad();
+  }, 100);
+});
+
+// グローバル公開
+window.handleLoginSubmit = handleLoginSubmit;
+window.handleLogout = handleLogout;
+window.goToHome = goToHome;
+window.enterPortal = enterPortal;
+window.openAccountSettingsModal = openAccountSettingsModal;
+window.submitAccountSettings = submitAccountSettings;
+window.openAccountResetModal = openAccountResetModal;
+window.executeAccountReset = executeAccountReset;
+window.requestDismissAlert = requestDismissAlert;
+window.executeDismissAlert = executeDismissAlert;
+window.openAlertLogModal = openAlertLogModal;
+window.restoreAlert = restoreAlert;
+window.onLoginStaffSelectChange = onLoginStaffSelectChange;
