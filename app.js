@@ -4531,6 +4531,28 @@ function handleSchemaImageClick(event) {
  }
 
  const idInput = document.getElementById("schemaEditPinId");
+
+ // [Claude修正] 既存ピンの「訂正」中に図をクリックした場合は、新規ピンにせず、そのピンの移動先として扱う。
+ // (旧実装は訂正中でも新規登録に切り替わり、位置を直すには新規追加と削除をやり直す必要があった)
+ const editingId = idInput ? Number(idInput.value || 0) : 0;
+ if (editingId > 0) {
+ const xIn = document.getElementById("schemaEditPinXPct");
+ const yIn = document.getElementById("schemaEditPinYPct");
+ if (xIn) xIn.value = xPct;
+ if (yIn) yIn.value = yPct;
+ const pinEl = document.getElementById(`schemaPinEl_${editingId}`);
+ if (pinEl) {
+ pinEl.style.left = `${xPct}%`;
+ pinEl.style.top = `${yPct}%`;
+ pinEl.style.border = "2px dashed #000000";
+ }
+ const badge = document.getElementById("schemaPinCoordsBadge");
+ if (badge) {
+ badge.textContent = `移動先: ${viewName} (${xPct}%, ${yPct}%) - まだ保存されていません。保存ボタンで位置も更新されます`;
+ }
+ return;
+ }
+
  if (idInput) idInput.value = "";
 
  const xInput = document.getElementById("schemaEditPinXPct");
@@ -4700,7 +4722,7 @@ function editSchemaPin(pinId) {
  const coordsBadge = document.getElementById("schemaPinCoordsBadge");
  if (coordsBadge) {
  const isFront = pin.x_pct < 50;
- coordsBadge.textContent = `位置: ${isFront ? "正面図" : "背面図"} (${pin.x_pct}%, ${pin.y_pct}%) - 図をクリックで位置再指定可`;
+ coordsBadge.textContent = `位置: ${isFront ? "正面図" : "背面図"} (${pin.x_pct}%, ${pin.y_pct}%) - ピンを動かす場合は、図の正しい位置をクリックしてから保存してください`;
  }
 
  const delBtn = document.getElementById("btnDeleteSchemaPin");
@@ -4785,6 +4807,9 @@ function resetSchemaPinForm() {
 
  const tempPin = document.querySelector(".schema-temp-click-pin");
  if (tempPin) tempPin.remove();
+
+ // [Claude修正] 訂正を取りやめた場合に、保存していない移動先の表示を元の位置に戻す
+ if (typeof renderBodySchemaPins === "function") renderBodySchemaPins();
 }
 
 function setSchemaSite(site) {
