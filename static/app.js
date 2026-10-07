@@ -1517,8 +1517,13 @@ function resolveDiseaseGuide(diseaseName) {
  };
 }
 
+// [Claude修正] 施設名の取得を1か所にまとめ、画面・全帳票で「変更した施設名」が使われるようにする
+function getFacilityName() {
+ return (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+}
+
 function editFacilityName() {
- const currentName = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+ const currentName = getFacilityName();
  const newName = prompt("施設名・事業所名を入力してください:", currentName);
  if (newName !== null) {
  const trimmed = newName.trim();
@@ -1533,7 +1538,7 @@ function editFacilityName() {
 }
 
 function updateFacilityNameUI() {
- const name = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+ const name = getFacilityName();
  const display = document.getElementById("facilityNameDisplay");
  if (display) display.textContent = name;
  document.title = `${name} 統合業務ポータルシステム`;
@@ -2974,7 +2979,7 @@ function clearRecordForm() {
 // 登録後 介護記録・カルテの個別編集・修正・加筆・削除機能
 // ======================================================================
 function openEditCareRecordModal(recId) {
- const rec = (db.data.care_records || []).find(r => r.id === recId);
+ const rec = (db.data.care_records || []).find(r => Number(r.id) === Number(recId));
  if (!rec) {
  alert("対象の介護記録が見つかりません。");
  return;
@@ -3002,8 +3007,8 @@ function openEditCareRecordModal(recId) {
 function updateCareRecord() {
  const idEl = document.getElementById("editCrId");
  if (!idEl) return;
- const recId = parseInt(idEl.value, 10);
- const rec = (db.data.care_records || []).find(r => r.id === recId);
+ const recId = Number(idEl.value); // [Claude修正] parseInt だと小数を含むIDの記録が見つからず保存できなかった
+ const rec = (db.data.care_records || []).find(r => Number(r.id) === recId);
  if (!rec) {
  alert("更新対象の介護記録が見つかりません。");
  return;
@@ -3039,11 +3044,11 @@ function updateCareRecord() {
 function deleteCareRecord() {
  const idEl = document.getElementById("editCrId");
  if (!idEl) return;
- const recId = parseInt(idEl.value, 10);
+ const recId = Number(idEl.value);
  if (!confirm("この介護記録を削除してもよろしいですか？\n※ 削除した記録は元に戻せません。")) return;
 
  if (db.data.care_records) {
- db.data.care_records = db.data.care_records.filter(r => r.id !== recId);
+ db.data.care_records = db.data.care_records.filter(r => Number(r.id) !== recId);
  db.save();
  }
  closeModal("editCareRecordModal");
@@ -3650,7 +3655,7 @@ function printShiftTable() {
  }
  const ym = (typeof getShiftYearMonth === "function") ? getShiftYearMonth() : "";
  const [y, m] = ym.split("-");
- const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "";
+ const facility = getFacilityName();
  const clone = table.cloneNode(true);
  clone.removeAttribute("id");
  clone.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
@@ -3678,7 +3683,7 @@ function printBillingDetail() {
  alert("請求明細を印刷する利用者を選択してください。");
  return;
  }
- const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "";
+ const facility = getFacilityName();
  const html = `
  <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:14px;">
@@ -3837,7 +3842,7 @@ function renderEmergencySummaryPreview(r) {
  const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入・特変発生状況または受診理由を記載してください）";
  const nowStr = new Date().toLocaleString("ja-JP");
  const staffName = document.getElementById("currentStaff")?.value || "職員";
- const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "介護老人保健施設 ケアポータル"; // [Claude修正] 未設定の gState.facilityName を参照していたため施設名が反映されていなかった
+ const facility = getFacilityName(); // [Claude修正] 未設定の gState.facilityName を参照しており、変更した施設名が反映されていなかった
 
  const vitals = (db.data.vitals || []).filter(v => Number(v.resident_id) === Number(r.id));
  const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
@@ -3949,7 +3954,7 @@ function copyEmergencySummaryText() {
  if (!r) return;
 
  const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入）";
- const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "介護老人保健施設 ケアポータル"; // [Claude修正] 未設定の gState.facilityName を参照していたため施設名が反映されていなかった
+ const facility = getFacilityName(); // [Claude修正] 未設定の gState.facilityName を参照しており、変更した施設名が反映されていなかった
  const nowStr = new Date().toLocaleString("ja-JP");
  const staffName = document.getElementById("currentStaff")?.value || "職員";
 
@@ -4464,7 +4469,7 @@ function printBodySchema() {
  return;
  }
 
- const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+ const facility = getFacilityName();
  const now = new Date();
  const printDateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
  const staffName = document.getElementById("currentStaff")?.value || "担当職員";
@@ -5740,7 +5745,7 @@ function printDailyJournal() {
 
  const staffName = document.getElementById("currentStaff").value || "未記録";
  const nowStr = new Date().toLocaleString("ja-JP");
- const facilityName = (db.data && db.data.facility_name) ? db.data.facility_name : "陽だまりの家";
+ const facilityName = getFacilityName();
 
  const roster = (typeof getDailyShiftRoster === "function") ? getDailyShiftRoster(gState.selectedDate) : null;
  let printRosterHtml = "";
@@ -7043,7 +7048,9 @@ function submitNightTurnsBatch() {
  rec.resident_id === resId &&
  rec.category === "巡視" &&
  rec.recorded_at.startsWith(gState.selectedDate) &&
- (rec.content.includes("定時巡視") || rec.content.includes("夜間巡視・体位変換") || rec.content.includes("夜間巡視:"))
+ // [Claude修正] 定型文を施設独自の文に変えると旧判定 (本文の文字一致) に掛からず、
+ // 保存し直すたびに巡視記録が重複していた。自動生成フラグでも判定する。
+ (rec.auto_night_turn === true || rec.content.includes("定時巡視") || rec.content.includes("夜間巡視・体位変換") || rec.content.includes("夜間巡視:"))
  ));
 
  // 時間順にソート (22:00 -> 00:00 -> 02:00 -> 04:00 -> 06:00)
@@ -7066,7 +7073,8 @@ function submitNightTurnsBatch() {
  resident_id: resId,
  category: "巡視",
  content: contentText,
- staff_name: staff
+ staff_name: staff,
+ auto_night_turn: true
  });
  totalRecordsCreated++;
  });
@@ -9920,6 +9928,17 @@ function renderCareExpiryNotes() {
  area.appendChild(item);
  }
  });
+}
+
+// [Claude修正] openModal() が未定義のまま呼ばれており、介護記録の編集・巡視定型文の編集・
+// 皮膚シェーマ図の各画面がエラーで開かなかった。他のモーダルと同じ表示方法で定義する。
+function openModal(id) {
+ const el = document.getElementById(id);
+ if (!el) {
+ alert("画面が見つかりません: " + id);
+ return;
+ }
+ el.style.display = "flex";
 }
 
 function closeModal(id) {
