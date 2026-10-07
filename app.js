@@ -807,8 +807,7 @@ let gState = {
  activeCareTab: "record",
  activeOfficeTab: "inventory",
  currentShiftMonth: new Date().toISOString().slice(0, 7),
- recordScope: "today",
- dismissedAlerts: []
+ recordScope: "today"
 };
 
 // ======================================================================
@@ -1655,16 +1654,62 @@ function isCurrentStaffAdmin() {
 // ==========================================
 // アラート完了・非表示（ディスミス）＆ 即時補充管理
 // ==========================================
-function dismissAlert(alertKey) {
- if (!gState.dismissedAlerts) gState.dismissedAlerts = [];
- if (!gState.dismissedAlerts.includes(alertKey)) {
- gState.dismissedAlerts.push(alertKey);
+// [Claude修正] 旧実装は「閉じた」記録をその端末のメモリ (gState) にだけ持っていたため、
+// 他の端末には反映されず、再読み込みすると復活していた。
+// 閉じた記録をデータベース (dismissed_alerts) に保存し、サーバー経由で全端末に共有する。
+// また、キーに日付や在庫数などの「その時点の状況」を含め、状況が変われば再びアラートが出るようにした。
+function getDismissedAlertStore() {
+ if (!db || !db.data) return {};
+ const st = db.data.dismissed_alerts;
+ if (!st || typeof st !== "object" || Array.isArray(st)) {
+ db.data.dismissed_alerts = {};
  }
+ return db.data.dismissed_alerts;
+}
+
+function dismissAlerts(alertKeys) {
+ const store = getDismissedAlertStore();
+ const staff = (document.getElementById("currentStaff")?.value) || "";
+ const now = new Date();
+ const nowStr = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")} ${now.toTimeString().slice(0, 5)}`;
+ (alertKeys || []).forEach(k => {
+ if (k) store[k] = { at: nowStr, by: staff };
+ });
+ // 120日より前の記録は削除してデータの肥大化を防ぐ
+ const limit = new Date(now.getTime() - 120 * 24 * 60 * 60 * 1000);
+ Object.keys(store).forEach(k => {
+ const at = store[k] && store[k].at ? new Date(store[k].at.replace(" ", "T")) : null;
+ if (at && !isNaN(at) && at < limit) delete store[k];
+ });
+ db.save();
  checkGlobalAlerts();
 }
 
+function dismissAlert(alertKey) {
+ dismissAlerts([alertKey]);
+}
+
+function undismissAlert(alertKey) {
+ const store = getDismissedAlertStore();
+ delete store[alertKey];
+}
+
 function isAlertDismissed(alertKey) {
- return Array.isArray(gState.dismissedAlerts) && gState.dismissedAlerts.includes(alertKey);
+ const store = (db && db.data && db.data.dismissed_alerts && typeof db.data.dismissed_alerts === "object") ? db.data.dismissed_alerts : {};
+ return Object.prototype.hasOwnProperty.call(store, alertKey);
+}
+
+function getRealTodayStr() {
+ const d = new Date();
+ return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+function dismissLowStockAll() {
+ dismissAlerts(gState.lastLowStockAlertKeys || []);
+}
+
+function dismissCareExpiryAll() {
+ dismissAlerts(gState.lastCareExpiryAlertKeys || []);
 }
 
 // アラートから直接ワンタップで在庫を平常時定数まで補充する
@@ -1761,7 +1806,8 @@ function checkGlobalAlerts() {
 
  // 0.0 【管理者・事務員専用：初期パスワード未変更セキュリティ警告】
  const isAdminOrClerk = isCurrentStaffAdminOrClerk();
- if (isAdminOrClerk && !isAlertDismissed('initial_pin_warning')) {
+ const pinWarnKey = `initial_pin_warning_${getRealTodayStr()}`;
+ if (isAdminOrClerk && !isAlertDismissed(pinWarnKey)) {
  const unconfigured = (gState.stamps || []).filter(s => {
  const pin = s.pin || "0000";
  return pin === "0000" || s.is_initial_pin !== false;
@@ -1775,7 +1821,7 @@ function checkGlobalAlerts() {
  <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
  <div style="display:flex; gap:6px; align-items:center;">
  <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('initial_pin_warning')">閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${pinWarnKey}')">閉じる</button>
  </div>
  </div>
  </div>
@@ -1826,7 +1872,7 @@ function checkGlobalAlerts() {
 
  // 1. 【前月誕生日事前アラート】
  const nextMonthNum = (today.getMonth() + 1) % 12 + 1;
- const birthdayKey = `birthday_${nextMonthNum}`;
+ const birthdayKey = `birthday_${today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()}_${nextMonthNum}`;
  if (!isAlertDismissed(birthdayKey)) {
  const nextMonthBirthdays = [];
  gState.residents.forEach(r => {
@@ -1853,7 +1899,7 @@ function checkGlobalAlerts() {
 
  // 2. 【非常食・防災備蓄 賞味期限2週間前アラート】
  (gState.emergencySupplies || []).forEach(item => {
- const emKey = `emergency_${item.id}`;
+ const emKey = `emergency_${item.id}_${item.expiry_date || ""}`;
  if (!isAlertDismissed(emKey) && item.expiry_date) {
  const expDate = new Date(item.expiry_date);
  const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
@@ -1877,10 +1923,11 @@ function checkGlobalAlerts() {
  const lowStockItems = (gState.inventory || []).filter(i => {
  if (i.current_stock > i.safety_stock) return false;
  if (pendingOrderNames.includes(i.name)) return false; // すでに発注済ならアラート解除
- if (isAlertDismissed(`stock_${i.id}`) || isAlertDismissed('stock_all')) return false; // スタッフが手動完了・非表示にした場合
+ if (isAlertDismissed(`stock_${i.id}_${i.current_stock}`)) return false; // スタッフが手動完了・非表示にした場合
  return true;
  });
 
+ gState.lastLowStockAlertKeys = lowStockItems.map(i => `stock_${i.id}_${i.current_stock}`);
  if (lowStockItems.length > 0) {
  if (lowStockItems.length === 1) {
  const item = lowStockItems[0];
@@ -1891,7 +1938,7 @@ function checkGlobalAlerts() {
  <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
  <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}')"> 閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_${item.id}_${item.current_stock}')"> 閉じる</button>
  </div>
  </div>
  `;
@@ -1918,7 +1965,7 @@ function checkGlobalAlerts() {
  </div>
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-top:8px;">
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('stock_all')"> 全て閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissLowStockAll()"> 全て閉じる</button>
  </div>
  </div>
  `;
@@ -1935,7 +1982,7 @@ function checkGlobalAlerts() {
  
  if (diffDays === 0 || r.next_clinic_date === todayStr) {
  // 当日往診
- const todayClinicKey = `clinic_today_${r.id}`;
+ const todayClinicKey = `clinic_today_${r.id}_${r.next_clinic_date}`;
  if (!isAlertDismissed(todayClinicKey)) {
  alertHtml += `
  <div class="alert-banner alert-danger" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
@@ -1948,7 +1995,7 @@ function checkGlobalAlerts() {
  `;
  }
  } else if (diffDays > 0 && diffDays <= 14) {
- const upcomingKey = `clinic_upcoming_${r.id}`;
+ const upcomingKey = `clinic_upcoming_${r.id}_${r.next_clinic_date}_${diffDays <= 7 ? "w1" : "w2"}`;
  if (!isAlertDismissed(upcomingKey)) {
  const alertType = diffDays <= 7 ? "alert-danger" : "alert-warning";
  const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
@@ -1967,13 +2014,14 @@ function checkGlobalAlerts() {
  const excretions = db.data.excretions || [];
  gState.residents.forEach(r => {
  if (r.status !== "在所") return;
- const stoolKey = `stool_${r.id}`;
+ const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
+ resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
+ // [Claude修正] 利用者ごと・最終排便日ごとのキー。対応完了は その利用者の今回分 だけを閉じる
+ const stoolKey = `stool_${r.id}_${resExcs.length > 0 ? resExcs[0].date : "none"}`;
  if (isAlertDismissed(stoolKey)) return;
 
- const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
  let daysNoStool = 0;
  if (resExcs.length > 0) {
- resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
  const latestDateStr = resExcs[0].date;
  const latestDate = new Date(latestDateStr);
  const curDate = new Date(todayStr);
@@ -2015,26 +2063,27 @@ function checkGlobalAlerts() {
  }
 
  // 7. 要介護認定有効期限 (満了60日以内)
- if (!isAlertDismissed('care_expiry_all')) {
+ {
  const expiringResidents = [];
  gState.residents.forEach(r => {
  if (r.care_expiry_date) {
  const expiryDate = new Date(r.care_expiry_date);
  const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
  if (diffDays > 0 && diffDays <= 60) {
- const expKey = `care_expiry_${r.id}`;
+ const expKey = `care_expiry_${r.id}_${r.care_expiry_date}`;
  if (!isAlertDismissed(expKey)) {
- expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays });
+ expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays, key: expKey });
  }
  }
  }
  });
+ gState.lastCareExpiryAlertKeys = expiringResidents.map(e => e.key);
  if (expiringResidents.length > 0) {
  const list = expiringResidents.map(e => `${e.name}様 (${e.level}, 期限:${e.date}, あと${e.days}日)`).join(" / ");
  alertHtml += `
  <div class="alert-banner alert-warning">
  <span> 【要介護認定更新アラート】更新申請の手続きが必要です：${list}</span>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('care_expiry_all')"> 申請手配済・閉じる</button>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissCareExpiryAll()"> 申請手配済・閉じる</button>
  </div>
  `;
  }
@@ -9871,9 +9920,7 @@ function submitOrderApply() {
  });
  
  // 新規申請時は管理者向け未承認アラートの非表示を解除
- if (Array.isArray(gState.dismissedAlerts)) {
- gState.dismissedAlerts = gState.dismissedAlerts.filter(k => k !== 'admin_pending_orders');
- }
+ undismissAlert('admin_pending_orders');
 
  db.save();
 
