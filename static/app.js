@@ -2212,6 +2212,7 @@ function selectDate(dt) {
 }
 
 function loadDateRecords(dt) {
+ syncGlobalDatePicker(dt);
  if (typeof renderTodayShiftBar === "function") renderTodayShiftBar(dt);
  renderSelectedDateRecords();
  renderNotebook();
@@ -2228,6 +2229,59 @@ function loadDateRecords(dt) {
  if (gState.activeCareTab === "grooming") renderGroomingTable();
  if (gState.activeCareTab === "recreation") renderRecreationTable();
  if (gState.activeCareTab === "consume") renderQuickConsume();
+}
+
+// 共通日付バーの同期・操作 (全タブ連動)
+function syncGlobalDatePicker(dt) {
+ const picker = document.getElementById("globalCareDatePicker");
+ if (picker && picker.value !== dt) picker.value = dt;
+
+ const label = document.getElementById("globalDateDisplayLabel");
+ const countBadge = document.getElementById("globalDateRecordCountBadge");
+ if (!label || !dt) return;
+
+ const days = ["日", "月", "火", "水", "木", "金", "土"];
+ const dObj = new Date(dt + "T00:00:00");
+ const dayName = !isNaN(dObj.getDay()) ? days[dObj.getDay()] : "";
+ const isToday = (dt === new Date().toISOString().split("T")[0]);
+ label.textContent = `${dt} (${dayName})` + (isToday ? " [本日]" : "");
+
+ // 当日の記録件数を集計してバッジ表示
+ let recCount = 0;
+ (db.data.care_records || []).forEach(r => {
+   const d = (r.recorded_at || r.record_time || "").slice(0, 10);
+   if (d === dt) recCount++;
+ });
+ (db.data.vitals || []).forEach(r => { if (r.date === dt) recCount++; });
+ (db.data.meals || []).forEach(r => { if (r.date === dt) recCount++; });
+ (db.data.excretions || []).forEach(r => { if (r.date === dt) recCount++; });
+
+ if (countBadge) {
+   countBadge.textContent = `記録: 計 ${recCount} 件`;
+ }
+}
+
+function onGlobalDateChange(newDate) {
+ if (!newDate) return;
+ gState.selectedDate = newDate;
+ gState.currentMonth = newDate.slice(0, 7);
+ loadDateRecords(newDate);
+}
+
+function changeDateByDays(offset) {
+ const cur = gState.selectedDate || new Date().toISOString().split("T")[0];
+ const d = new Date(cur + "T00:00:00");
+ d.setDate(d.getDate() + offset);
+ const y = d.getFullYear();
+ const m = String(d.getMonth() + 1).padStart(2, "0");
+ const day = String(d.getDate()).padStart(2, "0");
+ const newDt = `${y}-${m}-${day}`;
+ onGlobalDateChange(newDt);
+}
+
+function setTodayDate() {
+ const today = new Date().toISOString().split("T")[0];
+ onGlobalDateChange(today);
 }
 
 // 利用者カード一覧
@@ -5229,7 +5283,7 @@ function submitPersonalVitalModal() {
  const dt = document.getElementById("personalVitalDate").value;
  const staff = document.getElementById("currentStaff").value || "木村 健一";
 
- const tempVal = document.getElementById("pvmTemp").value;
+ const tempVal = normalizeTempValue(document.getElementById("pvmTemp").value);
  const pulseVal = document.getElementById("pvmPulse").value;
  const bpHighVal = document.getElementById("pvmBpHigher").value;
  const bpLowVal = document.getElementById("pvmBpLower").value;
@@ -6267,37 +6321,61 @@ function clearSearch() {
  document.getElementById("searchResults").style.display = "none";
 }
 
+// 体温入力の自動小数点変換 (例: 365 -> 36.5, 370 -> 37.0)
+function formatTempInput(el) {
+ if (!el) return;
+ let val = String(el.value).trim();
+ if (!val) return;
+ const num = parseFloat(val);
+ if (!isNaN(num) && num >= 300 && num <= 450 && !val.includes(".")) {
+   el.value = (num / 10).toFixed(1);
+ }
+}
+
+function normalizeTempValue(val) {
+ if (!val) return "";
+ let s = String(val).trim();
+ const num = parseFloat(s);
+ if (!isNaN(num) && num >= 300 && num <= 450 && !s.includes(".")) {
+   return (num / 10).toFixed(1);
+ }
+ return s;
+}
+
 // 1. バイタル表
 function renderVitalsTable() {
  const tbody = document.querySelector("#vitalsTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
  const vitals = (db.data.vitals || []).filter(v => v.date === gState.selectedDate);
 
  gState.residents.forEach(r => {
- const v = vitals.find(x => x.resident_id === r.id);
- const tr = document.createElement("tr");
- if (r.status !== "在所") tr.style.opacity = "0.5";
+   const v = vitals.find(x => x.resident_id === r.id);
+   const tr = document.createElement("tr");
+   if (r.status !== "在所") tr.style.opacity = "0.5";
 
- tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong> ${r.status !== '在所' ? `(${r.status})` : ''}</td>
- <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v ? v.temperature || '' : ''}" placeholder="36.5"></td>
- <td style="display:flex; gap:4px; align-items:center;">
- <input type="number" class="form-control" style="width:70px;" id="vBpHigh_${r.id}" value="${v ? v.bp_high || '' : ''}" placeholder="120">
- /
- <input type="number" class="form-control" style="width:70px;" id="vBpLow_${r.id}" value="${v ? v.bp_low || '' : ''}" placeholder="70">
- </td>
- <td><input type="number" class="form-control" style="width:75px;" id="vPulse_${r.id}" value="${v ? v.pulse || '' : ''}" placeholder="72"></td>
- <td><input type="number" class="form-control" style="width:75px;" id="vSpo2_${r.id}" value="${v ? v.spo2 || '' : ''}" placeholder="98"></td>
- <td><label><input type="checkbox" id="vUnusual_${r.id}" ${v && v.is_unusual ? 'checked' : ''}> 特変</label></td>
- <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveVital(${r.id})">登録</button></td>
- `;
- tbody.appendChild(tr);
+   tr.innerHTML = `
+     <td>${r.room_no}</td>
+     <td><strong>${r.name} 様</strong> ${r.status !== '在所' ? `(${r.status})` : ''}</td>
+     <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v ? v.temperature || '' : ''}" placeholder="36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)"></td>
+     <td style="display:flex; gap:4px; align-items:center;">
+       <input type="number" class="form-control" style="width:70px;" id="vBpHigh_${r.id}" value="${v ? v.bp_high || '' : ''}" placeholder="120">
+       /
+       <input type="number" class="form-control" style="width:70px;" id="vBpLow_${r.id}" value="${v ? v.bp_low || '' : ''}" placeholder="70">
+     </td>
+     <td><input type="number" class="form-control" style="width:75px;" id="vPulse_${r.id}" value="${v ? v.pulse || '' : ''}" placeholder="72"></td>
+     <td><input type="number" class="form-control" style="width:75px;" id="vSpo2_${r.id}" value="${v ? v.spo2 || '' : ''}" placeholder="98"></td>
+     <td><label><input type="checkbox" id="vUnusual_${r.id}" ${v && v.is_unusual ? 'checked' : ''}> 特変</label></td>
+     <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveVital(${r.id})">登録</button></td>
+   `;
+   tbody.appendChild(tr);
  });
 }
 
 function saveVital(resId) {
- const temp = document.getElementById(`vTemp_${resId}`).value;
+ const tempInput = document.getElementById(`vTemp_${resId}`);
+ if (tempInput) formatTempInput(tempInput);
+ const temp = normalizeTempValue(tempInput ? tempInput.value : "");
  const bpHigh = document.getElementById(`vBpHigh_${resId}`).value;
  const bpLow = document.getElementById(`vBpLow_${resId}`).value;
  const pulse = document.getElementById(`vPulse_${resId}`).value;
@@ -6305,96 +6383,98 @@ function saveVital(resId) {
  const isUnusual = document.getElementById(`vUnusual_${resId}`).checked;
 
  if (!temp && !bpHigh && !bpLow && !pulse && !spo2) {
- alert("体温・血圧・脈拍・SpO2のいずれかを入力してください。");
- return;
+   alert("体温・血圧・脈拍・SpO2のいずれかを入力してください。");
+   return;
  }
 
  // 個別注意基準値チェック (いつもより外れている場合の確認警告)
  const res = gState.residents.find(x => x.id === resId);
  if (res) {
- const warnings = [];
- const tNum = temp ? parseFloat(temp) : null;
- const bpHNum = bpHigh ? parseInt(bpHigh, 10) : null;
- const bpLNum = bpLow ? parseInt(bpLow, 10) : null;
- const spNum = spo2 ? parseInt(spo2, 10) : null;
- const pNum = pulse ? parseInt(pulse, 10) : null;
+   const warnings = [];
+   const tNum = temp ? parseFloat(temp) : null;
+   const bpHNum = bpHigh ? parseInt(bpHigh, 10) : null;
+   const bpLNum = bpLow ? parseInt(bpLow, 10) : null;
+   const spNum = spo2 ? parseInt(spo2, 10) : null;
+   const pNum = pulse ? parseInt(pulse, 10) : null;
 
- if (tNum !== null && res.temp_max && tNum > res.temp_max) {
- warnings.push(`体温が個別上限(${res.temp_max}℃)を超えています (測定値: ${tNum}℃)`);
- }
- if (bpHNum !== null && res.bp_high_max && bpHNum > res.bp_high_max) {
- warnings.push(`最高血圧が個別上限(${res.bp_high_max}mmHg)を超えています (測定値: ${bpHNum}mmHg)`);
- }
- if (bpHNum !== null && res.bp_high_min && bpHNum < res.bp_high_min) {
- warnings.push(`最高血圧が個別下限(${res.bp_high_min}mmHg)を下回っています (測定値: ${bpHNum}mmHg)`);
- }
- if (spNum !== null && res.spo2_min && spNum < res.spo2_min) {
- warnings.push(`SpO2が個別下限(${res.spo2_min}%)を下回っています (測定値: ${spNum}%)`);
- }
- if (pNum !== null && res.pulse_max && pNum > res.pulse_max) {
- warnings.push(`脈拍が個別上限(${res.pulse_max}bpm)を超えています (測定値: ${pNum}bpm)`);
- }
- if (pNum !== null && res.pulse_min && pNum < res.pulse_min) {
- warnings.push(`脈拍が個別下限(${res.pulse_min}bpm)を下回っています (測定値: ${pNum}bpm)`);
- }
+   if (tNum !== null && res.temp_max && tNum > res.temp_max) {
+     warnings.push(`体温が個別上限(${res.temp_max}℃)を超えています (測定値: ${tNum}℃)`);
+   }
+   if (bpHNum !== null && res.bp_high_max && bpHNum > res.bp_high_max) {
+     warnings.push(`最高血圧が個別上限(${res.bp_high_max}mmHg)を超えています (測定値: ${bpHNum}mmHg)`);
+   }
+   if (bpHNum !== null && res.bp_high_min && bpHNum < res.bp_high_min) {
+     warnings.push(`最高血圧が個別下限(${res.bp_high_min}mmHg)を下回っています (測定値: ${bpHNum}mmHg)`);
+   }
+   if (spNum !== null && res.spo2_min && spNum < res.spo2_min) {
+     warnings.push(`SpO2が個別下限(${res.spo2_min}%)を下回っています (測定値: ${spNum}%)`);
+   }
+   if (pNum !== null && res.pulse_max && pNum > res.pulse_max) {
+     warnings.push(`脈拍が個別上限(${res.pulse_max}bpm)を超えています (測定値: ${pNum}bpm)`);
+   }
+   if (pNum !== null && res.pulse_min && pNum < res.pulse_min) {
+     warnings.push(`脈拍が個別下限(${res.pulse_min}bpm)を下回っています (測定値: ${pNum}bpm)`);
+   }
 
- if (warnings.length > 0) {
- const confirmMsg = ` いつもより数値が外れていますが間違いありませんか？\n\n【${res.name} 様の個別注意設定】\n・${warnings.join("\n・")}\n\nこの数値のまま記録してよろしいですか？`;
- if (!confirm(confirmMsg)) {
- return; // キャンセルされたら入力修正のため中断
- }
- }
+   if (warnings.length > 0) {
+     const msg = `【個別注意基準値の警告】\n${res.name} 様\n\n` + warnings.join("\n") + "\n\nこのまま登録しますか？";
+     if (!confirm(msg)) return;
+   }
  }
 
  const staff = document.getElementById("currentStaff").value;
- const tm = new Date().toTimeString().slice(0, 5);
+ const now = new Date();
+ const timeStr = now.toTimeString().slice(0, 5);
 
- const vitalObj = {
- id: Date.now(),
- date: gState.selectedDate,
- time: tm,
- resident_id: resId,
- temperature: temp ? parseFloat(temp) : null,
- bp_high: bpHigh ? parseInt(bpHigh) : null,
- bp_low: bpLow ? parseInt(bpLow) : null,
- pulse: pulse ? parseInt(pulse) : null,
- spo2: spo2 ? parseInt(spo2) : null,
- is_unusual: isUnusual ? 1 : 0,
- staff_name: staff
- };
+ db.data.vitals = db.data.vitals.filter(x => !(x.resident_id === resId && x.date === gState.selectedDate));
+ db.data.vitals.push({
+   id: Date.now(),
+   resident_id: resId,
+   date: gState.selectedDate,
+   time: timeStr,
+   temperature: temp ? parseFloat(temp) : null,
+   bp_high: bpHigh ? parseInt(bpHigh, 10) : null,
+   bp_low: bpLow ? parseInt(bpLow, 10) : null,
+   pulse: pulse ? parseInt(pulse, 10) : null,
+   spo2: spo2 ? parseInt(spo2, 10) : null,
+   is_unusual: isUnusual,
+   staff_name: staff
+ });
 
- db.data.vitals.push(vitalObj);
+ // 個人記録へ自動転記
+ const parts = [];
+ if (temp) parts.push(`体温 ${temp}℃`);
+ if (bpHigh || bpLow) parts.push(`血圧 ${bpHigh || '-'}/${bpLow || '-'}`);
+ if (pulse) parts.push(`脈拍 ${pulse}bpm`);
+ if (spo2) parts.push(`SpO2 ${spo2}%`);
+ if (isUnusual) parts.push(`【特変あり】`);
 
- // 個人記録へ自動連動
- const vitalText = `バイタル測定: 体温${temp || '-'}℃, 血圧${bpHigh || '-'}/${bpLow || '-'}, 脈拍${pulse || '-'}, SpO2 ${spo2 || '-'}%`;
  db.data.care_records.unshift({
- id: Date.now() + 1,
- recorded_at: `${gState.selectedDate} ${tm}`,
- resident_id: resId,
- category: "バイタル",
- content: vitalText,
- staff_name: staff
+   id: Date.now() + 1,
+   recorded_at: `${gState.selectedDate} ${timeStr}`,
+   resident_id: resId,
+   category: "バイタル",
+   content: parts.join(", "),
+   staff_name: staff
  });
 
- // 特変チェック時は連絡帳へ自動転記
+ // 特変の場合は連絡帳・申し送りへも自動転記
  if (isUnusual) {
- db.data.notebooks.unshift({
- id: Date.now() + 2,
- date: gState.selectedDate,
- category: "特変申し送り",
- content: `【特変】${res ? res.name : ''}様 ${vitalText} (通常値と差異あり)`,
- status: "未対応",
- staff_name: staff,
- resolved_staff: null
- });
+   db.data.notebooks.unshift({
+     id: Date.now() + 2,
+     date: gState.selectedDate,
+     category: "特変・バイタル異常",
+     priority: "重要",
+     status: "未対応",
+     content: `【バイタル特変】${res ? res.name : ''} 様: ${parts.join(', ')}`,
+     staff_name: staff
+   });
  }
 
  db.save();
  loadDateRecords(gState.selectedDate);
- alert("バイタルを記録しました（個人記録・特変は連絡帳へ連動完了）！");
+ alert(`${res ? res.name : '利用者'}様のバイタルを登録しました！`);
 }
-
-// 2. 排泄 (15分刻み・微小中大・水様便)
 function renderExcretionTable() {
  const tbody = document.querySelector("#excretionHistoryTable tbody");
  tbody.innerHTML = "";
@@ -6459,12 +6539,13 @@ function renderMealsTable() {
  <td><strong>${r.name} 様</strong></td>
  <td style="font-size:12px;">${r.diet_type} / <span style="color:#dc2626;">${r.allergies || 'なし'}</span></td>
  <td>
- <select id="mType_${r.id}" class="form-control" style="width:90px;">
- <option value="昼">昼食</option>
- <option value="朝">朝食</option>
- <option value="夕">夕食</option>
- <option value="おやつ">おやつ</option>
- </select>
+ <select id="mType_${r.id}" class="form-control" style="width:95px;">
+  <option value="朝">朝食</option>
+  <option value="昼">昼食</option>
+  <option value="夕">夕食</option>
+  <option value="おやつ">おやつ</option>
+  <option value="その他">その他</option>
+</select>
  </td>
  <td><input type="number" id="mMain_${r.id}" class="form-control" style="width:70px;" value="10" min="0" max="10"></td>
  <td><input type="number" id="mSide_${r.id}" class="form-control" style="width:70px;" value="10" min="0" max="10"></td>
@@ -7423,51 +7504,106 @@ function saveWeight(resId) {
  alert(`${r.name} 様の体重（${w.toFixed(1)}kg${diffNote}）を登録しました！個人記録へ自動転記されました。`);
 }
 
-// 9. シーツ交換チェック
+// 9. シーツ交換チェック (利用者切り替え ＆ 取消機能)
 function renderLinenTable() {
  const r = gState.residents.find(x => x.id === gState.selectedResidentId);
- document.getElementById("linenResidentName").textContent = r ? r.name : "利用者";
+ const resNameEl = document.getElementById("linenResidentName");
+ if (resNameEl) resNameEl.textContent = r ? r.name : "利用者";
+
+ // 利用者セレクトボックスの同期
+ const sel = document.getElementById("linenResidentSelect");
+ if (sel) {
+   sel.innerHTML = "";
+   gState.residents.forEach(res => {
+     const opt = document.createElement("option");
+     opt.value = res.id;
+     opt.textContent = `${res.room_no}号室 ${res.name} 様 (${res.status})`;
+     if (res.id === gState.selectedResidentId) opt.selected = true;
+     sel.appendChild(opt);
+   });
+ }
 
  const tbody = document.querySelector("#linenTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
  const linens = (db.data.linens || []).filter(l => l.date === gState.selectedDate);
 
+ if (linens.length === 0) {
+   tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">本日のシーツ・リネン交換記録はありません。上のボタンから記録できます。</td></tr>`;
+   return;
+ }
+
  linens.forEach(l => {
- const res = gState.residents.find(x => x.id === l.resident_id);
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td>${l.date}</td>
- <td>${res ? res.name + ' 様' : '-'}</td>
- <td><span style="font-weight:bold; color:#0284c7;">${l.exchange_type}</span></td>
- <td>${l.notes || '-'}</td>
- <td>${l.staff_name}</td>
- `;
- tbody.appendChild(tr);
+   const res = gState.residents.find(x => x.id === l.resident_id);
+   const tr = document.createElement("tr");
+   tr.innerHTML = `
+     <td>${l.date}</td>
+     <td><strong>${res ? res.room_no + '号室 ' + res.name + ' 様' : '-'}</strong></td>
+     <td><span style="font-weight:bold; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px;">${l.exchange_type}</span></td>
+     <td>${l.notes || '-'}</td>
+     <td>${l.staff_name || '-'}</td>
+     <td style="text-align:center;">
+       <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteLinenRecord(${l.id})">取消</button>
+     </td>
+   `;
+   tbody.appendChild(tr);
  });
+}
+
+function changeLinenResident(resId) {
+ selectResident(Number(resId));
 }
 
 function saveLinen(type) {
  const staff = document.getElementById("currentStaff").value;
  const tm = new Date().toTimeString().slice(0, 5);
  const r = gState.residents.find(x => x.id === gState.selectedResidentId);
+ const linenId = Date.now();
 
  db.data.linens.unshift({
- id: Date.now(), date: gState.selectedDate, resident_id: gState.selectedResidentId, exchange_type: type, notes: "", staff_name: staff
+   id: linenId,
+   date: gState.selectedDate,
+   resident_id: gState.selectedResidentId,
+   exchange_type: type,
+   notes: "",
+   staff_name: staff
  });
 
- // 個人記録へ自動転記
+ // 個人記録へ自動転記 (連動IDを持たせる)
  db.data.care_records.unshift({
- id: Date.now() + 1,
- recorded_at: `${gState.selectedDate} ${tm}`,
- resident_id: gState.selectedResidentId,
- category: "環境整備",
- content: `シーツ・リネン交換 (${type}) 実施`,
- staff_name: staff
+   id: linenId + 1,
+   recorded_at: `${gState.selectedDate} ${tm}`,
+   resident_id: gState.selectedResidentId,
+   category: "環境整備",
+   content: `シーツ・リネン交換 (${type}) 実施`,
+   staff_name: staff,
+   source_linen_id: linenId
  });
 
  db.save();
  loadDateRecords(gState.selectedDate);
  alert(`${r ? r.name : '利用者'}様のシーツ交換（${type}）を記録しました！個人記録へ自動転記されました。`);
+}
+
+function deleteLinenRecord(linenId) {
+ const target = (db.data.linens || []).find(l => l.id === linenId);
+ if (!target) return;
+ const res = gState.residents.find(x => x.id === target.resident_id);
+ const resName = res ? res.name + " 様" : "対象利用者";
+
+ if (!confirm(`【確認】\n${resName}のシーツ交換記録（${target.exchange_type}）を取り消しますか？\n連動した介護記録も削除されます。`)) {
+   return;
+ }
+
+ // シーツ記録を削除
+ db.data.linens = (db.data.linens || []).filter(l => l.id !== linenId);
+
+ // 連動する介護記録を削除
+ db.data.care_records = (db.data.care_records || []).filter(c => c.source_linen_id !== linenId && c.id !== (linenId + 1));
+
+ db.save();
+ loadDateRecords(gState.selectedDate);
+ alert(`${resName}のシーツ交換記録を取り消しました。`);
 }
 
 // 10. 身だしなみチェック
@@ -8557,81 +8693,274 @@ function receiveOrder(id) {
 }
 
 // 取引先マスタ
+// 4. 取引先マスタ ＆ 個別取扱商品管理
 function renderOfficeSuppliers() {
- const tbody = document.querySelector("#suppliersTable tbody");
- if (!tbody) return;
- tbody.innerHTML = "";
+ const container = document.getElementById("suppliersContainer");
+ if (!container) return;
+ container.innerHTML = "";
+
+ if (!Array.isArray(gState.suppliers) || gState.suppliers.length === 0) {
+   container.innerHTML = `
+     <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:8px; padding:32px; text-align:center; color:var(--text-muted);">
+       <p style="font-size:14px; margin-bottom:10px;">登録されている取引先がありません。</p>
+       <button type="button" class="btn btn-primary" style="font-size:13px;" onclick="openSupplierModal()">＋ 新規取引先を追加</button>
+     </div>
+   `;
+   return;
+ }
+
  gState.suppliers.forEach(s => {
- const tr = document.createElement("tr");
- const itemsList = (s.items || []).map(i => `${i.name} (¥${i.unit_price}/${i.unit})`).join(", ");
- tr.innerHTML = `
- <td><strong>${escapeHtml(s.name)}</strong></td>
- <td>${escapeHtml(s.phone || '-')}</td>
- <td>${escapeHtml(s.contact_person || '-')}</td>
- <td style="font-size:13px;">${escapeHtml(itemsList || '-')}</td>
- <td>
- <button class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626;" onclick="deleteSupplier(${s.id})">削除</button>
- </td>
- `;
- tbody.appendChild(tr);
+   const card = document.createElement("div");
+   card.className = "supplier-card";
+   card.style.background = "#ffffff";
+   card.style.border = "1px solid #e2e8f0";
+   card.style.borderRadius = "8px";
+   card.style.padding = "16px";
+   card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)";
+
+   const items = Array.isArray(s.items) ? s.items : [];
+
+   let itemsRows = "";
+   if (items.length === 0) {
+     itemsRows = `<tr><td colspan="4" style="text-align:center; color:var(--text-muted); padding:12px; font-size:12.5px;">登録されている取扱商品はありません。「＋ 取扱商品を追加」ボタンから登録してください。</td></tr>`;
+   } else {
+     items.forEach(it => {
+       itemsRows += `
+         <tr>
+           <td style="font-weight:bold; font-size:13px; color:#1e293b;">${escapeHtml(it.name)}</td>
+           <td style="font-weight:bold; font-size:13px; color:#0284c7;">¥${Number(it.unit_price || 0).toLocaleString()}</td>
+           <td style="font-size:12.5px; color:#475569;">${escapeHtml(it.unit || '個')}</td>
+           <td style="text-align:right; white-space:nowrap;">
+             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; margin-right:4px;" onclick="openSupplierItemModal(${s.id}, ${it.id || 0})">編集</button>
+             <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteSupplierItem(${s.id}, ${it.id || 0})">削除</button>
+           </td>
+         </tr>
+       `;
+     });
+   }
+
+   card.innerHTML = `
+     <!-- 取引先ヘッダー -->
+     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; border-bottom:1px solid #f1f5f9; padding-bottom:12px; margin-bottom:12px;">
+       <div>
+         <div style="display:flex; align-items:center; gap:8px;">
+           <h4 style="margin:0; font-size:16px; color:#0f172a; font-weight:bold;">${escapeHtml(s.name)}</h4>
+         </div>
+         <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px; font-size:12.5px; color:#475569;">
+           <span><strong>担当者:</strong> ${escapeHtml(s.contact_person || '未設定')}</span>
+           <span><strong>TEL:</strong> ${escapeHtml(s.phone || '未設定')}</span>
+           <span><strong>E-mail:</strong> ${escapeHtml(s.email || '未設定')}</span>
+         </div>
+       </div>
+       <div style="display:flex; gap:6px;">
+         <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="openSupplierModal(${s.id})">取引先情報を編集</button>
+         <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; color:#dc2626; border-color:#fca5a5;" onclick="deleteSupplier(${s.id})">取引先を削除</button>
+       </div>
+     </div>
+
+     <!-- 取扱商品セクション -->
+     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px;">
+       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+         <span style="font-size:13px; font-weight:bold; color:#334155;">取扱商品一覧 (${items.length}品目)</span>
+         <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 12px; background:#0284c7; border-color:#0284c7;" onclick="openSupplierItemModal(${s.id})">＋ 取扱商品を追加</button>
+       </div>
+       <table class="data-table" style="background:#ffffff; margin:0;">
+         <thead>
+           <tr style="background:#f1f5f9;">
+             <th>商品名</th>
+             <th style="width:110px;">単価</th>
+             <th style="width:90px;">単位</th>
+             <th style="width:110px; text-align:right;">商品操作</th>
+           </tr>
+         </thead>
+         <tbody>
+           ${itemsRows}
+         </tbody>
+       </table>
+     </div>
+   `;
+
+   container.appendChild(card);
  });
 }
 
-function openSupplierModal() {
- document.getElementById("suppName").value = "";
- document.getElementById("suppPhone").value = "";
- document.getElementById("suppContact").value = "";
- document.getElementById("suppItems").value = "";
- document.getElementById("supplierModal").style.display = "flex";
+// 取引先 親項目の登録・編集
+function openSupplierModal(suppId) {
+ const titleEl = document.getElementById("supplierModalTitle");
+ const idEl = document.getElementById("editSupplierId");
+ const nameEl = document.getElementById("suppName");
+ const contactEl = document.getElementById("suppContact");
+ const phoneEl = document.getElementById("suppPhone");
+ const emailEl = document.getElementById("suppEmail");
+
+ if (suppId) {
+   const s = gState.suppliers.find(x => x.id === suppId);
+   if (!s) return;
+   if (titleEl) titleEl.textContent = "取引先情報の編集";
+   idEl.value = s.id;
+   nameEl.value = s.name || "";
+   contactEl.value = s.contact_person || "";
+   phoneEl.value = s.phone || "";
+   emailEl.value = s.email || "";
+ } else {
+   if (titleEl) titleEl.textContent = "新規取引先の登録";
+   idEl.value = "";
+   nameEl.value = "";
+   contactEl.value = "";
+   phoneEl.value = "";
+   emailEl.value = "";
+ }
+ openModal("supplierModal");
 }
 
-function submitNewSupplier() {
+function submitSupplierModal() {
+ const idVal = document.getElementById("editSupplierId").value;
  const name = document.getElementById("suppName").value.trim();
- const phone = document.getElementById("suppPhone").value.trim();
  const contact = document.getElementById("suppContact").value.trim();
- const itemsText = document.getElementById("suppItems").value.trim();
+ const phone = document.getElementById("suppPhone").value.trim();
+ const email = document.getElementById("suppEmail").value.trim();
 
  if (!name) {
- alert("業者名を入力してください。");
- return;
+   alert("取引先名を入力してください。");
+   return;
  }
 
- const items = [];
- if (itemsText) {
- itemsText.split(/[\n,、]/).forEach(line => {
- const trimmed = line.trim();
- if (trimmed) {
- items.push({ name: trimmed, unit_price: 1000, unit: "個" });
- }
- });
+ if (idVal) {
+   // 既存更新
+   const s = gState.suppliers.find(x => x.id === Number(idVal));
+   if (s) {
+     s.name = name;
+     s.contact_person = contact;
+     s.phone = phone;
+     s.email = email;
+     alert(`取引先「${name}」の情報を更新しました。`);
+   }
+ } else {
+   // 新規作成
+   const newSupplier = {
+     id: Date.now(),
+     name: name,
+     contact_person: contact,
+     phone: phone,
+     email: email,
+     items: []
+   };
+   gState.suppliers.push(newSupplier);
+   alert(`新規取引先「${name}」を登録しました！`);
  }
 
- const newSupplier = {
- id: Date.now(),
- name: name,
- phone: phone,
- contact_person: contact,
- items: items
- };
-
- gState.suppliers.push(newSupplier);
  db.data.suppliers = gState.suppliers;
  db.save();
-
  renderOfficeSuppliers();
  closeModal("supplierModal");
- alert(`「${name}」を取引先マスタに登録しました！`);
 }
 
-function deleteSupplier(id) {
- const s = gState.suppliers.find(x => x.id === id);
+function deleteSupplier(suppId) {
+ const s = gState.suppliers.find(x => x.id === suppId);
  if (!s) return;
- if (confirm(`取引先「${s.name}」を削除しますか？`)) {
- gState.suppliers = gState.suppliers.filter(x => x.id !== id);
+ if (!confirm(`【警告】\n取引先「${s.name}」および登録されている全取扱商品を削除しますか？`)) {
+   return;
+ }
+ gState.suppliers = gState.suppliers.filter(x => x.id !== suppId);
  db.data.suppliers = gState.suppliers;
  db.save();
  renderOfficeSuppliers();
+ alert(`取引先「${s.name}」を削除しました。`);
+}
+
+// 取扱商品 子項目の追加・編集
+function openSupplierItemModal(suppId, itemId) {
+ const s = gState.suppliers.find(x => x.id === suppId);
+ if (!s) return;
+
+ document.getElementById("targetSupplierId").value = suppId;
+ document.getElementById("supplierItemModalSuppName").textContent = s.name;
+ const titleEl = document.getElementById("supplierItemModalTitle");
+ const idEl = document.getElementById("editSupplierItemId");
+ const nameEl = document.getElementById("itemModalName");
+ const priceEl = document.getElementById("itemModalPrice");
+ const unitEl = document.getElementById("itemModalUnit");
+
+ if (itemId) {
+   const it = (s.items || []).find(x => (x.id === itemId || x.name === itemId));
+   if (it) {
+     if (titleEl) titleEl.textContent = "取扱商品の編集";
+     idEl.value = it.id || it.name;
+     nameEl.value = it.name || "";
+     priceEl.value = it.unit_price || 0;
+     unitEl.value = it.unit || "個";
+   }
+ } else {
+   if (titleEl) titleEl.textContent = "新規取扱商品の追加";
+   idEl.value = "";
+   nameEl.value = "";
+   priceEl.value = "";
+   unitEl.value = "個";
  }
+
+ openModal("supplierItemModal");
+}
+
+function submitSupplierItemModal() {
+ const suppId = Number(document.getElementById("targetSupplierId").value);
+ const itemIdVal = document.getElementById("editSupplierItemId").value;
+ const name = document.getElementById("itemModalName").value.trim();
+ const priceStr = document.getElementById("itemModalPrice").value.trim();
+ const unit = document.getElementById("itemModalUnit").value.trim() || "個";
+
+ if (!name) {
+   alert("商品名を入力してください。");
+   return;
+ }
+ const price = parseInt(priceStr, 10);
+ if (isNaN(price) || price < 0) {
+   alert("有効な単価を入力してください。");
+   return;
+ }
+
+ const s = gState.suppliers.find(x => x.id === suppId);
+ if (!s) return;
+ if (!Array.isArray(s.items)) s.items = [];
+
+ if (itemIdVal) {
+   // 既存編集
+   const it = s.items.find(x => String(x.id) === String(itemIdVal) || x.name === itemIdVal);
+   if (it) {
+     it.name = name;
+     it.unit_price = price;
+     it.unit = unit;
+     alert(`商品「${name}」を更新しました。`);
+   }
+ } else {
+   // 新規商品追加
+   s.items.push({
+     id: Date.now(),
+     name: name,
+     unit_price: price,
+     unit: unit
+   });
+   alert(`「${s.name}」に商品「${name}」を追加しました！`);
+ }
+
+ db.data.suppliers = gState.suppliers;
+ db.save();
+ renderOfficeSuppliers();
+ closeModal("supplierItemModal");
+}
+
+function deleteSupplierItem(suppId, itemId) {
+ const s = gState.suppliers.find(x => x.id === suppId);
+ if (!s || !Array.isArray(s.items)) return;
+ const it = s.items.find(x => (x.id === itemId || x.name === itemId));
+ const itemName = it ? it.name : "商品";
+
+ if (!confirm(`取扱商品「${itemName}」を削除しますか？`)) return;
+
+ s.items = s.items.filter(x => !(x.id === itemId || x.name === itemId));
+ db.data.suppliers = gState.suppliers;
+ db.save();
+ renderOfficeSuppliers();
+ alert(`商品「${itemName}」を削除しました。`);
 }
 
 // 月末請求明細
@@ -12313,3 +12642,18 @@ if (typeof window !== "undefined") {
  window.printEmergencySummary = printEmergencySummary;
  window.copyEmergencySummaryText = copyEmergencySummaryText;
 }
+
+// グローバル公開 (新規追加分)
+window.formatTempInput = formatTempInput;
+window.normalizeTempValue = normalizeTempValue;
+window.onGlobalDateChange = onGlobalDateChange;
+window.changeDateByDays = changeDateByDays;
+window.setTodayDate = setTodayDate;
+window.changeLinenResident = changeLinenResident;
+window.deleteLinenRecord = deleteLinenRecord;
+window.openSupplierModal = openSupplierModal;
+window.submitSupplierModal = submitSupplierModal;
+window.deleteSupplier = deleteSupplier;
+window.openSupplierItemModal = openSupplierItemModal;
+window.submitSupplierItemModal = submitSupplierItemModal;
+window.deleteSupplierItem = deleteSupplierItem;

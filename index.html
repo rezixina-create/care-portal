@@ -56,20 +56,26 @@
  <!-- 【A】介護現場ポータル -->
  <!-- ============================================================ -->
  <div id="portalCareSection">
- 
- <!-- カレンダー ＆ 日付選択バー (記録がある日に○印) -->
- <section class="calendar-bar">
- <div class="cal-header">
- <div class="cal-month-nav">
- <button class="cal-month-btn" onclick="changeMonth(-1)">◀ 前月</button>
- <span id="calCurrentMonthLabel">2026年9月</span>
- <button class="cal-month-btn" onclick="changeMonth(1)">次月 ▶</button>
- </div>
- <div>
- <span style="font-size:13px; color:var(--text-muted);">● 赤丸＝記録あり（タップでその日の記録を表示）</span>
- </div>
- </div>
- <div class="cal-days-row" id="calDaysRow"></div>
+ <!-- 共通日付選択バー (横スライドカレンダー廃止・各タブ共通連動) -->
+ <section class="calendar-bar" style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:10px 16px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.04);">
+   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
+     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+       <span style="font-weight:bold; font-size:13px; color:#1e3a8a; background:#eff6ff; padding:4px 10px; border-radius:4px; border:1px solid #bfdbfe;">対象記録日</span>
+       <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="changeDateByDays(-1)">◀ 前日</button>
+       <input type="date" id="globalCareDatePicker" class="form-control" style="font-size:14px; font-weight:bold; padding:4px 8px; width:auto;" onchange="onGlobalDateChange(this.value)">
+       <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="changeDateByDays(1)">翌日 ▶</button>
+       <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; background:#f1f5f9;" onclick="setTodayDate()">今日</button>
+     </div>
+     <div style="display:flex; align-items:center; gap:10px;">
+       <span id="globalDateDisplayLabel" style="font-size:13.5px; font-weight:bold; color:#0f172a;"></span>
+       <span id="globalDateRecordCountBadge" style="font-size:11.5px; padding:3px 10px; border-radius:12px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;"></span>
+     </div>
+   </div>
+   <!-- 内部互換用ダミー（JSエラー防止） -->
+   <div style="display:none;">
+     <span id="calCurrentMonthLabel"></span>
+     <div id="calDaysRow"></div>
+   </div>
  </section>
 
  <!-- 利用者カードリスト -->
@@ -561,22 +567,26 @@
  <div id="weightChartContainer" style="margin-top:20px; background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:16px;"></div>
  </div>
 
- <!-- 10. シーツ交換チェック -->
+  <!-- 10. シーツ交換チェック -->
  <div id="tabCareLinen" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> シーツ ＆ リネン交換チェック表</span>
- </div>
- <div style="display:flex; gap:12px; margin-bottom:12px; align-items:center;">
- <span>選択中の利用者「<strong id="linenResidentName"></strong> 様」:</span>
- <button class="btn btn-primary" onclick="saveLinen('定期交換')">定期シーツ交換完了 </button>
- <button class="btn btn-warning" onclick="saveLinen('臨時汚染交換')">汚染による臨時交換 </button>
- </div>
- <table class="data-table" id="linenTable">
- <thead>
- <tr><th>交換日</th><th>氏名</th><th>区分</th><th>備考</th><th>担当</th></tr>
- </thead>
- <tbody></tbody>
- </table>
+   <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+     <span> シーツ ＆ リネン交換チェック表</span>
+     <span style="font-size:12px; color:var(--text-muted);">定期交換または汚染時の交換を記録できます（取消可能）</span>
+   </div>
+   <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 14px; margin-bottom:14px; display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+     <label style="font-size:13px; font-weight:bold; color:#1e3a8a;">対象利用者:</label>
+     <select id="linenResidentSelect" class="form-control" style="width:200px; font-weight:bold; font-size:13px;" onchange="changeLinenResident(this.value)"></select>
+     <button type="button" class="btn btn-primary" onclick="saveLinen('定期交換')">定期シーツ交換完了</button>
+     <button type="button" class="btn btn-warning" onclick="saveLinen('臨時汚染交換')">汚染による臨時交換</button>
+     <!-- 互換用 -->
+     <span style="display:none;" id="linenResidentName"></span>
+   </div>
+   <table class="data-table" id="linenTable">
+     <thead>
+       <tr><th>交換日</th><th>居室・氏名</th><th>区分</th><th>備考</th><th>担当</th><th style="width:70px; text-align:center;">操作</th></tr>
+     </thead>
+     <tbody></tbody>
+   </table>
  </div>
 
  <!-- 11. 身だしなみチェック (爪切り・髭剃り・耳掃除等) -->
@@ -816,18 +826,21 @@
  </table>
  </div>
 
- <!-- 4. 取引先マスタ -->
+  <!-- 4. 取引先マスタ -->
  <div id="tabOfficeSuppliers" style="display:none;" class="panel-card">
- <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
- <span> 取引先マスタ (取扱商品と単価の事前連動)</span>
- <button class="btn btn-primary" onclick="openSupplierModal()">＋ 新規取引先を追加</button>
- </div>
- <table class="data-table" id="suppliersTable">
- <thead>
- <tr><th>業者名</th><th>連絡先電話</th><th>担当者</th><th>取扱品目・単価</th><th>操作</th></tr>
- </thead>
- <tbody></tbody>
- </table>
+   <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:14px;">
+     <div>
+       <span style="font-size:16px; font-weight:bold; color:#0f172a;"> 取引先マスタ ＆ 取扱商品管理</span>
+       <span style="font-size:12px; color:var(--text-muted); margin-left:8px;">取引先の基本情報と、取扱商品を個別に登録・単価修正できます</span>
+     </div>
+     <button type="button" class="btn btn-primary" style="font-size:13px; font-weight:bold; padding:6px 16px;" onclick="openSupplierModal()">＋ 新規取引先を追加</button>
+   </div>
+
+   <!-- 取引先一覧コンテナ (各取引先のカード内に個別取扱商品テーブルと追加ボタン) -->
+   <div id="suppliersContainer" style="display:flex; flex-direction:column; gap:16px;"></div>
+
+   <!-- 互換用ダミーテーブル (JSエラー防止) -->
+   <table id="suppliersTable" style="display:none;"><tbody></tbody></table>
  </div>
 
  <!-- 5. 利用者別 月末請求明細 (事務員目視チェック＆修正対応) -->
@@ -1457,34 +1470,84 @@
  </div>
  </div>
 
- <!-- 新規取引先登録 モーダル -->
+  <!-- 取引先 登録・編集モーダル -->
  <div class="modal-overlay" id="supplierModal" style="display:none;">
- <div class="modal-card" style="max-width:520px;">
- <div class="modal-header">
- <h3> 新規取引先・業者の登録</h3>
- <button class="modal-close-btn" onclick="closeModal('supplierModal')">×</button>
+   <div class="modal-card" style="max-width:540px;">
+     <div class="modal-header">
+       <h3 id="supplierModalTitle"> 取引先・業者の登録・編集</h3>
+       <button type="button" class="modal-close-btn" onclick="closeModal('supplierModal')">&times;</button>
+     </div>
+     <input type="hidden" id="editSupplierId">
+     <div class="form-group" style="margin-bottom:10px;">
+       <label style="font-weight:bold; font-size:12px;">取引先名 (会社名・屋号) <span style="color:#dc2626;">*</span>:</label>
+       <input type="text" id="suppName" class="form-control" placeholder="例: サトー医療器株式会社">
+     </div>
+     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+       <div class="form-group">
+         <label style="font-weight:bold; font-size:12px;">担当者名:</label>
+         <input type="text" id="suppContact" class="form-control" placeholder="例: 佐藤 健司">
+       </div>
+       <div class="form-group">
+         <label style="font-weight:bold; font-size:12px;">電話番号:</label>
+         <input type="text" id="suppPhone" class="form-control" placeholder="例: 03-3333-5555">
+       </div>
+     </div>
+     <div class="form-group" style="margin-bottom:14px;">
+       <label style="font-weight:bold; font-size:12px;">メールアドレス:</label>
+       <input type="email" id="suppEmail" class="form-control" placeholder="例: info@sato-med.example.com">
+     </div>
+     <div style="display:none;">
+       <textarea id="suppItems"></textarea>
+     </div>
+     <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
+       <button type="button" class="btn btn-secondary" onclick="closeModal('supplierModal')">キャンセル</button>
+       <button type="button" class="btn btn-primary" onclick="submitSupplierModal()">取引先情報を保存</button>
+     </div>
+   </div>
  </div>
- <div class="form-group">
- <label>業者名 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="suppName" class="form-control" placeholder="例: サトー医療器株式会社">
- </div>
- <div class="form-group">
- <label>連絡先電話番号:</label>
- <input type="text" id="suppPhone" class="form-control" placeholder="例: 03-3333-5555">
- </div>
- <div class="form-group">
- <label>担当者名:</label>
- <input type="text" id="suppContact" class="form-control" placeholder="例: 佐藤 担当">
- </div>
- <div class="form-group">
- <label>取扱品目・単価の例 (メモ):</label>
- <textarea id="suppItems" class="form-control" rows="3" placeholder="例: 使い捨てマスク (¥450/箱), 消毒液 (¥980/本)"></textarea>
- </div>
- <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
- <button class="btn btn-secondary" onclick="closeModal('supplierModal')">キャンセル</button>
- <button class="btn btn-primary" onclick="submitNewSupplier()">取引先を登録</button>
- </div>
- </div>
+
+ <!-- 取扱商品 個別追加・編集モーダル -->
+ <div class="modal-overlay" id="supplierItemModal" style="display:none;">
+   <div class="modal-card" style="max-width:480px;">
+     <div class="modal-header">
+       <h3 id="supplierItemModalTitle"> 取扱商品の追加・編集</h3>
+       <button type="button" class="modal-close-btn" onclick="closeModal('supplierItemModal')">&times;</button>
+     </div>
+     <input type="hidden" id="targetSupplierId">
+     <input type="hidden" id="editSupplierItemId">
+     <div style="background:#eff6ff; padding:8px 12px; border-radius:6px; margin-bottom:12px; font-size:12.5px; color:#1e40af; border:1px solid #bfdbfe;">
+       対象取引先: <strong id="supplierItemModalSuppName"></strong>
+     </div>
+     <div class="form-group" style="margin-bottom:10px;">
+       <label style="font-weight:bold; font-size:12px;">商品名 <span style="color:#dc2626;">*</span>:</label>
+       <input type="text" id="itemModalName" class="form-control" placeholder="例: 使い捨て不織布マスク (50枚入)">
+     </div>
+     <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
+       <div class="form-group">
+         <label style="font-weight:bold; font-size:12px;">単価 (円) <span style="color:#dc2626;">*</span>:</label>
+         <input type="number" id="itemModalPrice" class="form-control" placeholder="例: 450" min="0">
+       </div>
+       <div class="form-group">
+         <label style="font-weight:bold; font-size:12px;">単位 <span style="color:#dc2626;">*</span>:</label>
+         <input type="text" id="itemModalUnit" class="form-control" placeholder="例: 箱, 本, パック, 個">
+       </div>
+     </div>
+     <div style="margin-bottom:10px;">
+       <span style="font-size:11px; color:#64748b;">よく使う単位: </span>
+       <div style="display:inline-flex; gap:4px; flex-wrap:wrap; margin-top:2px;">
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='箱'">箱</button>
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='本'">本</button>
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='パック'">パック</button>
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='個'">個</button>
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='枚'">枚</button>
+         <button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="document.getElementById('itemModalUnit').value='セット'">セット</button>
+       </div>
+     </div>
+     <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
+       <button type="button" class="btn btn-secondary" onclick="closeModal('supplierItemModal')">キャンセル</button>
+       <button type="button" class="btn btn-primary" onclick="submitSupplierItemModal()">商品を保存</button>
+     </div>
+   </div>
  </div>
 
  <!-- 3. 発注申請 モーダル -->
@@ -2259,7 +2322,7 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label style="font-size:12px; font-weight:bold; color:#334155;">体温 (℃):</label>
- <input type="number" step="0.1" id="pvmTemp" class="form-control" placeholder="例: 36.5" style="margin-top:3px;">
+ <input type="number" step="0.1" id="pvmTemp" class="form-control" placeholder="例: 36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)" style="margin-top:3px;">
  </div>
  <div>
  <label style="font-size:12px; font-weight:bold; color:#334155;">脈拍 (bpm):</label>
