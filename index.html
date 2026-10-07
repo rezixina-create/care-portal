@@ -53,7 +53,7 @@
  <!-- 1. 最上部ヘッダー -->
  <header class="portal-header">
  <div class="portal-title">
- <span id="facilityTitleSpan" onclick="editFacilityName()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="クリックして施設名を変更">
+ <span id="facilityTitleSpan" onclick="openFacilityNameModal()" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;" title="クリックして施設名を変更">
  <span id="facilityNameDisplay">陽だまりの家</span> 統合ポータル
  <span style="font-size:11px; opacity:0.8; padding:1px 5px; background:rgba(255,255,255,0.25); border-radius:4px; font-weight:normal;">施設名変更</span>
  </span>
@@ -1643,8 +1643,12 @@
  <h3> 新規発注申請の起案</h3>
  <button class="modal-close-btn" onclick="closeModal('orderModal')">×</button>
  </div>
- <div class="form-group">
- <label>取引先を選択:</label>
+ <div class="form-group" style="margin-bottom:12px;">
+  <label style="font-size:12.5px; font-weight:bold; color:#334155;">発注日 <span style="color:#dc2626;">*</span>:</label>
+  <input type="date" id="orderDateInput" class="form-control" style="width:auto; font-weight:bold;">
+</div>
+<div class="form-group">
+  <label>取引先を選択:</label>
  <select id="orderSupplierSelect" class="form-control" onchange="onSupplierChangeInOrder()"></select>
  </div>
  <div class="form-group">
@@ -3500,6 +3504,46 @@
       <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
         <button type="button" class="btn btn-secondary" onclick="closeModal('accountResetModal')">キャンセル</button>
         <button type="button" class="btn btn-primary" style="background:#b91c1c; border-color:#b91c1c;" onclick="executeAccountReset()">2名承認で初期化実行</button>
+      </div>
+    </div>
+  </div>
+
+
+  <!-- 5. 施設名変更モーダル (管理者・事務員 2名承認) -->
+  <div class="modal-overlay" id="facilityNameModal" style="display:none;">
+    <div class="modal-card" style="max-width:500px;">
+      <div class="modal-header">
+        <h3 style="color:#1e40af;">施設名・事業所名の変更（2名承認）</h3>
+        <button type="button" class="modal-close-btn" onclick="closeModal('facilityNameModal')">&times;</button>
+      </div>
+      <div style="padding:10px 0;">
+        <p style="font-size:12.5px; color:#475569; margin:0 0 12px 0;">
+          施設名の変更は全端末および印刷帳票に反映されます。誤変更防止のため管理者と事務員の2名による承認が必要です。
+        </p>
+        <div class="form-group" style="margin-bottom:14px;">
+          <label style="font-size:12.5px; font-weight:bold; color:#334155;">新しい施設名・事業所名 <span style="color:#dc2626;">*</span>:</label>
+          <input type="text" id="newFacilityNameInput" class="form-control" placeholder="例: 陽だまりの家" style="font-size:14px; font-weight:bold;">
+        </div>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:10px;">
+          <div style="font-weight:bold; font-size:12px; color:#1e40af; margin-bottom:6px;">承認者1: 管理者承認</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <select id="facApproverAdmin" class="form-control" style="font-size:12px;"></select>
+            <input type="password" maxlength="4" id="facAdminPin" class="form-control" placeholder="暗証番号4桁" style="font-size:12px; letter-spacing:2px;">
+          </div>
+        </div>
+
+        <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+          <div style="font-weight:bold; font-size:12px; color:#166534; margin-bottom:6px;">承認者2: 事務員承認</div>
+          <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+            <select id="facApproverOffice" class="form-control" style="font-size:12px;"></select>
+            <input type="password" maxlength="4" id="facOfficePin" class="form-control" placeholder="暗証番号4桁" style="font-size:12px; letter-spacing:2px;">
+          </div>
+        </div>
+      </div>
+      <div style="margin-top:16px; display:flex; justify-content:flex-end; gap:10px;">
+        <button type="button" class="btn btn-secondary" onclick="closeModal('facilityNameModal')">キャンセル</button>
+        <button type="button" class="btn btn-primary" style="background:#1e40af; border-color:#1e40af;" onclick="executeFacilityNameChange()">2名承認で施設名を更新</button>
       </div>
     </div>
   </div>

@@ -1753,18 +1753,110 @@ function getFacilityName() {
 }
 
 function editFacilityName() {
+ openFacilityNameModal();
+}
+
+function openFacilityNameModal() {
  const currentName = getFacilityName();
- const newName = prompt("施設名・事業所名を入力してください:", currentName);
- if (newName !== null) {
- const trimmed = newName.trim();
- if (trimmed !== "" && trimmed !== currentName) {
+ const input = document.getElementById("newFacilityNameInput");
+ if (input) input.value = currentName;
+
+ renderFacilityApproverSelects();
+ const p1 = document.getElementById("facAdminPin");
+ const p2 = document.getElementById("facOfficePin");
+ if (p1) p1.value = "";
+ if (p2) p2.value = "";
+
+ openModal("facilityNameModal");
+}
+
+function renderFacilityApproverSelects() {
+ const adminSel = document.getElementById("facApproverAdmin");
+ const officeSel = document.getElementById("facApproverOffice");
+ if (!adminSel || !officeSel) return;
+
+ adminSel.innerHTML = "";
+ officeSel.innerHTML = "";
+
+ const accounts = db.data.staff_accounts || [];
+ const roleOf = (name) => {
+   const st = (db.data.stamps || []).find(x => (x.name || x) === name);
+   return (st && st.role) ? st.role : "";
+ };
+
+ const admins = accounts.filter(a => /管理者|施設長/.test(roleOf(a.staff_name)));
+ admins.forEach(a => {
+   const opt = document.createElement("option");
+   opt.value = a.staff_name;
+   opt.textContent = `${a.staff_name} (${roleOf(a.staff_name) || "管理者"})`;
+   adminSel.appendChild(opt);
+ });
+
+ const offices = accounts.filter(a => /事務/.test(roleOf(a.staff_name)));
+ offices.forEach(a => {
+   const opt = document.createElement("option");
+   opt.value = a.staff_name;
+   opt.textContent = `${a.staff_name} (${roleOf(a.staff_name) || "事務員"})`;
+   officeSel.appendChild(opt);
+ });
+}
+
+function executeFacilityNameChange() {
+ const input = document.getElementById("newFacilityNameInput");
+ const newName = input ? input.value.trim() : "";
+ const adminStaff = document.getElementById("facApproverAdmin")?.value;
+ const officeStaff = document.getElementById("facApproverOffice")?.value;
+ const adminPin = (document.getElementById("facAdminPin")?.value || "").trim();
+ const officePin = (document.getElementById("facOfficePin")?.value || "").trim();
+
+ if (!newName) {
+   alert("施設名を入力してください。");
+   return;
+ }
+
+ const currentName = getFacilityName();
+ if (newName === currentName) {
+   alert("現在の施設名と同じです。変更する必要はありません。");
+   return;
+ }
+
+ if (!adminStaff || !officeStaff) {
+   alert("承認者（管理者および事務員）を選択してください。");
+   return;
+ }
+
+ if (adminStaff === officeStaff) {
+   alert("承認者1と承認者2には別の職員を選択してください（2名による承認が必要です）。");
+   return;
+ }
+
+ // 承認者の暗証番号照合
+ const stampOf = (name) => (db.data.stamps || []).find(x => (x.name || x) === name);
+ const adminObj = stampOf(adminStaff);
+ const officeObj = stampOf(officeStaff);
+
+ if (!adminObj || !/管理者|施設長/.test(adminObj.role || "")) {
+   alert("承認者1には管理者（施設長）を選択してください。");
+   return;
+ }
+ if (!officeObj || !/事務/.test(officeObj.role || "")) {
+   alert("承認者2には事務員を選択してください。");
+   return;
+ }
+ if (adminPin !== String(adminObj.pin || "0000") || officePin !== String(officeObj.pin || "0000")) {
+   alert("承認者の暗証番号が一致しません。施設名は変更されませんでした。");
+   return;
+ }
+
+ const confirmMsg = `【確認】\n施設名を以下の通り変更します。\n\n旧施設名: ${currentName}\n新施設名: ${newName}\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\nよろしいですか？`;
+ if (!confirm(confirmMsg)) return;
+
  if (!db.data) db.data = {};
- db.data.facility_name = trimmed;
+ db.data.facility_name = newName;
  updateFacilityNameUI();
  db.saveToServer();
- alert("施設名を「" + trimmed + "」に更新しました。\n（このPCおよび接続しているタブレット・スマホにも自動反映されます）");
- }
- }
+ closeModal("facilityNameModal");
+ alert(`施設名を「${newName}」に更新しました。\n全端末および各種印刷書類に反映されます。`);
 }
 
 function updateFacilityNameUI() {
@@ -2228,7 +2320,8 @@ function checkGlobalAlerts() {
  .map(o => o.item_name);
 
  const lowStockItems = (gState.inventory || []).filter(i => {
- if (i.current_stock > i.safety_stock) return false;
+  const threshold = (i.alert_threshold !== undefined && i.alert_threshold !== null && !isNaN(i.alert_threshold)) ? Number(i.alert_threshold) : i.safety_stock;
+  if (i.current_stock > threshold) return false;
  if (pendingOrderNames.includes(i.name)) return false; // すでに発注済ならアラート解除
  if (isAlertDismissed(`stock_${i.id}_${i.current_stock}`)) return false; // スタッフが手動完了・非表示にした場合
  return true;
@@ -8663,45 +8756,69 @@ function switchOfficeTab(tab) {
 // 在庫一覧 ＆ 棚卸し実数合わせ
 function renderOfficeInventory() {
  const tbody = document.querySelector("#officeInventoryTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
 
  gState.inventory.forEach(i => {
- const tr = document.createElement("tr");
- const isLow = i.current_stock <= i.safety_stock;
- if (isLow) tr.style.backgroundColor = "#fee2e2";
+   const tr = document.createElement("tr");
+   const alertThreshold = (i.alert_threshold !== undefined && i.alert_threshold !== null && !isNaN(i.alert_threshold)) ? Number(i.alert_threshold) : i.safety_stock;
+   const isLow = i.current_stock <= alertThreshold;
+   if (isLow) tr.style.backgroundColor = "#fee2e2";
 
- tr.innerHTML = `
- <td><strong>${i.name}</strong></td>
- <td>${i.is_personal_billable ? '<span style="color:#0284c7;">個人請求対象</span>' : '<span style="color:#16a34a;">施設負担</span>'}</td>
- <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${i.unit}</td>
- <td>${i.safety_stock} ${i.unit}</td>
- <td>¥${i.unit_price}</td>
- <td>${isLow ? '<span style="color:#dc2626; font-weight:bold;"> 要発注</span>' : '<span style="color:#16a34a;">正常</span>'}</td>
- <td>${i.supplier_name || '-'}</td>
- <td style="display:flex; gap:6px;">
- <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openOrderModalWithItem(${i.id})">発注起案</button>
- <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openInventoryAdjustModal(${i.id}, '${i.name}', ${i.current_stock})">棚卸し合わせ</button>
- </td>
- `;
- tbody.appendChild(tr);
+   tr.innerHTML = `
+     <td><strong>${i.name}</strong></td>
+     <td>${i.is_personal_billable ? '<span style="color:#0284c7;">個人対象</span>' : '<span style="color:#16a34a;">施設負担</span>'}</td>
+     <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${i.unit}</td>
+     <td>
+       <div style="display:inline-flex; align-items:center; gap:4px;">
+         <input type="number" class="form-control" style="width:70px; font-size:12px; padding:2px 6px;" value="${alertThreshold}" min="0" onchange="updateItemAlertThreshold(${i.id}, this.value)" title="在庫がこの数を下回るとアラートが出ます">
+         <span style="font-size:12px; color:#64748b;">${i.unit}</span>
+       </div>
+     </td>
+     <td>¥${Number(i.unit_price || 0).toLocaleString()}</td>
+     <td>${isLow ? '<span style="color:#dc2626; font-weight:bold;"> 要補充</span>' : '<span style="color:#16a34a;">適正</span>'}</td>
+     <td>${i.supplier_name || '-'}</td>
+     <td style="display:flex; gap:6px;">
+       <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openOrderModalWithItem(${i.id})">発注起案</button>
+       <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openInventoryAdjustModal(${i.id}, '${i.name}', ${i.current_stock})">棚卸</button>
+     </td>
+   `;
+   tbody.appendChild(tr);
  });
 
  const logTbody = document.querySelector("#inventoryLogsTable tbody");
- logTbody.innerHTML = "";
- (db.data.inventory_logs || []).slice(0, 30).forEach(l => {
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td>${l.timestamp}</td>
- <td><strong>${l.item_name}</strong></td>
- <td><span class="badge" style="${l.action_type==='消費'?'background:#fee2e2;color:#991b1b;':'background:#dcfce7;color:#166534;'}">${l.action_type}</span></td>
- <td>${l.change_qty > 0 ? '+' : ''}${l.change_qty}</td>
- <td><strong>${l.after_qty}</strong></td>
- <td>${l.resident_name ? l.resident_name + ' 様' : '-'}</td>
- <td><strong>${l.staff_name}</strong></td>
- <td>${l.reason || '-'}</td>
- `;
- logTbody.appendChild(tr);
- });
+ if (logTbody) {
+   logTbody.innerHTML = "";
+   (db.data.inventory_logs || []).slice(0, 30).forEach(l => {
+     const tr = document.createElement("tr");
+     tr.innerHTML = `
+       <td>${l.timestamp}</td>
+       <td><strong>${l.item_name}</strong></td>
+       <td><span class="badge" style="${l.action_type==='出庫'?'background:#fee2e2;color:#991b1b;':'background:#dcfce7;color:#166534;'}">${l.action_type}</span></td>
+       <td>${l.change_qty > 0 ? '+' : ''}${l.change_qty}</td>
+       <td><strong>${l.after_qty}</strong></td>
+       <td>${l.resident_name ? l.resident_name + ' 様' : '-'}</td>
+       <td><strong>${l.staff_name}</strong></td>
+       <td>${l.reason || '-'}</td>
+     `;
+     logTbody.appendChild(tr);
+   });
+ }
+}
+
+function updateItemAlertThreshold(itemId, newVal) {
+ const item = (gState.inventory || []).find(i => i.id === itemId);
+ if (!item) return;
+ const val = parseInt(newVal, 10);
+ if (isNaN(val) || val < 0) {
+   alert("有効な数値を入力してください。");
+   renderOfficeInventory();
+   return;
+ }
+ item.alert_threshold = val;
+ db.save();
+ checkGlobalAlerts();
+ renderOfficeInventory();
 }
 
 function openInventoryAdjustModal(itemId, itemName, currentStock) {
@@ -10437,14 +10554,19 @@ function deleteStaffStamp(index) {
 
 // 発注申請
 function openOrderModal() {
+ const dateInput = document.getElementById("orderDateInput");
+ if (dateInput) dateInput.value = toLocalDateStr(new Date());
+
  const suppSel = document.getElementById("orderSupplierSelect");
- suppSel.innerHTML = "";
- gState.suppliers.forEach(s => {
- const opt = document.createElement("option");
- opt.value = s.id;
- opt.textContent = s.name;
- suppSel.appendChild(opt);
- });
+ if (suppSel) {
+   suppSel.innerHTML = "";
+   gState.suppliers.forEach(s => {
+     const opt = document.createElement("option");
+     opt.value = s.id;
+     opt.textContent = s.name;
+     suppSel.appendChild(opt);
+   });
+ }
  onSupplierChangeInOrder();
  document.getElementById("orderModal").style.display = "flex";
 }
@@ -10572,19 +10694,29 @@ function calcOrderTotal() {
 }
 
 function submitOrderApply() {
- const suppId = parseInt(document.getElementById("orderSupplierSelect").value);
+ const suppId = parseInt(document.getElementById("orderSupplierSelect").value, 10);
  const supp = gState.suppliers.find(s => s.id === suppId);
  const itemName = document.getElementById("orderItemSelect").value;
- const qty = parseInt(document.getElementById("orderQty").value) || 1;
- const unitPrice = parseInt(document.getElementById("orderUnitPrice").value) || 0;
+ const qty = parseInt(document.getElementById("orderQty").value, 10) || 1;
+ const unitPrice = parseInt(document.getElementById("orderUnitPrice").value, 10) || 0;
  const totalPrice = qty * unitPrice;
  const reason = document.getElementById("orderReason").value;
- const applicant = document.getElementById("currentStaff").value;
+ const applicant = (gState.session && gState.session.staffName) ? gState.session.staffName : ((document.getElementById("currentStaff")?.value) || "担当者");
+ const orderDate = (document.getElementById("orderDateInput")?.value) || toLocalDateStr(new Date());
 
  db.data.orders.unshift({
- id: Date.now(), ordered_at: toLocalDateStr(new Date()), supplier_id: suppId,
- supplier_name: supp ? supp.name : "", item_name: itemName, quantity: qty,
- unit_price: unitPrice, total_price: totalPrice, reason: reason, status: "申請中",
+   id: Date.now(),
+   ordered_at: orderDate,
+   order_date: orderDate,
+   supplier_id: suppId,
+   supplier_name: supp ? supp.name : "",
+   item_name: itemName,
+   quantity: qty,
+   unit_price: unitPrice,
+   total_price: totalPrice,
+   reason: reason,
+   applicant: applicant,
+   status: "申請中"
  });
  
  // 新規申請時は管理者向け未承認アラートの非表示を解除
@@ -13630,3 +13762,7 @@ window.executeDismissAlert = executeDismissAlert;
 window.openAlertLogModal = openAlertLogModal;
 window.restoreAlert = restoreAlert;
 window.onLoginStaffSelectChange = onLoginStaffSelectChange;
+// 第2段階 グローバル公開
+window.openFacilityNameModal = openFacilityNameModal;
+window.executeFacilityNameChange = executeFacilityNameChange;
+window.updateItemAlertThreshold = updateItemAlertThreshold;
