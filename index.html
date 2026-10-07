@@ -732,16 +732,20 @@
 
  <!-- 13. レク履歴 (被り防止) -->
  <div id="tabCareRecreation" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> レクリエーション実施記録 (内容の被り防止履歴)</span>
- </div>
- <table class="data-table" id="recreationTable">
- <thead>
- <tr><th>実施日</th><th>レク種別・タイトル</th><th>実施内容・様子</th><th>担当職員</th></tr>
- </thead>
- <tbody></tbody>
- </table>
- </div>
+		<div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+			<div>
+				<span style="font-size:16px; font-weight:bold; color:#0f172a;"> レクリエーション・アクティビティ実施記録</span>
+				<span style="font-size:12px; color:var(--text-muted); margin-left:8px;">体操・脳トレ・音楽・季節行事・参加者の反応記録</span>
+			</div>
+			<button type="button" class="btn btn-primary" style="font-size:12.5px; font-weight:bold;" onclick="openRecreationModal()">＋ レクリエーション記録を追加</button>
+		</div>
+		<table class="data-table" id="recreationTable">
+			<thead>
+				<tr><th>実施日</th><th>プログラム種別</th><th>種目・レク名</th><th>参加人数</th><th>内容詳細</th><th>利用者のご様子・反応</th><th>特記</th><th>担当者</th><th>操作</th></tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+	</div>
 
  <!-- 14. 連絡帳 ＆ 申し送り (月間連絡表と日々の申し送りを完全分離) -->
  <div id="tabCareNotebook" style="display:none;">
@@ -897,10 +901,14 @@
  </div>
 
  <!-- 2. 非常食・防災備蓄 (独立管理 ＆ 残り2週間告知) -->
- <div id="tabOfficeEmergency" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> 非常食・防災備蓄品 管理 (残り2週間で消費促進告知)</span>
- </div>
+	<div id="tabOfficeEmergency" style="display:none;" class="panel-card">
+		<div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+			<div>
+				<span style="font-size:16px; font-weight:bold; color:#0f172a;"> 非常食・防災備蓄品 管理 (残り2週間で消費促進告知)</span>
+				<span style="font-size:12px; color:var(--text-muted); margin-left:8px;">主食・副食・飲料水・アレルギー対応食・衛生備品</span>
+			</div>
+			<button type="button" class="btn btn-primary" style="font-size:12.5px; font-weight:bold;" onclick="openEmergencySupplyModal()">＋ 非常食・備蓄品を追加</button>
+		</div>
  <table class="data-table" id="emergencyTable">
  <thead>
  <tr><th>品名</th><th>数量</th><th>単位</th><th>賞味期限</th><th>状態</th><th>保管メモ</th></tr>
@@ -1100,27 +1108,31 @@
  </div>
 
  <!-- 9. ワクチン予防接種管理 -->
- <div id="tabOfficeVaccine" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> ワクチン予防接種管理 (同意書有無・接種実績)</span>
- </div>
- <table class="data-table" id="vaccineTable">
- <thead>
- <tr><th>居室</th><th>氏名</th><th>ワクチン名</th><th>家族同意書</th><th>接種日</th><th>状態</th></tr>
- </thead>
- <tbody>
- <tr><td>101</td><td>佐藤 太郎 様</td><td>インフルエンザ</td><td><span style="color:#16a34a; font-weight:bold;"> 同意受領済</span></td><td>2026-10-15予定</td><td>準備完了</td></tr>
- <tr><td>102</td><td>田中 ハナ 様</td><td>インフルエンザ</td><td><span style="color:#16a34a; font-weight:bold;"> 同意受領済</span></td><td>2026-10-15予定</td><td>準備完了</td></tr>
- <tr><td>103</td><td>鈴木 一郎 様</td><td>インフルエンザ</td><td><span style="color:#b45309; font-weight:bold;">未返送 (確認中)</span></td><td>-</td><td>家族へ連絡中</td></tr>
- </tbody>
- </table>
- </div>
+	<div id="tabOfficeVaccine" style="display:none;" class="panel-card">
+		<div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+			<div>
+				<span style="font-size:16px; font-weight:bold; color:#0f172a;"> ワクチン予防接種管理 (同意書有無・接種実績・副反応観察)</span>
+				<span style="font-size:12px; color:var(--text-muted); margin-left:8px;">インフルエンザ・コロナ・肺炎球菌等の接種計画と実施台帳</span>
+			</div>
+			<button type="button" class="btn btn-primary" style="font-size:12.5px; font-weight:bold;" onclick="openVaccineModal()">＋ 予防接種記録を登録・更新</button>
+		</div>
+		<table class="data-table" id="vaccineTable">
+			<thead>
+				<tr><th>居室</th><th>氏名</th><th>ワクチン種別</th><th>回数</th><th>家族同意書</th><th>接種日</th><th>接種医・医療機関</th><th>ロット番号</th><th>副反応観察</th><th>状態</th><th>操作</th></tr>
+			</thead>
+			<tbody></tbody>
+		</table>
+	</div>
 
  <!-- 10. 消防・避難訓練記録 -->
- <div id="tabOfficeFire" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> 消防・避難訓練の実施記録 (年2回・法令義務・消防署点検)</span>
- </div>
+	<div id="tabOfficeFire" style="display:none;" class="panel-card">
+		<div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+			<div>
+				<span style="font-size:16px; font-weight:bold; color:#0f172a;"> 消防・避難訓練の実施記録 (年2回・法令義務・消防署点検)</span>
+				<span style="font-size:12px; color:var(--text-muted); margin-left:8px;">出火想定シナリオ・所要時間・消防署通報の実施管理</span>
+			</div>
+			<button type="button" class="btn btn-primary" style="font-size:12.5px; font-weight:bold;" onclick="openFireDrillModal()">＋ 消防・避難訓練を記録</button>
+		</div>
  <table class="data-table" id="fireTable">
  <thead>
  <tr><th>実施日</th><th>訓練種別</th><th>参加人数</th><th>想定シナリオ・訓練内容</th><th>講評・所見</th><th>統括責任者</th></tr>
@@ -1780,15 +1792,24 @@
  <input type="text" id="incPlace" class="form-control" placeholder="例: 居室ベッド脇, 食堂など">
  </div>
  </div>
- <div class="form-group">
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
- <label style="margin:0;">発生状況 (何が起きたか):</label>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; font-weight:bold;" onclick="openBodySchemaForIncident()">
- 受傷部位をシェーマ図で確認・記録
- </button>
- </div>
- <textarea id="incSituation" class="form-control" rows="3"></textarea>
- </div>
+ 		<div class="form-group">
+			<label>発生状況 (何が起きたか):</label>
+			<textarea id="incSituation" class="form-control" rows="3" placeholder="転倒の経緯、発見時の体位、本人の訴え等"></textarea>
+		</div>
+		<div class="form-group" style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px; margin-bottom:12px;">
+			<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; flex-wrap:wrap; gap:6px;">
+				<div>
+					<strong style="font-size:12.5px; color:#991b1b;">受傷部位シェーマ図 (事故・外傷専用ピン)</strong>
+					<span style="font-size:11px; color:#64748b; margin-left:6px;">日常の皮膚軟膏処置ピンとは完全分離</span>
+				</div>
+				<button type="button" class="btn btn-danger" style="font-size:11.5px; padding:3px 10px; font-weight:bold; background:#dc2626; border-color:#dc2626; color:#ffffff;" onclick="openIncidentInjurySchemaModal()">
+					受傷部位をシェーマ図に記録・編集
+				</button>
+			</div>
+			<div id="incInjuryPinsSummary" style="font-size:12px; color:#475569; padding:6px 8px; background:#ffffff; border:1px dashed #cbd5e1; border-radius:6px; min-height:36px; display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
+				現在、登録されている負傷ピンはありません（必要な場合は上のボタンから受傷部位をピン留めできます）
+			</div>
+		</div>
  <div class="form-group">
  <label>原因の分析:</label>
  <textarea id="incCause" class="form-control" rows="2" placeholder="足元のスリッパの引っかかり、照明の暗さ等"></textarea>
@@ -3608,5 +3629,352 @@
     </div>
   </div>
 
+
+	<!-- ============================================================ -->
+	<!-- 【第3段階・後半 新規モーダル群】 -->
+	<!-- ============================================================ -->
+
+	<!-- A. 事故・ヒヤリハット 受傷部位シェーマ図モーダル (軟膏処置ピンと完全分離) -->
+	<div class="modal-overlay" id="incidentInjurySchemaModal" style="display:none; z-index:9999;">
+		<div class="modal-card" style="max-width:1050px; width:95%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #dc2626; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+				<div>
+					<div style="display:flex; align-items:center; gap:8px;">
+						<h3 style="margin:0; color:#991b1b; font-size:19px;">事故・ヒヤリハット 受傷部位シェーマ図</h3>
+						<span class="badge" style="background:#dc2626; color:white; font-size:12px; padding:3px 8px;">事故専用外傷ピン</span>
+						<span id="incInjuryResidentBadge" class="badge" style="background:#334155; color:white; font-size:12px; padding:3px 8px;"></span>
+					</div>
+					<p style="font-size:12px; color:#64748b; margin:4px 0 0 0;">
+						※ 日常ケアの軟膏処置ピン（皮膚シェーマ）とは完全に分離して管理されます。人体図をクリックして負傷箇所にピンを配置してください。
+					</p>
+				</div>
+				<button class="modal-close-btn" onclick="closeModal('incidentInjurySchemaModal')">&times;</button>
+			</div>
+
+			<!-- メインレイアウト: 2カラム (左: シェーマ図、右: 受傷ピン一覧＆編集) -->
+			<div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; align-items:start;">
+				<!-- 左: 人体シェーマ図 -->
+				<div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:10px; text-align:center;">
+					<div style="font-size:12px; font-weight:bold; color:#475569; margin-bottom:6px; display:flex; justify-content:space-between; padding:0 12px;">
+						<span>【正面図】 (前面・左右)</span>
+						<span>【背面図】 (背面・左右)</span>
+					</div>
+					<div id="incInjuryImageWrapper" style="position:relative; width:100%; display:inline-block; user-select:none; cursor:crosshair; border:1px solid #e2e8f0; border-radius:4px; overflow:hidden; background:#fafafa;" onclick="handleIncidentInjuryImageClick(event)">
+						<img src="assets/body_schema.jpg" alt="受傷部位シェーマ図" style="width:100%; height:auto; display:block; pointer-events:none;">
+						<div id="incInjuryPinsOverlay" style="position:absolute; top:0; left:0; width:100%; height:100%; pointer-events:none;"></div>
+					</div>
+					<div style="font-size:11px; color:#64748b; margin-top:6px;">
+						※ 図をクリックすると、その位置の座標がセットされます (赤丸番号で表示)
+					</div>
+				</div>
+
+				<!-- 右: ピン一覧＆ピン登録フォーム -->
+				<div>
+					<div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:12px; margin-bottom:12px;">
+						<div style="font-weight:bold; font-size:13px; color:#0f172a; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+							<span id="incInjuryPinsCountTitle">登録中の受傷ピン (0件)</span>
+							<span style="font-size:11px; color:#64748b;">番号をクリックで訂正</span>
+						</div>
+						<div id="incInjuryPinsTableContainer" style="max-height:220px; overflow-y:auto;"></div>
+					</div>
+
+					<!-- ピン編集ボックス -->
+					<div id="incInjuryPinEditBox" style="background:#fef2f2; border:2px solid #dc2626; border-radius:8px; padding:14px;">
+						<div style="font-weight:bold; font-size:13px; color:#991b1b; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center;">
+							<span id="incInjuryPinEditTitle">新規受傷ピン登録 (図をクリックして位置指定)</span>
+							<span id="incInjuryCoordsBadge" style="font-size:11px; color:#64748b;"></span>
+						</div>
+						<input type="hidden" id="incInjuryEditPinId">
+						<input type="hidden" id="incInjuryXPct">
+						<input type="hidden" id="incInjuryYPct">
+
+						<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+							<div>
+								<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">負傷部位名:</label>
+								<input type="text" id="incInjurySiteName" class="form-control" style="font-size:12.5px;" placeholder="例: 右膝、左前腕、頭頂部等">
+							</div>
+							<div>
+								<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">外傷・受傷種別:</label>
+								<select id="incInjuryType" class="form-control" style="font-size:12.5px;">
+									<option value="擦過傷 (すり傷)">擦過傷 (すり傷)</option>
+									<option value="打撲 (たんこぶ・腫れ)">打撲 (たんこぶ・腫れ)</option>
+									<option value="表皮剥離 (皮膚めくれ)">表皮剥離 (皮膚めくれ)</option>
+									<option value="皮下出血 (内出血・紫斑)">皮下出血 (内出血・紫斑)</option>
+									<option value="切創・裂傷 (切り傷)">切創・裂傷 (切り傷)</option>
+									<option value="骨折疑い">骨折疑い</option>
+									<option value="捻挫・関節痛">捻挫・関節痛</option>
+									<option value="熱傷 (火傷)">熱傷 (火傷)</option>
+									<option value="その他外傷">その他外傷</option>
+								</select>
+							</div>
+						</div>
+
+						<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+							<div>
+								<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">程度・重症度:</label>
+								<select id="incInjurySeverity" class="form-control" style="font-size:12.5px;">
+									<option value="軽微 (発赤・小擦過傷)">軽微 (発赤・小擦過傷)</option>
+									<option value="要観察 (経過観察中)">要観察 (経過観察中)</option>
+									<option value="施設内処置完了">施設内処置完了</option>
+									<option value="受診・医師精査要">受診・医師精査要</option>
+								</select>
+							</div>
+							<div>
+								<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">応急処置・対応内容:</label>
+								<input type="text" id="incInjuryTreatment" class="form-control" style="font-size:12.5px;" placeholder="例: 生理食塩水洗浄、ガーゼ保護、冷却等">
+							</div>
+						</div>
+
+						<div style="margin-bottom:12px;">
+							<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">特記・詳細観察:</label>
+							<input type="text" id="incInjuryNotes" class="form-control" style="font-size:12.5px;" placeholder="例: 出血は圧迫にて止血、骨変形・熱感なし">
+						</div>
+
+						<div style="display:flex; justify-content:space-between; align-items:center;">
+							<button type="button" class="btn btn-secondary" style="font-size:11.5px;" onclick="resetIncidentInjuryForm()">入力をクリア</button>
+							<button type="button" class="btn btn-danger" style="font-size:12px; font-weight:bold; background:#dc2626; border-color:#dc2626;" onclick="saveIncidentInjuryPin()">受傷ピンを登録・更新</button>
+						</div>
+					</div>
+				</div>
+			</div>
+
+			<div style="margin-top:16px; border-top:1px solid #cbd5e1; padding-top:12px; display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('incidentInjurySchemaModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" style="font-weight:bold; background:#1e40af; border-color:#1e40af;" onclick="commitIncidentInjuryPins()">受傷ピンを報告書に反映して閉じる</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- B. レクリエーション記録 登録モーダル -->
+	<div class="modal-overlay" id="recreationModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #2563eb; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+				<h3 style="margin:0; font-size:17px; font-weight:bold; color:#1e40af;">レクリエーション・アクティビティ 記録登録</h3>
+				<button class="modal-close-btn" onclick="closeModal('recreationModal')">&times;</button>
+			</div>
+			<input type="hidden" id="recEditId">
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">実施日:</label>
+					<input type="date" id="recDate" class="form-control" style="font-size:13px;">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">プログラム種別:</label>
+					<select id="recType" class="form-control" style="font-size:13px;">
+						<option value="機能訓練体操">機能訓練体操</option>
+						<option value="音楽療法・合唱">音楽療法・合唱</option>
+						<option value="脳トレ・クイズ">脳トレ・クイズ</option>
+						<option value="工作・手芸・絵画">工作・手芸・絵画</option>
+						<option value="季節行事・イベント">季節行事・イベント</option>
+						<option value="園芸・屋外散歩">園芸・屋外散歩</option>
+						<option value="喫茶・リラックス">喫茶・リラックス</option>
+					</select>
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">種目・プログラム名:</label>
+					<input type="text" id="recTitle" class="form-control" style="font-size:13px;" placeholder="例: 懐かしの唱歌合唱 ＆ リズム体操">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">参加人数:</label>
+					<input type="number" id="recParticipants" class="form-control" style="font-size:13px;" placeholder="14" value="12">
+				</div>
+			</div>
+			<div style="margin-bottom:12px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">内容詳細・実施手順:</label>
+				<textarea id="recContent" class="form-control" rows="2" style="font-size:13px;" placeholder="実施した楽曲や運動内容、盛り上がり状況等"></textarea>
+			</div>
+			<div style="margin-bottom:12px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">利用者のご様子・反応:</label>
+				<textarea id="recReaction" class="form-control" rows="2" style="font-size:13px;" placeholder="終始笑顔で手拍子参加された。自発的な発言や歌唱が多く見られた等"></textarea>
+			</div>
+			<div style="margin-bottom:16px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">特記・個別配慮事項:</label>
+				<input type="text" id="recNotes" class="form-control" style="font-size:13px;" placeholder="例: 佐藤様は途中疲労訴えあり水分補給後見学へ移行">
+			</div>
+			<div style="display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('recreationModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitRecreationRecord()">レク記録を保存</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- C. 消防・避難訓練記録 登録モーダル -->
+	<div class="modal-overlay" id="fireDrillModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #b45309; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+				<h3 style="margin:0; font-size:17px; font-weight:bold; color:#92400e;">消防・避難訓練 実施記録登録</h3>
+				<button class="modal-close-btn" onclick="closeModal('fireDrillModal')">&times;</button>
+			</div>
+			<input type="hidden" id="fireEditId">
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">実施日:</label>
+					<input type="date" id="fireDate" class="form-control" style="font-size:13px;">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">訓練種別:</label>
+					<select id="fireType" class="form-control" style="font-size:13px;">
+						<option value="昼間火災想定訓練">昼間火災想定訓練</option>
+						<option value="夜間想定避難訓練 (少人数)">夜間想定避難訓練 (少人数)</option>
+						<option value="地震・津波避難訓練">地震・津波避難訓練</option>
+						<option value="水害・浸水対策訓練">水害・浸水対策訓練</option>
+						<option value="総合消防点検・消火器訓練">総合消防点検・消火器訓練</option>
+					</select>
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">参加人数 (入所者＋職員):</label>
+					<input type="text" id="fireParticipants" class="form-control" style="font-size:13px;" placeholder="例: 28名 (入所者16, 職員12)">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">避難所要時間:</label>
+					<input type="text" id="fireDuration" class="form-control" style="font-size:13px;" placeholder="例: 6分45秒">
+				</div>
+			</div>
+			<div style="margin-bottom:12px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">想定出火元・訓練シナリオ:</label>
+				<input type="text" id="fireScenario" class="form-control" style="font-size:13px;" placeholder="例: 1F厨房ガスコンロ出火、初期消火失敗、非常ベル吹鳴">
+			</div>
+			<div style="margin-bottom:12px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">講評・反省点・次回課題:</label>
+				<textarea id="fireNotes" class="form-control" rows="2" style="font-size:13px;" placeholder="車椅子誘導時の声かけ連携良好。夜間訓練に向けたシミュレーションを継続。"></textarea>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">消防署への事前通報・報告:</label>
+					<input type="text" id="fireReported" class="form-control" style="font-size:13px;" placeholder="事前通報済 / 報告済">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">統括責任者:</label>
+					<input type="text" id="fireSupervisor" class="form-control" style="font-size:13px;" value="施設長">
+				</div>
+			</div>
+			<div style="display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('fireDrillModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitFireDrillRecord()">訓練記録を保存</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- D. 非常食・備蓄品 追加モーダル -->
+	<div class="modal-overlay" id="emergencySupplyModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:580px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #ea580c; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+				<h3 style="margin:0; font-size:17px; font-weight:bold; color:#c2410c;">非常食・防災備蓄品 登録・更新</h3>
+				<button class="modal-close-btn" onclick="closeModal('emergencySupplyModal')">&times;</button>
+			</div>
+			<input type="hidden" id="emgEditId">
+			<div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">品名:</label>
+					<input type="text" id="emgName" class="form-control" style="font-size:13px;" placeholder="例: アルファ化米 (白飯・五目ご飯)">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">カテゴリ:</label>
+					<select id="emgCat" class="form-control" style="font-size:13px;">
+						<option value="主食">主食</option>
+						<option value="副食・缶詰">副食・缶詰</option>
+						<option value="飲料水・保存水">飲料水・保存水</option>
+						<option value="特別食・とろみ">特別食・とろみ</option>
+						<option value="衛生・防災用品">衛生・防災用品</option>
+					</select>
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">数量:</label>
+					<input type="number" id="emgQty" class="form-control" style="font-size:13px;" placeholder="100">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">単位:</label>
+					<input type="text" id="emgUnit" class="form-control" style="font-size:13px;" placeholder="食 / 本 / 箱" value="食">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">賞味期限:</label>
+					<input type="date" id="emgExpiry" class="form-control" style="font-size:13px;">
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">保管場所:</label>
+					<input type="text" id="emgPlace" class="form-control" style="font-size:13px;" placeholder="例: 1F防災備蓄倉庫 A棚">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">特記事項・備考:</label>
+					<input type="text" id="emgNotes" class="form-control" style="font-size:13px;" placeholder="例: アレルギー対応、スプーン同梱">
+				</div>
+			</div>
+			<div style="display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('emergencySupplyModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitEmergencySupplyRecord()">備蓄品を保存</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- E. ワクチン接種記録 登録モーダル -->
+	<div class="modal-overlay" id="vaccineModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #059669; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+				<h3 style="margin:0; font-size:17px; font-weight:bold; color:#065f46;">ワクチン予防接種 記録登録・更新</h3>
+				<button class="modal-close-btn" onclick="closeModal('vaccineModal')">&times;</button>
+			</div>
+			<input type="hidden" id="vacEditId">
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">対象利用者:</label>
+					<select id="vacResidentSelect" class="form-control" style="font-size:13px;"></select>
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">ワクチン種別:</label>
+					<select id="vacType" class="form-control" style="font-size:13px;">
+						<option value="季節性インフルエンザ">季節性インフルエンザ</option>
+						<option value="新型コロナウイルス (定期)">新型コロナウイルス (定期)</option>
+						<option value="肺炎球菌 (23価/13価)">肺炎球菌 (23価/13価)</option>
+						<option value="帯状疱疹ワクチン">帯状疱疹ワクチン</option>
+						<option value="その他">その他</option>
+					</select>
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">接種回数:</label>
+					<input type="text" id="vacDose" class="form-control" style="font-size:13px;" placeholder="例: 定期接種 / 1回目" value="定期接種">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">家族同意状況:</label>
+					<select id="vacConsent" class="form-control" style="font-size:13px;">
+						<option value="同意受領済">同意受領済</option>
+						<option value="未返送 (確認中)">未返送 (確認中)</option>
+						<option value="接種見送り (辞退)">接種見送り (辞退)</option>
+					</select>
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">接種日 / 予定日:</label>
+					<input type="date" id="vacDate" class="form-control" style="font-size:13px;">
+				</div>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">接種医療機関・医師:</label>
+					<input type="text" id="vacDoctor" class="form-control" style="font-size:13px;" placeholder="例: 施設配置医・中央医院">
+				</div>
+				<div>
+					<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">ロット番号:</label>
+					<input type="text" id="vacLot" class="form-control" style="font-size:13px;" placeholder="例: AB1234">
+				</div>
+			</div>
+			<div style="margin-bottom:16px;">
+				<label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:3px;">副反応観察・特記:</label>
+				<input type="text" id="vacReactions" class="form-control" style="font-size:13px;" placeholder="例: 異常なし、接種後30分間アナフィラキシー徴候なし">
+			</div>
+			<div style="display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('vaccineModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitVaccineRecord()">接種記録を保存</button>
+			</div>
+		</div>
+	</div>
 </body>
 </html>

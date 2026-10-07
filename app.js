@@ -437,7 +437,7 @@ class LocalDB {
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
- "eyedrop_orders"
+ "eyedrop_orders", "vaccines"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -8041,7 +8041,13 @@ function renderWeightTable() {
  const diffNum = parseFloat(diff);
  const diffStr = diffNum > 0 ? `+${diff} kg` : (diffNum < 0 ? `${diff} kg` : `±0.0 kg`);
  const color = diffNum > 0 ? '#16a34a' : (diffNum < 0 ? '#dc2626' : '#64748b');
- diffDisplay = `<strong style="color:${color}; font-size:13px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prevRec.weight}k)</span>`;
+			let alertBadge = "";
+			if (diffNum <= -2.0) {
+				alertBadge = `<span style="display:inline-block; font-size:10.5px; background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:4px; font-weight:bold; margin-left:4px;">急減注意</span>`;
+			} else if (diffNum >= 2.0) {
+				alertBadge = `<span style="display:inline-block; font-size:10.5px; background:#eff6ff; color:#1e40af; padding:1px 5px; border-radius:4px; font-weight:bold; margin-left:4px;">急増注意</span>`;
+			}
+			diffDisplay = `<strong style="color:${color}; font-size:13px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prevRec.weight}k)</span>${alertBadge}`;
  } else if (currentRec) {
  diffDisplay = `<span style="font-size:11px; color:var(--text-muted);">- (前月なし)</span>`;
  } else if (prevRec) {
@@ -8447,20 +8453,113 @@ function submitGroomingsBatch() {
 
 // 11. レク履歴
 function renderRecreationTable() {
- const tbody = document.querySelector("#recreationTable tbody");
- tbody.innerHTML = "";
- (db.data.recreations || []).forEach(rec => {
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td>${rec.date}</td>
- <td><strong>${rec.title}</strong></td>
- <td>${rec.content || '-'}</td>
- <td>${rec.staff_name}</td>
- `;
- tbody.appendChild(tr);
- });
+	const tbody = document.querySelector("#recreationTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+	const list = db.data.recreations || [];
+	if (list.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">レクリエーション実施記録はありません。</td></tr>`;
+		return;
+	}
+	list.forEach(rec => {
+		const tr = document.createElement("tr");
+		tr.innerHTML = `
+			<td>${escapeHtml(rec.date || '')}</td>
+			<td><span class="badge" style="background:#eff6ff; color:#1e40af;">${escapeHtml(rec.program_type || '機能訓練')}</span></td>
+			<td><strong>${escapeHtml(rec.title || '')}</strong></td>
+			<td>${rec.participants_count ? `${escapeHtml(String(rec.participants_count))}名` : '-'}</td>
+			<td>${escapeHtml(rec.content || '-')}</td>
+			<td style="color:#0f172a;">${escapeHtml(rec.reaction || '-')}</td>
+			<td>${escapeHtml(rec.notes || '-')}</td>
+			<td>${escapeHtml(rec.staff_name || '担当')}</td>
+			<td style="text-align:center; white-space:nowrap;">
+				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openRecreationModal(${rec.id})">訂正</button>
+				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteRecreationRecord(${rec.id})">削除</button>
+			</td>
+		`;
+		tbody.appendChild(tr);
+	});
 }
 
+function openRecreationModal(editId = null) {
+	const idEl = document.getElementById("recEditId");
+	const dateEl = document.getElementById("recDate");
+	const typeEl = document.getElementById("recType");
+	const titleEl = document.getElementById("recTitle");
+	const partEl = document.getElementById("recParticipants");
+	const contEl = document.getElementById("recContent");
+	const reactEl = document.getElementById("recReaction");
+	const notesEl = document.getElementById("recNotes");
+
+	if (editId) {
+		const rec = (db.data.recreations || []).find(r => r.id === editId);
+		if (!rec) return;
+		idEl.value = rec.id;
+		dateEl.value = rec.date || toLocalDateStr(new Date());
+		typeEl.value = rec.program_type || "機能訓練体操";
+		titleEl.value = rec.title || "";
+		partEl.value = rec.participants_count || "12";
+		contEl.value = rec.content || "";
+		reactEl.value = rec.reaction || "";
+		notesEl.value = rec.notes || "";
+	} else {
+		idEl.value = "";
+		dateEl.value = gState.selectedDate || toLocalDateStr(new Date());
+		typeEl.value = "機能訓練体操";
+		titleEl.value = "";
+		partEl.value = "12";
+		contEl.value = "";
+		reactEl.value = "";
+		notesEl.value = "";
+	}
+	openModal("recreationModal");
+}
+
+function submitRecreationRecord() {
+	const editId = document.getElementById("recEditId")?.value;
+	const date = document.getElementById("recDate")?.value;
+	const type = document.getElementById("recType")?.value;
+	const title = document.getElementById("recTitle")?.value.trim();
+	const part = document.getElementById("recParticipants")?.value;
+	const cont = document.getElementById("recContent")?.value.trim();
+	const react = document.getElementById("recReaction")?.value.trim();
+	const notes = document.getElementById("recNotes")?.value.trim();
+	const staff = document.getElementById("currentStaff")?.value || "担当職員";
+
+	if (!date || !title) {
+		alert("実施日とプログラム名を入力してください。");
+		return;
+	}
+
+	if (!Array.isArray(db.data.recreations)) db.data.recreations = [];
+
+	if (editId) {
+		const rec = db.data.recreations.find(r => r.id === Number(editId));
+		if (rec) {
+			rec.date = date; rec.program_type = type; rec.title = title;
+			rec.participants_count = part; rec.content = cont; rec.reaction = react;
+			rec.notes = notes; rec.staff_name = staff;
+		}
+	} else {
+		db.data.recreations.unshift({
+			id: Date.now(), date: date, program_type: type, title: title,
+			participants_count: part, content: cont, reaction: react,
+			notes: notes, staff_name: staff
+		});
+	}
+
+	db.save();
+	closeModal("recreationModal");
+	renderRecreationTable();
+	alert("レクリエーション実施記録を保存しました！");
+}
+
+function deleteRecreationRecord(id) {
+	if (!confirm("このレクリエーション記録を削除しますか？")) return;
+	db.data.recreations = (db.data.recreations || []).filter(r => r.id !== id);
+	db.save();
+	renderRecreationTable();
+}
 // 12. 面会 ＆ 荷物受付
 function submitVisitation() {
  const visitor = document.getElementById("visitVisitor").value.trim();
@@ -9009,6 +9108,7 @@ function loadOfficeData() {
  renderOfficeComplaints();
  renderOfficeIncidents();
  renderCareExpiryNotes();
+	renderOfficeVaccines();
 }
 
 function switchOfficeTab(tab) {
@@ -9165,30 +9265,130 @@ function submitInventoryAdjust() {
 
 // 非常食・防災備蓄
 function renderOfficeEmergencySupplies() {
- const tbody = document.querySelector("#emergencyTable tbody");
- tbody.innerHTML = "";
- const today = new Date();
+	const tbody = document.querySelector("#emergencyTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+	const today = new Date();
+	const list = db.data.emergency_supplies || gState.emergencySupplies || [];
 
- gState.emergencySupplies.forEach(item => {
- const expDate = new Date(item.expiry_date);
- const diffDays = Math.ceil((expDate - today) / (1000 * 60 * 60 * 24));
- const isClose = diffDays <= 14;
+	if (list.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:16px;">非常食・備蓄品の登録はありません。</td></tr>`;
+		return;
+	}
 
- const tr = document.createElement("tr");
- if (isClose) tr.style.backgroundColor = "#fef3c7";
+	list.forEach(item => {
+		const expDate = item.expiry_date ? new Date(item.expiry_date) : null;
+		const diffDays = expDate ? Math.ceil((expDate - today) / (1000 * 60 * 60 * 24)) : 999;
+		const isExpired = diffDays < 0;
+		const isClose = diffDays >= 0 && diffDays <= 14;
 
- tr.innerHTML = `
- <td><strong>${item.name}</strong></td>
- <td><strong style="font-size:15px;">${item.quantity}</strong></td>
- <td>${item.unit}</td>
- <td><span style="${isClose?'color:#dc2626; font-weight:bold;':''}">${item.expiry_date}</span></td>
- <td>${isClose ? `<strong style="color:#d97706;"> あと${diffDays}日 (順次消費推奨)</strong>` : '<span style="color:#16a34a;">正常保管</span>'}</td>
- <td>${item.notes || '-'}</td>
- `;
- tbody.appendChild(tr);
- });
+		let statusHtml = '<span style="color:#16a34a; font-weight:bold;">正常保管</span>';
+		if (isExpired) {
+			statusHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-weight:bold;">期限切れ (${Math.abs(diffDays)}日超過)</span>`;
+		} else if (isClose) {
+			statusHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-weight:bold;">期限間近 (あと${diffDays}日)</span>`;
+		}
+
+		const tr = document.createElement("tr");
+		if (isClose || isExpired) tr.style.backgroundColor = isExpired ? "#fff1f2" : "#fffbeb";
+
+		tr.innerHTML = `
+			<td><strong>${escapeHtml(item.name || '')}</strong></td>
+			<td><span class="badge" style="background:#f1f5f9; color:#475569;">${escapeHtml(item.category || '主食')}</span></td>
+			<td><strong style="font-size:14px;">${item.quantity || 0}</strong></td>
+			<td>${escapeHtml(item.unit || '個')}</td>
+			<td><span style="${isClose || isExpired ? 'color:#dc2626; font-weight:bold;' : ''}">${item.expiry_date || '-'}</span></td>
+			<td>${statusHtml}</td>
+			<td>${escapeHtml(item.storage_place || item.notes || '-')}</td>
+			<td style="text-align:center; white-space:nowrap;">
+				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openEmergencySupplyModal(${item.id})">訂正</button>
+				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteEmergencySupplyRecord(${item.id})">削除</button>
+			</td>
+		`;
+		tbody.appendChild(tr);
+	});
 }
 
+function openEmergencySupplyModal(editId = null) {
+	const idEl = document.getElementById("emgEditId");
+	const nameEl = document.getElementById("emgName");
+	const catEl = document.getElementById("emgCat");
+	const qtyEl = document.getElementById("emgQty");
+	const unitEl = document.getElementById("emgUnit");
+	const expEl = document.getElementById("emgExpiry");
+	const placeEl = document.getElementById("emgPlace");
+	const notesEl = document.getElementById("emgNotes");
+
+	if (editId) {
+		const item = (db.data.emergency_supplies || []).find(x => x.id === editId);
+		if (!item) return;
+		idEl.value = item.id;
+		nameEl.value = item.name || "";
+		catEl.value = item.category || "主食";
+		qtyEl.value = item.quantity || "";
+		unitEl.value = item.unit || "食";
+		expEl.value = item.expiry_date || "";
+		placeEl.value = item.storage_place || "";
+		notesEl.value = item.notes || "";
+	} else {
+		idEl.value = "";
+		nameEl.value = "";
+		catEl.value = "主食";
+		qtyEl.value = "";
+		unitEl.value = "食";
+		expEl.value = "";
+		placeEl.value = "1F防災備蓄倉庫";
+		notesEl.value = "";
+	}
+	openModal("emergencySupplyModal");
+}
+
+function submitEmergencySupplyRecord() {
+	const editId = document.getElementById("emgEditId")?.value;
+	const name = document.getElementById("emgName")?.value.trim();
+	const cat = document.getElementById("emgCat")?.value;
+	const qty = parseInt(document.getElementById("emgQty")?.value, 10);
+	const unit = document.getElementById("emgUnit")?.value.trim();
+	const exp = document.getElementById("emgExpiry")?.value;
+	const place = document.getElementById("emgPlace")?.value.trim();
+	const notes = document.getElementById("emgNotes")?.value.trim();
+
+	if (!name || isNaN(qty) || !exp) {
+		alert("品名・数量・賞味期限を入力してください。");
+		return;
+	}
+
+	if (!Array.isArray(db.data.emergency_supplies)) db.data.emergency_supplies = [];
+
+	if (editId) {
+		const item = db.data.emergency_supplies.find(x => x.id === Number(editId));
+		if (item) {
+			item.name = name; item.category = cat; item.quantity = qty;
+			item.unit = unit; item.expiry_date = exp; item.storage_place = place; item.notes = notes;
+		}
+	} else {
+		db.data.emergency_supplies.unshift({
+			id: Date.now(), name: name, category: cat, quantity: qty,
+			unit: unit, expiry_date: exp, storage_place: place, notes: notes
+		});
+	}
+
+	db.save();
+	gState.emergencySupplies = db.data.emergency_supplies;
+	closeModal("emergencySupplyModal");
+	renderOfficeEmergencySupplies();
+	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+	alert("非常食・備蓄品を保存しました！");
+}
+
+function deleteEmergencySupplyRecord(id) {
+	if (!confirm("この備蓄品を削除しますか？")) return;
+	db.data.emergency_supplies = (db.data.emergency_supplies || []).filter(x => x.id !== id);
+	gState.emergencySupplies = db.data.emergency_supplies;
+	db.save();
+	renderOfficeEmergencySupplies();
+	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
 // 車両運行管理簿
 function renderOfficeVehicleLogs() {
  const tbody = document.querySelector("#vehicleLogsTable tbody");
@@ -9236,22 +9436,117 @@ function submitVehicleLog() {
 
 // 消防訓練
 function renderOfficeFireDrills() {
- const tbody = document.querySelector("#fireTable tbody");
- tbody.innerHTML = "";
- (db.data.fire_drills || []).forEach(d => {
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td>${d.date}</td>
- <td><strong>${d.drill_type}</strong></td>
- <td>${d.participants_count}名</td>
- <td>${d.scenario || '-'}</td>
- <td>${d.notes || '-'}</td>
- <td>${d.supervisor}</td>
- `;
- tbody.appendChild(tr);
- });
+	const tbody = document.querySelector("#fireTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+	const list = db.data.fire_drills || [];
+
+	if (list.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:16px;">消防・避難訓練の実施記録はありません。</td></tr>`;
+		return;
+	}
+
+	list.forEach(d => {
+		const tr = document.createElement("tr");
+		tr.innerHTML = `
+			<td>${escapeHtml(d.date || '')}</td>
+			<td><span class="badge" style="background:#fef3c7; color:#92400e;">${escapeHtml(d.drill_type || '火災訓練')}</span></td>
+			<td>${escapeHtml(d.participants_count || '-')}</td>
+			<td>${d.duration ? `<strong>${escapeHtml(d.duration)}</strong>` : '-'}</td>
+			<td>${escapeHtml(d.scenario || '-')}</td>
+			<td>${escapeHtml(d.notes || '-')}</td>
+			<td>${escapeHtml(d.supervisor || '施設長')}</td>
+			<td style="text-align:center; white-space:nowrap;">
+				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openFireDrillModal(${d.id})">訂正</button>
+				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteFireDrillRecord(${d.id})">削除</button>
+			</td>
+		`;
+		tbody.appendChild(tr);
+	});
 }
 
+function openFireDrillModal(editId = null) {
+	const idEl = document.getElementById("fireEditId");
+	const dateEl = document.getElementById("fireDate");
+	const typeEl = document.getElementById("fireType");
+	const partEl = document.getElementById("fireParticipants");
+	const durEl = document.getElementById("fireDuration");
+	const scenEl = document.getElementById("fireScenario");
+	const notesEl = document.getElementById("fireNotes");
+	const repEl = document.getElementById("fireReported");
+	const supEl = document.getElementById("fireSupervisor");
+
+	if (editId) {
+		const d = (db.data.fire_drills || []).find(x => x.id === editId);
+		if (!d) return;
+		idEl.value = d.id;
+		dateEl.value = d.date || toLocalDateStr(new Date());
+		typeEl.value = d.drill_type || "昼間火災想定訓練";
+		partEl.value = d.participants_count || "";
+		durEl.value = d.duration || "";
+		scenEl.value = d.scenario || "";
+		notesEl.value = d.notes || "";
+		repEl.value = d.reported_to_fire_dept || "";
+		supEl.value = d.supervisor || "施設長";
+	} else {
+		idEl.value = "";
+		dateEl.value = toLocalDateStr(new Date());
+		typeEl.value = "昼間火災想定訓練";
+		partEl.value = "28名 (入所者16, 職員12)";
+		durEl.value = "6分45秒";
+		scenEl.value = "1F厨房ガスコンロ出火想定、初期消火失敗、非常ベル吹鳴";
+		notesEl.value = "車椅子誘導連携良好。夜間想定の訓練計画を次回継続。";
+		repEl.value = "事前通報済";
+		supEl.value = "施設長";
+	}
+	openModal("fireDrillModal");
+}
+
+function submitFireDrillRecord() {
+	const editId = document.getElementById("fireEditId")?.value;
+	const date = document.getElementById("fireDate")?.value;
+	const type = document.getElementById("fireType")?.value;
+	const part = document.getElementById("fireParticipants")?.value.trim();
+	const dur = document.getElementById("fireDuration")?.value.trim();
+	const scen = document.getElementById("fireScenario")?.value.trim();
+	const notes = document.getElementById("fireNotes")?.value.trim();
+	const rep = document.getElementById("fireReported")?.value.trim();
+	const sup = document.getElementById("fireSupervisor")?.value.trim();
+
+	if (!date || !type) {
+		alert("実施日と訓練種別を入力してください。");
+		return;
+	}
+
+	if (!Array.isArray(db.data.fire_drills)) db.data.fire_drills = [];
+
+	if (editId) {
+		const d = db.data.fire_drills.find(x => x.id === Number(editId));
+		if (d) {
+			d.date = date; d.drill_type = type; d.participants_count = part;
+			d.duration = dur; d.scenario = scen; d.notes = notes;
+			d.reported_to_fire_dept = rep; d.supervisor = sup;
+		}
+	} else {
+		db.data.fire_drills.unshift({
+			id: Date.now(), date: date, drill_type: type, participants_count: part,
+			duration: dur, scenario: scen, notes: notes, reported_to_fire_dept: rep,
+			supervisor: sup
+		});
+	}
+
+	db.save();
+	closeModal("fireDrillModal");
+	renderOfficeFireDrills();
+	alert("消防・避難訓練記録を保存しました！");
+}
+
+function deleteFireDrillRecord(id) {
+	if (!confirm("この訓練記録を削除しますか？")) return;
+	db.data.fire_drills = (db.data.fire_drills || []).filter(x => x.id !== id);
+	db.save();
+	renderOfficeFireDrills();
+}
 // 法定委員会・研修記録
 function renderOfficeCommittees() {
  const tbody = document.querySelector("#committeeTable tbody");
@@ -10003,124 +10298,681 @@ function submitComplaint() {
 
 // 事故・ヒヤリハット
 function renderOfficeIncidents() {
- const tbody = document.querySelector("#incidentsTable tbody");
- tbody.innerHTML = "";
- (db.data.incidents || []).forEach(inc => {
- const res = gState.residents.find(x => x.id === inc.resident_id);
- const timeDisplay = inc.occurred_at || inc.date || '-';
- const repType = inc.report_type || inc.level || 'ヒヤリハット';
- const situ = inc.situation || '-';
- const prev = inc.prevention || inc.countermeasure || '-';
- const supervisor = inc.supervisor_comment || inc.factor || '-';
- const st = inc.status || '報告済';
+	const tbody = document.querySelector("#incidentsTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+	const list = db.data.incidents || [];
+	if (list.length === 0) {
+		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">事故・ヒヤリハット報告はありません。</td></tr>`;
+		return;
+	}
 
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td>${timeDisplay}</td>
- <td><span class="badge" style="background:#fee2e2; color:#991b1b;">${repType}</span></td>
- <td><strong>${res ? res.name + ' 様' : (inc.resident_name || '')}</strong></td>
- <td>${inc.place || '居室'}</td>
- <td>${situ}</td>
- <td>${prev}</td>
- <td>${supervisor}</td>
- <td><span class="badge" style="background:#dbeafe; color:#1e40af;">${st}</span></td>
- <td><button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="editIncident(${inc.id})">修正・追記</button></td>
- `;
- tbody.appendChild(tr);
- });
+	list.forEach(inc => {
+		const res = gState.residents.find(x => x.id === inc.resident_id);
+		const timeDisplay = inc.occurred_at || inc.date || '-';
+		const repType = inc.report_type || inc.level || 'ヒヤリハット';
+		const situ = inc.situation || '-';
+		const prev = inc.prevention || inc.countermeasure || '-';
+		const supervisor = inc.supervisor_comment || inc.factor || '-';
+		const st = inc.status || '報告済';
+		const pinsCount = (inc.injury_pins && Array.isArray(inc.injury_pins)) ? inc.injury_pins.length : 0;
+		const pinBadge = pinsCount > 0 ? `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:10.5px; padding:2px 6px; margin-left:4px; font-weight:bold;">外傷ピン ${pinsCount}件</span>` : '';
+
+		const tr = document.createElement("tr");
+		tr.innerHTML = `
+			<td>${escapeHtml(timeDisplay)}</td>
+			<td><span class="badge" style="background:#fee2e2; color:#991b1b;">${escapeHtml(repType)}</span>${pinBadge}</td>
+			<td><strong>${res ? escapeHtml(res.name) + ' 様' : escapeHtml(inc.resident_name || '')}</strong></td>
+			<td>${escapeHtml(inc.place || '居室')}</td>
+			<td>${escapeHtml(situ)}</td>
+			<td>${escapeHtml(prev)}</td>
+			<td>${escapeHtml(supervisor)}</td>
+			<td><span class="badge" style="background:#dbeafe; color:#1e40af;">${escapeHtml(st)}</span></td>
+			<td style="white-space:nowrap; text-align:center;">
+				<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px;" onclick="editIncident(${inc.id})">修正・追記</button>
+				<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="printIncidentReport(${inc.id})">印刷</button>
+			</td>
+		`;
+		tbody.appendChild(tr);
+	});
+}
+
+function updateIncidentPinsSummaryUI() {
+	const summaryEl = document.getElementById("incInjuryPinsSummary");
+	if (!summaryEl) return;
+	const pins = gState.currentIncidentInjuryPins || [];
+	if (pins.length === 0) {
+		summaryEl.innerHTML = `現在、登録されている負傷ピンはありません（必要な場合は上のボタンから受傷部位をピン留めできます）`;
+		return;
+	}
+	let html = "";
+	pins.forEach((p, idx) => {
+		html += `
+			<span style="display:inline-flex; align-items:center; gap:4px; background:#fef2f2; border:1px solid #fecaca; color:#991b1b; padding:2px 8px; border-radius:12px; font-size:11.5px; font-weight:bold;">
+				<span style="background:#dc2626; color:#ffffff; border-radius:50%; width:16px; height:16px; display:inline-flex; align-items:center; justify-content:center; font-size:10px;">${idx + 1}</span>
+				${escapeHtml(p.site_name || '部位')}: ${escapeHtml(p.injury_type || '外傷')} (${escapeHtml(p.treatment || '処置')})
+			</span>
+		`;
+	});
+	summaryEl.innerHTML = html;
 }
 
 function openIncidentFromRecord() {
- const content = document.getElementById("recordContent").value;
- const resId = gState.selectedResidentId;
- const now = new Date();
- const nowStr = toLocalDateTimeStr(now).replace(" ", "T");
+	const content = document.getElementById("recordContent").value;
+	const resId = gState.selectedResidentId;
+	const now = new Date();
+	const nowStr = toLocalDateTimeStr(now).replace(" ", "T");
 
- document.getElementById("incId").value = "";
- document.getElementById("incOccurredAt").value = nowStr;
- document.getElementById("incSituation").value = content;
- document.getElementById("incCause").value = "";
- document.getElementById("incPrevention").value = "";
- document.getElementById("incSupervisor").value = "";
+	document.getElementById("incId").value = "";
+	document.getElementById("incOccurredAt").value = nowStr;
+	document.getElementById("incSituation").value = content;
+	document.getElementById("incCause").value = "";
+	document.getElementById("incPrevention").value = "";
+	document.getElementById("incSupervisor").value = "";
+	gState.currentIncidentInjuryPins = [];
+	updateIncidentPinsSummaryUI();
 
- const sel = document.getElementById("incResidentSelect");
- sel.innerHTML = "";
- gState.residents.forEach(r => {
- const opt = document.createElement("option");
- opt.value = r.id;
- opt.textContent = `${r.room_no}号室 ${r.name} 様`;
- if (r.id === resId) opt.selected = true;
- sel.appendChild(opt);
- });
- document.getElementById("incidentModal").style.display = "flex";
+	const sel = document.getElementById("incResidentSelect");
+	sel.innerHTML = "";
+	gState.residents.forEach(r => {
+		const opt = document.createElement("option");
+		opt.value = r.id;
+		opt.textContent = `${r.room_no}号室 ${r.name} 様`;
+		if (r.id === resId) opt.selected = true;
+		sel.appendChild(opt);
+	});
+	document.getElementById("incidentModal").style.display = "flex";
 }
 
 function editIncident(id) {
- const inc = db.data.incidents.find(x => x.id === id);
- if (!inc) return;
+	const inc = db.data.incidents.find(x => x.id === id);
+	if (!inc) return;
 
- document.getElementById("incId").value = inc.id;
- document.getElementById("incType").value = inc.report_type || inc.level || "ヒヤリハット";
- const occTime = inc.occurred_at || (inc.date ? `${inc.date}T09:00` : "");
- document.getElementById("incOccurredAt").value = occTime.replace(" ", "T");
- document.getElementById("incPlace").value = inc.place || "居室";
- document.getElementById("incSituation").value = inc.situation || "";
- document.getElementById("incCause").value = inc.cause || inc.factor || "";
- document.getElementById("incPrevention").value = inc.prevention || inc.countermeasure || "";
- document.getElementById("incSupervisor").value = inc.supervisor_comment || "";
+	document.getElementById("incId").value = inc.id;
+	document.getElementById("incType").value = inc.report_type || inc.level || "ヒヤリハット";
+	const occTime = inc.occurred_at || (inc.date ? `${inc.date}T09:00` : "");
+	document.getElementById("incOccurredAt").value = occTime.replace(" ", "T");
+	document.getElementById("incPlace").value = inc.place || "居室";
+	document.getElementById("incSituation").value = inc.situation || "";
+	document.getElementById("incCause").value = inc.cause || inc.factor || "";
+	document.getElementById("incPrevention").value = inc.prevention || inc.countermeasure || "";
+	document.getElementById("incSupervisor").value = inc.supervisor_comment || "";
 
- const sel = document.getElementById("incResidentSelect");
- sel.innerHTML = "";
- gState.residents.forEach(r => {
- const opt = document.createElement("option");
- opt.value = r.id;
- opt.textContent = `${r.room_no}号室 ${r.name} 様`;
- if (r.id === inc.resident_id) opt.selected = true;
- sel.appendChild(opt);
- });
- document.getElementById("incidentModal").style.display = "flex";
+	// 負傷ピンの読み込み
+	gState.currentIncidentInjuryPins = (inc.injury_pins && Array.isArray(inc.injury_pins))
+		? JSON.parse(JSON.stringify(inc.injury_pins))
+		: [];
+	updateIncidentPinsSummaryUI();
+
+	const sel = document.getElementById("incResidentSelect");
+	sel.innerHTML = "";
+	gState.residents.forEach(r => {
+		const opt = document.createElement("option");
+		opt.value = r.id;
+		opt.textContent = `${r.room_no}号室 ${r.name} 様`;
+		if (r.id === inc.resident_id) opt.selected = true;
+		sel.appendChild(opt);
+	});
+	document.getElementById("incidentModal").style.display = "flex";
 }
 
 function saveIncidentReport() {
- const id = document.getElementById("incId").value;
- const type = document.getElementById("incType").value;
- const occurredAt = document.getElementById("incOccurredAt").value.replace("T", " ");
- const resSelectVal = document.getElementById("incResidentSelect").value;
- const resId = resSelectVal ? parseInt(resSelectVal, 10) : null;
- const place = document.getElementById("incPlace").value;
- const situation = document.getElementById("incSituation").value.trim();
- const cause = document.getElementById("incCause").value;
- const prevention = document.getElementById("incPrevention").value;
- const supervisor = document.getElementById("incSupervisor").value;
- const staff = document.getElementById("currentStaff").value;
+	const id = document.getElementById("incId").value;
+	const type = document.getElementById("incType").value;
+	const occurredAt = document.getElementById("incOccurredAt").value.replace("T", " ");
+	const resSelectVal = document.getElementById("incResidentSelect").value;
+	const resId = resSelectVal ? parseInt(resSelectVal, 10) : null;
+	const place = document.getElementById("incPlace").value;
+	const situation = document.getElementById("incSituation").value.trim();
+	const cause = document.getElementById("incCause").value;
+	const prevention = document.getElementById("incPrevention").value;
+	const supervisor = document.getElementById("incSupervisor").value;
+	const staff = document.getElementById("currentStaff")?.value || "担当職員";
+	const injuryPins = gState.currentIncidentInjuryPins || [];
 
- if (!situation) {
- alert("事故・ヒヤリハットの発生状況を入力してください。");
- return;
- }
+	if (!situation) {
+		alert("事故・ヒヤリハットの発生状況を入力してください。");
+		return;
+	}
 
- if (id) {
- const inc = db.data.incidents.find(x => x.id === parseInt(id));
- if (inc) {
- inc.report_type = type; inc.occurred_at = occurredAt; inc.resident_id = resId;
- inc.place = place; inc.situation = situation; inc.cause = cause;
- inc.prevention = prevention; inc.supervisor_comment = supervisor;
- }
- } else {
- db.data.incidents.unshift({
- id: Date.now(), report_type: type, occurred_at: occurredAt, resident_id: resId,
- place: place, situation: situation, cause: cause, prevention: prevention,
- supervisor_comment: supervisor, status: "作成済", staff_name: staff
- });
- }
+	if (!Array.isArray(db.data.incidents)) db.data.incidents = [];
 
- db.save();
- closeModal("incidentModal");
- if (gState.activePortal === "office") loadOfficeData();
- alert("報告書を保存しました！");
+	if (id) {
+		const inc = db.data.incidents.find(x => x.id === parseInt(id));
+		if (inc) {
+			inc.report_type = type; inc.occurred_at = occurredAt; inc.resident_id = resId;
+			inc.place = place; inc.situation = situation; inc.cause = cause;
+			inc.prevention = prevention; inc.supervisor_comment = supervisor;
+			inc.injury_pins = injuryPins;
+		}
+	} else {
+		db.data.incidents.unshift({
+			id: Date.now(), report_type: type, occurred_at: occurredAt, resident_id: resId,
+			place: place, situation: situation, cause: cause, prevention: prevention,
+			supervisor_comment: supervisor, status: "作成済", staff_name: staff,
+			injury_pins: injuryPins
+		});
+	}
+
+	db.save();
+	closeModal("incidentModal");
+	if (gState.activePortal === "office") loadOfficeData();
+	alert("報告書を保存しました！");
 }
 
-// 私物行 追加・編集
+// =====================================================================
+// 事故・ヒヤリハット 受傷部位シェーマ図ロジック (事故専用外傷ピン)
+// =====================================================================
+
+function openIncidentInjurySchemaModal() {
+	const resSelectVal = document.getElementById("incResidentSelect")?.value;
+	const resId = resSelectVal ? Number(resSelectVal) : Number(gState.selectedResidentId);
+	const r = (gState.residents || []).find(x => Number(x.id) === resId);
+
+	const badge = document.getElementById("incInjuryResidentBadge");
+	if (badge) badge.textContent = r ? `${r.room_no}号室 ${r.name} 様 (${r.care_level})` : "利用者情報";
+
+	if (!Array.isArray(gState.currentIncidentInjuryPins)) {
+		gState.currentIncidentInjuryPins = [];
+	}
+
+	resetIncidentInjuryForm();
+	renderIncidentInjuryPins();
+	openModal("incidentInjurySchemaModal");
+}
+
+function handleIncidentInjuryImageClick(e) {
+	const wrapper = document.getElementById("incInjuryImageWrapper");
+	if (!wrapper) return;
+	const rect = wrapper.getBoundingClientRect();
+	const x = e.clientX - rect.left;
+	const y = e.clientY - rect.top;
+
+	const xPct = Math.max(0, Math.min(100, Math.round((x / rect.width) * 1000) / 10));
+	const yPct = Math.max(0, Math.min(100, Math.round((y / rect.height) * 1000) / 10));
+
+	document.getElementById("incInjuryXPct").value = xPct;
+	document.getElementById("incInjuryYPct").value = yPct;
+
+	const coordsBadge = document.getElementById("incInjuryCoordsBadge");
+	if (coordsBadge) coordsBadge.textContent = `(位置: X:${xPct}%, Y:${yPct}%)`;
+
+	// 仮ピンのハイライト表示
+	const overlay = document.getElementById("incInjuryPinsOverlay");
+	if (overlay) {
+		const tempPin = document.getElementById("incInjuryTempPin");
+		if (tempPin) tempPin.remove();
+		const div = document.createElement("div");
+		div.id = "incInjuryTempPin";
+		div.style.cssText = `position:absolute; left:${xPct}%; top:${yPct}%; width:24px; height:24px; margin-left:-12px; margin-top:-12px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px; border:2px solid #fff; box-shadow:0 0 8px rgba(220,38,38,0.8); z-index:30; pointer-events:none;`;
+		div.textContent = "＋";
+		overlay.appendChild(div);
+	}
+}
+
+function renderIncidentInjuryPins() {
+	const overlay = document.getElementById("incInjuryPinsOverlay");
+	const tableContainer = document.getElementById("incInjuryPinsTableContainer");
+	const countTitle = document.getElementById("incInjuryPinsCountTitle");
+	if (!overlay || !tableContainer) return;
+
+	const pins = gState.currentIncidentInjuryPins || [];
+	pins.forEach((p, idx) => { p.pin_no = idx + 1; });
+
+	if (countTitle) countTitle.textContent = `登録中の受傷ピン (${pins.length}件)`;
+
+	const activeEditId = Number(document.getElementById("incInjuryEditPinId")?.value || 0);
+
+	let pinsHtml = "";
+	pins.forEach(p => {
+		const isSelected = activeEditId === Number(p.id);
+		const style = isSelected
+			? "background:#ffffff; color:#dc2626; border:2px solid #dc2626; transform:scale(1.25); z-index:25; box-shadow:0 0 8px rgba(220,38,38,0.9);"
+			: "background:#dc2626; color:#ffffff; border:2px solid #ffffff; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.6);";
+
+		pinsHtml += `
+			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; cursor:pointer; pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${style}"
+				title="[${p.pin_no}] ${escapeHtml(p.site_name)}: ${escapeHtml(p.injury_type)} (${escapeHtml(p.treatment || '-')})"
+				onclick="event.stopPropagation(); editIncidentInjuryPin(${p.id});">
+				${p.pin_no}
+			</div>
+		`;
+	});
+	overlay.innerHTML = pinsHtml;
+
+	if (pins.length === 0) {
+		tableContainer.innerHTML = `
+			<div style="text-align:center; padding:20px 10px; color:#64748b; font-size:12px;">
+				登録されている受傷ピンはありません。<br>
+				左の人体図（正面・背面）をクリックして位置を指定してください。
+			</div>
+		`;
+		return;
+	}
+
+	let tableHtml = `
+		<table class="table" style="width:100%; font-size:12px; margin-bottom:0; border-collapse:collapse;">
+			<thead>
+				<tr style="background:#fee2e2; color:#991b1b; border-bottom:2px solid #fca5a5;">
+					<th style="padding:6px 8px; width:40px; text-align:center;">番号</th>
+					<th style="padding:6px 8px; width:85px;">部位</th>
+					<th style="padding:6px 8px;">外傷種別・処置</th>
+					<th style="padding:6px 8px; width:80px;">程度</th>
+					<th style="padding:6px 8px; width:85px; text-align:center;">操作</th>
+				</tr>
+			</thead>
+			<tbody>
+	`;
+
+	pins.forEach(p => {
+		const isSelected = activeEditId === Number(p.id);
+		tableHtml += `
+			<tr style="border-bottom:1px solid #e2e8f0; ${isSelected ? 'background:#fef2f2;' : ''}">
+				<td style="padding:6px 8px; text-align:center;">
+					<span style="display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%; background:#dc2626; color:#ffffff; font-weight:bold; font-size:11.5px; text-align:center;">
+						${p.pin_no}
+					</span>
+				</td>
+				<td style="padding:6px 8px;"><strong>${escapeHtml(p.site_name || '-')}</strong></td>
+				<td style="padding:6px 8px;">
+					<div style="font-weight:bold; color:#0f172a;">${escapeHtml(p.injury_type || '-')}</div>
+					<div style="font-size:11px; color:#475569;">処置: ${escapeHtml(p.treatment || '-')}</div>
+				</td>
+				<td style="padding:6px 8px; font-size:11px; color:#64748b;">${escapeHtml(p.severity || '-')}</td>
+				<td style="padding:6px 8px; text-align:center; white-space:nowrap;">
+					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="editIncidentInjuryPin(${p.id})">訂正</button>
+					<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 6px; margin-left:3px;" onclick="deleteIncidentInjuryPin(${p.id})">削除</button>
+				</td>
+			</tr>
+		`;
+	});
+
+	tableHtml += `</tbody></table>`;
+	tableContainer.innerHTML = tableHtml;
+}
+
+function resetIncidentInjuryForm() {
+	document.getElementById("incInjuryEditPinId").value = "";
+	document.getElementById("incInjuryXPct").value = "50";
+	document.getElementById("incInjuryYPct").value = "50";
+	document.getElementById("incInjurySiteName").value = "";
+	document.getElementById("incInjuryType").value = "擦過傷 (すり傷)";
+	document.getElementById("incInjurySeverity").value = "軽微 (発赤・小擦過傷)";
+	document.getElementById("incInjuryTreatment").value = "";
+	document.getElementById("incInjuryNotes").value = "";
+	const badge = document.getElementById("incInjuryCoordsBadge");
+	if (badge) badge.textContent = "";
+	const tempPin = document.getElementById("incInjuryTempPin");
+	if (tempPin) tempPin.remove();
+}
+
+function editIncidentInjuryPin(pinId) {
+	const pins = gState.currentIncidentInjuryPins || [];
+	const p = pins.find(x => x.id === Number(pinId));
+	if (!p) return;
+
+	document.getElementById("incInjuryEditPinId").value = p.id;
+	document.getElementById("incInjuryXPct").value = p.x_pct;
+	document.getElementById("incInjuryYPct").value = p.y_pct;
+	document.getElementById("incInjurySiteName").value = p.site_name || "";
+	document.getElementById("incInjuryType").value = p.injury_type || "擦過傷 (すり傷)";
+	document.getElementById("incInjurySeverity").value = p.severity || "軽微 (発赤・小擦過傷)";
+	document.getElementById("incInjuryTreatment").value = p.treatment || "";
+	document.getElementById("incInjuryNotes").value = p.notes || "";
+
+	const badge = document.getElementById("incInjuryCoordsBadge");
+	if (badge) badge.textContent = `(位置: X:${p.x_pct}%, Y:${p.y_pct}%) [編集モード]`;
+
+	renderIncidentInjuryPins();
+}
+
+function saveIncidentInjuryPin() {
+	const editId = document.getElementById("incInjuryEditPinId")?.value;
+	const site = document.getElementById("incInjurySiteName")?.value.trim();
+	const type = document.getElementById("incInjuryType")?.value;
+	const sev = document.getElementById("incInjurySeverity")?.value;
+	const treat = document.getElementById("incInjuryTreatment")?.value.trim();
+	const notes = document.getElementById("incInjuryNotes")?.value.trim();
+	const xPct = parseFloat(document.getElementById("incInjuryXPct")?.value) || 50;
+	const yPct = parseFloat(document.getElementById("incInjuryYPct")?.value) || 50;
+
+	if (!site) {
+		alert("負傷部位名（例: 右膝、左手首など）を入力してください。");
+		return;
+	}
+
+	if (!Array.isArray(gState.currentIncidentInjuryPins)) {
+		gState.currentIncidentInjuryPins = [];
+	}
+
+	if (editId) {
+		const p = gState.currentIncidentInjuryPins.find(x => x.id === Number(editId));
+		if (p) {
+			p.site_name = site; p.injury_type = type; p.severity = sev;
+			p.treatment = treat; p.notes = notes; p.x_pct = xPct; p.y_pct = yPct;
+		}
+	} else {
+		gState.currentIncidentInjuryPins.push({
+			id: Date.now(), pin_no: gState.currentIncidentInjuryPins.length + 1,
+			site_name: site, injury_type: type, severity: sev,
+			treatment: treat, notes: notes, x_pct: xPct, y_pct: yPct
+		});
+	}
+
+	resetIncidentInjuryForm();
+	renderIncidentInjuryPins();
+}
+
+function deleteIncidentInjuryPin(pinId) {
+	if (!confirm("この受傷ピンを削除しますか？")) return;
+	gState.currentIncidentInjuryPins = (gState.currentIncidentInjuryPins || []).filter(x => x.id !== Number(pinId));
+	resetIncidentInjuryForm();
+	renderIncidentInjuryPins();
+}
+
+function commitIncidentInjuryPins() {
+	updateIncidentPinsSummaryUI();
+	closeModal("incidentInjurySchemaModal");
+}
+
+function printIncidentReport(incId) {
+	const inc = (db.data.incidents || []).find(x => x.id === incId);
+	if (!inc) {
+		alert("対象の事故報告書が見つかりません。");
+		return;
+	}
+	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
+	const pins = inc.injury_pins || [];
+	const facilityName = (typeof getFacilityName === "function") ? getFacilityName() : "陽だまりの家";
+
+	let pinsTableRows = "";
+	pins.forEach((p, idx) => {
+		pinsTableRows += `
+			<tr>
+				<td style="text-align:center; font-weight:bold; border:1px solid #333; padding:5px;">${idx + 1}</td>
+				<td style="border:1px solid #333; padding:5px; font-weight:bold;">${escapeHtml(p.site_name || '-')}</td>
+				<td style="border:1px solid #333; padding:5px;">${escapeHtml(p.injury_type || '-')}</td>
+				<td style="border:1px solid #333; padding:5px;">${escapeHtml(p.severity || '-')}</td>
+				<td style="border:1px solid #333; padding:5px;">${escapeHtml(p.treatment || '-')}</td>
+				<td style="border:1px solid #333; padding:5px;">${escapeHtml(p.notes || '-')}</td>
+			</tr>
+		`;
+	});
+
+	let pinsOverlayHtml = "";
+	pins.forEach((p, idx) => {
+		pinsOverlayHtml += `
+			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:22px; height:22px; margin-left:-11px; margin-top:-11px; border-radius:50%; background:#dc2626; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:12px; border:2px solid #fff;">
+				${idx + 1}
+			</div>
+		`;
+	});
+
+	const printHtml = `
+		<!DOCTYPE html>
+		<html lang="ja">
+		<head>
+			<meta charset="UTF-8">
+			<title>事故・ヒヤリハット報告書 - ${escapeHtml(res ? res.name : '利用者')}</title>
+			<style>
+				body { font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 11pt; color: #111; margin: 20px; line-height: 1.5; }
+				table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+				th, td { border: 1px solid #333; padding: 6px 8px; font-size: 10pt; }
+				th { background: #f1f5f9; text-align: left; }
+				.h-title { text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+				.stamp-box td { height: 45px; text-align: center; vertical-align: top; font-size: 9pt; }
+				@media print {
+					body { margin: 10mm; }
+					@page { size: A4 portrait; margin: 10mm; }
+				}
+			</style>
+		</head>
+		<body>
+			<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
+				<div style="font-size:11pt; font-weight:bold;">${escapeHtml(facilityName)}</div>
+				<table style="width:240px; margin-bottom:0;" class="stamp-box">
+					<tr><th>施設長</th><th>管理者</th><th>看護師長</th><th>報告者</th></tr>
+					<tr><td></td><td></td><td></td><td></td></tr>
+				</table>
+			</div>
+
+			<div class="h-title">事故・ヒヤリハット報告書 (${escapeHtml(inc.report_type || '報告書')})</div>
+
+			<table>
+				<tr>
+					<th style="width:15%;">発生日時</th>
+					<td style="width:35%;">${escapeHtml(inc.occurred_at || '-')}</td>
+					<th style="width:15%;">発生場所</th>
+					<td style="width:35%;">${escapeHtml(inc.place || '-')}</td>
+				</tr>
+				<tr>
+					<th>対象利用者</th>
+					<td>${res ? `${escapeHtml(res.room_no)}号室 <strong>${escapeHtml(res.name)} 様</strong> (${escapeHtml(res.care_level)})` : '-'}</td>
+					<th>報告者氏名</th>
+					<td>${escapeHtml(inc.staff_name || '担当職員')}</td>
+				</tr>
+			</table>
+
+			<table>
+				<tr><th style="background:#f1f5f9;">1. 発生状況 (何が起きたか・発見時の状態)</th></tr>
+				<tr><td style="min-height:70px; padding:10px;">${escapeHtml(inc.situation || '-').replace(/\n/g, '<br>')}</td></tr>
+			</table>
+
+			<!-- 受傷部位シェーマ図 ＆ 外傷ピン一覧 -->
+			<div style="border:1px solid #333; padding:10px; margin-bottom:12px; page-break-inside:avoid;">
+				<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cbd5e1; padding-bottom:3px;">
+					2. 受傷部位シェーマ図 ＆ 負傷箇所一覧 (${pins.length}か所)
+				</div>
+				<div style="display:flex; gap:16px; align-items:flex-start;">
+					<div style="position:relative; width:220px; border:1px solid #cbd5e1; background:#fafafa; text-align:center;">
+						<img src="assets/body_schema.jpg" style="width:100%; display:block;">
+						<div style="position:absolute; top:0; left:0; width:100%; height:100%;">${pinsOverlayHtml}</div>
+					</div>
+					<div style="flex:1;">
+						<table style="margin:0; font-size:9.5pt;">
+							<thead>
+								<tr style="background:#f8fafc;">
+									<th style="width:35px; text-align:center;">番号</th>
+									<th style="width:85px;">部位</th>
+									<th>外傷種別</th>
+									<th style="width:85px;">重症度</th>
+									<th>応急処置・対応</th>
+									<th>特記</th>
+								</tr>
+							</thead>
+							<tbody>
+								${pinsTableRows || '<tr><td colspan="6" style="text-align:center; color:#666;">受傷部位ピンの登録なし</td></tr>'}
+							</tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+
+			<table>
+				<tr><th style="background:#f1f5f9;">3. 原因の分析 (なぜ起きたか・人的/環境要因)</th></tr>
+				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.cause || '-').replace(/\n/g, '<br>')}</td></tr>
+			</table>
+
+			<table>
+				<tr><th style="background:#f1f5f9;">4. 再発防止策 ＆ 今後の対応方針</th></tr>
+				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.prevention || '-').replace(/\n/g, '<br>')}</td></tr>
+			</table>
+
+			<table>
+				<tr><th style="background:#f1f5f9;">5. 施設長・管理者コメント ＆ 指導事項</th></tr>
+				<tr><td style="min-height:40px; padding:8px;">${escapeHtml(inc.supervisor_comment || '確認・承認済。カンファレンスにて周知のこと。').replace(/\n/g, '<br>')}</td></tr>
+			</table>
+		</body>
+		</html>
+	`;
+
+	const win = window.open("", "_blank");
+	if (win) {
+		win.document.open();
+		win.document.write(printHtml);
+		win.document.close();
+		setTimeout(() => { win.print(); }, 400);
+	}
+}
+
+// =====================================================================
+// ワクチン予防接種管理 (動的レンダリング ＆ 登録・更新)
+// =====================================================================
+
+function renderOfficeVaccines() {
+	const tbody = document.querySelector("#vaccineTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+
+	if (!Array.isArray(db.data.vaccines) || db.data.vaccines.length === 0) {
+		db.data.vaccines = [
+			{ id: 1, resident_id: 1, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "同意受領済", date: "2026-10-15予定", doctor: "施設配置医・中央医院", lot: "FL8291", reactions: "異常なし。経過観察良好", status: "準備完了" },
+			{ id: 2, resident_id: 2, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "同意受領済", date: "2026-10-15予定", doctor: "施設配置医・中央医院", lot: "FL8291", reactions: "異常なし。経過観察良好", status: "準備完了" },
+			{ id: 3, resident_id: 3, vaccine_name: "季節性インフルエンザ", dose: "定期接種", consent: "未返送 (確認中)", date: "-", doctor: "施設配置医・中央医院", lot: "", reactions: "家族へ同意書再送・確認中", status: "家族へ連絡中" },
+			{ id: 4, resident_id: 4, vaccine_name: "新型コロナウイルス (定期)", dose: "令和8年度定期", consent: "同意受領済", date: "2026-10-22予定", doctor: "さくらクリニック", lot: "CV4410", reactions: "接種後30分間アナフィラキシー徴候なし", status: "準備完了" }
+		];
+		db.save();
+	}
+
+	const list = db.data.vaccines || [];
+	list.forEach(v => {
+		const res = (gState.residents || []).find(r => r.id === v.resident_id);
+		const consentColor = v.consent === "同意受領済" ? "#16a34a" : (v.consent === "接種見送り (辞退)" ? "#dc2626" : "#b45309");
+
+		const tr = document.createElement("tr");
+		tr.innerHTML = `
+			<td>${res ? escapeHtml(res.room_no) : '-'}</td>
+			<td><strong>${res ? escapeHtml(res.name) + ' 様' : '-'}</strong></td>
+			<td><span class="badge" style="background:#eff6ff; color:#1e40af;">${escapeHtml(v.vaccine_name || '-')}</span></td>
+			<td>${escapeHtml(v.dose || '-')}</td>
+			<td><strong style="color:${consentColor};">${escapeHtml(v.consent || '-')}</strong></td>
+			<td>${escapeHtml(v.date || '-')}</td>
+			<td>${escapeHtml(v.doctor || '-')}</td>
+			<td>${escapeHtml(v.lot || '-')}</td>
+			<td>${escapeHtml(v.reactions || '-')}</td>
+			<td><span class="badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(v.status || '登録済')}</span></td>
+			<td style="white-space:nowrap; text-align:center;">
+				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openVaccineModal(${v.id})">訂正</button>
+				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteVaccineRecord(${v.id})">削除</button>
+			</td>
+		`;
+		tbody.appendChild(tr);
+	});
+}
+
+function openVaccineModal(editId = null) {
+	const idEl = document.getElementById("vacEditId");
+	const selEl = document.getElementById("vacResidentSelect");
+	const typeEl = document.getElementById("vacType");
+	const doseEl = document.getElementById("vacDose");
+	const conEl = document.getElementById("vacConsent");
+	const dateEl = document.getElementById("vacDate");
+	const docEl = document.getElementById("vacDoctor");
+	const lotEl = document.getElementById("vacLot");
+	const reactEl = document.getElementById("vacReactions");
+
+	selEl.innerHTML = "";
+	(gState.residents || []).forEach(r => {
+		const opt = document.createElement("option");
+		opt.value = r.id;
+		opt.textContent = `${r.room_no}号室 ${r.name} 様`;
+		selEl.appendChild(opt);
+	});
+
+	if (editId) {
+		const v = (db.data.vaccines || []).find(x => x.id === editId);
+		if (!v) return;
+		idEl.value = v.id;
+		selEl.value = v.resident_id;
+		typeEl.value = v.vaccine_name || "季節性インフルエンザ";
+		doseEl.value = v.dose || "定期接種";
+		conEl.value = v.consent || "同意受領済";
+		dateEl.value = (v.date && !v.date.includes("予定")) ? v.date : toLocalDateStr(new Date());
+		docEl.value = v.doctor || "施設配置医・中央医院";
+		lotEl.value = v.lot || "";
+		reactEl.value = v.reactions || "異常なし";
+	} else {
+		idEl.value = "";
+		selEl.value = gState.selectedResidentId || (gState.residents[0] ? gState.residents[0].id : 1);
+		typeEl.value = "季節性インフルエンザ";
+		doseEl.value = "定期接種";
+		conEl.value = "同意受領済";
+		dateEl.value = toLocalDateStr(new Date());
+		docEl.value = "施設配置医・中央医院";
+		lotEl.value = "FL8291";
+		reactEl.value = "異常なし、経過観察良好";
+	}
+	openModal("vaccineModal");
+}
+
+function submitVaccineRecord() {
+	const editId = document.getElementById("vacEditId")?.value;
+	const resId = Number(document.getElementById("vacResidentSelect")?.value);
+	const type = document.getElementById("vacType")?.value;
+	const dose = document.getElementById("vacDose")?.value.trim();
+	const con = document.getElementById("vacConsent")?.value;
+	const date = document.getElementById("vacDate")?.value;
+	const doc = document.getElementById("vacDoctor")?.value.trim();
+	const lot = document.getElementById("vacLot")?.value.trim();
+	const react = document.getElementById("vacReactions")?.value.trim();
+
+	if (!resId || !type) {
+		alert("対象利用者とワクチン種別を選択してください。");
+		return;
+	}
+
+	if (!Array.isArray(db.data.vaccines)) db.data.vaccines = [];
+
+	if (editId) {
+		const v = db.data.vaccines.find(x => x.id === Number(editId));
+		if (v) {
+			v.resident_id = resId; v.vaccine_name = type; v.dose = dose;
+			v.consent = con; v.date = date; v.doctor = doc; v.lot = lot;
+			v.reactions = react; v.status = con === "同意受領済" ? "接種完了" : "確認中";
+		}
+	} else {
+		db.data.vaccines.unshift({
+			id: Date.now(), resident_id: resId, vaccine_name: type, dose: dose,
+			consent: con, date: date, doctor: doc, lot: lot, reactions: react,
+			status: con === "同意受領済" ? "接種完了" : "確認中"
+		});
+	}
+
+	db.save();
+	closeModal("vaccineModal");
+	renderOfficeVaccines();
+	alert("予防接種記録を保存しました！");
+}
+
+function deleteVaccineRecord(id) {
+	if (!confirm("このワクチン接種記録を削除しますか？")) return;
+	db.data.vaccines = (db.data.vaccines || []).filter(x => x.id !== id);
+	db.save();
+	renderOfficeVaccines();
+}
+
+// グローバル公開 (第3段階・後半)
+window.openIncidentInjurySchemaModal = openIncidentInjurySchemaModal;
+window.handleIncidentInjuryImageClick = handleIncidentInjuryImageClick;
+window.saveIncidentInjuryPin = saveIncidentInjuryPin;
+window.deleteIncidentInjuryPin = deleteIncidentInjuryPin;
+window.editIncidentInjuryPin = editIncidentInjuryPin;
+window.resetIncidentInjuryForm = resetIncidentInjuryForm;
+window.commitIncidentInjuryPins = commitIncidentInjuryPins;
+window.printIncidentReport = printIncidentReport;
+window.openRecreationModal = openRecreationModal;
+window.submitRecreationRecord = submitRecreationRecord;
+window.deleteRecreationRecord = deleteRecreationRecord;
+window.openFireDrillModal = openFireDrillModal;
+window.submitFireDrillRecord = submitFireDrillRecord;
+window.deleteFireDrillRecord = deleteFireDrillRecord;
+window.openEmergencySupplyModal = openEmergencySupplyModal;
+window.submitEmergencySupplyRecord = submitEmergencySupplyRecord;
+window.deleteEmergencySupplyRecord = deleteEmergencySupplyRecord;
+window.renderOfficeVaccines = renderOfficeVaccines;
+window.openVaccineModal = openVaccineModal;
+window.submitVaccineRecord = submitVaccineRecord;
+window.deleteVaccineRecord = deleteVaccineRecord;// 私物行 追加・編集
 function openBelongingModal(editId = null) {
  const modal = document.getElementById("belongingModal");
  if (!modal) return;
