@@ -291,6 +291,71 @@ function cpDaysUntil(dateStr) {
  return Math.round((d - today) / 86400000);
 }
 
+// [Claude修正] 記録台帳 (予防接種・消防訓練・レクリエーション) は削除せず「取消」にする。
+// 取消した記録はデータに残し、一覧では取消線・取消理由・取消者を表示する。誤って取消した場合は「取消を戻す」で元に戻せる
+const CP_LEDGERS = {
+ vaccines: { label: "予防接種記録", render: () => renderOfficeVaccines() },
+ fire_drills: { label: "消防・避難訓練記録", render: () => renderOfficeFireDrills() },
+ recreations: { label: "レクリエーション記録", render: () => renderRecreationTable() }
+};
+
+function cpLedgerStaff() {
+ return (document.getElementById("currentStaff")?.value) || gState.currentStaff || "担当職員";
+}
+
+function cpVoidLedgerRecord(key, id) {
+ const conf = CP_LEDGERS[key];
+ const rec = (db.data[key] || []).find(x => Number(x.id) === Number(id));
+ if (!conf || !rec || rec.voided) return;
+ const reason = prompt(`この${conf.label}を「取消」にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入力してください (例: 重複登録、利用者の選択間違い)`, "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("取消の理由を入力してください。取消は行っていません。"); return; }
+ rec.voided = true;
+ rec.voided_at = toLocalDateTimeStr(new Date());
+ rec.voided_by = cpLedgerStaff();
+ rec.void_reason = reason.trim();
+ db.save();
+ conf.render();
+ alert(`${conf.label}を取消にしました。`);
+}
+
+function cpRestoreLedgerRecord(key, id) {
+ const conf = CP_LEDGERS[key];
+ const rec = (db.data[key] || []).find(x => Number(x.id) === Number(id));
+ if (!conf || !rec || !rec.voided) return;
+ if (!confirm(`この${conf.label}の取消を戻し、有効な記録に戻しますか？\n(取消理由: ${rec.void_reason || '-'})`)) return;
+ rec.voided = false;
+ rec.restored_at = toLocalDateTimeStr(new Date());
+ rec.restored_by = cpLedgerStaff();
+ db.save();
+ conf.render();
+}
+
+// 操作欄: 有効な記録は「訂正」「取消」、取消済みは取消情報と「取消を戻す」
+function cpLedgerActions(key, rec, editFn) {
+ if (rec.voided) {
+  return `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div>
+   <div style="font-size:10.5px; color:#64748b; white-space:normal; max-width:180px;">${escapeHtml(rec.voided_at || '')} ${escapeHtml(rec.voided_by || '')}<br>理由: ${escapeHtml(rec.void_reason || '-')}</div>
+   <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('${key}', ${Number(rec.id)})">取消を戻す</button>`;
+ }
+ return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="${editFn}(${Number(rec.id)})">訂正</button>
+  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-left:3px; color:#991b1b; border-color:#fca5a5;" onclick="cpVoidLedgerRecord('${key}', ${Number(rec.id)})">取消</button>`;
+}
+
+// 取消済みの行は薄く表示し、内容に取消線を引く (操作欄は除く)
+function cpMarkVoidedRow(tr) {
+ tr.style.background = "#f8fafc";
+ tr.style.color = "#94a3b8";
+ const cells = tr.querySelectorAll("td");
+ cells.forEach((td, i) => { if (i < cells.length - 1) td.style.textDecoration = "line-through"; });
+ tr.querySelectorAll("td:not(:last-child) *").forEach(el => { el.style.color = "#94a3b8"; el.style.background = "transparent"; el.style.textDecoration = "line-through"; });
+}
+
+// 有効な記録を先に、取消済みを後ろに並べる (元の並び順は保つ)
+function cpLedgerOrder(list) {
+ return list.filter(x => !x.voided).concat(list.filter(x => x.voided));
+}
+
 function cpIsInitialPin(s) {
  if (!s || typeof s !== "object") return false;
  if (db && db.isServerMode) return s.is_initial_pin !== false;
@@ -8475,7 +8540,7 @@ function renderRecreationTable() {
 		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">レクリエーション実施記録はありません。</td></tr>`;
 		return;
 	}
-	list.forEach(rec => {
+	cpLedgerOrder(list).forEach(rec => {
 		const tr = document.createElement("tr");
 		tr.innerHTML = `
 			<td>${escapeHtml(rec.date || '')}</td>
@@ -8487,10 +8552,10 @@ function renderRecreationTable() {
 			<td>${escapeHtml(rec.notes || '-')}</td>
 			<td>${escapeHtml(rec.staff_name || '担当')}</td>
 			<td style="text-align:center; white-space:nowrap;">
-				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openRecreationModal(${rec.id})">訂正</button>
-				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteRecreationRecord(${rec.id})">削除</button>
+				${cpLedgerActions('recreations', rec, 'openRecreationModal')}
 			</td>
 		`;
+		if (rec.voided) cpMarkVoidedRow(tr);
 		tbody.appendChild(tr);
 	});
 }
@@ -8572,10 +8637,8 @@ function submitRecreationRecord() {
 }
 
 function deleteRecreationRecord(id) {
-	if (!confirm("このレクリエーション記録を削除しますか？")) return;
-	db.data.recreations = (db.data.recreations || []).filter(r => r.id !== id);
-	db.save();
-	renderRecreationTable();
+	// [Claude修正] 削除せず取消にする
+	cpVoidLedgerRecord('recreations', id);
 }
 // 12. 面会 ＆ 荷物受付
 function submitVisitation() {
@@ -9465,7 +9528,7 @@ function renderOfficeFireDrills() {
 		return;
 	}
 
-	list.forEach(d => {
+	cpLedgerOrder(list).forEach(d => {
 		const tr = document.createElement("tr");
 		tr.innerHTML = `
 			<td>${escapeHtml(d.date || '')}</td>
@@ -9477,10 +9540,10 @@ function renderOfficeFireDrills() {
 			<td>${escapeHtml(d.reported_to_fire_dept || '-')}</td>
 			<td>${escapeHtml(d.supervisor || '-')}</td>
 			<td style="text-align:center; white-space:nowrap;">
-				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openFireDrillModal(${d.id})">訂正</button>
-				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteFireDrillRecord(${d.id})">削除</button>
+				${cpLedgerActions('fire_drills', d, 'openFireDrillModal')}
 			</td>
 		`;
+		if (d.voided) cpMarkVoidedRow(tr);
 		tbody.appendChild(tr);
 	});
 }
@@ -9564,10 +9627,8 @@ function submitFireDrillRecord() {
 }
 
 function deleteFireDrillRecord(id) {
-	if (!confirm("この訓練記録を削除しますか？")) return;
-	db.data.fire_drills = (db.data.fire_drills || []).filter(x => x.id !== id);
-	db.save();
-	renderOfficeFireDrills();
+	// [Claude修正] 削除せず取消にする
+	cpVoidLedgerRecord('fire_drills', id);
 }
 // 法定委員会・研修記録
 function renderOfficeCommittees() {
@@ -10869,7 +10930,7 @@ function renderOfficeVaccines() {
 		tbody.innerHTML = `<tr><td colspan="11" style="text-align:center; color:var(--text-muted); padding:16px;">予防接種の記録はありません。</td></tr>`;
 		return;
 	}
-	list.forEach(v => {
+	cpLedgerOrder(list).forEach(v => {
 		const res = (gState.residents || []).find(r => r.id === v.resident_id);
 		const consentColor = v.consent === "同意受領済" ? "#16a34a" : (v.consent === "接種見送り (辞退)" ? "#dc2626" : "#b45309");
 
@@ -10886,10 +10947,10 @@ function renderOfficeVaccines() {
 			<td>${escapeHtml(v.reactions || '-')}</td>
 			<td><span class="badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(v.status || '登録済')}</span></td>
 			<td style="white-space:nowrap; text-align:center;">
-				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openVaccineModal(${v.id})">訂正</button>
-				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteVaccineRecord(${v.id})">削除</button>
+				${cpLedgerActions('vaccines', v, 'openVaccineModal')}
 			</td>
 		`;
+		if (v.voided) cpMarkVoidedRow(tr);
 		tbody.appendChild(tr);
 	});
 }
@@ -10988,10 +11049,8 @@ function submitVaccineRecord() {
 }
 
 function deleteVaccineRecord(id) {
-	if (!confirm("このワクチン接種記録を削除しますか？")) return;
-	db.data.vaccines = (db.data.vaccines || []).filter(x => x.id !== id);
-	db.save();
-	renderOfficeVaccines();
+	// [Claude修正] 削除せず取消にする
+	cpVoidLedgerRecord('vaccines', id);
 }
 
 // グローバル公開 (第3段階・後半)
@@ -11015,7 +11074,9 @@ window.deleteEmergencySupplyRecord = deleteEmergencySupplyRecord;
 window.renderOfficeVaccines = renderOfficeVaccines;
 window.openVaccineModal = openVaccineModal;
 window.submitVaccineRecord = submitVaccineRecord;
-window.deleteVaccineRecord = deleteVaccineRecord;// 私物行 追加・編集
+window.deleteVaccineRecord = deleteVaccineRecord;
+window.cpVoidLedgerRecord = cpVoidLedgerRecord;
+window.cpRestoreLedgerRecord = cpRestoreLedgerRecord;// 私物行 追加・編集
 function openBelongingModal(editId = null) {
  const modal = document.getElementById("belongingModal");
  if (!modal) return;
