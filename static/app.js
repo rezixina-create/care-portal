@@ -3575,6 +3575,127 @@ function submitCareSummary() {
  closeModal("careSummaryModal");
 }
 
+// ======================================================================
+// [Claude修正] 印刷共通処理 runPrintJob
+// 旧実装の問題:
+//  - 画面全体を visibility:hidden で隠すだけだったため、見えない画面の分だけ白紙ページが出ていた
+//  - 全帳票が A4横 固定 (@page) で、縦向き帳票が2枚目にはみ出していた
+//  - 勤務表・請求明細の印刷ボタンは帳票を作らず window.print() を呼ぶだけだったため、
+//    直前に別タブで印刷した書類 (#printArea の残り) がそのまま出ていた
+// 新実装: 帳票HTMLを #printArea に入れ、用紙サイズを帳票ごとに指定し、
+//          1枚に収める帳票は用紙に合わせて縮小してから印刷する。印刷後は #printArea を空に戻す。
+// ======================================================================
+const PRINT_PAGE_SIZES_MM = {
+ "A4 portrait": [210, 297],
+ "A4 landscape": [297, 210]
+};
+const PRINT_MARGIN_MM = 10;
+
+function runPrintJob(html, options) {
+ const opts = Object.assign({ page: "A4 portrait", fitOnePage: true, minScale: 0.5 }, options || {});
+ const printArea = document.getElementById("printArea");
+ if (!printArea) {
+ alert("印刷コンテナが見つかりません。");
+ return;
+ }
+ // 帳票は body 直下に置く (印刷CSSが body 直下の帳票以外を非表示にするため)
+ if (printArea.parentElement !== document.body) {
+ document.body.appendChild(printArea);
+ }
+
+ // 用紙サイズを帳票ごとに設定
+ let pageStyle = document.getElementById("printPageSizeStyle");
+ if (!pageStyle) {
+ pageStyle = document.createElement("style");
+ pageStyle.id = "printPageSizeStyle";
+ document.head.appendChild(pageStyle);
+ }
+ pageStyle.textContent = `@page { size: ${opts.page}; margin: ${PRINT_MARGIN_MM}mm; }`;
+
+ printArea.innerHTML = html;
+ printArea.style.zoom = "";
+
+ // 1枚に収める帳票は、印刷可能範囲に対する実寸を測って縮小率を決める
+ if (opts.fitOnePage) {
+ const mm = PRINT_PAGE_SIZES_MM[opts.page] || PRINT_PAGE_SIZES_MM["A4 portrait"];
+ const pxPerMm = 96 / 25.4;
+ const availW = (mm[0] - PRINT_MARGIN_MM * 2) * pxPerMm;
+ const availH = (mm[1] - PRINT_MARGIN_MM * 2) * pxPerMm;
+ const prev = printArea.getAttribute("style") || "";
+ printArea.setAttribute("style", `display:block; position:absolute; left:-30000px; top:0; width:${availW}px; visibility:hidden;`);
+ const contentW = Math.max(printArea.scrollWidth, availW);
+ const contentH = printArea.scrollHeight;
+ printArea.setAttribute("style", prev);
+ const scale = Math.min(1, availW / contentW, availH / contentH) * 0.98;
+ if (scale < 0.98 && scale >= opts.minScale) {
+ printArea.style.zoom = String(scale);
+ }
+ }
+
+ const cleanup = () => {
+ printArea.innerHTML = "";
+ printArea.style.zoom = "";
+ window.removeEventListener("afterprint", cleanup);
+ };
+ window.addEventListener("afterprint", cleanup);
+ window.print();
+}
+
+// 勤務表 (A4横・1枚) の印刷
+function printShiftTable() {
+ const table = document.getElementById("shiftMatrixTable");
+ if (!table) {
+ alert("勤務表が見つかりません。");
+ return;
+ }
+ const ym = (typeof getShiftYearMonth === "function") ? getShiftYearMonth() : "";
+ const [y, m] = ym.split("-");
+ const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "";
+ const clone = table.cloneNode(true);
+ clone.removeAttribute("id");
+ clone.querySelectorAll("[id]").forEach(el => el.removeAttribute("id"));
+ clone.querySelectorAll("[onclick],[ondblclick]").forEach(el => { el.removeAttribute("onclick"); el.removeAttribute("ondblclick"); });
+ clone.style.minWidth = "0";
+ clone.style.width = "100%";
+ const html = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:6px; margin-bottom:8px;">
+ <h1 style="font-size:18px; margin:0;">${escapeHtml(facility)} 月間勤務表 ${y ? `${escapeHtml(y)}年${Number(m)}月` : ""}</h1>
+ <div style="font-size:11px;">印刷日時: ${new Date().toLocaleString("ja-JP")}</div>
+ </div>
+ ${clone.outerHTML}
+ </div>`;
+ runPrintJob(html, { page: "A4 landscape", fitOnePage: true, minScale: 0.3 });
+}
+
+// 利用者別 月末請求明細 (A4縦・1枚) の印刷
+function printBillingDetail() {
+ const sel = document.getElementById("billingResidentSelect");
+ const area = document.getElementById("billingDetailArea");
+ const resId = sel ? parseInt(sel.value) : NaN;
+ const r = (gState.residents || []).find(x => x.id === resId);
+ if (!r || !area || !area.innerHTML.trim()) {
+ alert("請求明細を印刷する利用者を選択してください。");
+ return;
+ }
+ const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "";
+ const html = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:14px;">
+ <div>
+ <h1 style="font-size:20px; margin:0;">月末消耗品 請求明細書</h1>
+ <p style="font-size:13px; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</strong></p>
+ </div>
+ <div style="text-align:right; font-size:12px;">
+ <div>${escapeHtml(facility)}</div>
+ <div>印刷日時: ${new Date().toLocaleString("ja-JP")}</div>
+ </div>
+ </div>
+ ${area.innerHTML}
+ </div>`;
+ runPrintJob(html, { page: "A4 portrait", fitOnePage: true });
+}
+
 function printCareSummary() {
  const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
  const r = gState.residents ? gState.residents.find(x => Number(x.id) === rId) : null;
@@ -3673,7 +3794,7 @@ function printCareSummary() {
  </table>
  </div>
  `;
- window.print();
+ runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true });
 }
 
 // ======================================================================
@@ -3716,7 +3837,7 @@ function renderEmergencySummaryPreview(r) {
  const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入・特変発生状況または受診理由を記載してください）";
  const nowStr = new Date().toLocaleString("ja-JP");
  const staffName = document.getElementById("currentStaff")?.value || "職員";
- const facility = gState.facilityName || "介護老人保健施設 ケアポータル";
+ const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "介護老人保健施設 ケアポータル"; // [Claude修正] 未設定の gState.facilityName を参照していたため施設名が反映されていなかった
 
  const vitals = (db.data.vitals || []).filter(v => Number(v.resident_id) === Number(r.id));
  const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
@@ -3819,7 +3940,7 @@ function printEmergencySummary() {
  return;
  }
  printArea.innerHTML = container.innerHTML;
- window.print();
+ runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true });
 }
 
 function copyEmergencySummaryText() {
@@ -3828,7 +3949,7 @@ function copyEmergencySummaryText() {
  if (!r) return;
 
  const reasonText = document.getElementById("emgReasonInput")?.value || "（未記入）";
- const facility = gState.facilityName || "介護老人保健施設 ケアポータル";
+ const facility = (db && db.data && db.data.facility_name) ? db.data.facility_name : "介護老人保健施設 ケアポータル"; // [Claude修正] 未設定の gState.facilityName を参照していたため施設名が反映されていなかった
  const nowStr = new Date().toLocaleString("ja-JP");
  const staffName = document.getElementById("currentStaff")?.value || "職員";
 
@@ -4506,7 +4627,7 @@ function printBodySchema() {
  </div>
  `;
 
- window.print();
+ runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true });
 }
 
 // 介護記録の追加
@@ -5426,7 +5547,7 @@ ${escapeHtml(r.content || '')}
  </div>
  `;
 
- window.print();
+ runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true, minScale: 0.75 });
 }
 
 // ============================================================
@@ -5762,7 +5883,7 @@ ${escapeHtml(r.content || '')}
  </div>
  `;
 
- window.print();
+ runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true, minScale: 0.75 });
 }
 
 // 施設・フロア 一日の日課・業務スケジュール

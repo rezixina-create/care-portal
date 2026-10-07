@@ -676,23 +676,36 @@ body {
 }
 
 /* 印刷用スタイル (B5 / A4 日報帳票) */
+/* [Claude修正] 旧方式は visibility:hidden で画面全体を「透明」にしていたため、
+   見えない画面の高さ分だけ白紙ページが増えていた。印刷中は帳票以外を
+   display:none で完全に取り除き、帳票 (#printArea) だけを用紙に流し込む。
+   用紙サイズ (@page) は印刷ボタンごとに app.js の runPrintJob() が指定する。 */
 @media print {
-  body * {
-    visibility: hidden;
+  html, body {
+    background: #ffffff !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    overflow: visible !important;
   }
-  #printArea, #printArea * {
-    visibility: visible;
+  body > *:not(#printArea) {
+    display: none !important;
   }
   #printArea {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
-    margin: 0;
-    padding: 15mm 20mm;
+    display: block !important;
+    position: static !important;
+    width: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     background: white !important;
     color: black !important;
-    display: block !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+  #printArea button,
+  #printArea input[type="button"],
+  #printArea .no-print {
+    display: none !important;
   }
 
   .print-page-break {
@@ -987,12 +1000,8 @@ body {
   font-size: 11px;
 }
 
-@media print {
-  @page {
-    size: A4 landscape;
-    margin: 8mm;
-  }
-}
+/* [Claude修正] 全帳票が A4横 に固定されていた @page 指定を削除。
+   用紙の向きは runPrintJob() が帳票ごとに設定する (勤務表のみ A4横)。 */
 
 /* シフトセル クイック変更ポップオーバー */
 .shift-cell-popover {

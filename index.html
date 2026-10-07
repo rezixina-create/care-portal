@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css">
+ <link rel="stylesheet" href="style.css?v=20261007_c1">
 </head>
 <body>
 
@@ -838,7 +838,7 @@
  <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
  <label style="font-weight:bold;">利用者を選択:</label>
  <select id="billingResidentSelect" class="form-control" style="width:200px;" onchange="renderBillingDetail()"></select>
- <button class="btn btn-secondary" onclick="window.print()"> 請求明細書を印刷 (A4)</button>
+ <button class="btn btn-secondary" onclick="printBillingDetail()"> 請求明細書を印刷 (A4)</button>
  </div>
  <div id="billingDetailArea"></div>
  </div>
@@ -921,7 +921,7 @@
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="generateMonthlyShiftAction()"> 1ヶ月シフト自動生成</button>
  <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#fef2f2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;" onclick="openShiftHopeModal()"> 希望休・要望の登録</button>
  <button class="btn btn-outline" style="padding:6px 12px; font-size:13px; background:#f8fafc;" onclick="openShiftNgModal()"> 特例配慮設定 (同番NG)</button>
- <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="window.print()"> A4横 印刷</button>
+ <button class="btn btn-secondary" style="padding:6px 12px; font-size:13px;" onclick="printShiftTable()"> A4横 印刷</button>
  </div>
  </div>
 
@@ -3217,6 +3217,6 @@
  </div>
  </div>
 
- <script src="app.js?v=20261003_v8"></script>
+ <script src="app.js?v=20261007_c1"></script>
 </body>
 </html>
