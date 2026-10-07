@@ -343,6 +343,35 @@
  win.closeModal("eyedropOrderModal");
  }
 
+ // 22. 介護記録個別編集モーダルの動作確認
+ const firstRec = (win.db.data.care_records || [])[0];
+ if (firstRec) {
+ win.openEditCareRecordModal(firstRec.id);
+ await new Promise(r => setTimeout(r, 200));
+ const ecrModal = doc.getElementById("editCareRecordModal");
+ const isEcrOpen = ecrModal && win.getComputedStyle(ecrModal).display === "flex";
+ report("介護記録個別編集モーダルが開くこと", isEcrOpen);
+ const editCrContent = doc.getElementById("editCrContent");
+ report("編集モーダル内に記録内容入力欄が存在すること", !!editCrContent);
+ win.closeModal("editCareRecordModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isEcrClosed = ecrModal && win.getComputedStyle(ecrModal).display === "none";
+ report("介護記録個別編集モーダルが正常に閉じられること", isEcrClosed);
+ }
+
+ // 23. 夜間巡視定型文設定モーダルの動作確認
+ win.openNightTurnTemplateModal();
+ await new Promise(r => setTimeout(r, 200));
+ const nttModal = doc.getElementById("nightTurnTemplateModal");
+ const isNttOpen = nttModal && win.getComputedStyle(nttModal).display === "flex";
+ report("夜間巡視定型文設定モーダルが開くこと", isNttOpen);
+ const tplNightSleep = doc.getElementById("tplNightSleep");
+ report("定型文設定モーダル内に安眠中入力欄が存在すること", !!tplNightSleep);
+ win.closeModal("nightTurnTemplateModal");
+ await new Promise(r => setTimeout(r, 100));
+ const isNttClosed = nttModal && win.getComputedStyle(nttModal).display === "none";
+ report("夜間巡視定型文設定モーダルが正常に閉じられること", isNttClosed);
+
  const fin = document.createElement("div");
  fin.id = "testComplete";
  document.body.appendChild(fin);

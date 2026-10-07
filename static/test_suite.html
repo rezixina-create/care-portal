@@ -120,6 +120,29 @@
       <textarea id="eoNotes"></textarea>
       <select id="eoStatus"></select>
     </div>
+    <div id="editCareRecordModal" style="display:none;">
+      <input type="hidden" id="editCrId">
+      <input type="text" id="editCrResidentName">
+      <input type="text" id="editCrDateTime">
+      <select id="editCrCategory">
+        <option value="巡視">巡視</option>
+        <option value="特変">特変</option>
+      </select>
+      <input type="text" id="editCrStaff">
+      <textarea id="editCrContent"></textarea>
+      <button id="btnDeleteCareRecord"></button>
+      <button id="btnSaveCareRecord"></button>
+    </div>
+    <div id="nightTurnTemplateModal" style="display:none;">
+      <textarea id="tplNightSleep"></textarea>
+      <textarea id="tplNightLeft"></textarea>
+      <textarea id="tplNightRight"></textarea>
+      <textarea id="tplNightSupine"></textarea>
+      <textarea id="tplNightDiaper"></textarea>
+      <button id="btnResetNightTurnTemplates"></button>
+      <button id="btnSaveNightTurnTemplates"></button>
+    </div>
+    <button id="btnOpenNightTurnTemplates"></button>
     <table id="weightTable"></table>
     <div id="tabCareRecords"></div>
     <div id="tabCareVitals"></div>
@@ -673,7 +696,12 @@
       saveSchemaPin();
       assert((db.data.body_schema_pins || []).length === initPinCount + 1, "Test 93: シェーマ図への新規ピン登録が正常に保存されること");
 
-      // 32. 総合結果判定
+      // 32. 介護記録個別編集 ＆ 巡視定型文カスタマイズ・安全ガードテスト
+      assert(typeof openNightTurnTemplateModal === "function" && typeof submitNightTurnTemplates === "function" && typeof resetNightTurnTemplates === "function", "Test 94: 夜間巡視定型文設定・初期化関数が存在すること");
+      assert(typeof openEditCareRecordModal === "function" && typeof updateCareRecord === "function" && typeof deleteCareRecord === "function", "Test 95: 介護記録の個別編集・更新・削除関数が存在すること");
+      assert(db.data.night_turn_templates && db.data.night_turn_templates["安眠中"] && db.data.night_turn_templates["左側臥位"], "Test 96: 夜間巡視・体位変換の定型文テンプレートが正常保持されていること");
+
+      // 33. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

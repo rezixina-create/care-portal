@@ -2971,6 +2971,142 @@ function clearRecordForm() {
 }
 
 // ======================================================================
+// 登録後 介護記録・カルテの個別編集・修正・加筆・削除機能
+// ======================================================================
+function openEditCareRecordModal(recId) {
+ const rec = (db.data.care_records || []).find(r => r.id === recId);
+ if (!rec) {
+ alert("対象の介護記録が見つかりません。");
+ return;
+ }
+ const res = gState.residents.find(x => x.id === rec.resident_id);
+ const resName = (rec.resident_id === 0) ? "フロア全体・共通" : (res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定");
+
+ const idEl = document.getElementById("editCrId");
+ const nameEl = document.getElementById("editCrResidentName");
+ const timeEl = document.getElementById("editCrDateTime");
+ const catEl = document.getElementById("editCrCategory");
+ const staffEl = document.getElementById("editCrStaff");
+ const contentEl = document.getElementById("editCrContent");
+
+ if (idEl) idEl.value = rec.id;
+ if (nameEl) nameEl.value = resName;
+ if (timeEl) timeEl.value = rec.recorded_at || rec.record_time || "";
+ if (catEl) catEl.value = rec.category || "介護記録";
+ if (staffEl) staffEl.value = rec.staff_name || "";
+ if (contentEl) contentEl.value = rec.content || "";
+
+ openModal("editCareRecordModal");
+}
+
+function updateCareRecord() {
+ const idEl = document.getElementById("editCrId");
+ if (!idEl) return;
+ const recId = parseInt(idEl.value, 10);
+ const rec = (db.data.care_records || []).find(r => r.id === recId);
+ if (!rec) {
+ alert("更新対象の介護記録が見つかりません。");
+ return;
+ }
+
+ const contentEl = document.getElementById("editCrContent");
+ const newContent = contentEl ? contentEl.value.trim() : "";
+ if (!newContent) {
+ alert("記録内容を入力してください。");
+ return;
+ }
+
+ const timeEl = document.getElementById("editCrDateTime");
+ const catEl = document.getElementById("editCrCategory");
+ const staffEl = document.getElementById("editCrStaff");
+
+ if (timeEl && timeEl.value.trim()) {
+ rec.recorded_at = timeEl.value.trim();
+ }
+ if (catEl) rec.category = catEl.value;
+ if (staffEl && staffEl.value.trim()) {
+ rec.staff_name = staffEl.value.trim();
+ }
+ rec.content = newContent;
+
+ db.save();
+ closeModal("editCareRecordModal");
+ renderSelectedDateRecords();
+ if (typeof renderDailyJournal === "function") renderDailyJournal();
+ alert("介護記録の編集内容を保存しました！");
+}
+
+function deleteCareRecord() {
+ const idEl = document.getElementById("editCrId");
+ if (!idEl) return;
+ const recId = parseInt(idEl.value, 10);
+ if (!confirm("この介護記録を削除してもよろしいですか？\n※ 削除した記録は元に戻せません。")) return;
+
+ if (db.data.care_records) {
+ db.data.care_records = db.data.care_records.filter(r => r.id !== recId);
+ db.save();
+ }
+ closeModal("editCareRecordModal");
+ renderSelectedDateRecords();
+ if (typeof renderDailyJournal === "function") renderDailyJournal();
+ alert("介護記録を削除しました。");
+}
+
+// ======================================================================
+// 夜間巡視・体位変換 自動生成定型文テンプレート管理 (施設独自編集)
+// ======================================================================
+function getNightTurnTemplates() {
+ if (!db.data.night_turn_templates || typeof db.data.night_turn_templates !== "object") {
+ db.data.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
+ }
+ return db.data.night_turn_templates;
+}
+
+function openNightTurnTemplateModal() {
+ const tpls = getNightTurnTemplates();
+ const sleepEl = document.getElementById("tplNightSleep");
+ const leftEl = document.getElementById("tplNightLeft");
+ const rightEl = document.getElementById("tplNightRight");
+ const supineEl = document.getElementById("tplNightSupine");
+ const diaperEl = document.getElementById("tplNightDiaper");
+
+ if (sleepEl) sleepEl.value = tpls["安眠中"] || DEFAULT_NIGHT_TURN_TEMPLATES["安眠中"];
+ if (leftEl) leftEl.value = tpls["左側臥位"] || DEFAULT_NIGHT_TURN_TEMPLATES["左側臥位"];
+ if (rightEl) rightEl.value = tpls["右側臥位"] || DEFAULT_NIGHT_TURN_TEMPLATES["右側臥位"];
+ if (supineEl) supineEl.value = tpls["仰臥位"] || DEFAULT_NIGHT_TURN_TEMPLATES["仰臥位"];
+ if (diaperEl) diaperEl.value = tpls["おむつ交換"] || DEFAULT_NIGHT_TURN_TEMPLATES["おむつ交換"];
+
+ openModal("nightTurnTemplateModal");
+}
+
+function submitNightTurnTemplates() {
+ if (!db.data.night_turn_templates) db.data.night_turn_templates = {};
+ const sleepEl = document.getElementById("tplNightSleep");
+ const leftEl = document.getElementById("tplNightLeft");
+ const rightEl = document.getElementById("tplNightRight");
+ const supineEl = document.getElementById("tplNightSupine");
+ const diaperEl = document.getElementById("tplNightDiaper");
+
+ db.data.night_turn_templates["安眠中"] = (sleepEl && sleepEl.value.trim()) || DEFAULT_NIGHT_TURN_TEMPLATES["安眠中"];
+ db.data.night_turn_templates["左側臥位"] = (leftEl && leftEl.value.trim()) || DEFAULT_NIGHT_TURN_TEMPLATES["左側臥位"];
+ db.data.night_turn_templates["右側臥位"] = (rightEl && rightEl.value.trim()) || DEFAULT_NIGHT_TURN_TEMPLATES["右側臥位"];
+ db.data.night_turn_templates["仰臥位"] = (supineEl && supineEl.value.trim()) || DEFAULT_NIGHT_TURN_TEMPLATES["仰臥位"];
+ db.data.night_turn_templates["おむつ交換"] = (diaperEl && diaperEl.value.trim()) || DEFAULT_NIGHT_TURN_TEMPLATES["おむつ交換"];
+
+ db.save();
+ closeModal("nightTurnTemplateModal");
+ alert("夜間巡視・体位変換の自動生成定型文を保存しました！\n今後の巡視記録保存時にこの設定文が適用されます。");
+}
+
+function resetNightTurnTemplates() {
+ if (!confirm("巡視定型文をシステムの初期標準設定に戻しますか？")) return;
+ db.data.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
+ db.save();
+ openNightTurnTemplateModal();
+ alert("定型文を初期標準設定に戻しました。");
+}
+
+// ======================================================================
 // よく使う定型文テンプレート管理・追加・変更機能
 // ======================================================================
 const DEFAULT_CARE_TEMPLATES = [
@@ -6773,15 +6909,20 @@ function submitNightTurnsBatch() {
 
  Object.keys(resActionsMap).forEach(resIdStr => {
  const resId = parseInt(resIdStr, 10);
+ const r = gState.residents.find(x => x.id === resId);
+ if (!r || r.status !== "在所") {
+ // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から完全除外
+ return;
+ }
  const actionsList = resActionsMap[resId];
  if (!actionsList || actionsList.length === 0) return;
 
  // 前回の自動生成レコード（定時巡視・夜間巡視）を削除して最新状態に更新
- db.data.care_records = (db.data.care_records || []).filter(r => !(
- r.resident_id === resId &&
- r.category === "巡視" &&
- r.recorded_at.startsWith(gState.selectedDate) &&
- (r.content.includes("定時巡視") || r.content.includes("夜間巡視・体位変換") || r.content.includes("夜間巡視:"))
+ db.data.care_records = (db.data.care_records || []).filter(rec => !(
+ rec.resident_id === resId &&
+ rec.category === "巡視" &&
+ rec.recorded_at.startsWith(gState.selectedDate) &&
+ (rec.content.includes("定時巡視") || rec.content.includes("夜間巡視・体位変換") || rec.content.includes("夜間巡視:"))
  ));
 
  // 時間順にソート (22:00 -> 00:00 -> 02:00 -> 04:00 -> 06:00)
@@ -6791,22 +6932,12 @@ function submitNightTurnsBatch() {
  return (idxA >= 0 ? idxA : 99) - (idxB >= 0 ? idxB : 99);
  });
 
- // 巡視した時間すべてについて、1回ずつ個別に介護記録を作成
+ const tpls = getNightTurnTemplates();
+
+ // 巡視した時間すべてについて、設定された定型文に基づき個別に介護記録を作成
  actionsList.forEach((item, index) => {
- let contentText = "";
- if (item.action === "安眠中") {
- contentText = `【${item.time} 定時巡視】訪室確認。静かに安眠中、呼吸状態安定。掛物の乱れを整え、ナースコールを手元に確認。異常なし。`;
- } else if (item.action === "左側臥位") {
- contentText = `【${item.time} 定時巡視・体位変換】訪室確認。仰臥位から左側臥位へ体位変換実施。仙骨部除圧クッションを背部・膝間に挿入。良肢位保持、寝具を整える。`;
- } else if (item.action === "右側臥位") {
- contentText = `【${item.time} 定時巡視・体位変換】訪室確認。左側臥位から右側臥位へ体位変換実施。除圧クッション配置し安楽な姿勢を保持。呼吸落ち着き安眠継続。`;
- } else if (item.action === "仰臥位") {
- contentText = `【${item.time} 定時巡視・体位変換】訪室確認。側臥位から仰臥位へ体位変換実施。背部・仙骨部の皮膚状態確認（発赤悪化なし）。膝下クッション配置。`;
- } else if (item.action === "おむつ交換") {
- contentText = `【${item.time} 定時巡視・おむつ交換】訪室確認。おむつ汚染（排尿あり）確認しパッド交換実施。陰部清拭、皮膚保護処置。寝具交換なし、安眠。`;
- } else {
- contentText = `【${item.time} 定時巡視・体位変換】訪室確認。${item.action}実施。全身状態・呼吸安定、安眠。`;
- }
+ const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。全身状態・呼吸安定、安眠。`;
+ const contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
 
  db.data.care_records.unshift({
  id: Date.now() + Math.floor(Math.random() * 100000) + index,
@@ -6824,7 +6955,7 @@ function submitNightTurnsBatch() {
  renderNightTable();
  loadDateRecords(gState.selectedDate);
  if (totalRecordsCreated > 0) {
- alert(`体位変換・夜間巡視を一括確定しました！\n巡視した全${totalRecordsCreated}回分の巡視記録が個別に個人記録へ反映されました。`);
+ alert(`体位変換・夜間巡視のチェック入力分（計${totalRecordsCreated}回）を保存・カルテへ転記しました！`);
  } else {
  alert("体位変換・夜間巡視のチェック解除状態を確定・保存しました。");
  }
@@ -6841,7 +6972,22 @@ function renderNightTable() {
  const times = ["22:00", "00:00", "02:00", "04:00", "06:00"];
 
  gState.residents.forEach(r => {
+ const isHospital = r.status === "入院中" || r.status === "ショート終了" || r.status !== "在所";
  const tr = document.createElement("tr");
+
+ if (isHospital) {
+ tr.style.background = "#f8fafc";
+ tr.style.opacity = "0.7";
+ const cells = times.map(() => `<td style="text-align:center; color:#94a3b8; font-size:11px;">(対象外)</td>`).join("");
+ tr.innerHTML = `
+ <td>${r.room_no}</td>
+ <td><strong>${escapeHtml(r.name)} 様</strong> <span class="badge" style="background:#64748b; color:#fff; font-size:10px; margin-left:4px;">${escapeHtml(r.status)}</span></td>
+ ${cells}
+ `;
+ tbody.appendChild(tr);
+ return;
+ }
+
  const cells = times.map(tm => {
  const key = `${r.id}_${tm}`;
  const curAction = gState.nightTurnDrafts[key];
