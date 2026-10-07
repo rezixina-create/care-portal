@@ -231,8 +231,25 @@ namespace CarePortal
                         string postData = Encoding.UTF8.GetString(bodyBytes);
                         if (!string.IsNullOrEmpty(postData))
                         {
+                            bool revConflict = false;
                             lock (_fileLock)
                             {
+                                // [Claude修正] 版番号 (_rev) の照合。保存データの _rev は「取得時の版 + 1」でなければならない。
+                                // 取得後に他端末が保存して版が進んでいれば 409 を返し、端末側で合流をやり直させる。
+                                long currentRev = -1;
+                                if (File.Exists(_dbFile))
+                                {
+                                    string currentJson = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                    var mc = System.Text.RegularExpressions.Regex.Match(currentJson, "\"_rev\":(\\d+)");
+                                    if (mc.Success) currentRev = long.Parse(mc.Groups[1].Value);
+                                }
+                                var mp = System.Text.RegularExpressions.Regex.Match(postData, "\"_rev\":(\\d+)");
+                                if (currentRev >= 0 && mp.Success && long.Parse(mp.Groups[1].Value) != currentRev + 1)
+                                {
+                                    revConflict = true;
+                                }
+                                if (!revConflict)
+                                {
                                 File.WriteAllText(_dbFile, postData, Encoding.UTF8);
                                 try
                                 {
@@ -243,6 +260,12 @@ namespace CarePortal
                                     File.WriteAllText(latestPath, postData, Encoding.UTF8);
                                 }
                                 catch { }
+                                }
+                            }
+                            if (revConflict)
+                            {
+                                SendJsonResponse(stream, 409, "{\"error\":\"conflict\"}");
+                                return;
                             }
                             string nowTime = DateTime.Now.ToString("HH:mm");
                             SendJsonResponse(stream, 200, "{\"success\":true,\"saved_at\":\"" + nowTime + "\"}");
@@ -302,7 +325,7 @@ namespace CarePortal
         private static void SendJsonResponse(NetworkStream stream, int statusCode, string json)
         {
             byte[] bytes = Encoding.UTF8.GetBytes(json);
-            SendCorsResponse(stream, statusCode, statusCode == 200 ? "OK" : "Bad Request", "application/json; charset=utf-8", bytes);
+            SendCorsResponse(stream, statusCode, statusCode == 200 ? "OK" : (statusCode == 409 ? "Conflict" : "Bad Request"), "application/json; charset=utf-8", bytes);
         }
 
         private static void SendCorsResponse(NetworkStream stream, int statusCode, string statusMsg, string contentType, byte[] body)

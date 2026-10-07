@@ -50,6 +50,97 @@ const DEFAULT_NIGHT_TURN_TEMPLATES = {
  "おむつ交換": "【{time} 定時巡視・おむつ交換】訪室確認。おむつ汚染（排尿あり）確認しパッド交換実施。陰部清拭、皮膚保護処置。寝具交換なし、安眠。"
 };
 
+// ======================================================================
+// [Claude修正] 3者比較による合流 (マージ)
+// local = この端末のデータ, base = 前回サーバーと同期した時点のデータ, server = サーバーの最新
+// ・片方だけが変えた部分は、変えた側を採用
+// ・ID付きの記録の配列は1件ずつ合流 (両端末で追加した記録はどちらも残す)
+// ・同じ記録を両端末で別々に編集した場合は、この端末の内容を採用
+// ・一方が削除し、もう一方が編集した記録は、記録を残す (消失を防ぐ)
+// ======================================================================
+function cpSame(a, b) {
+ return JSON.stringify(a) === JSON.stringify(b);
+}
+
+function cpIdKeys(arr) {
+ if (!Array.isArray(arr)) return null;
+ const keys = [];
+ const seen = {};
+ for (const it of arr) {
+ if (!it || typeof it !== "object" || Array.isArray(it) || it.id === undefined || it.id === null || it.id === "") return null;
+ const k = String(it.id);
+ seen[k] = (seen[k] || 0) + 1;
+ keys.push(seen[k] === 1 ? k : `${k}#${seen[k]}`);
+ }
+ return keys;
+}
+
+function cpMergeIdArray(local, base, server) {
+ const lk = cpIdKeys(local), bk = cpIdKeys(base || []), sk = cpIdKeys(server || []);
+ if (!lk || !bk || !sk) return null;
+ const L = new Map(), B = new Map(), S = new Map();
+ lk.forEach((k, i) => L.set(k, local[i]));
+ bk.forEach((k, i) => B.set(k, (base || [])[i]));
+ sk.forEach((k, i) => S.set(k, (server || [])[i]));
+ const result = [];
+ const used = new Set();
+ // サーバーの並びを基準に
+ sk.forEach(k => {
+ const sv = S.get(k);
+ if (L.has(k)) {
+ const lv = L.get(k);
+ if (!B.has(k) && !cpSame(lv, sv)) {
+ // 両端末が同じ時刻 (同じID) で別々の記録を追加した場合は、両方とも残す
+ result.push(sv, lv);
+ used.add(k);
+ return;
+ }
+ const localChanged = !B.has(k) || !cpSame(lv, B.get(k));
+ result.push(localChanged ? lv : sv);
+ used.add(k);
+ } else if (B.has(k)) {
+ // この端末で削除済み。サーバー側で編集されていれば残す
+ if (!cpSame(sv, B.get(k))) { result.push(sv); }
+ used.add(k);
+ } else {
+ result.push(sv); // 他端末で追加
+ used.add(k);
+ }
+ });
+ // この端末だけにある記録 (この端末で追加、または他端末で削除されたがこの端末で編集)
+ const head = [], tail = [];
+ lk.forEach((k, i) => {
+ if (used.has(k)) return;
+ const lv = L.get(k);
+ if (B.has(k) && cpSame(lv, B.get(k))) return; // 他端末で削除され、この端末では未編集
+ (i < local.length / 2 ? head : tail).push(lv);
+ });
+ return head.concat(result, tail);
+}
+
+function cpIsPlainObject(v) {
+ return v !== null && typeof v === "object" && !Array.isArray(v);
+}
+
+function cpMergeValue(local, base, server) {
+ if (cpSame(local, base)) return server;
+ if (cpSame(server, base)) return local;
+ if (Array.isArray(local) && Array.isArray(server)) {
+ const merged = cpMergeIdArray(local, Array.isArray(base) ? base : [], server);
+ return merged || local;
+ }
+ if (cpIsPlainObject(local) && cpIsPlainObject(server)) {
+ const b = cpIsPlainObject(base) ? base : {};
+ const out = {};
+ new Set([...Object.keys(local), ...Object.keys(server), ...Object.keys(b)]).forEach(k => {
+ const v = cpMergeValue(local[k], b[k], server[k]);
+ if (v !== undefined) out[k] = v;
+ });
+ return out;
+ }
+ return local;
+}
+
 // データベース管理クラス (ハイブリッド: サーバー同期 ＋ ローカル保存)
 class LocalDB {
  constructor() {
@@ -60,6 +151,7 @@ class LocalDB {
  this.serverPort = window.location.port || 8888;
  this.hasSyncedWithServer = !this.isServerMode;
  this.lastSavedJson = JSON.stringify(this.data);
+ this.baseJson = this.lastSavedJson;
 
  if (this.isServerMode) {
  this.initServerSync();
@@ -443,17 +535,54 @@ class LocalDB {
  }
  }
 
+ // [Claude修正] 保存の競合対策 (別々の端末でほぼ同時に保存すると、後から保存した端末が
+ // 全データを上書きし、先に保存された記録が消えていた)。
+ // 保存の直前にサーバーの最新データを取得し、「前回同期した状態」と比べて
+ // 自分の変更と他端末の変更を合流 (マージ) してから保存する。
+ // さらに版番号 (_rev) をサーバー側で照合し、取得から保存までの間に他端末が保存した場合は
+ // サーバーが 409 を返すので、もう一度取得・合流してやり直す。
  async saveToServer() {
  if (this.isServerMode && !this.hasSyncedWithServer) return;
+ this._saveChain = (this._saveChain || Promise.resolve()).then(() => this._syncAndSave()).catch(() => {});
+ return this._saveChain;
+ }
+
+ async _syncAndSave() {
+ this._saving = true;
+ this._syncEpoch = (this._syncEpoch || 0) + 1;
  try {
+ for (let attempt = 1; attempt <= 5; attempt++) {
+ let serverRev = 0;
+ let remoteChanged = false;
+ const resGet = await fetch('/api/data', { cache: 'no-store' });
+ if (resGet.ok) {
+ const text = await resGet.text();
+ if (text && text.trim() !== "" && text.trim() !== "{}") {
+ const serverData = this.ensureDefaultArrays(JSON.parse(text));
+ serverRev = Number(serverData._rev) || 0;
+ const serverJson = JSON.stringify(serverData);
+ if (serverJson !== this.baseJson) {
+ this.mergeRemoteData(serverData);
+ remoteChanged = true;
+ }
+ }
+ }
+ this.data._rev = serverRev + 1;
  const payload = JSON.stringify(this.data);
- this.lastSavedJson = payload;
  const res = await fetch('/api/save', {
  method: 'POST',
  headers: { 'Content-Type': 'application/json' },
  body: payload
  });
+ if (res.status === 409) {
+ // 取得から保存までの間に他端末が保存した。少し待って取得・合流からやり直す
+ await new Promise(r => setTimeout(r, 150 * attempt));
+ continue;
+ }
  if (res.ok) {
+ this.baseJson = payload;
+ this.lastSavedJson = payload;
+ try { localStorage.setItem(this.key, payload); } catch (e) {}
  this.updateSyncBadge(true);
  try {
  const resp = await res.json();
@@ -461,12 +590,50 @@ class LocalDB {
  } catch (e) {
  this.updateBackupBadge(new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
  }
- } else {
- this.updateSyncBadge(false);
+ if (remoteChanged) this.refreshViewAfterRemoteMerge();
+ return true;
  }
+ this.updateSyncBadge(false);
+ return false;
+ }
+ console.warn("Server save conflict could not be resolved after retries");
+ this.updateSyncBadge(false);
+ return false;
  } catch (err) {
  console.warn("Server save error:", err);
  this.updateSyncBadge(false);
+ return false;
+ } finally {
+ this._saving = false;
+ }
+ }
+
+ // 他端末の変更を、このページが持つ配列・オブジェクトを置き換えずに (参照を保ったまま) 取り込む
+ mergeRemoteData(serverData) {
+ let base = {};
+ try { base = JSON.parse(this.baseJson || "{}"); } catch (e) { base = {}; }
+ const keys = new Set([...Object.keys(this.data), ...Object.keys(serverData)]);
+ keys.forEach(k => {
+ if (k === "_rev") return;
+ const merged = cpMergeValue(this.data[k], base[k], serverData[k]);
+ const cur = this.data[k];
+ if (merged === undefined) {
+ delete this.data[k];
+ } else if (Array.isArray(cur) && Array.isArray(merged)) {
+ cur.splice(0, cur.length, ...merged);
+ } else if (cur && merged && typeof cur === "object" && typeof merged === "object" && !Array.isArray(cur) && !Array.isArray(merged)) {
+ Object.keys(cur).forEach(x => { if (!(x in merged)) delete cur[x]; });
+ Object.assign(cur, merged);
+ } else {
+ this.data[k] = merged;
+ }
+ });
+ }
+
+ refreshViewAfterRemoteMerge() {
+ const activeTag = document.activeElement ? document.activeElement.tagName : "";
+ if (activeTag !== "INPUT" && activeTag !== "TEXTAREA" && activeTag !== "SELECT") {
+ if (typeof reloadStateFromDb === 'function') reloadStateFromDb();
  }
  }
 
@@ -506,6 +673,7 @@ class LocalDB {
  if (serverData && serverData.residents && serverData.residents.length > 0) {
  this.data = this.ensureDefaultArrays(serverData);
  this.lastSavedJson = JSON.stringify(this.data);
+ this.baseJson = this.lastSavedJson;
  try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
  // 画面を再初期化して最新データを表示
  setTimeout(() => {
@@ -571,24 +739,40 @@ class LocalDB {
  }
 
  try {
- const res = await fetch('/api/data');
+ const epochAtFetch = this._syncEpoch;
+ const res = await fetch('/api/data', { cache: 'no-store' });
  if (!res.ok) return;
  const text = await res.text();
  if (!text || text.trim() === "" || text === "{}") return;
 
- const serverData = JSON.parse(text);
- if (!serverData || !serverData.residents) return;
-
+ // [Claude修正] 保存中、または取得中に保存が行われた場合は取り込まない
+ // (取得した内容が保存より古いと、削除した記録が復活するなどの不整合が起きるため)
+ if (this._saving || this._syncEpoch !== epochAtFetch) return;
+ const parsed = JSON.parse(text);
+ if (!parsed || !parsed.residents) return;
+ const serverData = this.ensureDefaultArrays(parsed);
+ let baseRev = 0;
+ try { baseRev = Number(JSON.parse(this.baseJson || "{}")._rev) || 0; } catch (e) {}
+ if ((Number(serverData._rev) || 0) < baseRev) return; // 古い版は無視
  const normalizedJson = JSON.stringify(serverData);
- if (normalizedJson === this.lastSavedJson) {
+ if (normalizedJson === this.baseJson) {
  this.updateSyncBadge(true);
  return;
  }
 
- this.data = this.ensureDefaultArrays(serverData);
+ // [Claude修正] 以前は this.data を丸ごと差し替えていたため、入力中で画面を更新しなかった場合に
+ // 画面側が古いデータを持ち続け、次の保存で他端末の記録を消すことがあった。
+ // 配列の参照を保ったまま、他端末の変更だけを合流する。
+ const localJsonBefore = JSON.stringify(this.data);
+ this.mergeRemoteData(serverData);
+ this.baseJson = normalizedJson;
  this.lastSavedJson = normalizedJson;
- try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
+ try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {}
  this.updateSyncBadge(true);
+ // 合流後もサーバーと異なる (未送信の自分の変更がある) 場合は保存する
+ if (JSON.stringify(this.data) !== normalizedJson && localJsonBefore !== this.baseJson) {
+ this.saveToServer();
+ }
 
  // 職員が編集中でない場合に限りビューを更新
  const activeTag = document.activeElement ? document.activeElement.tagName : "";
@@ -1832,12 +2016,45 @@ function confirmAllMonthlyNoticesForStaff() {
 }
 
 // アラート監視（管理者発注認証待ち・前月誕生日・非常食2週前・在庫補充・受診2週1週前・要介護期限・排便3日以上なし・月間連絡未確認）
+// [Claude修正] 保存データ中の「???」(文字化け) をデータの種類ごとに数える
+function findMojibakeTables() {
+ const result = { total: 0, list: "" };
+ if (!db || !db.data) return result;
+ const parts = [];
+ Object.keys(db.data).forEach(k => {
+ if (k === "dismissed_alerts") return;
+ let json = "";
+ try { json = JSON.stringify(db.data[k]); } catch (e) { return; }
+ const m = json.match(/\?{3,}/g);
+ if (m && m.length > 0) {
+ result.total += m.length;
+ parts.push(`${k}: ${m.length}か所`);
+ }
+ });
+ result.list = parts.join(" / ");
+ return result;
+}
+
 function checkGlobalAlerts() {
  const container = document.getElementById("alertsContainer");
  if (!container) return;
  let alertHtml = "";
  const today = new Date();
  const todayStr = gState.selectedDate || toLocalDateStr(today);
+
+ // [Claude修正] 文字化け (日本語が「???」になったデータ) の検出。
+ // スクリプト等で文字コードを誤って書き込むと、日本語が「?」に置き換わり元に戻せなくなる。
+ // 早く気付けるよう、保存データに「???」を含む項目があれば警告する。
+ const mojibake = findMojibakeTables();
+ const mojibakeKey = `mojibake_${toLocalDateStr(new Date())}_${mojibake.total}`;
+ if (mojibake.total > 0 && !isAlertDismissed(mojibakeKey)) {
+ alertHtml += `
+ <div class="alert-banner alert-danger">
+ <span> <strong>【文字化け検出】</strong> 保存データに「???」に化けた文字が ${mojibake.total} か所あります（${escapeHtml(mojibake.list)}）。スクリプト等でデータを書き込む場合は、必ずUTF-8で保存してください。</span>
+ <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="dismissAlert('${mojibakeKey}')"> 確認済・閉じる</button>
+ </div>
+ `;
+ }
 
  // 0.0 【管理者・事務員専用：初期パスワード未変更セキュリティ警告】
  const isAdminOrClerk = isCurrentStaffAdminOrClerk();
@@ -6513,7 +6730,9 @@ function saveVital(resId) {
 function renderExcretionTable() {
  const tbody = document.querySelector("#excretionHistoryTable tbody");
  tbody.innerHTML = "";
- const excretions = (db.data.excretions || []).filter(e => e.date === gState.selectedDate);
+ // [Claude修正] 保存した順ではなく、記録の時刻順に並べる (後から早い時刻を記録しても正しい位置に入る)
+ const excretions = (db.data.excretions || []).filter(e => e.date === gState.selectedDate)
+ .slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
  excretions.forEach(e => {
  const res = gState.residents.find(r => r.id === e.resident_id);
