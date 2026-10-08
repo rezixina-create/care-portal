@@ -3134,7 +3134,7 @@ function checkGlobalAlerts() {
             <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
             <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
             <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
-            <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '補充発注')} / 申請日: ${o.ordered_at || '-'}</div>
+            <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '-')} / 申請日: ${o.ordered_at || '-'}</div>
           </div>
           <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
             <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')"> 承認する</button>
@@ -3747,7 +3747,7 @@ function renderResidentDetail() {
  return `<div style="display:inline-flex; align-items:center; gap:4px; margin-right:8px; margin-top:2px;">
  <span class="badge" style="background:${bColor}; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">${bText}</span>
  <strong>${escapeHtml(e.medicine_name)}</strong>
- <span style="color:#2563eb; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '1回1滴')})</span>
+ <span style="color:#2563eb; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '用量未登録')})</span>
  </div>`;
  }).join('');
  }
@@ -3899,7 +3899,7 @@ function renderResidentDetail() {
  <!-- 特殊指示ブロック -->
  <div style="margin-bottom:10px; display:flex; justify-content:space-between; align-items:center; background:#fef2f2; border:1px solid #fecaca; border-left:4px solid #ef4444; border-radius:6px; padding:8px 12px;">
  <div style="color:#991b1b; font-weight:bold; font-size:13px;">
-  【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '特段の指示なし (通常対応)')}
+  【往診・受診 特殊指示】: ${escapeHtml(r.clinic_special_notes || '未登録')}
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'special'); return false;">特殊指示を変更</button>
  </div>
@@ -3908,7 +3908,7 @@ function renderResidentDetail() {
  <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f8fafc; padding:8px 10px; border-radius:6px;">
  <div>
  <strong>医師の指示内容 (受診時コメント):</strong>
- <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '定期採血・血圧コントロール')}</div>
+ <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '未登録')}</div>
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'instructions'); return false;">指示内容を変更</button>
  </div>
@@ -6687,7 +6687,7 @@ function renderPersonalCalendar() {
  const dayRecs = (db.data.care_records || []).filter(cr => !cr.voided && cr.resident_id === res.id && (cr.recorded_at || cr.record_time || "").startsWith(curDateStr));
  const recCount = dayRecs.length;
  const hasTokukan = dayRecs.some(cr => cr.category === "特変");
- const isHospitalized = (res.status === "入院中" && curDateStr >= (res.hospital_date || "2026-08-25"));
+ const isHospitalized = (res.status === "入院中" && (!res.hospital_date || curDateStr >= res.hospital_date)); // [Claude修正] 入院日が未登録のとき仮の日付 2026-08-25 を使っていた
 
  let cellBg = isSelected ? "#dbeafe" : "#ffffff";
  let cellBorder = isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0";
@@ -6777,7 +6777,7 @@ function renderPersonalDailySummary(res, dateStr) {
  return;
  }
 
- const isHospitalized = (res.status === "入院中" && dateStr >= (res.hospital_date || "2026-08-25"));
+ const isHospitalized = (res.status === "入院中" && (!res.hospital_date || dateStr >= res.hospital_date));
 
  if (isHospitalized) {
  area.innerHTML = `
@@ -6786,9 +6786,9 @@ function renderPersonalDailySummary(res, dateStr) {
  <div style="display:flex; align-items:center; gap:8px;">
  <span style="font-size:22px;"></span>
  <div>
- <strong style="font-size:14.5px; color:#92400e;">【入院加療中】 ${escapeHtml(res.hospital_name || 'さくら総合病院')}</strong>
+ <strong style="font-size:14.5px; color:#92400e;">【入院加療中】 ${escapeHtml(res.hospital_name || '入院先未登録')}</strong>
  <div style="font-size:12px; color:#b45309; margin-top:2px;">
- 理由: <strong>${escapeHtml(res.hospital_reason || '右大腿骨頸部骨折 (術後リハビリ加療中)')}</strong> (入院開始: ${res.hospital_date || '2026-08-25'})
+ 理由: <strong>${escapeHtml(res.hospital_reason || '未登録')}</strong> (入院開始: ${escapeHtml(res.hospital_date || '未登録')})
  </div>
  </div>
  </div>
@@ -6858,7 +6858,7 @@ function renderPersonalDailySummary(res, dateStr) {
  let weightHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
  if (latestWeight) {
  const isExact = exactWeight ? " (本日測定)" : ` [${latestWeight.date.slice(5)}測定]`;
- weightHtml = `<strong style="font-size:14px; color:#1e293b;">${latestWeight.weight} kg</strong> <span style="font-size:11px; color:#64748b;">(${latestWeight.diff_prev || '±0.0kg'})${isExact}</span>`;
+ weightHtml = `<strong style="font-size:14px; color:#1e293b;">${latestWeight.weight} kg</strong> <span style="font-size:11px; color:#64748b;">(${latestWeight.diff_prev || '前回比なし'})${isExact}</span>`;
  }
 
  area.innerHTML = `
@@ -6913,7 +6913,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
  <div style="font-size:11px; color:#64748b;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
  <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
- 入浴: ${bath ? `<strong style="color:#16a34a;">${bath.bath_type} 実施</strong> (${escapeHtml(bath.ointment_notes || '処置済')})` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
+ 入浴: ${bath ? `<strong style="color:#16a34a;">${bath.bath_type} 実施</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
  </div>
  </div>
  </div>
@@ -6927,7 +6927,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
  <div>口腔ケア: ${dayOrals.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayOrals.length}回)</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
  <div style="font-size:11px; color:#64748b; margin-top:2px;">
- 食形態: ${escapeHtml(res.diet_type || '普通食')}
+ 食形態: ${escapeHtml(res.diet_type || '未登録')}
  </div>
  </div>
  </div>
@@ -8390,7 +8390,7 @@ function renderOralTable() {
  tr.innerHTML = `
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
- <td style="font-size:12px; font-weight:bold; color:#0369a1;">${r.oral_state || '残歯'}</td>
+ <td style="font-size:12px; font-weight:bold; color:#0369a1;">${escapeHtml(r.oral_state || '未登録')}</td>
  <td>${getOralBtn("朝")}</td>
  <td>${getOralBtn("昼")}</td>
  <td>${getOralBtn("夕")}</td>
