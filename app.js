@@ -8579,120 +8579,123 @@ function initNightTurnDrafts(force) {
  }
  gState.nightTurnDate = gState.selectedDate;
  gState.nightTurnDrafts = {};
- const turns = (db.data.turns || []).filter(t => t.date === gState.selectedDate);
+ const turns = (db.data.turns || []).filter(t => !t.voided && t.date === gState.selectedDate);
  turns.forEach(t => {
  gState.nightTurnDrafts[`${t.resident_id}_${t.time}`] = t.action;
  });
+}
+
+// [Claude修正] 夜間の巡視・体位変換は、解除しても消さずに「取消」として残す（理由必須）。連動した巡視の介護記録も取消にする
+function cpActiveTurnsForDate(date) {
+ return (db.data.turns || []).filter(t => !t.voided && t.date === date);
+}
+
+function cpVoidTurns(list, reason) {
+ const now = toLocalDateTimeStr(new Date());
+ const by = cpLedgerStaff();
+ list.forEach(t => {
+ t.voided = true; t.voided_at = now; t.voided_by = by; t.void_reason = reason;
+ (db.data.care_records || []).forEach(rec => {
+ if (!rec.voided && rec.category === "巡視" && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
+ rec.voided = true; rec.voided_at = now; rec.voided_by = by; rec.void_reason = `巡視チェックの解除: ${reason}`;
+ }
+ });
+ });
+}
+
+function cpAskTurnVoidReason(count) {
+ const reason = prompt(`保存済みの巡視・体位変換のチェック ${count}件を解除します。\n記録は消えずに、取消済みとして残ります。\n\n解除の理由を入力してください (例: 押し間違い、別の方の欄に入れた)`, "");
+ if (reason === null) return null;
+ if (!reason.trim()) { alert("解除の理由を入力してください。解除は行っていません。"); return null; }
+ return reason.trim();
 }
 
 function setNightTurnAction(resId, time, action) {
  const key = `${resId}_${time}`;
  if (!gState.nightTurnDrafts) gState.nightTurnDrafts = {};
  if (!action) {
- delete gState.nightTurnDrafts[key];
- if (db.data.turns) {
- db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
- db.save();
+ toggleNightTurnAction(resId, time);
+ return;
  }
- } else {
  gState.nightTurnDrafts[key] = action;
- }
  renderNightTable();
 }
 
 function toggleNightTurnAction(resId, time) {
  const key = `${resId}_${time}`;
- if (gState.nightTurnDrafts) {
- delete gState.nightTurnDrafts[key];
- }
- // 確定済みのデータからも即座に削除・永続保存（解除したものが復活するのを完全防止）
- if (db.data.turns) {
- db.data.turns = db.data.turns.filter(t => !(t.resident_id === resId && t.date === gState.selectedDate && t.time === time));
+ const saved = cpActiveTurnsForDate(gState.selectedDate).filter(t => t.resident_id === resId && t.time === time);
+ if (saved.length > 0) {
+ const reason = cpAskTurnVoidReason(saved.length);
+ if (reason === null) { renderNightTable(); return; }
+ cpVoidTurns(saved, reason);
  db.save();
+ loadDateRecords(gState.selectedDate);
  }
+ if (gState.nightTurnDrafts) delete gState.nightTurnDrafts[key];
  renderNightTable();
 }
 
 function clearAllNightTurnsForDate() {
  if (!confirm(`${gState.selectedDate} の夜間体位変換・巡視チェックを全て解除しますか？`)) return;
- gState.nightTurnDrafts = {};
- if (db.data.turns) {
- db.data.turns = db.data.turns.filter(t => t.date !== gState.selectedDate);
+ const saved = cpActiveTurnsForDate(gState.selectedDate);
+ if (saved.length > 0) {
+ const reason = cpAskTurnVoidReason(saved.length);
+ if (reason === null) return;
+ cpVoidTurns(saved, reason);
  db.save();
+ loadDateRecords(gState.selectedDate);
  }
+ gState.nightTurnDrafts = {};
  renderNightTable();
- alert(`${gState.selectedDate} の体位変換チェックをすべて解除しました。`);
+ alert(`${gState.selectedDate} の体位変換チェックをすべて解除しました。（保存済みの分は取消として残っています）`);
 }
 
+// [Claude修正] まとめて保存: 前の保存分は消さない。新しく付けたチェックだけ記録し、外した・変えたチェックは理由を書いて取消にする。
+// 以前は保存のたびに日付分を全部消して作り直していたため、前の記録者名・時刻が保存した人に書き換わっていた
 function submitNightTurnsBatch() {
  const staff = document.getElementById("currentStaff").value;
- const turns = db.data.turns || [];
- db.data.turns = turns.filter(t => t.date !== gState.selectedDate);
+ const date = gState.selectedDate;
+ if (!Array.isArray(db.data.turns)) db.data.turns = [];
+ const drafts = gState.nightTurnDrafts || {};
+ const active = cpActiveTurnsForDate(date);
 
- const resActionsMap = {};
+ const toVoid = active.filter(t => drafts[`${t.resident_id}_${t.time}`] !== t.action);
+ if (toVoid.length > 0) {
+ const reason = cpAskTurnVoidReason(toVoid.length);
+ if (reason === null) return;
+ cpVoidTurns(toVoid, reason);
+ }
 
- if (gState.nightTurnDrafts) {
- Object.keys(gState.nightTurnDrafts).forEach(key => {
+ const added = [];
+ Object.keys(drafts).forEach(key => {
+ const action = drafts[key];
+ if (!action) return;
  const parts = key.split("_");
  const resId = parseInt(parts[0], 10);
  const time = parts[1];
- const action = gState.nightTurnDrafts[key];
- if (action) {
+ if (cpActiveTurnsForDate(date).some(t => t.resident_id === resId && t.time === time && t.action === action)) return; // 保存済みはそのまま
  db.data.turns.push({
  id: Date.now() + Math.floor(Math.random() * 1000),
- date: gState.selectedDate,
+ date: date,
  time: time,
  resident_id: resId,
  action: action,
  staff_name: staff
  });
- if (!resActionsMap[resId]) resActionsMap[resId] = [];
- resActionsMap[resId].push({ time: time, action: action });
- }
- });
- }
-
- const timeOrder = ["22:00", "00:00", "02:00", "04:00", "06:00"];
- let totalRecordsCreated = 0;
-
- Object.keys(resActionsMap).forEach(resIdStr => {
- const resId = parseInt(resIdStr, 10);
- const r = gState.residents.find(x => x.id === resId);
- if (!r || r.status !== "在所") {
- // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から完全除外
- return;
- }
- const actionsList = resActionsMap[resId];
- if (!actionsList || actionsList.length === 0) return;
-
- // 前回の自動生成レコード（定時巡視・夜間巡視）を削除して最新状態に更新
- db.data.care_records = (db.data.care_records || []).filter(rec => !(
- rec.resident_id === resId &&
- rec.category === "巡視" &&
- rec.recorded_at.startsWith(gState.selectedDate) &&
- // [Claude修正] 定型文を施設独自の文に変えると旧判定 (本文の文字一致) に掛からず、
- // 保存し直すたびに巡視記録が重複していた。自動生成フラグでも判定する。
- (rec.auto_night_turn === true || rec.content.includes("定時巡視") || rec.content.includes("夜間巡視・体位変換") || rec.content.includes("夜間巡視:"))
- ));
-
- // 時間順にソート (22:00 -> 00:00 -> 02:00 -> 04:00 -> 06:00)
- actionsList.sort((a, b) => {
- const idxA = timeOrder.indexOf(a.time);
- const idxB = timeOrder.indexOf(b.time);
- return (idxA >= 0 ? idxA : 99) - (idxB >= 0 ? idxB : 99);
+ added.push({ resId: resId, time: time, action: action });
  });
 
  const tpls = getNightTurnTemplates();
-
- // 巡視した時間すべてについて、設定された定型文に基づき個別に介護記録を作成
- actionsList.forEach((item, index) => {
+ let totalRecordsCreated = 0;
+ added.forEach((item, index) => {
+ const r = gState.residents.find(x => x.id === item.resId);
+ if (!r || r.status !== "在所") return; // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から除外
  const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。全身状態・呼吸安定、安眠。`;
  const contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
-
  db.data.care_records.unshift({
  id: Date.now() + Math.floor(Math.random() * 100000) + index,
- recorded_at: `${gState.selectedDate} ${item.time}`,
- resident_id: resId,
+ recorded_at: `${date} ${item.time}`,
+ resident_id: item.resId,
  category: "巡視",
  content: contentText,
  staff_name: staff,
@@ -8700,15 +8703,17 @@ function submitNightTurnsBatch() {
  });
  totalRecordsCreated++;
  });
- });
 
  db.save();
+ initNightTurnDrafts(true);
  renderNightTable();
- loadDateRecords(gState.selectedDate);
+ loadDateRecords(date);
  if (totalRecordsCreated > 0) {
- alert(`体位変換・夜間巡視のチェック入力分（計${totalRecordsCreated}回）を保存・カルテへ転記しました！`);
+ alert(`体位変換・夜間巡視のチェック（新しく付けた${totalRecordsCreated}回分）を保存・カルテへ転記しました！`);
+ } else if (toVoid.length > 0) {
+ alert("外したチェックを取消として保存しました。");
  } else {
- alert("体位変換・夜間巡視のチェック解除状態を確定・保存しました。");
+ alert("新しく保存するチェックはありませんでした。");
  }
 }
 
