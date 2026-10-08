@@ -3958,7 +3958,7 @@ function renderResidentDetail() {
  </div>
  <div style="background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
  <strong> 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
- <p style="margin-top:3px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "穏やかな生活を好まれる。")}</p>
+ <p style="margin-top:3px; color:#78350f; margin-bottom:0;">${escapeHtml(r.life_history || "未登録")}</p>
  </div>
  </details>
 
@@ -4263,28 +4263,27 @@ function insertB5Template(isFullscreen = false) {
  const area = document.getElementById(targetId);
  if (!area) return;
 
+ // [Claude修正] 雛形は見出しと項目名だけにする（数値や様子の例文が入ったまま保存されると、実際とちがう記録になるため）
  const template =
 `【バイタル・全身状態】
-体温: 36.5℃ / 血圧: 124/76 / 脈拍: 72 / SpO2: 98%
-表情・活気: 顔色良好、活気あり。自覚症状・特段の主訴なし。
+体温:  ℃ / 血圧:  /  / 脈拍:  / SpO2:  %
+表情・活気: 
 
 【食事・水分摂取】
-朝食: 全量摂取 / 昼食: 8割摂取 / 夕食: 全量摂取
-水分摂取量計: 約 1,200ml (嚥下良好、むせ・誤嚥傾向なし)
+朝食:  / 昼食:  / 夕食: 
+水分摂取量計:  ml
 
 【排泄状況・介助】
-日中排尿 4回 / 夜間 1回 / 排便: 1回 (普通便)
-定時誘導にて失禁なくスムーズに自力歩行で排泄完了。
+日中排尿:  回 / 夜間:  回 / 排便: 
 
 【活動・日中のご様子】
-午前中はフロアでのラジオ体操およびちぎり絵レクリエーションに参加。他の利用者様と笑顔で談笑され、意欲的に取り組まれる。午後はリビングにて音楽鑑賞をされ穏やかに過ごされる。
+
 
 【衛生・処置・皮膚状態】
-14:00 一般入浴実施。全身清拭、頭髪洗髪完了。皮膚発赤や褥瘡等のトラブルなし。両下肢に保湿剤塗布。
+
 
 【夜勤・申し送り事項】
-21:00 消灯後、中途覚醒なく良眠。巡視時呼吸整、異常なし。
-明日予定: 午前中 訪問歯科診療受診予定。`;
+`;
 
  if (area.value.trim().length > 0) {
  if (confirm("すでに入力されている文章があります。末尾に日報雛形を追加しますか？\n（[キャンセル]を押すと上書き確認に移ります）")) {
@@ -4902,18 +4901,19 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
  const prev = list.length > 0 ? list[0] : null;
 
  const basicText = prev ? prev.basic_info : `${r ? r.name : ""} 様。${r ? r.care_level : ""}。生年月日: ${r ? (r.birth_date || "未登録") : ""}。緊急連絡先: ${r ? (r.emergency_contact || "未登録") : ""}。看取り方針: ［${r ? (r.policy_stamp || "未設定") : ""}］。`;
- const backgroundText = prev ? prev.background : `${summaryType === "入院後再入所サマリー" ? "協力病院へ一時入院後、病状軽快に伴い退院・再入所。" : "自宅での生活が困難となり当施設へ入所。"}`;
- const physicalText = prev ? prev.physical_cognitive : `麻痺: ${r ? (r.paralysis || "特記なし") : "特記なし"}。病歴: ${r ? (r.diseases || "特記なし") : "特記なし"}。`;
- const adlText = prev ? prev.adl : "寝返り・起き上がり自立。立ち上がり・車椅子移乗は見守り。歩行器歩行にて室内移動。更衣一部介助。入浴見守り。";
- const mealsText = prev ? prev.meals_hydration : `食形態: ${r ? (r.diet_type || "普通食") : "普通食"}。口腔: ${r ? (r.oral_state || "良好") : "良好"}。アレルギー: ${r ? (r.allergies || "なし") : "なし"}。水分目標1200ml/日。`;
- const excretionText = prev ? prev.excretion : "日中はトイレ誘導にて排泄見守り。夜間はパッド使用。定時声かけ。";
- const sleepText = prev ? prev.sleep : "21:00就寝、6:00起床。夜間中途覚醒1〜2回あり。センサー対応。";
- const medsText = prev ? prev.meds : "内服薬あり。看護師・職員による配薬管理および確認。";
- const medicalText = prev ? prev.medical_care : `${r ? (r.dr_instructions || "定期採血・バイタルチェック") : "定期バイタルチェック"}`;
- const dementiaText = prev ? prev.dementia_behavior : "夕方に軽度の帰宅願望や不穏が見られることがある。昔の話題の傾聴により落ち着かれる。";
- const notesText = prev ? prev.care_notes : `急がせる声かけは避ける。${r ? (r.life_history ? "人生歴: " + r.life_history : "") : ""}`;
- const familyText = prev ? prev.family_info : `${r ? (r.family_wishes ? "家族の意向: " + r.family_wishes : "定期面会あり") : "定期面会あり"}`;
- const goalsText = prev ? prev.future_goals : `${r ? (r.care_plan_goal || "安全な日常生活の維持・自立支援") : "安全な日常生活の維持・自立支援"}`;
+ // [Claude修正] 前回のサマリーがないときは、登録済みの情報だけを入れ、それ以外は空欄にする（誰も書いていない例文を入れない）
+ const backgroundText = prev ? prev.background : "";
+ const physicalText = prev ? prev.physical_cognitive : `麻痺: ${r ? (r.paralysis || "未登録") : "未登録"}。病歴: ${r ? (r.diseases || "未登録") : "未登録"}。`;
+ const adlText = prev ? prev.adl : "";
+ const mealsText = prev ? prev.meals_hydration : `食形態: ${r ? (r.diet_type || "未登録") : "未登録"}。口腔: ${r ? (r.oral_state || "未登録") : "未登録"}。アレルギー: ${r ? (r.allergies || "未登録") : "未登録"}。`;
+ const excretionText = prev ? prev.excretion : "";
+ const sleepText = prev ? prev.sleep : "";
+ const medsText = prev ? prev.meds : "";
+ const medicalText = prev ? prev.medical_care : (r && r.dr_instructions ? r.dr_instructions : "");
+ const dementiaText = prev ? prev.dementia_behavior : "";
+ const notesText = prev ? prev.care_notes : (r && r.life_history ? "人生歴: " + r.life_history : "");
+ const familyText = prev ? prev.family_info : (r && r.family_wishes ? "家族の意向: " + r.family_wishes : "");
+ const goalsText = prev ? prev.future_goals : (r && r.care_plan_goal ? r.care_plan_goal : "");
 
  const fields = [
  { id: "csBasicInfo", val: basicText },
@@ -7986,7 +7986,6 @@ function renderBathTable() {
  gState.residents.forEach(r => {
  const b = baths.find(x => x.resident_id === r.id);
  const tr = document.createElement("tr");
- const defaultMedNote = r.id === 1 ? "背中・両下腿にヒルドイドソフト塗布（保湿）" : (r.id === 2 ? "両踵にプロペト塗布" : "特記なし");
 
  tr.innerHTML = `
  <td>${r.room_no}</td>
@@ -7999,7 +7998,7 @@ function renderBathTable() {
  <option value="見合わせ" ${b && b.bath_type==='見合わせ'?'selected':''}>見合わせ</option>
  </select>
  </td>
- <td><input type="text" id="bathNotes_${r.id}" class="form-control" value="${b ? b.ointment_notes : defaultMedNote}"></td>
+ <td><input type="text" id="bathNotes_${r.id}" class="form-control" value="${escapeHtml(b ? (b.ointment_notes || "") : "")}"></td>
  <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveBath(${r.id})">保存</button></td>
  `;
  tbody.appendChild(tr);
@@ -11748,8 +11747,8 @@ function resetIncidentInjuryForm() {
 	document.getElementById("incInjuryXPct").value = "50";
 	document.getElementById("incInjuryYPct").value = "50";
 	document.getElementById("incInjurySiteName").value = "";
-	document.getElementById("incInjuryType").value = "擦過傷 (すり傷)";
-	document.getElementById("incInjurySeverity").value = "軽微 (発赤・小擦過傷)";
+	document.getElementById("incInjuryType").value = ""; // [Claude修正] 選ばずに「擦過傷・軽微」で登録されないように
+	document.getElementById("incInjurySeverity").value = "";
 	document.getElementById("incInjuryTreatment").value = "";
 	document.getElementById("incInjuryNotes").value = "";
 	const badge = document.getElementById("incInjuryCoordsBadge");
@@ -11790,6 +11789,10 @@ function saveIncidentInjuryPin() {
 
 	if (!site) {
 		alert("負傷部位名（例: 右膝、左手首など）を入力してください。");
+		return;
+	}
+	if (!type || !sev) {
+		alert("傷の種類と程度を選んでください。");
 		return;
 	}
 	// [Claude修正] 図をクリックせずに登録すると、図の中央 (50%, 50%) に誤ったピンが立っていた
@@ -12395,14 +12398,14 @@ function openAddResidentModal() {
  document.getElementById("resEditId").value = "";
  document.getElementById("resRoomNo").value = "";
  document.getElementById("resName").value = "";
- document.getElementById("resCareLevel").value = "要介護3";
+ document.getElementById("resCareLevel").value = ""; // [Claude修正] 未選択のまま「要介護3」で登録されないように
  document.getElementById("resStatus").value = "在所";
  document.getElementById("resBirthDate").value = "";
- document.getElementById("resPolicyStamp").value = "緊急搬送";
- document.getElementById("resDietType").value = "普通食 (一口大)";
+ document.getElementById("resPolicyStamp").value = ""; // [Claude修正] 未選択のまま「緊急搬送」で登録されないように
+ document.getElementById("resDietType").value = ""; // [Claude修正] 未選択のまま「普通食 (一口大)」で登録されないように
  document.getElementById("resAllergies").value = "";
  document.getElementById("resParalysis").value = "";
- document.getElementById("resOralState").value = "残歯あり";
+ document.getElementById("resOralState").value = "";
  document.getElementById("resDiseases").value = "";
  document.getElementById("resEmergencyContact").value = "";
  document.getElementById("resSensorAlert").value = "";
@@ -12435,7 +12438,7 @@ function openEditResidentModal(id) {
  document.getElementById("resStatus").value = r.status || "在所";
  document.getElementById("resBirthDate").value = r.birth_date || "";
  document.getElementById("resPolicyStamp").value = r.policy_stamp || "緊急搬送";
- document.getElementById("resDietType").value = r.diet_type || "普通食 (一口大)";
+ document.getElementById("resDietType").value = r.diet_type || "";
  document.getElementById("resAllergies").value = r.allergies || "";
  document.getElementById("resParalysis").value = r.paralysis || "";
  document.getElementById("resOralState").value = r.oral_state || "";
@@ -12464,6 +12467,15 @@ function submitResidentForm() {
  const name = document.getElementById("resName").value.trim();
  if (!roomNo || !name) {
  alert("居室番号と氏名は必須入力です。");
+ return;
+ }
+ // [Claude修正] 要介護度と基本方針（看取り・緊急搬送）は、選ばずに登録できないようにする
+ if (!document.getElementById("resCareLevel").value) {
+ alert("要介護度を選んでください。");
+ return;
+ }
+ if (!document.getElementById("resPolicyStamp").value) {
+ alert("基本方針（緊急搬送・看取りなど）を選んでください。");
  return;
  }
 
@@ -12722,7 +12734,7 @@ function openBodyConditionModal(resId, focusField = '') {
  dietSel.appendChild(opt);
  dietSel.value = r.diet_type;
  } else if (!r.diet_type) {
- dietSel.value = "普通食";
+ dietSel.value = ""; // [Claude修正] 未登録を「普通食」と表示しない
  }
  }
 
