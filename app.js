@@ -8128,6 +8128,18 @@ function saveVital(resId) {
    return;
  }
 
+ // [Claude修正] 一部の項目が空欄なら、保存してよいか確認する（個人バイタル編集画面と同じ）
+ const cpBlankLabels = [];
+ if (!temp) cpBlankLabels.push("体温");
+ if (!bpHigh) cpBlankLabels.push("最高血圧");
+ if (!bpLow) cpBlankLabels.push("最低血圧");
+ if (!pulse) cpBlankLabels.push("脈拍");
+ if (!spo2) cpBlankLabels.push("SpO2");
+ if (cpBlankLabels.length > 0) {
+   const cpResName = (gState.residents.find(x => x.id === resId) || {}).name || "";
+   if (!confirm(`${cpResName} 様\n次の項目が空欄です。\n${cpBlankLabels.join("、")}\n\nこのまま登録しますか？`)) return;
+ }
+
  // 個別注意基準値チェック (いつもより外れている場合の確認警告)
  const res = gState.residents.find(x => x.id === resId);
  if (res) {
