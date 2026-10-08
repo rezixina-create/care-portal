@@ -6773,6 +6773,7 @@ function submitPersonalVitalModal() {
  vitalObj.is_unusual = cpIsUnusualVital(pvmRes, vitalObj);
 
  if (existingVitalIndex >= 0) {
+ cpAppendEditHistory(vitalObj, db.data.vitals[existingVitalIndex], ["temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual", "notes"]);
  db.data.vitals[existingVitalIndex] = vitalObj;
  } else if (tempVal || bpHighVal || pulseVal || spo2Val) {
  db.data.vitals.push(vitalObj);
@@ -6803,6 +6804,7 @@ function submitPersonalVitalModal() {
  };
 
  if (existingWeightIndex >= 0) {
+ cpAppendEditHistory(weightObj, db.data.weight_records[existingWeightIndex], ["weight", "diff_prev"]);
  db.data.weight_records[existingWeightIndex] = weightObj;
  } else {
  db.data.weight_records.push(weightObj);
@@ -7885,9 +7887,10 @@ function saveVital(resId) {
  const now = new Date();
  const timeStr = now.toTimeString().slice(0, 5);
 
+ const cpOldVital = db.data.vitals.find(x => x.resident_id === resId && x.date === gState.selectedDate);
  db.data.vitals = db.data.vitals.filter(x => !(x.resident_id === resId && x.date === gState.selectedDate));
  db.data.vitals.push({
-   id: Date.now(),
+   id: cpOldVital ? cpOldVital.id : Date.now(),
    resident_id: resId,
    date: gState.selectedDate,
    time: timeStr,
@@ -7899,6 +7902,7 @@ function saveVital(resId) {
    is_unusual: isUnusual,
    staff_name: staff
  });
+ if (cpOldVital) cpAppendEditHistory(db.data.vitals[db.data.vitals.length - 1], cpOldVital, ["time", "temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual"]);
 
  // 個人記録へ自動転記
  const parts = [];
@@ -8079,9 +8083,11 @@ function saveBath(resId) {
 
  let existing = (db.data.baths || []).find(b => b.date === gState.selectedDate && b.resident_id === resId);
  if (existing) {
+ const cpOldBath = Object.assign({}, existing);
  existing.bath_type = type;
  existing.ointment_notes = notes;
  existing.staff_name = staff;
+ cpAppendEditHistory(existing, cpOldBath, ["bath_type", "ointment_notes"]);
  } else {
  db.data.baths.push({
  id: Date.now(),
@@ -8327,6 +8333,19 @@ function cpVoidMedRecord(rec, label) {
  rec.voided_by = cpLedgerStaff();
  rec.void_reason = reason.trim();
  return true;
+}
+
+// [Claude修正] 日々の記録を上書きするとき、直す前の値を edit_history に残す（誰が・いつ・何から直したか）
+function cpAppendEditHistory(target, old, fields) {
+ if (!target || !old) return;
+ const norm = v => (v === undefined || v === "" ? null : v);
+ const before = {};
+ fields.forEach(f => { before[f] = norm(old[f]); });
+ if (old.staff_name !== undefined) before.staff_name = norm(old.staff_name);
+ const changed = fields.some(f => String(norm(old[f])) !== String(norm(target[f])));
+ const hist = Array.isArray(old.edit_history) ? old.edit_history.slice() : [];
+ if (changed) hist.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), before: before });
+ if (hist.length) target.edit_history = hist;
 }
 
 function saveMed(resId, slot) {
@@ -9117,11 +9136,13 @@ function saveGrooming(resId) {
 
  let existing = (db.data.groomings || []).find(g => g.date === gState.selectedDate && g.resident_id === resId);
  if (existing) {
+ const cpOldGroom = Object.assign({}, existing);
  existing.nail_done = nail;
  existing.shave_done = shave;
  existing.ear_done = ear;
  existing.notes = notes;
  existing.staff_name = staff;
+ cpAppendEditHistory(existing, cpOldGroom, ["nail_done", "shave_done", "ear_done", "notes"]);
  } else {
  db.data.groomings.push({
  id: Date.now(), date: gState.selectedDate, resident_id: resId, nail_done: nail, shave_done: shave, ear_done: ear, notes: notes, staff_name: staff
@@ -9152,11 +9173,13 @@ function submitGroomingsBatch() {
  if (nail || shave || ear || notes) {
  let existing = (db.data.groomings || []).find(g => g.date === gState.selectedDate && g.resident_id === r.id);
  if (existing) {
+ const cpOldGroom = Object.assign({}, existing);
  existing.nail_done = nail;
  existing.shave_done = shave;
  existing.ear_done = ear;
  existing.notes = notes;
  existing.staff_name = staff;
+ cpAppendEditHistory(existing, cpOldGroom, ["nail_done", "shave_done", "ear_done", "notes"]);
  } else {
  db.data.groomings.push({
  id: Date.now() + Math.floor(Math.random() * 1000),
