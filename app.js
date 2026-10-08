@@ -1065,7 +1065,7 @@ class LocalDB {
  residents: [
  { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (移乗・歩行の介助は麻痺側（右）の後方から)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
  { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
- { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "極小刻み (とろみ中)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+ { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "やわらか食 (舌でつぶせる・とろみでまとめる)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
  { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
  ],
  stamps: [
@@ -1262,7 +1262,7 @@ class LocalDB {
  background: "元農業。真面目で温厚な性格。10年前にパーキンソン病と診断。在宅にて妻が介護していたが、誤嚥性肺炎で入院加療。退院にあたり経口摂取支援と専門的介護を要するため当施設へ新規入所。",
  physical_cognitive: "左片麻痺およびパーキンソン病による無動・振戦・筋強剛あり。小刻み歩行・突進歩行のリスク高く、自立歩行は不可。車椅子移動。意思疎通は可能だが発語が小声で聞き取りに傾聴を要する。",
  adl: "ベッド上での寝返り・起き上がりは軽介助。端座位保持は数分可能。車椅子への移乗は職員1名による軽介助〜一部介助。更衣・整容は全介助。入浴は機械浴（リフト浴）にて全身清拭・洗身介助。",
- meals_hydration: "極小刻み食（トロミ中）。嚥下反射の遅延あり、食事時は頭頸部前屈位（顎引き）を保持。スプーンにて一口ずつ全介助。水分は全量トロミ茶。1日目標1,000ml。むせ込み・湿性咳嗽に厳重警戒。",
+ meals_hydration: "やわらか食（舌でつぶせる軟らかさ・とろみあんでまとめる。刻むだけの形はまとまりにくく誤嚥しやすいため避ける）。嚥下反射の遅延あり、食事時は頭頸部前屈位（顎引き）を保持。スプーンにて一口ずつ全介助。水分は全量トロミ茶。1日目標1,000ml。むせ込み・湿性咳嗽に厳重警戒。",
  excretion: "リハビリパンツ＋尿取りパッド使用。定時おむつ交換および車椅子移乗時にポータブルトイレ誘導（成功率約50%）。排便は2〜3日に1回、緩下剤調整にて管理。",
  sleep: "20:30就寝、6:00起床。夜間体位変換（3時間ごと）実施。仙骨部発赤予防のため体圧分散エアマット使用。離床センサー設置。夜間覚醒時は穏やかに声かけ。",
  meds: "抗パーキンソン薬（レボドパ合剤）、便秘薬、胃薬。定時内服厳守（薬効オン・オフ現象あり、時間厳守が動作に直結）。トロミ水または服薬ゼリーにて全介助服薬。",
@@ -1331,7 +1331,7 @@ class LocalDB {
  medicine_name: "クラビット点眼液 1.5%",
  timing_slots: ["朝", "昼", "夕"],
  dosage: "1回1滴",
- notes: "結膜炎・角膜感染症予防。朝食後・昼食後・夕食後に両眼へ各1滴点眼。容器先端がまつ毛に触れないよう清潔操作。",
+ notes: "細菌性結膜炎の治療。眼科の指示した期間のみ使用（抗菌薬のため漫然と続けない）。朝食後・昼食後・夕食後に両眼へ各1滴点眼。容器先端がまつ毛に触れないよう清潔操作。",
  doctor_name: "総合病院眼科",
  status: "継続中",
  updated_at: "2026-10-01"

@@ -1571,7 +1571,7 @@
  <option value="普通食 (一口大)">普通食 (一口大)</option>
  <option value="普通食">普通食</option>
  <option value="軟飯・一口刻み">軟飯・一口刻み</option>
- <option value="極小刻み (とろみ中)">極小刻み (とろみ中)</option>
+ <option value="やわらか食 (舌でつぶせる・とろみでまとめる)">やわらか食 (舌でつぶせる・とろみでまとめる)</option>
  <option value="ミキサー食">ミキサー食</option>
  </select>
  </div>
@@ -1626,7 +1626,7 @@
  <div style="font-size:13px; font-weight:bold; color:#1e40af; margin-bottom:6px;">往診時 特殊指示 (絶食・薬のみ等 / アラート自動表示):</div>
  <div class="form-group">
  <label>往診・受診 特殊指示 (絶食、薬のみ服用可、採血あり等):</label>
- <input type="text" id="resClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、朝薬のみ水分少量で服用可、採血あり">
+ <input type="text" id="resClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、採血あり（糖尿病の薬は医師の指示を確認）">
  </div>
  </div>
  <div style="border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px;">
@@ -2438,10 +2438,10 @@
  
  <div class="form-group">
  <label> 往診・受診 特殊指示 (絶食・薬のみ等):</label>
- <input type="text" id="quickClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、朝薬のみ水分少量で服用可、採血あり">
+ <input type="text" id="quickClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、採血あり（糖尿病の薬は医師の指示を確認）">
  <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('当日朝は絶食 (採血あり)')">＋ 絶食(採血)</button>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('朝薬のみ水分少量で服用可')">＋ 朝薬のみ水分可</button>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('朝薬のみ水分少量で服用可（糖尿病の薬・インスリンは医師の指示を確認）')">＋ 朝薬のみ水分可</button>
  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="insertQuickSpecialNote('往診時レントゲン撮影予定')">＋ レントゲン予定</button>
  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px; color:#dc2626;" onclick="document.getElementById('quickClinicSpecialNotes').value=''">クリア</button>
  </div>
@@ -2548,7 +2548,7 @@
  <option value="軟飯・一口刻み">軟飯・一口刻み</option>
  <option value="刻み食">刻み食</option>
  <option value="極刻み食">極刻み食</option>
- <option value="極小刻み (とろみ中)">極小刻み (とろみ中)</option>
+ <option value="やわらか食 (舌でつぶせる・とろみでまとめる)">やわらか食 (舌でつぶせる・とろみでまとめる)</option>
  <option value="ペースト・とろみ">ペースト・とろみ</option>
  <option value="ミキサー食">ミキサー食</option>
  </select>
