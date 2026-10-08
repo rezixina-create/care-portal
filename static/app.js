@@ -3818,9 +3818,9 @@ function renderResidentDetail() {
  <!-- 身体状況・食形態情報カード -->
  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:10px;">
- <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "特記なし")}</div>
- <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "なし")}</span></div>
- <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "普通食")}</div>
+ <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "未登録")}</div>
+ <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "未登録")}</span></div>
+ <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "未登録")}</div>
  <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
  </div>
  <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
@@ -5276,7 +5276,9 @@ function renderEmergencySummaryPreview(r) {
  const staffName = document.getElementById("currentStaff")?.value || "職員";
  const facility = getFacilityName(); // [Claude修正] 未設定の gState.facilityName を参照しており、変更した施設名が反映されていなかった
 
- const vitals = (db.data.vitals || []).filter(v => Number(v.resident_id) === Number(r.id));
+ // [Claude修正] 配列の最後ではなく、日付・時刻がいちばん新しいバイタルを出す（編集すると配列の順番と日付の順番がずれるため）
+ const vitals = (db.data.vitals || []).filter(v => Number(v.resident_id) === Number(r.id))
+ .slice().sort((a, b) => `${a.date || ""} ${a.time || ""}`.localeCompare(`${b.date || ""} ${b.time || ""}`));
  const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
  const vitalStr = latestVital ? `体温: ${latestVital.temperature || "-"}℃ / 血圧: ${latestVital.bp_high || "-"}/${latestVital.bp_low || "-"} mmHg / 脈拍: ${latestVital.pulse || "-"} / SpO2: ${latestVital.spo2 || "-"}% (${latestVital.measured_at || latestVital.date || ""})` : "記録なし";
 
@@ -5323,28 +5325,28 @@ function renderEmergencySummaryPreview(r) {
  </tr>
  <tr>
  <th style="background:#f8fafc; padding:6px; text-align:left;">家族要望・ACP</th>
- <td colspan="3" style="padding:6px;">${escapeHtml(r.family_wishes || "特記事項なし")}</td>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.family_wishes || "未登録")}</td>
  </tr>
  </table>
 
  <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
  <tr style="background:#fff1f2;">
  <th style="width:120px; color:#991b1b; padding:6px; text-align:left;">アレルギー</th>
- <td colspan="3" style="padding:6px; color:#dc2626; font-weight:bold; font-size:13px;">${escapeHtml(r.allergies || "なし")}</td>
+ <td colspan="3" style="padding:6px; color:#dc2626; font-weight:bold; font-size:13px;">${escapeHtml(r.allergies || "未登録")}</td>
  </tr>
  <tr>
  <th style="width:120px; background:#f8fafc; padding:6px; text-align:left;">既往歴・病歴</th>
- <td colspan="3" style="padding:6px;">${escapeHtml(r.diseases || "特記なし")}</td>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.diseases || "未登録")}</td>
  </tr>
  <tr>
  <th style="background:#f8fafc; padding:6px; text-align:left;">往診医・受診指示</th>
- <td colspan="3" style="padding:6px;">${escapeHtml(r.dr_instructions || "特記なし")}</td>
+ <td colspan="3" style="padding:6px;">${escapeHtml(r.dr_instructions || "未登録")}</td>
  </tr>
  <tr>
  <th style="background:#f8fafc; padding:6px; text-align:left;">身体麻痺・状態</th>
- <td style="padding:6px;">${escapeHtml(r.paralysis || "特記なし")}</td>
+ <td style="padding:6px;">${escapeHtml(r.paralysis || "未登録")}</td>
  <th style="width:100px; background:#f8fafc; padding:6px; text-align:left;">食形態・口腔</th>
- <td style="padding:6px;">${escapeHtml(r.diet_type || "普通食")} / ${escapeHtml(r.oral_state || "良好")}</td>
+ <td style="padding:6px;">${escapeHtml(r.diet_type || "未登録")} / ${escapeHtml(r.oral_state || "未登録")}</td>
  </tr>
  <tr>
  <th style="background:#f8fafc; padding:6px; text-align:left;">最新バイタル</th>
@@ -5355,9 +5357,9 @@ function renderEmergencySummaryPreview(r) {
  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px;">
  <strong style="color:#1e3a8a;">【生活動作・ADL・介助注意点 (介護サマリー抜粋)】:</strong>
  <div style="margin-top:3px; line-height:1.4;">
- <strong>ADL:</strong> ${latestSummary ? escapeHtml(latestSummary.adl) : '寝返り・起き上がり自立、移動見守り'} /
- <strong>排泄:</strong> ${latestSummary ? escapeHtml(latestSummary.excretion) : 'トイレ誘導見守り'} /
- <strong>認知症・BPSD:</strong> ${latestSummary ? escapeHtml(latestSummary.dementia_behavior) : '特記なし'}
+ <strong>ADL:</strong> ${latestSummary ? escapeHtml(latestSummary.adl) : '未登録（介護サマリー未作成）'} /
+ <strong>排泄:</strong> ${latestSummary ? escapeHtml(latestSummary.excretion) : '未登録（介護サマリー未作成）'} /
+ <strong>認知症・BPSD:</strong> ${latestSummary ? escapeHtml(latestSummary.dementia_behavior) : '未登録（介護サマリー未作成）'}
  </div>
  </div>
 
@@ -5407,19 +5409,19 @@ ${reasonText}
 生年月日: ${r.birth_date || "-"}
 基本方針: ［${r.policy_stamp || "未設定"}］
 緊急連絡先: ${r.emergency_contact || "未登録"}
-家族要望: ${r.family_wishes || "特記事項なし"}
+家族要望: ${r.family_wishes || "未登録"}
 
 ■ 医療・身体状態
-アレルギー: ${r.allergies || "なし"}
-既往歴: ${r.diseases || "特記なし"}
-麻痺: ${r.paralysis || "特記なし"}
-食形態・口腔: ${r.diet_type || "普通食"} / ${r.oral_state || "良好"}
-往診医指示: ${r.dr_instructions || "特記なし"}
+アレルギー: ${r.allergies || "未登録"}
+既往歴: ${r.diseases || "未登録"}
+麻痺: ${r.paralysis || "未登録"}
+食形態・口腔: ${r.diet_type || "未登録"} / ${r.oral_state || "未登録"}
+往診医指示: ${r.dr_instructions || "未登録"}
 
 ■ 生活・ADL抜粋
-ADL: ${s ? s.adl : "寝返り・起き上がり自立、移動見守り"}
-排泄: ${s ? s.excretion : "トイレ誘導"}
-認知機能・注意点: ${s ? s.care_notes : "急がせる声かけを避ける"}
+ADL: ${s ? s.adl : "未登録（介護サマリー未作成）"}
+排泄: ${s ? s.excretion : "未登録（介護サマリー未作成）"}
+認知機能・注意点: ${s ? s.care_notes : "未登録（介護サマリー未作成）"}
 `;
 
  if (navigator.clipboard && navigator.clipboard.writeText) {
@@ -7929,7 +7931,7 @@ function renderMealsTable() {
  tr.innerHTML = `
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
- <td style="font-size:12px;">${r.diet_type} / <span style="color:#dc2626;">${r.allergies || 'なし'}</span></td>
+ <td style="font-size:12px;">${escapeHtml(r.diet_type || '未登録')} / <span style="color:#dc2626;">${escapeHtml(r.allergies || '未登録')}</span></td>
  <td>
  <select id="mType_${r.id}" class="form-control" style="width:95px;">
   <option value="朝食">朝食</option>
