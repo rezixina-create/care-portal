@@ -3516,7 +3516,7 @@ function renderResidentDetail() {
  `).join("");
 
  // 私物行リスト
- const belongings = (db.data.belongings || []).filter(b => b.resident_id === r.id);
+ const belongings = (db.data.belongings || []).filter(b => !b.voided && b.resident_id === r.id);
  let belongingsHtml = belongings.map(b => `
  <tr style="font-size:12px;">
  <td>${escapeHtml(b.category || '-')}</td>
@@ -3538,7 +3538,7 @@ function renderResidentDetail() {
  `).join("");
 
  // 備品リスト
- const equipments = (db.data.equipments || []).filter(eq => eq.resident_id === r.id);
+ const equipments = (db.data.equipments || []).filter(eq => !eq.voided && eq.resident_id === r.id);
  let equipmentsHtml = equipments.map(eq => `
  <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:4px 8px; font-size:12px; margin-right:6px; margin-bottom:4px; display:inline-flex; align-items:center; gap:6px;">
  <span>${escapeHtml(eq.equipment_name)} (${escapeHtml(eq.ownership_type || '施設備品')})</span>
@@ -3547,8 +3547,8 @@ function renderResidentDetail() {
  `).join("");
 
  // 写真・重要書類件数
- const resDocs = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'documents');
- const resPhotos = (db.data.photos || []).filter(p => p.resident_id === r.id && p.category === 'personal');
+ const resDocs = (db.data.photos || []).filter(p => !p.voided && p.resident_id === r.id && p.category === 'documents');
+ const resPhotos = (db.data.photos || []).filter(p => !p.voided && p.resident_id === r.id && p.category === 'personal');
 
  // 点眼処方指示
  const resEyedrops = (db.data.eyedrop_orders || []).filter(e => e.resident_id === r.id && e.status !== '終了');
@@ -8174,7 +8174,18 @@ function renderMedTable() {
 }
 
 // [Claude修正] 記録を「取消」にする共通処理（消さずに、取消の日時・職員・理由を残す）
-function cpVoidRecord(rec, label) { return cpVoidMedRecord(rec, label); }
+function cpVoidRecord(rec, label, customMsg) {
+ if (!customMsg) return cpVoidMedRecord(rec, label);
+ if (!rec || rec.voided) return false;
+ const reason = prompt(customMsg, "");
+ if (reason === null) return false;
+ if (!reason.trim()) { alert("理由を入力してください。何も変更していません。"); return false; }
+ rec.voided = true;
+ rec.voided_at = toLocalDateTimeStr(new Date());
+ rec.voided_by = cpLedgerStaff();
+ rec.void_reason = reason.trim();
+ return true;
+}
 
 // [Claude修正] 服薬・点眼の実施記録を「取消」にする（消さずに、取消の日時・職員・理由を残す）
 function cpVoidMedRecord(rec, label) {
@@ -8253,7 +8264,7 @@ function toggleEyedrop(resId, slot) {
  return;
  }
 
- const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId);
+ const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId && e.status !== '終了');
  const eyeSide = order ? order.eye : "指示";
  const medName = order ? order.medicine_name : "点眼薬";
 
@@ -8299,7 +8310,7 @@ function onEyedropResidentChange() {
 }
 
 function loadEyedropOrderFormData(resId) {
- const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId) || {};
+ const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId && e.status !== '終了') || {};
 
  const eye = order.eye || "右のみ";
  const rRight = document.getElementById("eoEyeRight");
@@ -8373,7 +8384,7 @@ function submitEyedropOrder() {
  const status = document.getElementById("eoStatus")?.value || "継続中";
 
  if (!db.data.eyedrop_orders) db.data.eyedrop_orders = [];
- const existingIdx = db.data.eyedrop_orders.findIndex(e => e.resident_id === resId);
+ const existingIdx = db.data.eyedrop_orders.findIndex(e => e.resident_id === resId && e.status !== '終了');
 
  const newOrder = {
  id: existingIdx >= 0 ? db.data.eyedrop_orders[existingIdx].id : Date.now(),
@@ -8389,6 +8400,7 @@ function submitEyedropOrder() {
  };
 
  if (existingIdx >= 0) {
+ cpAppendEditHistory(newOrder, db.data.eyedrop_orders[existingIdx], ["eye", "medicine_name", "timing_slots", "dosage", "notes", "doctor_name", "status"]); // [Claude修正] 変更前の指示を残す
  db.data.eyedrop_orders[existingIdx] = newOrder;
  } else {
  db.data.eyedrop_orders.push(newOrder);
@@ -8411,10 +8423,12 @@ function deleteEyedropOrder() {
 
  if (!confirm(`${r ? r.name : '利用者'}様の点眼指示を解除（指示なし）にしますか？`)) return;
 
- if (db.data.eyedrop_orders) {
- db.data.eyedrop_orders = db.data.eyedrop_orders.filter(e => e.resident_id !== resId);
+ // [Claude修正] 点眼指示は消さずに「終了」として、日時・職員を残す
+ const nowStr = toLocalDateTimeStr(new Date());
+ (db.data.eyedrop_orders || []).forEach(e => {
+ if (e.resident_id === resId && e.status !== '終了') { e.status = '終了'; e.ended_at = nowStr; e.ended_by = cpLedgerStaff(); }
+ });
  db.save();
- }
  closeModal("eyedropOrderModal");
  renderMedTable();
  if (typeof renderResidentDetail === "function" && gState.selectedResidentId === resId) {
@@ -12178,10 +12192,12 @@ function submitBelonging() {
  const ok = confirm(`『${b.item_name}』の登録内容を変更しますか？\n\n・品名: ${b.item_name} → ${name}\n・個数: ${b.quantity} → ${qty}\n・区分: ${b.category} → ${cat}\n・備考: ${b.notes || 'なし'} → ${notes || 'なし'}`);
  if (!ok) return;
 
+ const cpOldBel = Object.assign({}, b);
  b.category = cat;
  b.item_name = name;
  b.quantity = qty;
  b.notes = notes;
+ cpAppendEditHistory(b, cpOldBel, ["category", "item_name", "quantity", "notes"]); // [Claude修正] 変更前の内容を残す
  }
  alert(`私物『${name}』の情報を更新しました。`);
  } else {
@@ -12218,17 +12234,17 @@ function adjustBelongingQty(id, delta) {
 
  const nextNum = curNum + delta;
  if (nextNum <= 0) {
- const ok = confirm(`『${b.item_name}』の数量が0になります。台帳から削除しますか？`);
- if (ok) {
+ // [Claude修正] 数量が0になる時も、消さずに「返却・破棄」として残す
  deleteBelonging(id, false);
- }
  return;
  }
 
  const ok = confirm(`『${b.item_name}』の数量を変更しますか？\n\n【 変更前 】 ${b.quantity}\n　　↓\n【 変更後 】 ${nextNum}${unit}`);
  if (!ok) return;
 
+ const cpOldQty = Object.assign({}, b);
  b.quantity = `${nextNum}${unit}`;
+ cpAppendEditHistory(b, cpOldQty, ["quantity"]); // [Claude修正] 変更前の数量を残す
  db.save();
  renderResidentDetail();
 }
@@ -12238,15 +12254,11 @@ function deleteBelonging(id, needConfirm = true) {
  const b = (db.data.belongings || []).find(x => x.id === id);
  if (!b) return;
 
- if (needConfirm) {
- const ok = confirm(`『${b.item_name} (${b.quantity})』を台帳から削除しますか？`);
- if (!ok) return;
- }
-
- db.data.belongings = (db.data.belongings || []).filter(x => x.id !== id);
+ // [Claude修正] 預かり品は台帳から消さずに「返却・破棄・誤登録」などの理由を残して外す
+ if (!cpVoidRecord(b, "", `『${b.item_name} (${b.quantity})』を預かり品台帳から外します。\n記録は消えずに残ります。\n\n理由を入力してください (例: ご家族へ返却、破損のため破棄、誤登録)`)) return;
  db.save();
  renderResidentDetail();
- alert(`『${b.item_name}』を台帳から削除しました。`);
+ alert(`『${b.item_name}』を台帳から外しました（記録は残っています）。`);
 }
 
 // 福祉用具・備品 追加
@@ -12292,7 +12304,11 @@ function deleteEquipment(id) {
  const ok = confirm(`福祉用具『${eq.equipment_name} (${eq.ownership_type})』の使用を終了（解除）しますか？`);
  if (!ok) return;
 
- db.data.equipments = (db.data.equipments || []).filter(x => x.id !== id);
+ // [Claude修正] 消さずに、使用終了の日時・職員・理由を残す
+ eq.voided = true;
+ eq.voided_at = toLocalDateTimeStr(new Date());
+ eq.voided_by = cpLedgerStaff();
+ eq.void_reason = "使用終了・解除";
  db.save();
  renderResidentDetail();
  alert(`『${eq.equipment_name}』の使用を終了・解除しました。`);
@@ -13283,7 +13299,7 @@ function renderPhotoGrid() {
  grid.innerHTML = "";
 
  const photos = (db.data.photos || []).filter(p => 
- p.resident_id === gState.selectedResidentId && p.category === currentPhotoCategory
+ !p.voided && p.resident_id === gState.selectedResidentId && p.category === currentPhotoCategory
  );
 
  if (photos.length === 0) {
@@ -13450,8 +13466,9 @@ function saveNewPhoto() {
 }
 
 function deletePhoto(id) {
- if (!confirm("この写真・書類を保管庫から削除してもよろしいですか？")) return;
- db.data.photos = (db.data.photos || []).filter(p => p.id !== id);
+ // [Claude修正] 写真・書類は消さずに「取消」として残す（理由必須）
+ const ph = (db.data.photos || []).find(p => p.id === id);
+ if (!cpVoidRecord(ph, "この写真・書類")) return;
  db.save();
  renderPhotoGrid();
  if (typeof renderResidentDetail === 'function') renderResidentDetail();
