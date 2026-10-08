@@ -3438,6 +3438,7 @@ function renderCalendar() {
 
  const recordedDates = new Set();
  (db.data.care_records || []).forEach(r => {
+ if (r.voided) return; // [Claude修正] 取消済みは数えない
  const d = r.recorded_at || r.record_time;
  if (d && typeof d === 'string') recordedDates.add(d.slice(0, 10));
  });
@@ -3529,6 +3530,7 @@ function syncGlobalDatePicker(dt) {
  // 当日の記録件数を集計してバッジ表示
  let recCount = 0;
  (db.data.care_records || []).forEach(r => {
+   if (r.voided) return; // [Claude修正] 取消済みは数えない
    const d = (r.recorded_at || r.record_time || "").slice(0, 10);
    if (d === dt) recCount++;
  });
@@ -4429,12 +4431,13 @@ function openEditCareRecordModal(recId) {
  if (nameEl) nameEl.value = resName;
  if (timeEl) timeEl.value = rec.recorded_at || rec.record_time || "";
  if (catEl) catEl.value = rec.category || "介護記録";
- if (staffEl) staffEl.value = rec.staff_name || "";
+ if (staffEl) { staffEl.value = rec.staff_name || ""; staffEl.readOnly = true; } // [Claude修正] 記録者名は訂正で変えられないようにする
  if (contentEl) contentEl.value = rec.content || "";
 
  openModal("editCareRecordModal");
 }
 
+// [Claude修正] 介護記録の訂正: 直す前の内容を訂正履歴（edit_history）に残す。記録者名は変えられない。訂正の理由を必ず書く
 function updateCareRecord() {
  const idEl = document.getElementById("editCrId");
  if (!idEl) return;
@@ -4442,6 +4445,10 @@ function updateCareRecord() {
  const rec = (db.data.care_records || []).find(r => Number(r.id) === recId);
  if (!rec) {
  alert("更新対象の介護記録が見つかりません。");
+ return;
+ }
+ if (rec.voided) {
+ alert("取消済みの記録は訂正できません。先に「取消を戻す」を行ってください。");
  return;
  }
 
@@ -4454,38 +4461,97 @@ function updateCareRecord() {
 
  const timeEl = document.getElementById("editCrDateTime");
  const catEl = document.getElementById("editCrCategory");
- const staffEl = document.getElementById("editCrStaff");
+ const newTime = (timeEl && timeEl.value.trim()) ? timeEl.value.trim() : (rec.recorded_at || "");
+ const newCat = catEl ? catEl.value : rec.category;
 
- if (timeEl && timeEl.value.trim()) {
- rec.recorded_at = timeEl.value.trim();
+ const before = { recorded_at: rec.recorded_at || rec.record_time || "", category: rec.category || "", content: rec.content || "" };
+ if (before.recorded_at === newTime && before.category === newCat && before.content === newContent) {
+ alert("変更された内容がありません。");
+ return;
  }
- if (catEl) rec.category = catEl.value;
- if (staffEl && staffEl.value.trim()) {
- rec.staff_name = staffEl.value.trim();
- }
+ const reason = prompt("訂正の理由を入力してください (例: 誤字の修正、時刻の入力間違い)\n直す前の内容は訂正履歴として残ります。", "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("訂正の理由を入力してください。保存は行っていません。"); return; }
+
+ if (!Array.isArray(rec.edit_history)) rec.edit_history = [];
+ rec.edit_history.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), reason: reason.trim(), before: before });
+ rec.recorded_at = newTime;
+ rec.category = newCat;
  rec.content = newContent;
 
  db.save();
  closeModal("editCareRecordModal");
  renderSelectedDateRecords();
  if (typeof renderDailyJournal === "function") renderDailyJournal();
- alert("介護記録の編集内容を保存しました！");
+ alert("介護記録を訂正しました。直す前の内容は訂正履歴に残っています。");
 }
 
+// [Claude修正] 介護記録は削除せず「取消」にする（記録は残り、取消済みとして表示される）
 function deleteCareRecord() {
  const idEl = document.getElementById("editCrId");
  if (!idEl) return;
  const recId = Number(idEl.value);
- if (!confirm("この介護記録を削除してもよろしいですか？\n※ 削除した記録は元に戻せません。")) return;
-
- if (db.data.care_records) {
- db.data.care_records = db.data.care_records.filter(r => Number(r.id) !== recId);
+ const rec = (db.data.care_records || []).find(r => Number(r.id) === recId);
+ if (!rec || rec.voided) return;
+ const reason = prompt("この介護記録を「取消」にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入力してください (例: 重複登録、利用者の選択間違い)", "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("取消の理由を入力してください。取消は行っていません。"); return; }
+ rec.voided = true;
+ rec.voided_at = toLocalDateTimeStr(new Date());
+ rec.voided_by = cpLedgerStaff();
+ rec.void_reason = reason.trim();
  db.save();
- }
  closeModal("editCareRecordModal");
  renderSelectedDateRecords();
  if (typeof renderDailyJournal === "function") renderDailyJournal();
- alert("介護記録を削除しました。");
+ alert("介護記録を取消にしました。");
+}
+
+// [Claude修正] 印刷時に取消・訂正の情報を本文の前に書く
+function cpCareRecordPrintNote(r) {
+ let s = "";
+ if (r.voided) s += `【取消済 ${r.voided_at || ''} ${r.voided_by || ''} 理由: ${r.void_reason || '-'}】\n`;
+ if (r.edit_history && r.edit_history.length) {
+ const last = r.edit_history[r.edit_history.length - 1];
+ s += `（訂正あり ${r.edit_history.length}回 / 最終: ${last.edited_at} ${last.edited_by} 理由: ${last.reason}）\n`;
+ }
+ return escapeHtml(s);
+}
+
+function cpRestoreCareRecord(recId) {
+ const rec = (db.data.care_records || []).find(r => Number(r.id) === Number(recId));
+ if (!rec || !rec.voided) return;
+ if (!confirm(`この介護記録の取消を戻し、有効な記録に戻しますか？\n(取消理由: ${rec.void_reason || '-'})`)) return;
+ if (!Array.isArray(rec.void_history)) rec.void_history = [];
+ rec.void_history.push({ voided_at: rec.voided_at, voided_by: rec.voided_by, void_reason: rec.void_reason, restored_at: toLocalDateTimeStr(new Date()), restored_by: cpLedgerStaff() });
+ rec.voided = false;
+ db.save();
+ renderSelectedDateRecords();
+ if (typeof renderDailyJournal === "function") renderDailyJournal();
+}
+
+function cpShowCareRecordHistory(recId) {
+ const rec = (db.data.care_records || []).find(r => Number(r.id) === Number(recId));
+ if (!rec) return;
+ const lines = [];
+ (rec.edit_history || []).forEach((h, i) => {
+ lines.push(`■ 訂正${i + 1}: ${h.edited_at} ${h.edited_by}\n理由: ${h.reason}\n直す前: [${h.before.recorded_at}] [${h.before.category}]\n${h.before.content}`);
+ });
+ (rec.void_history || []).forEach(h => {
+ lines.push(`■ 取消: ${h.voided_at} ${h.voided_by} (理由: ${h.void_reason}) → 取消を戻す: ${h.restored_at} ${h.restored_by}`);
+ });
+ alert(lines.length ? `【訂正・取消の履歴】\n\n${lines.join("\n\n")}` : "訂正・取消の履歴はありません。");
+}
+
+// 記録カードの右上: 取消済みなら取消情報と「取消を戻す」、それ以外は「訂正・取消」と（あれば）「履歴」
+function cpCareRecordActions(r) {
+ const hasHist = (r.edit_history && r.edit_history.length) || (r.void_history && r.void_history.length);
+ const histBtn = hasHist ? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="cpShowCareRecordHistory(${r.id})">履歴${r.edit_history && r.edit_history.length ? `(訂正${r.edit_history.length})` : ''}</button>` : '';
+ if (r.voided) {
+ return `<span style="font-size:11px; color:#991b1b; font-weight:bold;">取消済 ${escapeHtml(r.voided_at || '')} ${escapeHtml(r.voided_by || '')} 理由: ${escapeHtml(r.void_reason || '-')}</span>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="cpRestoreCareRecord(${r.id})">取消を戻す</button>${histBtn}`;
+ }
+ return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">訂正・取消</button>${histBtn}`;
 }
 
 // ======================================================================
@@ -5282,7 +5348,7 @@ function renderEmergencySummaryPreview(r) {
  const latestVital = vitals.length > 0 ? vitals[vitals.length - 1] : null;
  const vitalStr = latestVital ? `体温: ${latestVital.temperature || "-"}℃ / 血圧: ${latestVital.bp_high || "-"}/${latestVital.bp_low || "-"} mmHg / 脈拍: ${latestVital.pulse || "-"} / SpO2: ${latestVital.spo2 || "-"}% (${latestVital.measured_at || latestVital.date || ""})` : "記録なし";
 
- const records = (db.data.care_records || []).filter(c => Number(c.resident_id) === Number(r.id) && (c.category === "特変" || c.category === "バイタル" || c.category === "巡視")).slice(0, 3);
+ const records = (db.data.care_records || []).filter(c => !c.voided && Number(c.resident_id) === Number(r.id) && (c.category === "特変" || c.category === "バイタル" || c.category === "巡視")).slice(0, 3);
  const recordsHtml = records.length > 0 ? records.map(rc => `<div>・[${escapeHtml(rc.recorded_at || "")}] [${escapeHtml(rc.category || "")}] ${escapeHtml(rc.content || "")} (${escapeHtml(rc.staff_name || "")})</div>`).join("") : "<div>特変記録なし</div>";
 
  const summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
@@ -6352,7 +6418,7 @@ function renderPersonalCalendar() {
 
  // 記録判定
  const hasVital = (db.data.vitals || []).some(v => v.resident_id === res.id && v.date === curDateStr);
- const dayRecs = (db.data.care_records || []).filter(cr => cr.resident_id === res.id && (cr.recorded_at || cr.record_time || "").startsWith(curDateStr));
+ const dayRecs = (db.data.care_records || []).filter(cr => !cr.voided && cr.resident_id === res.id && (cr.recorded_at || cr.record_time || "").startsWith(curDateStr));
  const recCount = dayRecs.length;
  const hasTokukan = dayRecs.some(cr => cr.category === "特変");
  const isHospitalized = (res.status === "入院中" && curDateStr >= (res.hospital_date || "2026-08-25"));
@@ -6876,10 +6942,10 @@ function renderSelectedDateRecords() {
  </div>
  <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">編集</button>
+ ${cpCareRecordActions(r)}
  </div>
  </div>
- <div class="care-record-body">${escapeHtml(displayContent)}</div>
+ <div class="care-record-body" style="${r.voided ? 'text-decoration:line-through; color:#94a3b8;' : ''}">${escapeHtml(displayContent)}</div>
  ${toggleBtnHtml}
  `;
  return item;
@@ -7016,7 +7082,7 @@ function printSelectedDateRecords() {
  </div>
  </div>
  <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#1e293b; padding:4px 2px;">
-${escapeHtml(r.content || '')}
+${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </div>
  </div>
  `;
@@ -7066,6 +7132,7 @@ function renderDailyJournal() {
  const hospitalCount = gState.residents.filter(r => r.status === "入院中").length;
 
  const dayRecords = (db.data.care_records || []).filter(r => {
+ if (r.voided) return false; // [Claude修正] 取消済みは数えない
  const timeStr = r.recorded_at || r.record_time || "";
  return timeStr.startsWith(gState.selectedDate);
  });
@@ -7153,10 +7220,10 @@ function renderDailyJournal() {
  </div>
  <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">編集</button>
+ ${cpCareRecordActions(r)}
  </div>
  </div>
- <div class="care-record-body" style="margin-top:6px;">${escapeHtml(r.content || '')}</div>
+ <div class="care-record-body" style="margin-top:6px; ${r.voided ? 'text-decoration:line-through; color:#94a3b8;' : ''}">${escapeHtml(r.content || '')}</div>
  `;
  recordsListEl.appendChild(item);
  });
@@ -7310,7 +7377,7 @@ function printDailyJournal() {
  </div>
  </div>
  <div style="white-space:pre-wrap; font-size:13px; line-height:1.6; color:#1e293b;">
-${escapeHtml(r.content || '')}
+${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </div>
  </div>
  `;
