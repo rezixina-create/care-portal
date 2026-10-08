@@ -297,7 +297,8 @@ const CP_LEDGERS = {
  vaccines: { label: "予防接種記録", render: () => renderOfficeVaccines() },
  fire_drills: { label: "消防・避難訓練記録", render: () => renderOfficeFireDrills() },
  recreations: { label: "レクリエーション記録", render: () => renderRecreationTable() },
- incidents: { label: "事故・ヒヤリハット報告書", render: () => renderOfficeIncidents() }
+ incidents: { label: "事故・ヒヤリハット報告書", render: () => renderOfficeIncidents() },
+ committees: { label: "委員会・研修記録", render: () => renderOfficeCommittees() }
 };
 
 function cpLedgerStaff() {
@@ -10775,7 +10776,7 @@ function renderOfficeCommittees() {
  const tbody = document.querySelector("#committeeTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
- const list = db.data.committees || [];
+ const list = cpLedgerOrder(db.data.committees || []); // [Claude修正] 取消済みは後ろに並べる
  if (list.length === 0) {
  const tr = document.createElement("tr");
  tr.innerHTML = `<td colspan="7" style="text-align:center; color:#64748b; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
@@ -10799,17 +10800,20 @@ function renderOfficeCommittees() {
  catBgColor = "#f3f4f6";
  }
 
+ // [Claude修正] 削除をやめて「取消」に（理由必須・記録は残る）
+ const actionHtml = c.voided
+ ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#64748b; white-space:normal; max-width:180px;">${escapeHtml(c.voided_at || '')} ${escapeHtml(c.voided_by || '')}<br>理由: ${escapeHtml(c.void_reason || '-')}</div><button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('committees', ${Number(c.id)})">取消を戻す</button>`
+ : `<button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#991b1b; border-color:#fca5a5;" onclick="deleteCommittee(${Number(c.id)})">取消</button>`;
  tr.innerHTML = `
- <td>${c.date || '-'}</td>
- <td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${cat}</span></td>
- <td><strong>${c.committee_name || c.name || '-'}</strong></td>
- <td>${c.attendees || '-'}</td>
- <td>${c.agenda || '-'}</td>
- <td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${c.content || '-'}</td>
- <td>
- <button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#dc2626;" onclick="deleteCommittee(${c.id})">削除</button>
- </td>
+ <td>${escapeHtml(c.date || '-')}</td>
+ <td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${escapeHtml(cat)}</span></td>
+ <td><strong>${escapeHtml(c.committee_name || c.name || '-')}</strong></td>
+ <td>${escapeHtml(c.attendees || '-')}</td>
+ <td>${escapeHtml(c.agenda || '-')}</td>
+ <td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${escapeHtml(c.content || '-')}</td>
+ <td>${actionHtml}</td>
  `;
+ if (c.voided) cpMarkVoidedRow(tr);
  tbody.appendChild(tr);
  });
 }
@@ -10868,11 +10872,7 @@ function submitCommittee() {
 }
 
 function deleteCommittee(id) {
- if (!confirm("この委員会・研修記録を削除してもよろしいですか？")) return;
- if (!db.data.committees) return;
- db.data.committees = db.data.committees.filter(c => c.id !== id);
- db.save();
- renderOfficeCommittees();
+ cpVoidLedgerRecord("committees", id);
 }
 
 // 発注 ＆ 上司承認 (管理者のみ認証・閲覧制限)
