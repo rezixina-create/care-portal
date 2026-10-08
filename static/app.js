@@ -5358,7 +5358,7 @@ ADL: ${s ? s.adl : "未登録（介護サマリー未作成）"}
 
 function renderSchemaSummaryBadges(residentId) {
  const rId = Number(residentId);
- const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const allPins = ((db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : []).filter(p => !p.voided); // [Claude修正] 取消済みは表示しない
  const pins = allPins.filter(p => Number(p.resident_id) === rId && p.status !== "治癒・終了");
  if (pins.length === 0) {
  return `<span style="color:#64748b; font-size:11.5px;">特記処置なし</span>`;
@@ -5404,7 +5404,7 @@ function renderBodySchemaPins() {
  if (!overlay || !tableContainer) return;
 
  const rId = Number(gState.schemaResidentId || gState.selectedResidentId);
- const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const allPins = ((db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : []).filter(p => !p.voided); // [Claude修正] 取消済みは表示しない
  const pins = allPins.filter(p => Number(p.resident_id) === rId);
 
  pins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
@@ -5626,6 +5626,7 @@ function saveSchemaPin() {
  if (editId > 0) {
  const pin = db.data.body_schema_pins.find(p => Number(p.id) === editId);
  if (pin) {
+ const cpOld = Object.assign({}, pin); // [Claude修正] 変更前の内容を履歴に残す
  pin.site_name = site;
  pin.category = category;
  pin.item_name = item;
@@ -5638,13 +5639,14 @@ function saveSchemaPin() {
  pin.x_pct = xPct;
  pin.y_pct = yPct;
  }
+ cpAppendEditHistory(pin, cpOld, ["site_name", "category", "item_name", "frequency", "status", "notes", "x_pct", "y_pct"]);
  }
  } else {
  const newId = db.data.body_schema_pins.length > 0
  ? Math.max(...db.data.body_schema_pins.map(p => Number(p.id) || 0)) + 1
  : 1;
 
- const resPins = db.data.body_schema_pins.filter(p => Number(p.resident_id) === rId);
+ const resPins = db.data.body_schema_pins.filter(p => !p.voided && Number(p.resident_id) === rId);
  const pinNo = resPins.length + 1;
 
  db.data.body_schema_pins.push({
@@ -5740,13 +5742,11 @@ function deleteSchemaPinById(pinId) {
  const pin = (db.data.body_schema_pins || []).find(p => Number(p.id) === Number(pinId));
  if (!pin) return;
 
- const confirmMsg = `No. ${pin.pin_no}「${pin.site_name}: ${pin.item_name}」のピンを削除しますか？\n（※処置が終了した場合は、状態を「治癒・終了」に変更して記録を残すことも可能です）`;
- if (!confirm(confirmMsg)) return;
+ // [Claude修正] ピン（処置の指示）は消さずに「取消」として残す（理由必須）。処置が終わった場合は状態を「治癒・終了」にする
+ if (!cpVoidRecord(pin, "", `No. ${pin.pin_no}「${pin.site_name}: ${pin.item_name}」のピンを取消にします。\n記録は消えずに残ります。\n（処置が終わった場合は、取消ではなく状態を「治癒・終了」に変更してください）\n\n取消の理由を入力してください (例: 位置の間違い、重複登録)`)) return;
 
  const rId = pin.resident_id;
- db.data.body_schema_pins = (db.data.body_schema_pins || []).filter(p => Number(p.id) !== Number(pinId));
-
- const resPins = db.data.body_schema_pins.filter(p => Number(p.resident_id) === Number(rId));
+ const resPins = db.data.body_schema_pins.filter(p => !p.voided && Number(p.resident_id) === Number(rId));
  resPins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
  resPins.forEach((p, idx) => { p.pin_no = idx + 1; });
 
@@ -5850,7 +5850,7 @@ function printBodySchema() {
  const printDateStr = `${now.getFullYear()}年${now.getMonth() + 1}月${now.getDate()}日`;
  const staffName = document.getElementById("currentStaff")?.value || "担当職員";
 
- const allPins = (db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : [];
+ const allPins = ((db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : []).filter(p => !p.voided); // [Claude修正] 取消済みは表示しない
  const pins = allPins.filter(p => Number(p.resident_id) === rId);
  pins.sort((a, b) => (Number(a.id) || 0) - (Number(b.id) || 0));
  pins.forEach((p, idx) => { p.pin_no = idx + 1; });
@@ -8205,9 +8205,10 @@ function cpAppendEditHistory(target, old, fields) {
  if (!target || !old) return;
  const norm = v => (v === undefined || v === "" ? null : v);
  const before = {};
- fields.forEach(f => { before[f] = norm(old[f]); });
+ fields.forEach(f => { const x = norm(old[f]); before[f] = (x !== null && typeof x === "object") ? JSON.parse(JSON.stringify(x)) : x; });
  if (old.staff_name !== undefined) before.staff_name = norm(old.staff_name);
- const changed = fields.some(f => String(norm(old[f])) !== String(norm(target[f])));
+ const key = v => { const x = norm(v); return (x !== null && typeof x === "object") ? JSON.stringify(x) : String(x); };
+ const changed = fields.some(f => key(old[f]) !== key(target[f]));
  const hist = Array.isArray(old.edit_history) ? old.edit_history.slice() : [];
  if (changed) hist.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), before: before });
  if (hist.length) target.edit_history = hist;
@@ -9180,9 +9181,11 @@ function submitRecreationRecord() {
 	if (editId) {
 		const rec = db.data.recreations.find(r => r.id === Number(editId));
 		if (rec) {
+			const cpOld = Object.assign({}, rec); // [Claude修正] 訂正前の内容を履歴に残す
 			rec.date = date; rec.program_type = type; rec.title = title;
 			rec.participants_count = part; rec.content = cont; rec.reaction = react;
 			rec.notes = notes;
+			cpAppendEditHistory(rec, cpOld, ["date", "program_type", "title", "participants_count", "content", "reaction", "notes"]);
 			// [Claude修正] 記録者は最初の記録者のまま残し、訂正者は別に記録する
 			if (!rec.staff_name) rec.staff_name = staff;
 			rec.updated_by = staff; rec.updated_at = toLocalDateTimeStr(new Date());
@@ -10613,9 +10616,11 @@ function submitFireDrillRecord() {
 	if (editId) {
 		const d = db.data.fire_drills.find(x => x.id === Number(editId));
 		if (d) {
+			const cpOld = Object.assign({}, d); // [Claude修正] 訂正前の内容を履歴に残す
 			d.date = date; d.drill_type = type; d.participants_count = part;
 			d.duration = dur; d.scenario = scen; d.notes = notes;
 			d.reported_to_fire_dept = rep; d.supervisor = sup;
+			cpAppendEditHistory(d, cpOld, ["date", "drill_type", "participants_count", "duration", "scenario", "notes", "reported_to_fire_dept", "supervisor"]);
 		}
 	} else {
 		db.data.fire_drills.unshift({
@@ -11585,10 +11590,12 @@ function saveIncidentReport() {
 	if (id) {
 		const inc = db.data.incidents.find(x => x.id === parseInt(id));
 		if (inc) {
+			const cpOld = JSON.parse(JSON.stringify(inc)); // [Claude修正] 訂正前の内容を履歴に残す
 			inc.report_type = type; inc.occurred_at = occurredAt; inc.resident_id = resId;
 			inc.place = place; inc.situation = situation; inc.cause = cause;
 			inc.prevention = prevention; inc.supervisor_comment = supervisor;
 			inc.injury_pins = injuryPins;
+			cpAppendEditHistory(inc, cpOld, ["report_type", "occurred_at", "resident_id", "place", "situation", "cause", "prevention", "supervisor_comment", "injury_pins"]);
 		}
 	} else {
 		db.data.incidents.unshift({
@@ -12094,9 +12101,11 @@ function submitVaccineRecord() {
 	if (editId) {
 		const v = db.data.vaccines.find(x => x.id === Number(editId));
 		if (v) {
+			const cpOld = Object.assign({}, v); // [Claude修正] 訂正前の内容を履歴に残す
 			v.resident_id = resId; v.vaccine_name = type; v.dose = dose;
 			v.consent = con; v.date = date; v.doctor = doc; v.lot = lot;
 			v.reactions = react; v.status = vacStatus;
+			cpAppendEditHistory(v, cpOld, ["resident_id", "vaccine_name", "dose", "consent", "date", "doctor", "lot", "reactions", "status"]);
 		}
 	} else {
 		db.data.vaccines.unshift({
