@@ -12520,7 +12520,9 @@ function submitResidentForm() {
  targetId = parseInt(editId);
  const idx = gState.residents.findIndex(x => x.id === targetId);
  if (idx !== -1) {
+ const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();
@@ -12684,6 +12686,7 @@ function submitCarePlanModal() {
  const r = gState.residents ? gState.residents.find(x => Number(x.id) === id) : null;
  if (!r) return;
 
+ const cpOld = Object.assign({}, r); // [Claude修正] 変更前の内容を利用者の変更履歴に残す
  r.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
  r.sensor_alert = document.getElementById("quickSensorAlert").value.trim();
  r.bp_high_max = document.getElementById("quickBpHMax").value ? parseInt(document.getElementById("quickBpHMax").value, 10) : null;
@@ -12691,6 +12694,7 @@ function submitCarePlanModal() {
  r.temp_max = document.getElementById("quickTempMax").value ? parseFloat(document.getElementById("quickTempMax").value) : null;
  r.spo2_min = document.getElementById("quickSpo2Min").value ? parseInt(document.getElementById("quickSpo2Min").value, 10) : null;
 
+ cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
  db.save();
  closeModal("carePlanModal");
  renderResidentDetail();
@@ -12782,11 +12786,13 @@ function submitBodyConditionModal() {
  const dietEl = document.getElementById("quickDietType");
  const oralEl = document.getElementById("quickOralState");
 
+ const cpOld = Object.assign({}, r); // [Claude修正] 変更前の内容（病歴・アレルギー等）を利用者の変更履歴に残す
  if (disEl) r.diseases = disEl.value.trim();
  if (parEl) r.paralysis = parEl.value.trim();
  if (algEl) r.allergies = algEl.value.trim();
  if (dietEl) r.diet_type = dietEl.value;
  if (oralEl) r.oral_state = oralEl.value.trim();
+ cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
 
  db.save();
  closeModal("bodyConditionModal");
