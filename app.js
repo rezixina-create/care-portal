@@ -42,7 +42,17 @@ function sortStaffList(list) {
 }
 
 // 夜間巡視・体位変換 自動生成定型文の標準初期値 (施設・現場ごとのカスタマイズ対応)
+// [Claude修正] チェックを付けるだけで、確かめていない観察（呼吸状態安定・異常なし・発赤悪化なし・排尿あり・前の体位など）が
+// 公式記録に書き込まれていた。標準の文は「行ったこと」だけにする。観察したことは職員が書き足す。
 const DEFAULT_NIGHT_TURN_TEMPLATES = {
+ "安眠中": "【{time} 定時巡視】訪室確認。安眠中。",
+ "左側臥位": "【{time} 定時巡視・体位変換】訪室確認。左側臥位へ体位変換実施。",
+ "右側臥位": "【{time} 定時巡視・体位変換】訪室確認。右側臥位へ体位変換実施。",
+ "仰臥位": "【{time} 定時巡視・体位変換】訪室確認。仰臥位へ体位変換実施。",
+ "おむつ交換": "【{time} 定時巡視・おむつ交換】訪室確認。おむつ交換実施。"
+};
+// 以前の標準の文（施設が書き換えていなければ、新しい標準の文に置き換える）
+const CP_OLD_NIGHT_TURN_TEMPLATES = {
  "安眠中": "【{time} 定時巡視】訪室確認。静かに安眠中、呼吸状態安定。掛物の乱れを整え、ナースコールを手元に確認。異常なし。",
  "左側臥位": "【{time} 定時巡視・体位変換】訪室確認。仰臥位から左側臥位へ体位変換実施。仙骨部除圧クッションを背部・膝間に挿入。良肢位保持、寝具を整える。",
  "右側臥位": "【{time} 定時巡視・体位変換】訪室確認。左側臥位から右側臥位へ体位変換実施。除圧クッション配置し安楽な姿勢を保持。呼吸落ち着き安眠継続。",
@@ -4600,6 +4610,10 @@ function getNightTurnTemplates() {
  if (!db.data.night_turn_templates || typeof db.data.night_turn_templates !== "object") {
  db.data.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
  }
+ // [Claude修正] 以前の標準の文のままになっている項目は、新しい標準の文に置き換える（施設が書き換えた文はそのまま）
+ Object.keys(CP_OLD_NIGHT_TURN_TEMPLATES).forEach(k => {
+ if (db.data.night_turn_templates[k] === CP_OLD_NIGHT_TURN_TEMPLATES[k]) db.data.night_turn_templates[k] = DEFAULT_NIGHT_TURN_TEMPLATES[k];
+ });
  return db.data.night_turn_templates;
 }
 
@@ -4655,12 +4669,12 @@ const DEFAULT_CARE_TEMPLATES = [
  { category: "巡視", label: "左側臥位", phrase: "確認のため訪室。左側臥位にて入眠中。" },
  { category: "巡視", label: "ナースコール対応", phrase: "ナースコールあり訪室。排泄介助実施。" },
  { category: "食事", label: "全量摂取", phrase: "主食・副食ともに全量摂取。むせ込みなし。" },
- { category: "食事", label: "むせ込みあり", phrase: "水分摂取時に軽度のむせ込みあり。とろみ濃度を一段階上げて対応。誤嚥徴候なし。" },
+ { category: "食事", label: "むせ込みあり", phrase: "水分摂取時にむせ込みあり。看護師へ報告。" },
  { category: "排泄", label: "普通便中量", phrase: "トイレ誘導にて排尿あり。普通便中等量排便あり。" },
  { category: "入浴", label: "軟膏塗布", phrase: "一般浴実施。背部・両下腿に保湿軟膏塗布。皮膚状態異常なし。" },
- { category: "バイタル", label: "発熱クーリング", phrase: "37.8度の発熱あり。悪寒なし。水分補給実施し頸部クーリング対応。" },
+ { category: "バイタル", label: "発熱あり", phrase: "発熱あり（体温はバイタル欄に記録）。看護師へ報告。" },
  { category: "特変", label: "ふらつき見守り", phrase: "立ち上がり時に軽度のふらつきを認める。転倒なし。付き添い見守りを強化。" },
- { category: "申し送り", label: "受診指示引継ぎ", phrase: "往診医より指示あり。次回採血まで水分摂取を促し経過観察。" }
+ { category: "申し送り", label: "受診指示引継ぎ", phrase: "往診医より指示あり。指示内容：" }
 ];
 
 function openTemplateManageModal() {
@@ -9004,7 +9018,7 @@ function submitNightTurnsBatch() {
  added.forEach((item, index) => {
  const r = gState.residents.find(x => x.id === item.resId);
  if (!r || r.status !== "在所") return; // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から除外
- const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。全身状態・呼吸安定、安眠。`;
+ const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。`;
  const contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
  db.data.care_records.unshift({
  id: Date.now() + Math.floor(Math.random() * 100000) + index,
