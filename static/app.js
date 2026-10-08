@@ -9029,7 +9029,7 @@ function renderLinenTable() {
  const tbody = document.querySelector("#linenTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
- const linens = (db.data.linens || []).filter(l => l.date === gState.selectedDate);
+ const linens = cpLedgerOrder((db.data.linens || []).filter(l => l.date === gState.selectedDate));
 
  if (linens.length === 0) {
    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; color:var(--text-muted); padding:16px;">本日のシーツ・リネン交換記録はありません。上のボタンから記録できます。</td></tr>`;
@@ -9039,16 +9039,18 @@ function renderLinenTable() {
  linens.forEach(l => {
    const res = gState.residents.find(x => x.id === l.resident_id);
    const tr = document.createElement("tr");
+   const actionHtml = l.voided
+     ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#64748b; white-space:normal;">${escapeHtml(l.voided_at || '')} ${escapeHtml(l.voided_by || '')}<br>理由: ${escapeHtml(l.void_reason || '-')}</div>`
+     : `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteLinenRecord(${l.id})">取消</button>`;
    tr.innerHTML = `
-     <td>${l.date}</td>
-     <td><strong>${res ? res.room_no + '号室 ' + res.name + ' 様' : '-'}</strong></td>
-     <td><span style="font-weight:bold; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px;">${l.exchange_type}</span></td>
-     <td>${l.notes || '-'}</td>
-     <td>${l.staff_name || '-'}</td>
-     <td style="text-align:center;">
-       <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteLinenRecord(${l.id})">取消</button>
-     </td>
+     <td>${escapeHtml(l.date || '')}</td>
+     <td><strong>${res ? escapeHtml(res.room_no + '号室 ' + res.name + ' 様') : '-'}</strong></td>
+     <td><span style="font-weight:bold; color:#0284c7; background:#e0f2fe; padding:2px 8px; border-radius:4px;">${escapeHtml(l.exchange_type || '')}</span></td>
+     <td>${escapeHtml(l.notes || '-')}</td>
+     <td>${escapeHtml(l.staff_name || '-')}</td>
+     <td style="text-align:center;">${actionHtml}</td>
    `;
+   if (l.voided) cpMarkVoidedRow(tr);
    tbody.appendChild(tr);
  });
 }
@@ -9094,16 +9096,19 @@ function deleteLinenRecord(linenId) {
  const res = gState.residents.find(x => x.id === target.resident_id);
  const resName = res ? res.name + " 様" : "対象利用者";
 
- if (!confirm(`【確認】\n${resName}のシーツ交換記録（${target.exchange_type}）を取り消しますか？\n連動した介護記録も削除されます。`)) {
-   return;
+ if (target.voided) return;
+ // [Claude修正] シーツ交換記録と連動した介護記録は、消さずに「取消」として残す（理由必須）
+ const reason = prompt(`${resName}のシーツ交換記録（${target.exchange_type}）を「取消」にします。\n連動した介護記録も取消になります。記録は消えずに残ります。\n\n取消の理由を入力してください (例: 押し間違い、別の方の記録)`, "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("取消の理由を入力してください。取消は行っていません。"); return; }
+ const now = toLocalDateTimeStr(new Date());
+ const by = cpLedgerStaff();
+ target.voided = true; target.voided_at = now; target.voided_by = by; target.void_reason = reason.trim();
+ (db.data.care_records || []).forEach(c => {
+ if (c.source_linen_id === linenId && !c.voided) {
+ c.voided = true; c.voided_at = now; c.voided_by = by; c.void_reason = `シーツ交換記録の取消: ${reason.trim()}`;
  }
-
- // シーツ記録を削除
- db.data.linens = (db.data.linens || []).filter(l => l.id !== linenId);
-
- // 連動する介護記録を削除
- // [Claude修正] 旧条件 (ID が linenId+1 の記録も削除) では、無関係の介護記録を消す恐れがあった。連動IDが一致する記録だけを削除する
- db.data.care_records = (db.data.care_records || []).filter(c => c.source_linen_id !== linenId);
+ });
 
  db.save();
  loadDateRecords(gState.selectedDate);
