@@ -881,7 +881,6 @@
  <button class="sub-tab-btn" onclick="switchOfficeTab('deposit')"> 預かり金出納帳</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('vehicle')"> 送迎・公用車運行</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('orders')"> 発注申請</button>
- <button class="sub-tab-btn" onclick="switchOfficeTab('incidents')"> ヒヤリハット・事故</button>
  </div>
 
  <!-- たまに使う -->
@@ -1255,20 +1254,6 @@
  </table>
  </div>
 
-   <!-- 13. ヒヤリハット ＆ 事故報告書 -->
-  <div id="tabOfficeIncidents" style="display:none;" class="panel-card">
-    <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
-      <span> ヒヤリハット ＆ 事故報告書 一覧</span>
-      <button class="btn btn-primary" style="font-size:12.5px; padding:6px 14px; background:#dc2626; border-color:#b91c1c;" onclick="openNewIncidentModal()">＋ 新規報告書を作成</button>
-    </div>
- <table class="data-table" id="incidentsTable">
- <thead>
- <tr><th>発生日時</th><th>種別</th><th>氏名</th><th>場所</th><th>発生状況</th><th>再発防止策</th><th>上司コメント</th><th>状態</th><th>操作</th></tr>
- </thead>
- <tbody></tbody>
- </table>
- </div>
-
  <!-- 14. データ保管・バックアップ管理（管理者・事務専用） -->
  <div id="tabOfficeBackup" style="display:none;" class="panel-card">
  <div class="panel-title" style="color:#065f46; border-bottom:2px solid #10b981;">
@@ -1353,6 +1338,12 @@
   </table>
  </div>
  </div>
+
+ </div><!-- /officeTabContent -->
+ </div><!-- /portalOfficeSection -->
+ <!-- [Claude修正] 上の2つの閉じタグと </main> が消えていたため、以降のモーダル（入力画面）がすべて
+ 事務ポータルの中に入ってしまい、介護ポータルでは表示されなくなっていた -->
+ </main>
 
  <!-- 【2名承認制】暗証番号の初期化モーダル (別枠) -->
  <div class="modal-overlay" id="resetStaffPinModal" style="display:none;">
@@ -3639,7 +3630,8 @@
   </div>
 
   <!-- 4. 2名承認によるID・パスワード初期化モーダル -->
-  <div class="modal-overlay" id="accountResetModal" style="display:none;">
+  <!-- [Claude修正] ログイン画面 (z-index:999999) の上に出す。旧状態ではログイン画面の裏に隠れて押せなかった -->
+  <div class="modal-overlay" id="accountResetModal" style="display:none; z-index:1000000;">
     <div class="modal-card" style="max-width:500px;">
       <div class="modal-header">
         <h3 style="color:#b91c1c;">ID・パスワード初期化（2名承認）</h3>

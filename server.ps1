@@ -477,6 +477,33 @@ namespace CarePortal
             }
         }
 
+        // [Claude修正] アカウントが休止中か。画面のロックボタンは職員マスタ (stamps) に書くため、両方を見る
+        private bool IsSuspended(JObj db, string name)
+        {
+            if (db == null || string.IsNullOrEmpty(name)) return false;
+            JObj st = FindStamp(GetList(db, "stamps"), name);
+            if (st != null && st.GetStr("status") == "休止中") return true;
+            JObj acc = FindByField(GetList(db, "staff_accounts"), "staff_name", name);
+            return acc != null && acc.GetStr("status") == "休止中";
+        }
+
+        // 保存されたデータで休止中になった職員のログイン中セッションを終了させる
+        private void DropSuspendedSessions(string json)
+        {
+            JObj db = null;
+            try { db = MiniJson.Parse(json) as JObj; } catch { db = null; }
+            if (db == null) return;
+            lock (_authLock)
+            {
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, SessionInfo> kv in _sessions)
+                {
+                    if (IsSuspended(db, kv.Value.Staff)) remove.Add(kv.Key);
+                }
+                foreach (string k in remove) _sessions.Remove(k);
+            }
+        }
+
         private void HandleLoginInfo(NetworkStream stream)
         {
             JObj db = null;
@@ -495,7 +522,7 @@ namespace CarePortal
                 JObj sj = st as JObj;
                 string role = sj != null ? (sj.GetStr("role") ?? "") : "";
                 JObj acc = FindByField(accs, "staff_name", nm);
-                string status = acc != null ? (acc.GetStr("status") ?? "正常") : "正常";
+                string status = IsSuspended(db, nm) ? "休止中" : "正常";
                 if (status == "休止中") continue;
                 bool custom = acc != null && IsTrue(acc.Get("is_custom"));
                 if (!first) sb.Append(',');
@@ -524,6 +551,11 @@ namespace CarePortal
 
             JObj db = null;
             try { db = LoadDb(); } catch { db = null; }
+            if (IsSuspended(db, name))
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"suspended\"}");
+                return;
+            }
             string[] cred = GetCredentials(db, name);
             if (cred == null || cred[0] != sid || cred[1] != pw)
             {
@@ -743,6 +775,7 @@ namespace CarePortal
             JObj db = null;
             try { db = LoadDb(); } catch { db = null; }
             if (req == null || db == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            if (IsSuspended(db, req.GetStr("name") ?? "")) { SendJsonResponse(stream, 403, "{\"error\":\"suspended\"}"); return; }
             bool locked;
             bool ok = CheckPinWithLock(db, req.GetStr("name") ?? "", req.GetStr("pin") ?? "", out locked);
             SendPinResult(stream, ok, locked, "{\"success\":true}");
@@ -1181,6 +1214,7 @@ namespace CarePortal
                                 // [Claude修正] 伏せ字で届いたパスワードを、サーバー側の本物で補う
                                 try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
                                 File.WriteAllText(_dbFile, postData, Encoding.UTF8);
+                                try { DropSuspendedSessions(postData); } catch { }
                                 try
                                 {
                                     string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");

@@ -296,7 +296,8 @@ function cpDaysUntil(dateStr) {
 const CP_LEDGERS = {
  vaccines: { label: "予防接種記録", render: () => renderOfficeVaccines() },
  fire_drills: { label: "消防・避難訓練記録", render: () => renderOfficeFireDrills() },
- recreations: { label: "レクリエーション記録", render: () => renderRecreationTable() }
+ recreations: { label: "レクリエーション記録", render: () => renderRecreationTable() },
+ incidents: { label: "事故・ヒヤリハット報告書", render: () => renderOfficeIncidents() }
 };
 
 function cpLedgerStaff() {
@@ -9765,17 +9766,65 @@ function confirmMonthlyNotice(id) {
  const notice = (db.data.monthly_notices || []).find(n => n.id === id);
  if (!notice) return;
  if (!Array.isArray(notice.confirmed_staff)) notice.confirmed_staff = [];
+ if (!notice.confirmed_versions || typeof notice.confirmed_versions !== "object") notice.confirmed_versions = {};
 
+ // [Claude修正] 旧実装は押すたびに確認済み/未確認を切り替えていたため、
+ // 追記後に「追記も見ました（再チェック）」を押すと、逆に確認が外れていた。
+ // 確認済みの時だけ取り消し、それ以外 (未確認・追記あり) は最新の内容を確認したことにする
+ const st = getNoticeConfirmationStatus(notice, currentStaff);
+ if (st.confirmed) {
  const idx = notice.confirmed_staff.indexOf(currentStaff);
- if (idx !== -1) {
- notice.confirmed_staff.splice(idx, 1);
+ if (idx !== -1) notice.confirmed_staff.splice(idx, 1);
+ delete notice.confirmed_versions[currentStaff];
  } else {
- notice.confirmed_staff.push(currentStaff);
+ if (!notice.confirmed_staff.includes(currentStaff)) notice.confirmed_staff.push(currentStaff);
+ notice.confirmed_versions[currentStaff] = notice.last_updated_at || notice.created_at || toLocalDateTimeStr(new Date());
  }
 
  db.save();
  renderMonthlyNotices();
  checkGlobalAlerts();
+}
+
+// [Claude修正] 業務連絡への追記。ボタンと入力画面はあったが、処理 (関数) が作られておらず押しても何も起きなかった。
+// 申し送りの追記 (openAddDailyNotebookUpdateModal / submitDailyNotebookUpdate) と同じ仕組みにした
+function openAddMonthlyNoticeUpdateModal(id) {
+ const n = (db.data.monthly_notices || []).find(x => x.id === id);
+ if (!n) return;
+ document.getElementById("noticeUpdateParentId").value = id;
+ document.getElementById("noticeUpdateTargetTitle").textContent = n.title || "";
+ document.getElementById("noticeUpdateContent").value = "";
+ openModal("monthlyNoticeUpdateModal");
+}
+
+function submitMonthlyNoticeUpdate() {
+ const id = Number(document.getElementById("noticeUpdateParentId").value);
+ const content = (document.getElementById("noticeUpdateContent").value || "").trim();
+ const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "職員";
+ if (!content) {
+ alert("追記・変更内容を入力してください。");
+ return;
+ }
+ const n = (db.data.monthly_notices || []).find(x => x.id === id);
+ if (!n) return;
+ if (!Array.isArray(n.updates)) n.updates = [];
+ const now = new Date();
+ const nowStr = toLocalDateTimeStr(now);
+ n.updates.push({ id: Date.now(), staff_name: currentStaff, content: content, created_at: nowStr });
+ // 確認済みかどうかの比較に使うため秒まで記録する (分単位だと、同じ分に確認した職員に「追記あり」が出なかった)
+ const stamp = nowStr + ":" + String(now.getSeconds()).padStart(2, "0");
+ n.last_updated_at = stamp;
+ n.last_updated_by = currentStaff;
+ // 追記した本人は確認済み。ほかの職員には「追記あり（要再チェック）」と表示される
+ if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
+ if (!n.confirmed_staff.includes(currentStaff)) n.confirmed_staff.push(currentStaff);
+ if (!n.confirmed_versions || typeof n.confirmed_versions !== "object") n.confirmed_versions = {};
+ n.confirmed_versions[currentStaff] = stamp;
+ db.save();
+ closeModal("monthlyNoticeUpdateModal");
+ renderMonthlyNotices();
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+ alert("業務連絡に追記を登録しました。ほかの職員には再確認が表示されます。");
 }
 
 function deleteMonthlyNotice(id) {
@@ -10048,7 +10097,7 @@ function switchOfficeTab(tab) {
  suppliers: "tabOfficeSuppliers", billing: "tabOfficeBilling", deposit: "tabOfficeDeposit",
  shift: "tabOfficeShift", vehicle: "tabOfficeVehicle", vaccine: "tabOfficeVaccine",
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
- incidents: "tabCareIncidents", care_renewal: "tabOfficeCareRenewal",
+ care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth"
  };
 
@@ -11224,7 +11273,7 @@ function openNewIncidentModal() {
 		const incType = document.getElementById("incType");
 		if (incType) incType.value = "ヒヤリハット";
 		const incPlace = document.getElementById("incPlace");
-		if (incPlace) incPlace.value = "居室";
+		if (incPlace) incPlace.value = "";
 		const now = new Date();
 		const nowIsoStr = typeof toLocalDateTimeStr === "function"
 			? toLocalDateTimeStr(now).slice(0, 16).replace(" ", "T")
@@ -11261,12 +11310,8 @@ function openNewIncidentModal() {
 }
 
 function deleteIncident(id) {
-	if (!confirm("この事故・ヒヤリハット報告書を削除してもよろしいですか？")) return;
-	if (!Array.isArray(db.data.incidents)) return;
-	db.data.incidents = db.data.incidents.filter(x => Number(x.id) !== Number(id));
-	db.save();
-	renderOfficeIncidents();
-	alert("報告書を削除しました。");
+	// [Claude修正] 事故・ヒヤリハット報告書は記録として残すため、削除せず取消にする
+	cpVoidLedgerRecord('incidents', id);
 }
 
 function renderOfficeIncidents() {
@@ -11281,7 +11326,7 @@ function renderOfficeIncidents() {
 			return;
 		}
 
-		list.forEach(inc => {
+		cpLedgerOrder(list).forEach(inc => {
 			const res = (gState.residents || []).find(x => x.id === inc.resident_id);
 			const timeDisplay = inc.occurred_at || inc.date || '-';
 			const repType = inc.report_type || inc.level || 'ヒヤリハット';
@@ -11303,11 +11348,11 @@ function renderOfficeIncidents() {
 				<td>${escapeHtml(supervisor)}</td>
 				<td><span class="badge" style="background:#dbeafe; color:#1e40af;">${escapeHtml(st)}</span></td>
 				<td style="white-space:nowrap; text-align:center;">
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px;" onclick="editIncident(${inc.id})">修正・追記</button>
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#fff1f2; color:#9f1239; border:1px solid #fecdd3;" onclick="deleteIncident(${inc.id})">削除</button>
+					${cpLedgerActions('incidents', inc, 'editIncident').replace('訂正', '修正・追記')}
 					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="printIncidentReport(${inc.id})">印刷</button>
 				</td>
 			`;
+			if (inc.voided) cpMarkVoidedRow(tr);
 			tbody.appendChild(tr);
 		});
 	});
@@ -12914,6 +12959,9 @@ function updateResidentStatus(resId, status) {
 
 function renderCareExpiryNotes() {
  const area = document.getElementById("careExpiryNotesArea");
+ // [Claude修正] この表示欄は「要介護認定・更新管理」タブへの作り替えで無くなったため、無い場合は何もしない
+ // (旧実装のままだと、事務ポータルを開いた時点でエラーになり画面が表示されなかった)
+ if (!area) return;
  area.innerHTML = "";
  const today = new Date();
 
@@ -15000,7 +15048,7 @@ async function verifyStaffPin() {
  gEnteredPin = "";
  } else {
  const err = document.getElementById("staffPinError");
- if (err) err.textContent = r.status === 423 ? "失敗が続いたため5分間ロック中です" : "暗証番号が一致しません";
+ if (err) err.textContent = r.status === 423 ? "失敗が続いたため5分間ロック中です" : (r.info && r.info.error === "suspended") ? "このアカウントはロック（休止中）されています" : "暗証番号が一致しません";
  gEnteredPin = "";
  updatePinDots();
  renderRandomKeypad();
@@ -15167,6 +15215,10 @@ function toggleStaffAccountStatus(staffName) {
   const s = (gState.stamps || []).find(x => (x.name || x) === staffName);
   if (!s) return;
   const newStatus = s.status === "休止中" ? "正常" : "休止中";
+  // [Claude修正] 操作中の本人をロックすると、その場で使えなくなるため止める
+  const me = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "";
+  if (newStatus === "休止中" && staffName === me) { alert("ご自身のアカウントはロックできません。別の管理者・事務員が操作してください。"); return; }
+  if (!confirm(`【${staffName}】様のアカウントを「${newStatus}」にしますか？` + (newStatus === "休止中" ? "\nロック中はログインと職員切り替えができなくなります。" : ""))) return;
   s.status = newStatus;
   db.data.stamps = gState.stamps;
   db.save();
@@ -15209,6 +15261,27 @@ function submitTwoPersonReset() {
   }
   if (!app2Pin || app2Pin.length !== 4) {
     alert("立ち会い承認者の暗証番号(4桁)を入力してください。");
+    return;
+  }
+
+  // [Claude修正] サーバー稼働時は暗証番号を端末に持たないため、照合と初期化はサーバーで行う
+  // (端末で照合すると、暗証番号を変更済みの職員は一致せず、初期化もサーバーに反映されなかった)
+  if (db && db.isServerMode) {
+    if (currentStaff === app2Name) { alert("操作者と立ち会い承認者は別の2名にしてください。"); return; }
+    if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？`)) return;
+    cpPostJson('/api/pin-reset', { target: targetName, approver1: currentStaff, approver1_pin: app1Pin, approver2: app2Name, approver2_pin: app2Pin }).then(r => {
+      if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
+      if (r.info && r.info.error === "pin_mismatch_2") { alert("立ち会い承認者（承認者2）の暗証番号が正しくありません。"); return; }
+      if (r.info && r.info.error === "pin_mismatch") { alert("操作者（承認者1）の暗証番号が正しくありません。"); return; }
+      if (!r.ok) { alert("承認者の役職（管理者・事務員）または入力内容が正しくありません。初期化は行っていません。"); return; }
+      const t = (gState.stamps || []).find(s => (s.name || s) === targetName);
+      if (t) t.is_initial_pin = true;
+      closeModal("resetStaffPinModal");
+      renderOfficeStaffAuth();
+      if (typeof updateStaffRoleUI === "function") updateStaffRoleUI();
+      if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+      alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を「0000」に初期化しました。`);
+    });
     return;
   }
 
@@ -15322,7 +15395,6 @@ if (typeof window !== "undefined") {
  window.submitInitialPinModal = submitInitialPinModal;
  window.renderOfficeBackup = renderOfficeBackup;
  window.renderOfficeStaffAuth = renderOfficeStaffAuth;
- window.selectTargetForReset = selectTargetForReset;
  window.submitTwoPersonReset = submitTwoPersonReset;
  window.resetStaffPin = resetStaffPin;
  window.openTemplateManageModal = openTemplateManageModal;
@@ -15741,6 +15813,11 @@ async function handleLoginSubmit() {
   try { info = await res.json(); } catch (e) {}
   if (res.status === 423) {
     alert(`ログインに続けて失敗したため、一時的にロックしています。\n約${Math.ceil((info.retry_after || 300) / 60)}分後にもう一度お試しください。`);
+    return;
+  }
+  // [Claude修正] 休止中 (ロック中) のアカウント
+  if (res.status === 403 && info.error === "suspended") {
+    alert("このアカウントは現在ロック（休止中）されています。\n管理者または事務員にお問い合わせください。");
     return;
   }
   if (!res.ok || !info.token) {
