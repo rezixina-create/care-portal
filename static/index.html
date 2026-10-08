@@ -3544,7 +3544,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261008_c4"></script>
+ <script src="app.js?v=20261008_c5"></script>
   
 
   <!-- ============================================================ -->
@@ -4121,7 +4121,7 @@
 				<button type="button" class="modal-close-btn" onclick="closeModal('auditLogModal')">&times;</button>
 			</div>
 			<p style="font-size:12.5px; color:#475569; margin:6px 0 10px 0;">記録は削除されず、取消・訂正・確認の操作が「いつ・誰が・何を・なぜ」の形で残っています。条件で絞り込んで確認・印刷できます。</p>
-			<div style="display:flex; flex-wrap:wrap; gap:8px; align-items:flex-end; margin-bottom:10px; font-size:12.5px;">
+			<div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:8px; align-items:end; margin-bottom:10px; font-size:12.5px;">
 				<div><label style="display:block; font-weight:bold;">操作</label>
 					<select id="auditFilterType" class="form-control" style="font-size:12.5px;" onchange="renderAuditLog()">
 						<option value="">すべて</option><option value="取消">取消</option><option value="取消を戻す">取消を戻す</option><option value="訂正・変更">訂正・変更</option><option value="確認">確認・確認の取消</option><option value="その他">その他（終了・アラート・職員名簿）</option>
@@ -4153,17 +4153,17 @@
 				<h3>利用者別・期間を指定して記録を印刷</h3>
 				<button type="button" class="modal-close-btn" onclick="closeModal('periodPrintModal')">&times;</button>
 			</div>
-			<div style="display:grid; gap:10px; font-size:13px; margin-top:8px;">
-				<div><label style="display:block; font-weight:bold;">利用者</label><select id="ppResident" class="form-control"></select></div>
+			<div style="display:grid; grid-template-columns:minmax(0, 1fr); gap:10px; font-size:13px; margin-top:8px;">
+				<div><label style="display:block; font-weight:bold;">利用者</label><select id="ppResident" class="form-control" style="width:100%; box-sizing:border-box;"></select></div>
 				<div style="display:flex; gap:8px;">
-					<div style="flex:1;"><label style="display:block; font-weight:bold;">開始日</label><input type="date" id="ppFrom" class="form-control"></div>
-					<div style="flex:1;"><label style="display:block; font-weight:bold;">終了日</label><input type="date" id="ppTo" class="form-control"></div>
+					<div style="flex:1; min-width:0;"><label style="display:block; font-weight:bold;">開始日</label><input type="date" id="ppFrom" class="form-control" style="width:100%; box-sizing:border-box;"></div>
+					<div style="flex:1; min-width:0;"><label style="display:block; font-weight:bold;">終了日</label><input type="date" id="ppTo" class="form-control" style="width:100%; box-sizing:border-box;"></div>
 				</div>
 				<div><label style="display:block; font-weight:bold;">印刷する記録</label>
-					<label style="margin-right:10px;"><input type="checkbox" id="ppCare" checked> 介護記録（経過記録）</label>
-					<label style="margin-right:10px;"><input type="checkbox" id="ppVitals" checked> バイタル</label>
-					<label style="margin-right:10px;"><input type="checkbox" id="ppMeds" checked> 服薬・点眼</label>
-					<label><input type="checkbox" id="ppTurns" checked> 夜間巡視・体位変換</label>
+					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppCare" checked> 介護記録（経過記録）</label>
+					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppVitals" checked> バイタル</label>
+					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppMeds" checked> 服薬・点眼</label>
+					<label style="display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppTurns" checked> 夜間巡視・体位変換</label>
 				</div>
 				<div><label><input type="checkbox" id="ppIncludeVoided" checked> 取消済みの記録も含める（取消の日時・職員・理由を表示）</label></div>
 			</div>

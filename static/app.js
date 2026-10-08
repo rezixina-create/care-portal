@@ -5309,6 +5309,20 @@ function renderAuditLog() {
  return;
  }
  const color = t => t === "取消" ? "#991b1b" : (t === "訂正・変更" ? "#92400e" : (t === "取消を戻す" ? "#1d4ed8" : "#334155"));
+ // [Claude修正] スマホなど幅が狭い画面では、表ではなくカードで表示する（表だと横にはみ出し、行が縦に長くなるため）
+ const narrow = window.innerWidth < 700;
+ const thead = tbody.parentElement ? tbody.parentElement.querySelector("thead") : null;
+ if (thead) thead.style.display = narrow ? "none" : "";
+ if (narrow) {
+ tbody.innerHTML = list.slice(0, 1000).map(e => `
+ <tr><td colspan="7" style="padding:8px 10px; border-bottom:1px solid #e2e8f0;">
+ <div style="display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap;"><strong style="color:${color(e.type)};">${escapeHtml(e.type)}</strong><span style="color:#64748b;">${escapeHtml(e.at || "")}</span></div>
+ <div style="margin-top:2px;">${escapeHtml(e.kind)}${e.resident ? " / " + escapeHtml(e.resident) : ""} / 職員: ${escapeHtml(e.by || "-")}</div>
+ <div style="margin-top:2px; color:#334155; white-space:pre-wrap;">${escapeHtml((e.summary || "").slice(0, 120))}</div>
+ ${e.detail ? `<div style="margin-top:2px; color:#475569; white-space:pre-wrap;">${escapeHtml((e.detail || "").slice(0, 300))}</div>` : ""}
+ </td></tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#64748b;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
+ return;
+ }
  tbody.innerHTML = list.slice(0, 1000).map(e => `
  <tr>
  <td>${escapeHtml(e.at || "")}</td>
