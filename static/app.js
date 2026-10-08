@@ -3001,7 +3001,7 @@ function confirmAllMonthlyNoticesForStaff() {
  const staff = (document.getElementById("currentStaff")?.value) || "";
  if (!staff) return;
  const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
- (db.data.monthly_notices || []).forEach(n => {
+ (db.data.monthly_notices || []).filter(n => !n.voided).forEach(n => {
  if (n.month === curMonth) {
  if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
  if (!n.confirmed_staff.includes(staff)) n.confirmed_staff.push(staff);
@@ -3304,7 +3304,7 @@ function checkGlobalAlerts() {
   // 6. 【介護専用：月間業務連絡 未確認アラート】
   const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
   const curMonth = todayStr.slice(0, 7);
-  const monthlyNotices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+  const monthlyNotices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth);
   if (currentStaff && monthlyNotices.length > 0) {
     const unconfirmed = monthlyNotices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
     if (unconfirmed.length > 0 && !isAlertDismissed('monthly_notices_' + currentStaff)) {
@@ -3445,7 +3445,7 @@ function renderCalendar() {
  (db.data.vitals || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
  (db.data.excretions || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
  (db.data.meals || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
- (db.data.notebooks || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
+ (db.data.notebooks || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
 
  const daysRow = document.getElementById("calDaysRow");
  if (!daysRow) return;
@@ -8322,6 +8322,9 @@ function renderMedTable() {
  });
 }
 
+// [Claude修正] 記録を「取消」にする共通処理（消さずに、取消の日時・職員・理由を残す）
+function cpVoidRecord(rec, label) { return cpVoidMedRecord(rec, label); }
+
 // [Claude修正] 服薬・点眼の実施記録を「取消」にする（消さずに、取消の日時・職員・理由を残す）
 function cpVoidMedRecord(rec, label) {
  if (!rec || rec.voided) return false;
@@ -9406,7 +9409,7 @@ function renderNotebook() {
 	const list = document.getElementById("notebookList");
 	if (!list) return;
 	list.innerHTML = "";
-	const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
+	const notebooks = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない（データには残る）
 	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
 	if (notebooks.length === 0) {
@@ -9516,7 +9519,7 @@ function renderMonthlyNotices() {
 	if (alertArea) alertArea.innerHTML = "";
 
 	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
-	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	const notices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth); // [Claude修正] 取消済みは表示しない（データには残る）
 	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
 	// 未確認アラート表示
@@ -9634,7 +9637,7 @@ function toggleNotebookStamp() {
 	const nowStr = new Date().toISOString();
 
 	// 1. 本日の引き継ぎ・申し送り事項を一括確認
-	const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
+	const notebooks = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない（データには残る）
 	notebooks.forEach(nb => {
 		if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
 		if (!nb.confirmed_versions) nb.confirmed_versions = {};
@@ -9645,7 +9648,7 @@ function toggleNotebookStamp() {
 
 	// 2. 当月の月間業務連絡を一括確認
 	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
-	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	const notices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth); // [Claude修正] 取消済みは表示しない（データには残る）
 	notices.forEach(n => {
 		if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
 		if (!n.confirmed_versions) n.confirmed_versions = {};
@@ -9678,10 +9681,12 @@ function confirmDailyNotebookItem(id) {
 		const idx = nb.confirmed_staff.indexOf(currentStaff);
 		if (idx !== -1) nb.confirmed_staff.splice(idx, 1);
 		delete nb.confirmed_versions[currentStaff];
+		cpLogConfirm(nb, currentStaff, "確認を取消");
 	} else {
 		if (!nb.confirmed_staff.includes(currentStaff)) {
 			nb.confirmed_staff.push(currentStaff);
 		}
+		cpLogConfirm(nb, currentStaff, "確認");
 		const nowStr = nb.last_updated_at || nb.created_at || new Date().toISOString();
 		nb.confirmed_versions[currentStaff] = nowStr;
 	}
@@ -9737,9 +9742,17 @@ function submitDailyNotebookUpdate() {
 	alert("申し送り事項に追記を登録しました。他職員へ再確認が表示されます。");
 }
 
+// [Claude修正] 申し送り・業務連絡の「確認」「確認の取消」を、日時つきで記録に残す
+function cpLogConfirm(item, staff, action) {
+ if (!item) return;
+ if (!Array.isArray(item.confirm_log)) item.confirm_log = [];
+ item.confirm_log.push({ staff: staff, action: action, at: toLocalDateTimeStr(new Date()) });
+}
+
 function deleteDailyNotebookItem(id) {
-	if (!confirm("この申し送り事項を削除してもよろしいですか？")) return;
-	db.data.notebooks = (db.data.notebooks || []).filter(x => x.id !== id);
+	// [Claude修正] 申し送りは消さずに「取消」として残す（理由必須）
+	const nb = (db.data.notebooks || []).find(x => x.id === id);
+	if (!cpVoidRecord(nb, "この申し送り事項")) return;
 	db.save();
 	renderNotebook();
 }
@@ -9783,7 +9796,7 @@ function resolveNotebook(id) {
 
 function toggleNotebookStamp() {
  const staff = document.getElementById("currentStaff").value;
- const isStamped = (db.data.notebook_stamps || []).some(s => s.date === gState.selectedDate && s.staff_name === staff);
+ const isStamped = (db.data.notebook_stamps || []).some(s => !s.voided && s.date === gState.selectedDate && s.staff_name === staff);
  if (isStamped) {
  removeNotebookStamp(gState.selectedDate, staff);
  } else {
@@ -9793,9 +9806,9 @@ function toggleNotebookStamp() {
 
 function stampNotebook() {
  const staff = document.getElementById("currentStaff").value;
- const exists = (db.data.notebook_stamps || []).some(s => s.date === gState.selectedDate && s.staff_name === staff);
+ const exists = (db.data.notebook_stamps || []).some(s => !s.voided && s.date === gState.selectedDate && s.staff_name === staff);
  if (!exists) {
- db.data.notebook_stamps.push({ date: gState.selectedDate, staff_name: staff });
+ db.data.notebook_stamps.push({ id: Date.now(), date: gState.selectedDate, staff_name: staff, stamped_at: toLocalDateTimeStr(new Date()) });
  db.save();
  loadDateRecords(gState.selectedDate);
  }
@@ -9803,7 +9816,9 @@ function stampNotebook() {
 
 function removeNotebookStamp(date, staffName) {
  if (confirm(`「${staffName}」の確認を取り消しますか？`)) {
- db.data.notebook_stamps = (db.data.notebook_stamps || []).filter(s => !(s.date === date && s.staff_name === staffName));
+ // [Claude修正] 確認印は消さずに、取り消した日時と職員を残す
+ const now = toLocalDateTimeStr(new Date());
+ (db.data.notebook_stamps || []).forEach(s => { if (!s.voided && s.date === date && s.staff_name === staffName) { s.voided = true; s.voided_at = now; s.voided_by = cpLedgerStaff(); } });
  db.save();
  loadDateRecords(date);
  }
@@ -9844,7 +9859,7 @@ function renderMonthlyNotices() {
 	if (alertArea) alertArea.innerHTML = "";
 
 	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
-	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	const notices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth); // [Claude修正] 取消済みは表示しない（データには残る）
 	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
 	// 未確認アラート表示
@@ -10014,8 +10029,10 @@ function confirmMonthlyNotice(id) {
  const idx = notice.confirmed_staff.indexOf(currentStaff);
  if (idx !== -1) notice.confirmed_staff.splice(idx, 1);
  delete notice.confirmed_versions[currentStaff];
+ cpLogConfirm(notice, currentStaff, "確認を取消");
  } else {
  if (!notice.confirmed_staff.includes(currentStaff)) notice.confirmed_staff.push(currentStaff);
+ cpLogConfirm(notice, currentStaff, "確認");
  notice.confirmed_versions[currentStaff] = notice.last_updated_at || notice.created_at || toLocalDateTimeStr(new Date());
  }
 
@@ -10066,8 +10083,9 @@ function submitMonthlyNoticeUpdate() {
 }
 
 function deleteMonthlyNotice(id) {
- if (!confirm("この月間業務連絡を削除してもよろしいですか？")) return;
- db.data.monthly_notices = (db.data.monthly_notices || []).filter(n => n.id !== id);
+ // [Claude修正] 業務連絡は消さずに「取消」として残す（理由必須）
+ const n = (db.data.monthly_notices || []).find(x => x.id === id);
+ if (!cpVoidRecord(n, "この月間業務連絡")) return;
  db.save();
  renderMonthlyNotices();
  checkGlobalAlerts();
