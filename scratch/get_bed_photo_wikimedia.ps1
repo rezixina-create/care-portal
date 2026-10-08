@@ -1,4 +1,4 @@
-# get_bed_photo_wikimedia.ps1
+﻿# get_bed_photo_wikimedia.ps1
 $headers = @{ "User-Agent" = "CarePortalBot/1.0 (contact: test@example.com)" }
 
 $terms = @(

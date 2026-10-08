@@ -1,4 +1,4 @@
-# Headless Edge JavaScript Syntax & Test Suite Runner
+﻿# Headless Edge JavaScript Syntax & Test Suite Runner
 $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
 $testHtml = (Resolve-Path "$PSScriptRoot\..\test_suite.html").Path
 $testUrl = "file:///" + ($testHtml -replace '\\', '/')

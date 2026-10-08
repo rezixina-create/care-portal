@@ -1,4 +1,4 @@
-# Care Portal Test Runner (Pure ASCII, compatible with PS 5.1)
+﻿# Care Portal Test Runner (Pure ASCII, compatible with PS 5.1)
 $ErrorActionPreference = "Continue"
 $carePortalDir = (Get-Item "$PSScriptRoot\..").FullName
 $appJsPath = Join-Path $carePortalDir "app.js"

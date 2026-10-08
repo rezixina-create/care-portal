@@ -1,4 +1,4 @@
-# Dynamic Onclick Handlers Check
+﻿# Dynamic Onclick Handlers Check
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $js = [System.IO.File]::ReadAllText("$dir\app.js", [System.Text.Encoding]::UTF8)

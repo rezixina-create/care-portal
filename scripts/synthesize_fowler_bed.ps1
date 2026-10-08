@@ -1,4 +1,4 @@
-# Synthesize Fowler Bed Photo for Suzuki-san (Pure ASCII)
+﻿# Synthesize Fowler Bed Photo for Suzuki-san (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

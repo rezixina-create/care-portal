@@ -1,4 +1,4 @@
-# Apply Clean, Warm, Natural Flux Seed 2024 Image for Suzuki-san (Pure ASCII)
+﻿# Apply Clean, Warm, Natural Flux Seed 2024 Image for Suzuki-san (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

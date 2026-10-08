@@ -1,4 +1,4 @@
-# Server Syntax & AST Check
+﻿# Server Syntax & AST Check
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $serverPs1 = "$dir\server.ps1"

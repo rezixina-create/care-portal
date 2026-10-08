@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 function To-Str($codes) {
     $chars = foreach ($c in $codes) { [char]$c }

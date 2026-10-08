@@ -1,4 +1,4 @@
-# Generate Perfect Gatch-up Bed Photo via Flux (Pure ASCII)
+﻿# Generate Perfect Gatch-up Bed Photo via Flux (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Drawing
 

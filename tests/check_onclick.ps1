@@ -1,4 +1,4 @@
-# Static Onclick Handlers Check
+﻿# Static Onclick Handlers Check
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $html = [System.IO.File]::ReadAllText("$dir\index.html", [System.Text.Encoding]::UTF8)

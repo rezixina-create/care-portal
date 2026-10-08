@@ -1,4 +1,4 @@
-# download_bed_senior.ps1
+﻿# download_bed_senior.ps1
 $ids = @(
     "photo-1678940806728-cd5a451ee1ea",
     "photo-1765896387454-3c29c0473615",

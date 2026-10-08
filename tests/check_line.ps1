@@ -1,4 +1,4 @@
-$appJsPath = Join-Path (Resolve-Path "$PSScriptRoot\..") "app.js"
+﻿$appJsPath = Join-Path (Resolve-Path "$PSScriptRoot\..") "app.js"
 $lines = [System.IO.File]::ReadAllLines($appJsPath, [System.Text.Encoding]::UTF8)
 
 for ($idx = 3044; $idx -lt $lines.Length; $idx++) {

@@ -1,4 +1,4 @@
-# Realistic Suzuki Bed Portrait Synthesizer (Pure ASCII)
+﻿# Realistic Suzuki Bed Portrait Synthesizer (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

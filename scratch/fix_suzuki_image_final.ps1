@@ -1,4 +1,4 @@
-Add-Type -AssemblyName System.Drawing
+﻿Add-Type -AssemblyName System.Drawing
 
 $srcPath = "C:\Users\Owner\.gemini\antigravity\brain\4b265d6d-9c8d-442b-afe5-5771244cf85d\resident_sato_photo_1790853080369.jpg"
 $dstPath = "C:\Users\Owner\.gemini\antigravity\scratch\care_portal\data\photos\personal\resident_suzuki_snap.jpg"

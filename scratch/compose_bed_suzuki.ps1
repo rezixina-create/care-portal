@@ -1,4 +1,4 @@
-Add-Type -AssemblyName System.Drawing
+﻿Add-Type -AssemblyName System.Drawing
 
 $srcSuzuki = "C:\Users\Owner\.gemini\antigravity\scratch\care_portal\data\photos\personal\resident_suzuki_snap.jpg"
 $srcBed = "C:\Users\Owner\.gemini\antigravity\scratch\care_portal\tests\tome_1.jpg"

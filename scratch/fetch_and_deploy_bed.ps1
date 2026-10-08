@@ -1,4 +1,4 @@
-# fetch_and_deploy_bed.ps1 - Pure ASCII
+﻿# fetch_and_deploy_bed.ps1 - Pure ASCII
 $ErrorActionPreference = "Continue"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $portalDir = Split-Path -Parent $scriptDir

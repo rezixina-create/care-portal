@@ -1,4 +1,4 @@
-# One-Step Master Update Script (100% ASCII)
+﻿# One-Step Master Update Script (100% ASCII)
 $ErrorActionPreference = "Stop"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $portalDir = Split-Path -Parent $scriptDir

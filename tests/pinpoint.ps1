@@ -1,4 +1,4 @@
-# Pinpoint line of bracket imbalance
+﻿# Pinpoint line of bracket imbalance
 $appJsPath = Join-Path (Resolve-Path "$PSScriptRoot\..") "app.js"
 $appJsCode = [System.IO.File]::ReadAllText($appJsPath, [System.Text.Encoding]::UTF8)
 

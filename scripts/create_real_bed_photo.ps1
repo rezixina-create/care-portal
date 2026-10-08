@@ -1,4 +1,4 @@
-# Photorealistic Japanese Care Room Bed Resting Synthesizer (Pure ASCII)
+﻿# Photorealistic Japanese Care Room Bed Resting Synthesizer (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

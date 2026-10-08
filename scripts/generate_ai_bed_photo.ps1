@@ -1,4 +1,4 @@
-# Generate Brand New AI Photo via Pollinations Flux (Pure ASCII)
+﻿# Generate Brand New AI Photo via Pollinations Flux (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseDir = Split-Path -Parent $PSScriptRoot

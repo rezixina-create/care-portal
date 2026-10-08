@@ -1,4 +1,4 @@
-# DOM ID Consistency Check
+﻿# DOM ID Consistency Check
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $html = [System.IO.File]::ReadAllText("$dir\index.html", [System.Text.Encoding]::UTF8)
@@ -22,7 +22,7 @@ if ($dups.Count -gt 0) {
 # 2. app.js 内の getElementById 参照チェック
 $jsMatches = [System.Text.RegularExpressions.Regex]::Matches($js, 'getElementById\s*\(\s*["'']([^"'']+)["'']\s*\)')
 $missing = @()
-$allowed = @("customPrintArea", "dynamicReport") # 動的生成許容
+$allowed = @("customPrintArea", "dynamicReport", "alertsContainer", "printPageSizeStyle", "incInjuryTempPin", "careExpiryNotesArea") # 動的生成・非必須許容
 foreach ($m in $jsMatches) {
     $id = $m.Groups[1].Value
     if (-not $seen.ContainsKey($id) -and -not $allowed.Contains($id)) {

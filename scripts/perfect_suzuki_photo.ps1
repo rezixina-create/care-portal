@@ -1,4 +1,4 @@
-# Perfect Suzuki Photo Script (Pure ASCII)
+﻿# Perfect Suzuki Photo Script (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Drawing
 

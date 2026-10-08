@@ -1,4 +1,4 @@
-# B5 Care Record Features Verification
+﻿# B5 Care Record Features Verification
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $html = [System.IO.File]::ReadAllText("$dir\index.html", [System.Text.Encoding]::UTF8)

@@ -1,4 +1,4 @@
-# Apply Professional Portrait Bokeh Effect for Suzuki-san (Pure ASCII)
+﻿# Apply Professional Portrait Bokeh Effect for Suzuki-san (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

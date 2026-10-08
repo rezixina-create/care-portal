@@ -1,4 +1,4 @@
-# Management Features Verification (Staff, Resident, Supplier, Stamp)
+﻿# Management Features Verification (Staff, Resident, Supplier, Stamp)
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $html = [System.IO.File]::ReadAllText("$dir\index.html", [System.Text.Encoding]::UTF8)
@@ -24,7 +24,7 @@ foreach ($el in $reqElements) {
 $reqFunctions = @(
     "openAddResidentModal", "openEditResidentModal", "submitResidentForm",
     "openStaffModal", "renderStaffModalList", "submitNewStaffStamp", "deleteStaffStamp",
-    "openSupplierModal", "submitNewSupplier", "deleteSupplier",
+    "openSupplierModal", "submitSupplierModal", "deleteSupplier",
     "toggleNotebookStamp", "removeNotebookStamp",
     "getStaffRoleRank", "sortStaffList", "autoSortStaffByRank", "moveStaffOrder"
 )

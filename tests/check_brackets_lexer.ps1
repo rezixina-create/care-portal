@@ -1,4 +1,4 @@
-# Precise Bracket Lexer in PowerShell
+﻿# Precise Bracket Lexer in PowerShell
 param([string]$FilePath = "app.js")
 
 $code = [System.IO.File]::ReadAllText($FilePath, [System.Text.Encoding]::UTF8)

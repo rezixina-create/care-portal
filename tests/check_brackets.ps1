@@ -1,4 +1,4 @@
-# Robust JavaScript Syntax Checker using Node AST
+﻿# Robust JavaScript Syntax Checker using Node AST
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 

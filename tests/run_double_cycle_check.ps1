@@ -1,4 +1,4 @@
-# Double Cycle Verification Runner
+﻿# Double Cycle Verification Runner
 # Guarantees 0 bugs across 2 consecutive full cycles as requested by user
 $ErrorActionPreference = "Continue"
 

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 
 # Wikimedia Commons headers
 $wc = New-Object System.Net.WebClient

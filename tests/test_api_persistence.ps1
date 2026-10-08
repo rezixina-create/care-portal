@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 
 $baseDir = Resolve-Path .
 $serverScript = Join-Path $baseDir "server.ps1"

@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Continue"
+﻿$ErrorActionPreference = "Continue"
 $job = Start-Process powershell.exe -ArgumentList "-ExecutionPolicy Bypass -File server.ps1 -NoBrowser -NoTunnel" -PassThru
 Start-Sleep -Seconds 3
 

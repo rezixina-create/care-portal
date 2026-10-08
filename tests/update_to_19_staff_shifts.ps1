@@ -1,4 +1,4 @@
-$ErrorActionPreference = "Stop"
+﻿$ErrorActionPreference = "Stop"
 $dbPath = "$PSScriptRoot\..\data\portal_database.json"
 $content = Get-Content -Raw -Encoding UTF8 $dbPath
 $db = $content | ConvertFrom-Json

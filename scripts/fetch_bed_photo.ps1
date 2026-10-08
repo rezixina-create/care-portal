@@ -1,4 +1,4 @@
-# PowerShell script to fetch bedridden/gatch-up photo (Pure ASCII)
+﻿# PowerShell script to fetch bedridden/gatch-up photo (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseDir = Split-Path -Parent $PSScriptRoot

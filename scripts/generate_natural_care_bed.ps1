@@ -1,4 +1,4 @@
-# Generate Bright, Natural Japanese Care Bed Photos (Pure ASCII)
+﻿# Generate Bright, Natural Japanese Care Bed Photos (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Drawing
 

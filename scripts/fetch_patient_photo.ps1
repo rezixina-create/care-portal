@@ -1,4 +1,4 @@
-# Fetch Patient Photo from Wikimedia API (Pure ASCII)
+﻿# Fetch Patient Photo from Wikimedia API (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseDir = Split-Path -Parent $PSScriptRoot

@@ -1,4 +1,4 @@
-# check_patient_and_nursing.ps1
+﻿# check_patient_and_nursing.ps1
 $url1 = "https://commons.wikimedia.org/wiki/Special:FilePath/In-_patient.JPG?width=800"
 curl.exe -s -L -H "User-Agent: Mozilla/5.0" "$url1" -o "tests\in_patient.jpg"
 

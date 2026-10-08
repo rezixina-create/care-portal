@@ -1,4 +1,4 @@
-# Dignified High-Definition Crop for Suzuki-san (Pure ASCII)
+﻿# Dignified High-Definition Crop for Suzuki-san (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

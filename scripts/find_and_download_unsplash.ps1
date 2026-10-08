@@ -1,4 +1,4 @@
-# Find and Download Real Unsplash Photos (Pure ASCII)
+﻿# Find and Download Real Unsplash Photos (Pure ASCII)
 $candidateDir = Join-Path $PSScriptRoot "..\tests\candidates"
 if (-not (Test-Path $candidateDir)) {
     New-Item -ItemType Directory -Path $candidateDir -Force | Out-Null

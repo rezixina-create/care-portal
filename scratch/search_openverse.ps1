@@ -1,4 +1,4 @@
-$headers = @{ "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
+﻿$headers = @{ "User-Agent" = "Mozilla/5.0 (Windows NT 10.0; Win64; x64)" }
 $queries = @(
     "elderly recliner nursing home",
     "elderly wheelchair indoor window",

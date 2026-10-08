@@ -1,4 +1,4 @@
-# download_unsplash_beds.ps1
+﻿# download_unsplash_beds.ps1
 $urls = @(
     @{ name = "bed_cand1.jpg"; url = "https://images.unsplash.com/photo-1580869318757-a6c605b061ed?w=800&auto=format&fit=crop&q=80" },
     @{ name = "bed_cand2.jpg"; url = "https://images.unsplash.com/photo-1617952986600-802f965dcdbc?w=800&auto=format&fit=crop&q=80" }

@@ -1,4 +1,4 @@
-param([string]$FilePath = "app.js")
+﻿param([string]$FilePath = "app.js")
 
 $lines = [System.IO.File]::ReadAllLines($FilePath, [System.Text.Encoding]::UTF8)
 $curl = 0; $paren = 0; $brack = 0

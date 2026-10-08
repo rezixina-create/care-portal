@@ -1,4 +1,4 @@
-# Generate Colorful, Warm Care Bed Photos via Turbo Engine (Pure ASCII)
+﻿# Generate Colorful, Warm Care Bed Photos via Turbo Engine (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 Add-Type -AssemblyName System.Drawing
 

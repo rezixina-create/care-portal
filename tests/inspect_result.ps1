@@ -1,4 +1,4 @@
-$c = [System.IO.File]::ReadAllText("$PSScriptRoot\e2e_result.html", [System.Text.Encoding]::UTF8)
+﻿$c = [System.IO.File]::ReadAllText("$PSScriptRoot\e2e_result.html", [System.Text.Encoding]::UTF8)
 if ($c -match '<div id="testLog">([\s\S]*?)</div>') {
     Write-Host "testLog content:"
     Write-Host $Matches[1]

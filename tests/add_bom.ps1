@@ -1,4 +1,4 @@
-param([string]$target)
+﻿param([string]$target)
 $bytes = [System.IO.File]::ReadAllBytes($target)
 $bom = [byte[]]@(0xEF, 0xBB, 0xBF)
 if ($bytes.Length -ge 3 -and $bytes[0] -eq 0xEF -and $bytes[1] -eq 0xBB -and $bytes[2] -eq 0xBF) {

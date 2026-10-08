@@ -1,4 +1,4 @@
-# Apply Suzuki Bed Gatch-up Photo (Pure ASCII)
+﻿# Apply Suzuki Bed Gatch-up Photo (Pure ASCII)
 $ErrorActionPreference = "Continue"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

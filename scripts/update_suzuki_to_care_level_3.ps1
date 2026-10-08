@@ -1,4 +1,4 @@
-# Update Suzuki-san to Care Level 3 with Full Consistency (Pure ASCII)
+﻿# Update Suzuki-san to Care Level 3 with Full Consistency (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

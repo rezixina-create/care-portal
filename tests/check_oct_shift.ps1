@@ -1,4 +1,4 @@
-$json = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\data\portal_database.json" | ConvertFrom-Json
+﻿$json = Get-Content -Raw -Encoding UTF8 "$PSScriptRoot\..\data\portal_database.json" | ConvertFrom-Json
 $shiftOct = $json.monthly_shifts.'2026-10'
 if (-not $shiftOct) {
     Write-Host "No 2026-10 shift data in portal_database.json"

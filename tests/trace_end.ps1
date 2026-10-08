@@ -1,4 +1,4 @@
-$appJsPath = Join-Path (Resolve-Path "$PSScriptRoot\..") "app.js"
+﻿$appJsPath = Join-Path (Resolve-Path "$PSScriptRoot\..") "app.js"
 $appJsCode = [System.IO.File]::ReadAllText($appJsPath, [System.Text.Encoding]::UTF8)
 
 $len = $appJsCode.Length

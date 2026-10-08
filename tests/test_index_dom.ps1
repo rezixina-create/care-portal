@@ -1,4 +1,4 @@
-# Verify index.html real browser execution & DOM rendering (Pure ASCII Script)
+﻿# Verify index.html real browser execution & DOM rendering (Pure ASCII Script)
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"

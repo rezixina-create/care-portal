@@ -1,4 +1,4 @@
-# apply_bed_update.ps1 - Pure ASCII
+﻿# apply_bed_update.ps1 - Pure ASCII
 $ErrorActionPreference = "Continue"
 $scriptDir = Split-Path -Parent $MyInvocation.MyCommand.Path
 $portalDir = Split-Path -Parent $scriptDir

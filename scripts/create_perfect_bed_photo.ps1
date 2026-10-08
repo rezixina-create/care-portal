@@ -1,4 +1,4 @@
-# High Quality Photo Synthesizer for Suzuki Bed Rest (Pure ASCII)
+﻿# High Quality Photo Synthesizer for Suzuki Bed Rest (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

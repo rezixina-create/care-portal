@@ -1,4 +1,4 @@
-# Database JSON Structure & Array Keys Check
+﻿# Database JSON Structure & Array Keys Check
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $dbPath = "$dir\data\portal_database.json"

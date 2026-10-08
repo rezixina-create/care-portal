@@ -1,4 +1,4 @@
-# Final High Quality Suzuki Bed Resting Photo Generator (Pure ASCII)
+﻿# Final High Quality Suzuki Bed Resting Photo Generator (Pure ASCII)
 $ErrorActionPreference = "Stop"
 
 $baseDir = Split-Path -Parent $PSScriptRoot

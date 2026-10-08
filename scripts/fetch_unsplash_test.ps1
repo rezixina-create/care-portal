@@ -1,4 +1,4 @@
-# Download Unsplash images (Pure ASCII)
+﻿# Download Unsplash images (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseDir = Split-Path -Parent $PSScriptRoot

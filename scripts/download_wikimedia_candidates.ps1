@@ -1,4 +1,4 @@
-# Download Wikimedia Candidates via Direct MD5 Calculation (Pure ASCII)
+﻿# Download Wikimedia Candidates via Direct MD5 Calculation (Pure ASCII)
 [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
 
 $baseDir = Split-Path -Parent $PSScriptRoot

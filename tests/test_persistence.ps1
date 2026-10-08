@@ -1,4 +1,4 @@
-# Test Persistence of Quick Edits Across Browser Reload
+﻿# Test Persistence of Quick Edits Across Browser Reload
 $ErrorActionPreference = "Continue"
 
 Write-Host "==========================================================" -ForegroundColor Cyan

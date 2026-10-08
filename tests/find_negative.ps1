@@ -1,4 +1,4 @@
-$dir = (Get-Item "$PSScriptRoot\..").FullName
+﻿$dir = (Get-Item "$PSScriptRoot\..").FullName
 $lines = [System.IO.File]::ReadAllLines("$dir\app.js", [System.Text.Encoding]::UTF8)
 
 $cleanLines = @()

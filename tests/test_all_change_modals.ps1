@@ -1,4 +1,4 @@
-# Test All Change Modals Click & Display Verification via Real Edge Headless Browser
+﻿# Test All Change Modals Click & Display Verification via Real Edge Headless Browser
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $edgePath = "C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"
