@@ -495,10 +495,12 @@ namespace CarePortal
                 JObj sj = st as JObj;
                 string role = sj != null ? (sj.GetStr("role") ?? "") : "";
                 JObj acc = FindByField(accs, "staff_name", nm);
+                string status = acc != null ? (acc.GetStr("status") ?? "正常") : "正常";
+                if (status == "休止中") continue;
                 bool custom = acc != null && IsTrue(acc.Get("is_custom"));
                 if (!first) sb.Append(',');
                 first = false;
-                sb.Append("{\"name\":" + MiniJson.Quote(nm) + ",\"role\":" + MiniJson.Quote(role) + ",\"is_custom\":" + (custom ? "true" : "false") + "}");
+                sb.Append("{\"name\":" + MiniJson.Quote(nm) + ",\"role\":" + MiniJson.Quote(role) + ",\"status\":" + MiniJson.Quote(status) + ",\"is_custom\":" + (custom ? "true" : "false") + "}");
             }
             sb.Append("]}");
             SendJsonResponse(stream, 200, sb.ToString());

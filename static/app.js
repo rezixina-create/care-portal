@@ -1221,17 +1221,21 @@ class LocalDB {
  { name: "鈴木 美智子", role: "主任看護師" },
  { name: "加藤 由美", role: "看護師" },
  { name: "山田 孝之", role: "介護リーダー" },
- { name: "佐藤 健太", role: "介護職員" },
- { name: "高橋 直樹", role: "介護職員" },
  { name: "伊藤 翔太", role: "介護職員" },
- { name: "渡辺 拓也", role: "介護職員" },
- { name: "中村 大輔", role: "介護職員" },
- { name: "小林 亮", role: "介護職員" },
- { name: "斉藤 翼", role: "介護職員" },
+ { name: "井上 蓮", role: "介護職員" },
  { name: "吉田 誠", role: "介護職員" },
+ { name: "高橋 直樹", role: "介護職員" },
+ { name: "佐藤 健太", role: "介護職員" },
+ { name: "小林 亮", role: "介護職員" },
+ { name: "松田 健二", role: "介護職員" },
  { name: "清水 翔平", role: "介護職員" },
- { name: "田中 慎一", role: "事務員" },
- { name: "松本 陽子", role: "事務員" }
+ { name: "斉藤 翼", role: "介護職員" },
+ { name: "石川 太陽", role: "介護職員" },
+ { name: "中村 大輔", role: "介護職員" },
+ { name: "渡辺 拓也", role: "介護職員" },
+ { name: "野村 拓海", role: "介護職員" },
+ { name: "松本 陽子", role: "事務員" },
+ { name: "田中 慎一", role: "事務員" }
  ],
  templates: [
  { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
@@ -2628,6 +2632,8 @@ window.addEventListener("DOMContentLoaded", () => {
  renderStaffSelect();
  updateStaffRoleUI();
  renderResidentsStrip();
+	initGlobalTimeSync();
+	
  renderResidentDetail();
  updateRecordTargetBanner();
  updateRecordCharCount();
@@ -3307,7 +3313,7 @@ function switchCareTab(tab) {
  meal: "tabCareMeal", bath: "tabCareBath", oral: "tabCareOral", med: "tabCareMed",
  night: "tabCareNight", weight: "tabCareWeight", linen: "tabCareLinen",
  grooming: "tabCareGrooming", visit: "tabCareVisit", recreation: "tabCareRecreation",
- notebook: "tabCareNotebook", consume: "tabCareConsume"
+ notebook: "tabCareNotebook", consume: "tabCareConsume", incidents: "tabCareIncidents"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -3331,6 +3337,7 @@ function switchCareTab(tab) {
  if (tab === "grooming") renderGroomingTable();
  if (tab === "recreation") renderRecreationTable();
  if (tab === "consume") renderQuickConsume();
+ if (tab === "incidents") renderOfficeIncidents();
 }
 
 // カレンダー描画 (記録がある日に●印)
@@ -3444,6 +3451,54 @@ function syncGlobalDatePicker(dt) {
  }
 }
 
+
+
+// 日付・時刻ワンタイムスナップショット機能 (ボタン押下時・初回のみ現在時刻を取得・継続自動更新なし)
+function initGlobalTimeSync() {
+	if (!gState.selectedTime) {
+		const now = new Date();
+		const hh = String(now.getHours()).padStart(2, '0');
+		const mm = String(now.getMinutes()).padStart(2, '0');
+		gState.selectedTime = `${hh}:${mm}`;
+	}
+	const timePicker = document.getElementById("globalCareTimePicker");
+	if (timePicker && gState.selectedTime) {
+		timePicker.value = gState.selectedTime;
+	}
+	updateRecordFormCustomTime();
+}
+
+function syncGlobalTimeToNow() {
+	// ボタンを押した「その瞬間」の時刻を取得・一回のみ固定セット（継続タイマー更新なし）
+	const now = new Date();
+	const hh = String(now.getHours()).padStart(2, '0');
+	const mm = String(now.getMinutes()).padStart(2, '0');
+	const curTime = `${hh}:${mm}`;
+
+	gState.selectedTime = curTime;
+	gState.userOverrodeTime = true;
+
+	const timePicker = document.getElementById("globalCareTimePicker");
+	if (timePicker) timePicker.value = curTime;
+	updateRecordFormCustomTime();
+}
+
+function onGlobalTimeChange(timeVal) {
+	gState.userOverrodeTime = true;
+	gState.selectedTime = timeVal;
+	updateRecordFormCustomTime();
+}
+
+function updateRecordFormCustomTime() {
+	const d = gState.selectedDate || toLocalDateStr(new Date());
+	const t = gState.selectedTime || "09:00";
+	const customTimeInput = document.getElementById("recordCustomTime");
+	if (customTimeInput) {
+		customTimeInput.value = `${d}T${t}`;
+	}
+}
+
+
 function onGlobalDateChange(newDate) {
  if (!newDate) return;
  gState.selectedDate = newDate;
@@ -3480,13 +3535,11 @@ function renderResidentsStrip() {
  card.onclick = () => selectResident(r.id);
 
  card.innerHTML = `
- <div class="card-top">
- <span class="room-badge">${r.room_no}号室</span>
- </div>
- <div class="res-name">${r.name} 様</div>
- <div class="res-meta">${r.care_level} | ${r.status}</div>
- ${r.sensor_alert ? `<div style="font-size:11px; color:#dc2626; font-weight:bold; margin-top:2px;">${r.sensor_alert}</div>` : ''}
- `;
+		<div class="card-top">
+			<span class="room-badge">${r.room_no}号室</span>
+		</div>
+		<div class="res-name">${r.name} 様</div>
+	`;
  strip.appendChild(card);
  });
 }
@@ -3494,6 +3547,8 @@ function renderResidentsStrip() {
 function selectResident(id) {
  gState.selectedResidentId = id;
  renderResidentsStrip();
+	initGlobalTimeSync();
+	
  renderResidentDetail();
  updateRecordTargetBanner();
  renderSelectedDateRecords();
@@ -6275,6 +6330,7 @@ function jumpPersonalCalendarToday() {
 
 function selectPersonalCalendarDate(dateStr) {
  gState.selectedDate = dateStr;
+	updateRecordFormCustomTime();
  gState.recordScope = "daily";
  gState.personalCalendarYearMonth = dateStr.slice(0, 7);
 
@@ -9078,91 +9134,402 @@ function submitVisitation() {
  alert("面会・差し入れ荷物を登録しました！個人記録へ自動転記されました。");
 }
 
-// 13. 連絡帳 ＆ 【認】名前スタンプ ＆ 月間業務連絡表 (完全分離)
+
+
+// 日々申し送りの確認状況チェック (追記・更新判定付き)
+function getDailyNotebookConfirmationStatus(nb, currentStaff) {
+	if (!currentStaff) return { confirmed: false, hasNewUpdate: false };
+
+	const lastUpdated = nb.last_updated_at || nb.created_at;
+	if (nb.confirmed_versions && nb.confirmed_versions[currentStaff]) {
+		const confirmedTime = nb.confirmed_versions[currentStaff];
+		if (lastUpdated && confirmedTime < lastUpdated) {
+			return { confirmed: false, hasNewUpdate: true };
+		}
+		return { confirmed: true, hasNewUpdate: false };
+	}
+
+	const isConfirmed = Array.isArray(nb.confirmed_staff) && nb.confirmed_staff.includes(currentStaff);
+	if (isConfirmed && nb.last_updated_at) {
+		if (nb.last_updated_by === currentStaff) {
+			return { confirmed: true, hasNewUpdate: false };
+		}
+		return { confirmed: false, hasNewUpdate: true };
+	}
+
+	return { confirmed: isConfirmed, hasNewUpdate: false };
+}
+
+// 13. 連絡・申送り ＆ 月間業務連絡表
 function renderNotebook() {
- renderMonthlyNotices();
+	renderMonthlyNotices();
 
- const list = document.getElementById("notebookList");
- if (!list) return;
- list.innerHTML = "";
- const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
+	const list = document.getElementById("notebookList");
+	if (!list) return;
+	list.innerHTML = "";
+	const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
+	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
- if (notebooks.length === 0) {
- list.innerHTML = '<p style="font-size:13px; color:var(--text-muted);">本日の引継ぎ・申し送り事項はありません。</p>';
- } else {
- notebooks.forEach(nb => {
- const card = document.createElement("div");
- card.style.background = nb.status === "未対応" ? "#fffbeb" : "#f0fdf4";
- card.style.border = `1px solid ${nb.status === "未対応" ? "#fde68a" : "#bbf7d0"}`;
- card.style.borderRadius = "8px";
- card.style.padding = "10px 12px";
- card.style.marginBottom = "8px";
- card.style.display = "flex";
- card.style.justifyContent = "space-between";
- card.style.alignItems = "center";
+	if (notebooks.length === 0) {
+		list.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:10px 0;">本日の引継ぎ・申し送り事項はありません。</p>';
+	} else {
+		notebooks.forEach(nb => {
+			const stStatus = getDailyNotebookConfirmationStatus(nb, currentStaff);
 
- card.innerHTML = `
- <div>
- <span style="font-size:12px; font-weight:bold; padding:2px 6px; border-radius:4px; ${nb.status==='未対応'?'background:#fef3c7; color:#92400e;':'background:#dcfce7; color:#166534;'}">
- ${nb.status === '未対応' ? ' 未対応' : ' 完了'}
- </span>
- <span style="font-size:14px; margin-left:8px;">${nb.content}</span>
- <div style="font-size:11px; color:var(--text-muted); margin-top:4px;">記入: ${nb.staff_name} ${nb.resolved_staff ? `/ 対応者: ${nb.resolved_staff}` : ''}</div>
- </div>
- <div>
- ${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:4px 10px; font-size:12px;" onclick="resolveNotebook(${nb.id})">対応完了にする</button>` : ''}
- </div>
- `;
- list.appendChild(card);
- });
- }
+			const card = document.createElement("div");
+			card.style.background = stStatus.confirmed ? "#f8fafc" : (nb.status === "未対応" ? "#ffffff" : "#f0fdf4");
+			card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : (nb.status === "未対応" ? "2px solid #2563eb" : "1px solid #bbf7d0"));
+			card.style.borderRadius = "8px";
+			card.style.padding = "12px 14px";
+			card.style.marginBottom = "10px";
+			card.style.boxShadow = stStatus.confirmed ? "none" : "0 2px 5px rgba(37,99,235,0.12)";
 
- const stampArea = document.getElementById("hankoStampArea");
- if (!stampArea) return;
- stampArea.innerHTML = "";
- const stamps = (db.data.notebook_stamps || []).filter(s => s.date === gState.selectedDate).map(s => s.staff_name);
- if (stamps.length === 0) {
- stampArea.innerHTML = '<span style="font-size:13px; color:var(--text-muted);">まだ確認した職員はいません。</span>';
- } else {
- stamps.forEach(s => {
- const stampEl = document.createElement("div");
- stampEl.className = "hanko-stamp";
- stampEl.textContent = s;
- stampEl.title = `「${s}」の確認を取り消す (クリックで解除)`;
- stampEl.onclick = () => removeNotebookStamp(gState.selectedDate, s);
- stampArea.appendChild(stampEl);
- });
- }
+			let statusBadgeHtml = "";
+			if (stStatus.hasNewUpdate) {
+				statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再確認)</span>`;
+			} else if (stStatus.confirmed) {
+				statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #86efac;">✓ 確認済み</span>`;
+			} else {
+				statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認</span>`;
+			}
 
- // 選択中スタッフの確認状況に応じてボタン表示を動的更新
- const currentStaffEl = document.getElementById("currentStaff");
- const currentStaff = currentStaffEl ? currentStaffEl.value : "";
- const stampBtn = document.getElementById("notebookStampBtn");
- if (stampBtn && currentStaff) {
- const isStamped = stamps.includes(currentStaff);
- if (isStamped) {
- stampBtn.textContent = `↩ ［${currentStaff}］の確認を取り消す`;
- stampBtn.className = "btn btn-secondary";
- stampBtn.style.color = "#dc2626";
- } else {
- stampBtn.textContent = " 確認済みにする";
- stampBtn.className = "btn btn-primary";
- stampBtn.style.color = "";
- }
- }
+			const taskBadgeHtml = nb.status === '未対応'
+				? `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:11px; padding:2px 6px; font-weight:bold;">要対応</span>`
+				: `<span class="badge" style="background:#dcfce7; color:#166534; font-size:11px; padding:2px 6px; font-weight:bold;">完了</span>`;
+
+			const confirmedPills = (nb.confirmed_staff && nb.confirmed_staff.length > 0)
+				? nb.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
+				: `<span style="color:#94a3b8; font-size:11.5px;">未確認</span>`;
+
+			let updatesHtml = "";
+			if (Array.isArray(nb.updates) && nb.updates.length > 0) {
+				updatesHtml += `<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; margin:8px 0 6px 0;">`;
+				updatesHtml += `<div style="font-weight:bold; font-size:11.5px; color:#b45309; margin-bottom:4px;"> 【追記・変更事項】 (計 ${nb.updates.length}件)</div>`;
+				nb.updates.forEach(u => {
+					updatesHtml += `
+						<div style="font-size:12px; color:#78350f; margin-top:4px; padding-top:4px; border-top:1px dashed #fde68a;">
+							<span style="font-weight:bold; color:#92400e;">[${escapeHtml(u.created_at || '')} 追記 by ${escapeHtml(u.staff_name || '職員')}]:</span>
+							<div style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(u.content)}</div>
+						</div>
+					`;
+				});
+				updatesHtml += `</div>`;
+			}
+
+			card.innerHTML = `
+				<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+					<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+						${taskBadgeHtml}
+						${statusBadgeHtml}
+						<strong style="font-size:14.5px; color:#1e293b; margin-left:4px;">${escapeHtml(nb.content)}</strong>
+					</div>
+					<div style="display:flex; gap:6px; align-items:center;">
+						<span style="font-size:11px; color:#64748b;">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
+						<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
+						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:11px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
+						<button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
+					</div>
+				</div>
+				${updatesHtml}
+				<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; margin-top:8px; padding-top:8px; font-size:12px; line-height:1.6;">
+					<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
+						<strong style="color:#475569; white-space:nowrap;">確認済職員:</strong>
+						<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
+					</div>
+					<div>
+						${stStatus.hasNewUpdate ? `
+							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmDailyNotebookItem(${nb.id})">
+								☑ 追記も含めて確認済みにする
+							</button>
+						` : (stStatus.confirmed ? `
+							<button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmDailyNotebookItem(${nb.id})">
+								✓ 確認済み (解除)
+							</button>
+						` : `
+							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmDailyNotebookItem(${nb.id})">
+								☑ 確認済みにする
+							</button>
+						`)}
+					</div>
+				</div>
+			`;
+			list.appendChild(card);
+		});
+	}
+
+	// 一括確認ボタン
+	const stampBtn = document.getElementById("notebookStampBtn");
+	if (stampBtn && currentStaff) {
+		stampBtn.textContent = `☑ 本日の全項目を［${currentStaff}］で一括確認済みにする`;
+		stampBtn.className = "btn btn-primary";
+		stampBtn.style.padding = "8px 18px";
+		stampBtn.style.fontSize = "13px";
+		stampBtn.style.fontWeight = "bold";
+	}
+}
+
+// 月間業務連絡表
+function renderMonthlyNotices() {
+	const container = document.getElementById("monthlyNoticeList");
+	const alertArea = document.getElementById("monthlyNoticeAlertArea");
+	if (!container) return;
+	container.innerHTML = "";
+	if (alertArea) alertArea.innerHTML = "";
+
+	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
+	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+
+	// 未確認アラート表示
+	if (currentStaff && notices.length > 0) {
+		const unconfirmed = notices.filter(n => {
+			const st = getNoticeConfirmationStatus(n, currentStaff);
+			return !st.confirmed;
+		});
+		if (unconfirmed.length > 0 && alertArea) {
+			alertArea.innerHTML = `
+			<div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
+				 ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡・追記が <strong>${unconfirmed.length}件</strong> あります。各項目の「☑ 確認済みにする」を押してください。
+			</div>
+			`;
+		}
+	}
+
+	if (notices.length === 0) {
+		container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
+		return;
+	}
+
+	notices.forEach(n => {
+		const stStatus = getNoticeConfirmationStatus(n, currentStaff);
+		let prioStyle = "background:#f1f5f9; color:#475569;";
+		if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+		else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
+
+		const confirmedPills = (n.confirmed_staff && n.confirmed_staff.length > 0)
+			? n.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
+			: `<span style="color:#94a3b8; font-size:11.5px;">未確認</span>`;
+
+		const card = document.createElement("div");
+		card.style.background = stStatus.confirmed ? "#f8fafc" : "#ffffff";
+		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : "2px solid #2563eb");
+		card.style.borderRadius = "8px";
+		card.style.padding = "14px 16px";
+		card.style.marginBottom = "12px";
+		card.style.boxShadow = stStatus.confirmed ? "none" : "0 2px 8px rgba(37,99,235,0.12)";
+
+		let statusBadgeHtml = "";
+		if (stStatus.hasNewUpdate) {
+			statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再確認)</span>`;
+		} else if (stStatus.confirmed) {
+			statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #86efac;">✓ 確認済み</span>`;
+		} else {
+			statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認</span>`;
+		}
+
+		// 追記リスト
+		let updatesHtml = "";
+		if (Array.isArray(n.updates) && n.updates.length > 0) {
+			updatesHtml += `<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:10px 12px; margin:10px 0 6px 0;">`;
+			updatesHtml += `<div style="font-weight:bold; font-size:12px; color:#b45309; margin-bottom:4px; display:flex; align-items:center; gap:4px;"> 【追記・変更事項】 (計 ${n.updates.length}件)</div>`;
+			n.updates.forEach(u => {
+				updatesHtml += `
+					<div style="font-size:12.5px; color:#78350f; margin-top:6px; padding-top:6px; border-top:1px dashed #fde68a;">
+						<span style="font-weight:bold; color:#92400e;">[${escapeHtml(u.created_at || '')} 追記 by ${escapeHtml(u.staff_name || '職員')}]:</span>
+						<div style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(u.content)}</div>
+					</div>
+				`;
+			});
+			updatesHtml += `</div>`;
+		}
+
+		card.innerHTML = `
+			<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+				<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+					<span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
+					<strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+					${statusBadgeHtml}
+				</div>
+				<div style="display:flex; gap:6px; align-items:center;">
+					<span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
+					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
+				</div>
+			</div>
+			<div style="font-size:14px; line-height:1.7; color:#334155; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+			${updatesHtml}
+			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px; font-size:12.5px; line-height:1.6;">
+				<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
+					<strong style="color:#475569; white-space:nowrap;">確認済職員:</strong>
+					<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
+				</div>
+				<div>
+					${stStatus.hasNewUpdate ? `
+						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmMonthlyNotice(${n.id})">
+							☑ 追記も含めて確認済みにする
+						</button>
+					` : (stStatus.confirmed ? `
+						<button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
+							✓ 確認済み (解除)
+						</button>
+					` : `
+						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmMonthlyNotice(${n.id})">
+							☑ 確認済みにする
+						</button>
+					`)}
+				</div>
+			</div>
+		`;
+		container.appendChild(card);
+	});
+}
+
+// 一括確認機能（ボタン押下時に全項目に現在の職員名を反映）
+function toggleNotebookStamp() {
+	const staff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
+	if (!staff) {
+		alert("担当職員を選択してください。");
+		return;
+	}
+
+	const nowStr = new Date().toISOString();
+
+	// 1. 本日の引き継ぎ・申し送り事項を一括確認
+	const notebooks = (db.data.notebooks || []).filter(nb => nb.date === gState.selectedDate);
+	notebooks.forEach(nb => {
+		if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
+		if (!nb.confirmed_versions) nb.confirmed_versions = {};
+		if (!nb.confirmed_staff.includes(staff)) nb.confirmed_staff.push(staff);
+		const lastUpdated = nb.last_updated_at || nb.created_at || nowStr;
+		nb.confirmed_versions[staff] = lastUpdated;
+	});
+
+	// 2. 当月の月間業務連絡を一括確認
+	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
+	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	notices.forEach(n => {
+		if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
+		if (!n.confirmed_versions) n.confirmed_versions = {};
+		if (!n.confirmed_staff.includes(staff)) n.confirmed_staff.push(staff);
+		const lastUpdated = n.last_updated_at || n.created_at || nowStr;
+		n.confirmed_versions[staff] = lastUpdated;
+	});
+
+	db.save();
+	renderNotebook();
+	alert(`［${staff}］さんで本日の全申送りおよび月間業務連絡を全件確認済みにしました。`);
+}
+
+
+function confirmDailyNotebookItem(id) {
+	const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
+	if (!currentStaff) {
+		alert("担当職員を選択してください。");
+		return;
+	}
+
+	const nb = (db.data.notebooks || []).find(x => x.id === id);
+	if (!nb) return;
+	if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
+	if (!nb.confirmed_versions) nb.confirmed_versions = {};
+
+	const stStatus = getDailyNotebookConfirmationStatus(nb, currentStaff);
+
+	if (stStatus.confirmed) {
+		const idx = nb.confirmed_staff.indexOf(currentStaff);
+		if (idx !== -1) nb.confirmed_staff.splice(idx, 1);
+		delete nb.confirmed_versions[currentStaff];
+	} else {
+		if (!nb.confirmed_staff.includes(currentStaff)) {
+			nb.confirmed_staff.push(currentStaff);
+		}
+		const nowStr = nb.last_updated_at || nb.created_at || new Date().toISOString();
+		nb.confirmed_versions[currentStaff] = nowStr;
+	}
+
+	db.save();
+	renderNotebook();
+}
+
+function openAddDailyNotebookUpdateModal(id) {
+	const nb = (db.data.notebooks || []).find(x => x.id === id);
+	if (!nb) return;
+	document.getElementById("dailyNotebookUpdateParentId").value = id;
+	document.getElementById("dailyNotebookUpdateTargetTitle").textContent = nb.content;
+	document.getElementById("dailyNotebookUpdateContent").value = "";
+	document.getElementById("dailyNotebookUpdateModal").style.display = "flex";
+}
+
+function submitDailyNotebookUpdate() {
+	const id = parseInt(document.getElementById("dailyNotebookUpdateParentId").value, 10);
+	const content = document.getElementById("dailyNotebookUpdateContent").value.trim();
+	const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "職員";
+
+	if (!content) {
+		alert("追記・変更内容を入力してください。");
+		return;
+	}
+
+	const nb = (db.data.notebooks || []).find(x => x.id === id);
+	if (!nb) return;
+
+	if (!Array.isArray(nb.updates)) nb.updates = [];
+	const now = new Date();
+	const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
+
+	nb.updates.push({
+		id: Date.now(),
+		staff_name: currentStaff,
+		content: content,
+		created_at: nowStr
+	});
+
+	nb.last_updated_at = nowStr;
+	nb.last_updated_by = currentStaff;
+
+	if (!nb.confirmed_staff) nb.confirmed_staff = [];
+	if (!nb.confirmed_staff.includes(currentStaff)) nb.confirmed_staff.push(currentStaff);
+	if (!nb.confirmed_versions) nb.confirmed_versions = {};
+	nb.confirmed_versions[currentStaff] = nowStr;
+
+	db.save();
+	closeModal("dailyNotebookUpdateModal");
+	renderNotebook();
+	alert("申し送り事項に追記を登録しました。他職員へ再確認が表示されます。");
+}
+
+function deleteDailyNotebookItem(id) {
+	if (!confirm("この申し送り事項を削除してもよろしいですか？")) return;
+	db.data.notebooks = (db.data.notebooks || []).filter(x => x.id !== id);
+	db.save();
+	renderNotebook();
 }
 
 function submitNotebook() {
- const content = document.getElementById("notebookContent").value.trim();
- if (!content) return;
- const staff = document.getElementById("currentStaff").value;
- db.data.notebooks.unshift({
- id: Date.now(), date: gState.selectedDate, category: "申し送り", content: content, status: "未対応", staff_name: staff, resolved_staff: null
- });
- db.save();
- document.getElementById("notebookContent").value = "";
- loadDateRecords(gState.selectedDate);
+	const content = document.getElementById("notebookContent").value.trim();
+	if (!content) return;
+	const staff = document.getElementById("currentStaff").value || "担当職員";
+	const now = new Date();
+	const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
+
+	if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
+	db.data.notebooks.unshift({
+		id: Date.now(),
+		date: gState.selectedDate,
+		category: "申し送り",
+		content: content,
+		status: "未対応",
+		staff_name: staff,
+		created_at: nowStr,
+		resolved_staff: null,
+		confirmed_staff: [staff],
+		confirmed_versions: { [staff]: nowStr }
+	});
+	db.save();
+	document.getElementById("notebookContent").value = "";
+	renderNotebook();
 }
+
 
 function resolveNotebook(id) {
  const staff = document.getElementById("currentStaff").value;
@@ -9203,85 +9570,147 @@ function removeNotebookStamp(date, staffName) {
  }
 }
 
+
+// 月間業務連絡の確認状況チェック (追記・更新判定付き)
+function getNoticeConfirmationStatus(n, currentStaff) {
+	if (!currentStaff) return { confirmed: false, hasNewUpdate: false };
+
+	const lastUpdated = n.last_updated_at || n.created_at;
+	if (n.confirmed_versions && n.confirmed_versions[currentStaff]) {
+		const confirmedTime = n.confirmed_versions[currentStaff];
+		if (lastUpdated && confirmedTime < lastUpdated) {
+			return { confirmed: false, hasNewUpdate: true };
+		}
+		return { confirmed: true, hasNewUpdate: false };
+	}
+
+	const isConfirmed = Array.isArray(n.confirmed_staff) && n.confirmed_staff.includes(currentStaff);
+	if (isConfirmed && n.last_updated_at) {
+		if (n.last_updated_by === currentStaff) {
+			return { confirmed: true, hasNewUpdate: false };
+		}
+		return { confirmed: false, hasNewUpdate: true };
+	}
+
+	return { confirmed: isConfirmed, hasNewUpdate: false };
+}
+
+
 // 月間業務連絡表 (全館・当月1ヶ月間継続掲示・変更事項等)
 function renderMonthlyNotices() {
- const container = document.getElementById("monthlyNoticeList");
- const alertArea = document.getElementById("monthlyNoticeAlertArea");
- if (!container) return;
- container.innerHTML = "";
- if (alertArea) alertArea.innerHTML = "";
+	const container = document.getElementById("monthlyNoticeList");
+	const alertArea = document.getElementById("monthlyNoticeAlertArea");
+	if (!container) return;
+	container.innerHTML = "";
+	if (alertArea) alertArea.innerHTML = "";
 
- const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
- const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
- const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
+	const notices = (db.data.monthly_notices || []).filter(n => n.month === curMonth);
+	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
 
- // 未確認アラート表示
- if (currentStaff && notices.length > 0) {
- const unconfirmed = notices.filter(n => !(n.confirmed_staff || []).includes(currentStaff));
- if (unconfirmed.length > 0 && alertArea) {
- alertArea.innerHTML = `
- <div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
-  ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「 確認済にする」を押してください。
- </div>
- `;
- }
- }
+	// 未確認アラート表示
+	if (currentStaff && notices.length > 0) {
+		const unconfirmed = notices.filter(n => {
+			const st = getNoticeConfirmationStatus(n, currentStaff);
+			return !st.confirmed;
+		});
+		if (unconfirmed.length > 0 && alertArea) {
+			alertArea.innerHTML = `
+			<div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
+				 ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の「見ました」未チェック連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「☑ 見ました」ボタンを押してください。
+			</div>
+			`;
+		}
+	}
 
- if (notices.length === 0) {
- container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
- return;
- }
+	if (notices.length === 0) {
+		container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
+		return;
+	}
 
- notices.forEach(n => {
- const isConfirmedByMe = currentStaff && (n.confirmed_staff || []).includes(currentStaff);
- let prioStyle = "background:#f1f5f9; color:#475569;";
- if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
- else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
+	notices.forEach(n => {
+		const stStatus = getNoticeConfirmationStatus(n, currentStaff);
+		let prioStyle = "background:#f1f5f9; color:#475569;";
+		if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
+		else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
 
- const confirmedListStr = (n.confirmed_staff || []).length > 0
- ? (n.confirmed_staff || []).join("・")
- : "未確認";
+		const confirmedListStr = (n.confirmed_staff || []).length > 0
+			? (n.confirmed_staff || []).join("・")
+			: "未確認";
 
- const card = document.createElement("div");
- card.style.background = isConfirmedByMe ? "#f8fafc" : "#ffffff";
- card.style.border = isConfirmedByMe ? "1px solid #cbd5e1" : "2px solid #818cf8";
- card.style.borderRadius = "8px";
- card.style.padding = "12px 14px";
- card.style.marginBottom = "10px";
- card.style.boxShadow = isConfirmedByMe ? "none" : "0 2px 6px rgba(99,102,241,0.15)";
+		const card = document.createElement("div");
+		card.style.background = stStatus.confirmed ? "#f8fafc" : "#ffffff";
+		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : "2px solid #2563eb");
+		card.style.borderRadius = "8px";
+		card.style.padding = "14px 16px";
+		card.style.marginBottom = "12px";
+		card.style.boxShadow = stStatus.confirmed ? "none" : "0 2px 8px rgba(37,99,235,0.12)";
 
- card.innerHTML = `
- <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
- <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
- <span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
- <strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
- </div>
- <div style="display:flex; gap:6px; align-items:center;">
- <span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
- <button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
- </div>
- </div>
- <div style="font-size:13.5px; line-height:1.7; color:#334155; margin:8px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
- <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; padding-top:8px; font-size:12px;">
- <div style="color:#64748b;">
- <strong>確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
- </div>
- <div>
- ${isConfirmedByMe ? `
- <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="confirmMonthlyNotice(${n.id})">
- 確認済 (解除する)
- </button>
- ` : `
- <button class="btn btn-primary" style="padding:4px 14px; font-size:12px; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
- 私が確認済みにする
- </button>
- `}
- </div>
- </div>
- `;
- container.appendChild(card);
- });
+		let statusBadgeHtml = "";
+		if (stStatus.hasNewUpdate) {
+			statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再チェック)</span>`;
+		} else if (stStatus.confirmed) {
+			statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #86efac;">☑ 見ました (確認済)</span>`;
+		} else {
+			statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認 (未チェック)</span>`;
+		}
+
+		// 追記（Updates）リストのレンダリング
+		let updatesHtml = "";
+		if (Array.isArray(n.updates) && n.updates.length > 0) {
+			updatesHtml += `<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:10px 12px; margin:10px 0 6px 0;">`;
+			updatesHtml += `<div style="font-weight:bold; font-size:12px; color:#b45309; margin-bottom:4px; display:flex; align-items:center; gap:4px;"> 【追記・変更事項】 (計 ${n.updates.length}件)</div>`;
+			n.updates.forEach(u => {
+				updatesHtml += `
+					<div style="font-size:12.5px; color:#78350f; margin-top:6px; padding-top:6px; border-top:1px dashed #fde68a;">
+						<span style="font-weight:bold; color:#92400e;">[${escapeHtml(u.created_at || '')} 追記 by ${escapeHtml(u.staff_name || '職員')}]:</span>
+						<div style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(u.content)}</div>
+					</div>
+				`;
+			});
+			updatesHtml += `</div>`;
+		}
+
+		card.innerHTML = `
+			<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+				<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+					<span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
+					<strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+					${statusBadgeHtml}
+				</div>
+				<div style="display:flex; gap:6px; align-items:center;">
+					<span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
+					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
+				</div>
+			</div>
+			<div style="font-size:14px; line-height:1.7; color:#334155; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+			${updatesHtml}
+			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px; font-size:12.5px;">
+				<div style="color:#475569;">
+					<strong>☑ 「見ました」確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
+				</div>
+				<div>
+					${stStatus.hasNewUpdate ? `
+						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmMonthlyNotice(${n.id})">
+							☑ 追記も見ました (再チェック)
+						</button>
+					` : (stStatus.confirmed ? `
+						<button class="btn btn-secondary" style="padding:5px 14px; font-size:12.5px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
+							☑ 「見ました」済 (クリックで解除)
+						</button>
+					` : `
+						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmMonthlyNotice(${n.id})">
+							☑ 見ました
+						</button>
+					`)}
+				</div>
+			</div>
+		`;
+		container.appendChild(card);
+	});
 }
+
 
 function openMonthlyNoticeModal() {
  const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
@@ -9414,6 +9843,8 @@ function onConsumeResidentChange() {
  if (!isNaN(newId)) {
  gState.selectedResidentId = newId;
  renderResidentsStrip();
+	initGlobalTimeSync();
+	
  renderResidentDetail();
  updateRecordTargetBanner();
  renderQuickConsume();
@@ -9617,7 +10048,7 @@ function switchOfficeTab(tab) {
  suppliers: "tabOfficeSuppliers", billing: "tabOfficeBilling", deposit: "tabOfficeDeposit",
  shift: "tabOfficeShift", vehicle: "tabOfficeVehicle", vaccine: "tabOfficeVaccine",
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
- incidents: "tabOfficeIncidents",
+ incidents: "tabCareIncidents", care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth"
  };
 
@@ -9632,7 +10063,9 @@ function switchOfficeTab(tab) {
  renderShiftTable(gState.currentShiftMonth || "2026-10");
  } else if (tab === "backup") {
  renderOfficeBackup();
- } else if (tab === "staff_auth") {
+ } else if (tab === "care_renewal") {
+  renderOfficeCareRenewal();
+  } else if (tab === "staff_auth") {
  renderOfficeStaffAuth();
  }
  }
@@ -10199,7 +10632,8 @@ function approveOrder(id, status) {
  o.approver = staff;
  o.approved_at = toLocalDateStr(new Date());
  db.save();
- if (gState.activePortal === "office") loadOfficeData();
+ renderOfficeIncidents();
+	if (gState.activePortal === "office") loadOfficeData();
  checkGlobalAlerts();
  alert(`発注申請（${o.item_name} × ${o.quantity}）を「${status}」にしました。`);
 }
@@ -10782,45 +11216,103 @@ function submitComplaint() {
 }
 
 // 事故・ヒヤリハット
-function renderOfficeIncidents() {
-	const tbody = document.querySelector("#incidentsTable tbody");
-	if (!tbody) return;
-	tbody.innerHTML = "";
-	const list = db.data.incidents || [];
-	if (list.length === 0) {
-		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">事故・ヒヤリハット報告はありません。</td></tr>`;
-		return;
+
+function openNewIncidentModal() {
+	try {
+		const incId = document.getElementById("incId");
+		if (incId) incId.value = "";
+		const incType = document.getElementById("incType");
+		if (incType) incType.value = "ヒヤリハット";
+		const incPlace = document.getElementById("incPlace");
+		if (incPlace) incPlace.value = "居室";
+		const now = new Date();
+		const nowIsoStr = typeof toLocalDateTimeStr === "function"
+			? toLocalDateTimeStr(now).slice(0, 16).replace(" ", "T")
+			: now.toISOString().slice(0, 16);
+		const incOccurredAt = document.getElementById("incOccurredAt");
+		if (incOccurredAt) incOccurredAt.value = nowIsoStr;
+		const incSit = document.getElementById("incSituation");
+		if (incSit) incSit.value = "";
+		const incCause = document.getElementById("incCause");
+		if (incCause) incCause.value = "";
+		const incPrev = document.getElementById("incPrevention");
+		if (incPrev) incPrev.value = "";
+		const incSup = document.getElementById("incSupervisor");
+		if (incSup) incSup.value = "";
+		gState.currentIncidentInjuryPins = [];
+		if (typeof updateIncidentPinsSummaryUI === "function") updateIncidentPinsSummaryUI();
+
+		const sel = document.getElementById("incResidentSelect");
+		if (sel) {
+			sel.innerHTML = "";
+			(gState.residents || []).forEach(r => {
+				const opt = document.createElement("option");
+				opt.value = r.id;
+				opt.textContent = `${r.room_no}号室 ${r.name} 様`;
+				if (gState.selectedResidentId && r.id === gState.selectedResidentId) opt.selected = true;
+				sel.appendChild(opt);
+			});
+		}
+		const modal = document.getElementById("incidentModal");
+		if (modal) modal.style.display = "flex";
+	} catch (e) {
+		console.error("openNewIncidentModal error:", e);
 	}
+}
 
-	list.forEach(inc => {
-		const res = gState.residents.find(x => x.id === inc.resident_id);
-		const timeDisplay = inc.occurred_at || inc.date || '-';
-		const repType = inc.report_type || inc.level || 'ヒヤリハット';
-		const situ = inc.situation || '-';
-		const prev = inc.prevention || inc.countermeasure || '-';
-		const supervisor = inc.supervisor_comment || inc.factor || '-';
-		const st = inc.status || '報告済';
-		const pinsCount = (inc.injury_pins && Array.isArray(inc.injury_pins)) ? inc.injury_pins.length : 0;
-		const pinBadge = pinsCount > 0 ? `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:10.5px; padding:2px 6px; margin-left:4px; font-weight:bold;">外傷ピン ${pinsCount}件</span>` : '';
+function deleteIncident(id) {
+	if (!confirm("この事故・ヒヤリハット報告書を削除してもよろしいですか？")) return;
+	if (!Array.isArray(db.data.incidents)) return;
+	db.data.incidents = db.data.incidents.filter(x => Number(x.id) !== Number(id));
+	db.save();
+	renderOfficeIncidents();
+	alert("報告書を削除しました。");
+}
 
-		const tr = document.createElement("tr");
-		tr.innerHTML = `
-			<td>${escapeHtml(timeDisplay)}</td>
-			<td><span class="badge" style="background:#fee2e2; color:#991b1b;">${escapeHtml(repType)}</span>${pinBadge}</td>
-			<td><strong>${res ? escapeHtml(res.name) + ' 様' : escapeHtml(inc.resident_name || '')}</strong></td>
-			<td>${escapeHtml(inc.place || '居室')}</td>
-			<td>${escapeHtml(situ)}</td>
-			<td>${escapeHtml(prev)}</td>
-			<td>${escapeHtml(supervisor)}</td>
-			<td><span class="badge" style="background:#dbeafe; color:#1e40af;">${escapeHtml(st)}</span></td>
-			<td style="white-space:nowrap; text-align:center;">
-				<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px;" onclick="editIncident(${inc.id})">修正・追記</button>
-				<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="printIncidentReport(${inc.id})">印刷</button>
-			</td>
-		`;
-		tbody.appendChild(tr);
+function renderOfficeIncidents() {
+	const tbodies = document.querySelectorAll("#incidentsTable tbody, #careIncidentsTable tbody");
+	if (!tbodies || tbodies.length === 0) return;
+	const list = db.data.incidents || [];
+
+	tbodies.forEach(tbody => {
+		tbody.innerHTML = "";
+		if (list.length === 0) {
+			tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">事故・ヒヤリハット報告はありません。</td></tr>`;
+			return;
+		}
+
+		list.forEach(inc => {
+			const res = (gState.residents || []).find(x => x.id === inc.resident_id);
+			const timeDisplay = inc.occurred_at || inc.date || '-';
+			const repType = inc.report_type || inc.level || 'ヒヤリハット';
+			const situ = inc.situation || '-';
+			const prev = inc.prevention || inc.countermeasure || '-';
+			const supervisor = inc.supervisor_comment || inc.factor || '-';
+			const st = inc.status || '報告済';
+			const pinsCount = (inc.injury_pins && Array.isArray(inc.injury_pins)) ? inc.injury_pins.length : 0;
+			const pinBadge = pinsCount > 0 ? `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:10.5px; padding:2px 6px; margin-left:4px; font-weight:bold;">外傷ピン ${pinsCount}件</span>` : '';
+
+			const tr = document.createElement("tr");
+			tr.innerHTML = `
+				<td>${escapeHtml(timeDisplay)}</td>
+				<td><span class="badge" style="background:#fee2e2; color:#991b1b;">${escapeHtml(repType)}</span>${pinBadge}</td>
+				<td><strong>${res ? escapeHtml(res.name) + ' 様' : escapeHtml(inc.resident_name || '')}</strong></td>
+				<td>${escapeHtml(inc.place || '居室')}</td>
+				<td>${escapeHtml(situ)}</td>
+				<td>${escapeHtml(prev)}</td>
+				<td>${escapeHtml(supervisor)}</td>
+				<td><span class="badge" style="background:#dbeafe; color:#1e40af;">${escapeHtml(st)}</span></td>
+				<td style="white-space:nowrap; text-align:center;">
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px;" onclick="editIncident(${inc.id})">修正・追記</button>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#fff1f2; color:#9f1239; border:1px solid #fecdd3;" onclick="deleteIncident(${inc.id})">削除</button>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="printIncidentReport(${inc.id})">印刷</button>
+				</td>
+			`;
+			tbody.appendChild(tr);
+		});
 	});
 }
+
 
 function updateIncidentPinsSummaryUI() {
 	const summaryEl = document.getElementById("incInjuryPinsSummary");
@@ -10944,6 +11436,7 @@ function saveIncidentReport() {
 
 	db.save();
 	closeModal("incidentModal");
+	renderOfficeIncidents();
 	if (gState.activePortal === "office") loadOfficeData();
 	alert("報告書を保存しました！");
 }
@@ -11464,6 +11957,8 @@ window.editIncidentInjuryPin = editIncidentInjuryPin;
 window.resetIncidentInjuryForm = resetIncidentInjuryForm;
 window.commitIncidentInjuryPins = commitIncidentInjuryPins;
 window.printIncidentReport = printIncidentReport;
+window.openNewIncidentModal = openNewIncidentModal;
+window.deleteIncident = deleteIncident;
 window.openRecreationModal = openRecreationModal;
 window.submitRecreationRecord = submitRecreationRecord;
 window.deleteRecreationRecord = deleteRecreationRecord;
@@ -11850,6 +12345,8 @@ function submitResidentForm() {
 
  closeModal("residentModal");
  renderResidentsStrip();
+	initGlobalTimeSync();
+	
  selectResident(targetId);
  renderOfficeBillingSelect();
  if (typeof onDepositResidentChange === "function") {
@@ -12406,6 +12903,8 @@ function updateResidentStatus(resId, status) {
  r.status = status;
  db.save();
  renderResidentsStrip();
+	initGlobalTimeSync();
+	
  renderResidentDetail();
  if (gState.activeCareTab === "vitals") renderVitalsTable();
  if (gState.activeCareTab === "meal") renderMealsTable();
@@ -12547,6 +13046,8 @@ function reloadStateFromDb() {
  if (typeof renderFsQuickTemplates === 'function') renderFsQuickTemplates();
  if (typeof renderStaffSelect === 'function') renderStaffSelect();
  if (typeof renderResidentsStrip === 'function') renderResidentsStrip();
+	initGlobalTimeSync();
+	
  if (typeof renderResidentDetail === 'function') renderResidentDetail();
  if (typeof renderCalendar === 'function') renderCalendar();
  if (typeof loadDateRecords === 'function') loadDateRecords(gState.selectedDate);
@@ -14599,160 +15100,153 @@ function renderOfficeBackup() {
 }
 
 // 事務所ポータル：職員アカウント・暗証番号管理
+
 function renderOfficeStaffAuth() {
- const tbody = document.querySelector("#staffAuthTable tbody");
- if (!tbody) return;
- tbody.innerHTML = "";
+  const tbody = document.querySelector("#staffAuthTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
 
- const stamps = sortStaffList(gState.stamps || []);
- stamps.forEach(s => {
- const isInit = cpIsInitialPin(s);
- const tr = document.createElement("tr");
- tr.innerHTML = `
- <td><strong>${escapeHtml(s.name)}</strong></td>
- <td><span style="font-size:12px; color:#475569;">${escapeHtml(s.role || "職員")}</span></td>
- <td>
- ${isInit 
- ? '<span class="badge" style="background:#fee2e2; color:#991b1b; padding:2px 6px; font-size:11.5px;">初期値(0000) 要設定</span>'
- : '<span class="badge" style="background:#dcfce7; color:#166534; padding:2px 6px; font-size:11.5px;">設定済み</span>'}
- </td>
- <td>
- <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px;" onclick="selectTargetForReset('${escapeHtml(s.name)}')">初期化フォームへ選択</button>
- </td>
- `;
- tbody.appendChild(tr);
- });
+  const stamps = sortStaffList(gState.stamps || []);
+  stamps.forEach(s => {
+    const isInit = cpIsInitialPin(s);
+    const isSuspended = s.status === "休止中";
+    const tr = document.createElement("tr");
 
- // 対象職員セレクトボックス
- const targetSel = document.getElementById("staffAuthTargetSelect");
- if (targetSel) {
- targetSel.innerHTML = "";
- stamps.forEach(s => {
- const opt = document.createElement("option");
- opt.value = s.name;
- opt.textContent = `${s.name} (${s.role || "職員"})`;
- targetSel.appendChild(opt);
- });
- }
+    const statusBadge = isSuspended
+      ? `<span class="badge" style="background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:3px 8px; font-size:12px;">休止中 (ロック)</span>`
+      : `<span class="badge" style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:3px 8px; font-size:12px;">正常 (利用可能)</span>`;
 
- // 承認者1（操作者）の表示
- const currentStaff = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "管理者";
- const currentStaffObj = (gState.stamps || []).find(s => (s.name || s) === currentStaff);
- const app1Display = document.getElementById("staffAuthApprover1NameDisplay");
- if (app1Display) {
- app1Display.textContent = `${currentStaff} (${currentStaffObj?.role || "管理者・事務"})`;
- }
+    const pinBadge = isInit
+      ? `<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:3px 8px; font-size:12px;">初期値(0000)</span>`
+      : `<span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:3px 8px; font-size:12px;">設定変更済み</span>`;
 
- // 承認者2（立ち会い承認者）のセレクトボックス
- const app2Sel = document.getElementById("staffAuthApprover2Select");
- if (app2Sel) {
- app2Sel.innerHTML = "";
- const approvers = (gState.stamps || []).filter(s => {
- return isStaffAdminOrClerk(s.name) && s.name !== currentStaff;
- });
- approvers.forEach(a => {
- const opt = document.createElement("option");
- opt.value = a.name;
- opt.textContent = `${a.name} (${a.role || "管理者・事務"})`;
- app2Sel.appendChild(opt);
- });
- }
+    const lockBtnLabel = isSuspended ? "ロック解除 (正常へ)" : "ロック (休止中へ)";
+    const lockBtnStyle = isSuspended
+      ? "background:#dcfce7; color:#166534; border-color:#86efac;"
+      : "background:#fee2e2; color:#991b1b; border-color:#fca5a5;";
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(s.name)}</strong></td>
+      <td><span style="font-size:12px; color:#475569;">${escapeHtml(s.role || "職員")}</span></td>
+      <td>${statusBadge}</td>
+      <td>${pinBadge}</td>
+      <td>
+        <div style="display:inline-flex; gap:6px; flex-wrap:wrap;">
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; ${lockBtnStyle}" onclick="toggleStaffAccountStatus('${escapeHtml(s.name)}')">${lockBtnLabel}</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; background:#f8fafc;" onclick="openResetStaffPinModal('${escapeHtml(s.name)}')">暗証番号を初期化</button>
+        </div>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const currentStaff = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "管理者";
+  const app1Disp = document.getElementById("staffAuthApprover1NameDisplay");
+  if (app1Disp) app1Disp.textContent = currentStaff;
+
+  const app2Sel = document.getElementById("staffAuthApprover2Select");
+  if (app2Sel) {
+    app2Sel.innerHTML = "";
+    const adminClerks = (gState.stamps || []).filter(st => {
+      const r = st.role || "";
+      const isAC = r.includes("管理者") || r.includes("施設長") || r.includes("事務");
+      return isAC && st.name !== currentStaff;
+    });
+
+    const candidates = adminClerks.length > 0 ? adminClerks : (gState.stamps || []).filter(st => st.name !== currentStaff);
+    candidates.forEach(st => {
+      const opt = document.createElement("option");
+      opt.value = st.name;
+      opt.textContent = `${st.name} (${st.role || '職員'})`;
+      app2Sel.appendChild(opt);
+    });
+  }
 }
 
-function selectTargetForReset(staffName) {
- const targetSel = document.getElementById("staffAuthTargetSelect");
- if (targetSel) {
- targetSel.value = staffName;
- targetSel.scrollIntoView({ behavior: 'smooth', block: 'center' });
- }
+function toggleStaffAccountStatus(staffName) {
+  const s = (gState.stamps || []).find(x => (x.name || x) === staffName);
+  if (!s) return;
+  const newStatus = s.status === "休止中" ? "正常" : "休止中";
+  s.status = newStatus;
+  db.data.stamps = gState.stamps;
+  db.save();
+  renderOfficeStaffAuth();
+  if (typeof updateStaffRoleUI === "function") updateStaffRoleUI();
+  alert(`【アカウント状態変更】\n【${staffName}】様のアカウント状態を「${newStatus}」に変更しました。`);
+}
+
+function openResetStaffPinModal(staffName) {
+  const s = (gState.stamps || []).find(x => (x.name || x) === staffName);
+  if (!s) return;
+  document.getElementById("resetTargetStaffHidden").value = staffName;
+  document.getElementById("resetTargetStaffDisplay").textContent = `${s.name} (${s.role || '職員'})`;
+  document.getElementById("staffAuthApprover1Pin").value = "";
+  document.getElementById("staffAuthApprover2Pin").value = "";
+  
+  renderOfficeStaffAuth();
+  openModal("resetStaffPinModal");
 }
 
 function submitTwoPersonReset() {
- const targetSel = document.getElementById("staffAuthTargetSelect");
- const targetName = targetSel ? targetSel.value : "";
- if (!targetName) {
- alert("初期化する対象職員を選択してください。");
- return;
- }
+  const targetName = document.getElementById("resetTargetStaffHidden")?.value;
+  if (!targetName) {
+    alert("初期化対象の職員が選択されていません。");
+    return;
+  }
 
- const currentStaff = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "";
- const app1Pin = (document.getElementById("staffAuthApprover1Pin")?.value || "").trim();
- const app2Sel = document.getElementById("staffAuthApprover2Select");
- const app2Name = app2Sel ? app2Sel.value : "";
- const app2Pin = (document.getElementById("staffAuthApprover2Pin")?.value || "").trim();
+  const currentStaff = (document.getElementById("currentStaff")?.value) || gState.currentStaff || "";
+  const app1Pin = document.getElementById("staffAuthApprover1Pin")?.value || "";
+  const app2Name = document.getElementById("staffAuthApprover2Select")?.value || "";
+  const app2Pin = document.getElementById("staffAuthApprover2Pin")?.value || "";
 
- if (!app2Name) {
- alert("立ち会い承認者（管理者または別の事務員）を選択してください。");
- return;
- }
- if (currentStaff === app2Name) {
- alert("承認者1と承認者2は異なる2名である必要があります。");
- return;
- }
+  if (!app1Pin || app1Pin.length !== 4) {
+    alert("操作者の暗証番号(4桁)を入力してください。");
+    return;
+  }
+  if (!app2Name) {
+    alert("立ち会い承認者を選択してください。");
+    return;
+  }
+  if (!app2Pin || app2Pin.length !== 4) {
+    alert("立ち会い承認者の暗証番号(4桁)を入力してください。");
+    return;
+  }
 
- // [Claude修正] サーバー稼働時は、承認者2名の暗証番号の照合と初期化をサーバーで行う
- if (db && db.isServerMode) {
- if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？\nリセット後は対象者本人が新しい暗証番号を初回設定します。`)) return;
- cpPostJson('/api/pin-reset', { target: targetName, approver1: currentStaff, approver1_pin: app1Pin, approver2: app2Name, approver2_pin: app2Pin }).then(r => {
- if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
- if (r.info && r.info.error === "pin_mismatch_2") { alert("承認者2（立ち会い承認者）の暗証番号が正しくありません。"); return; }
- if (r.info && r.info.error === "pin_mismatch") { alert("承認者1（操作者）の暗証番号が正しくありません。"); return; }
- if (!r.ok) { alert("承認者の役職または入力内容が正しくありません。初期化は行っていません。"); return; }
- const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
- if (targetObj) targetObj.is_initial_pin = true;
- const p1 = document.getElementById("staffAuthApprover1Pin");
- if (p1) p1.value = "";
- const p2 = document.getElementById("staffAuthApprover2Pin");
- if (p2) p2.value = "";
- renderOfficeStaffAuth();
- updateStaffRoleUI();
- checkGlobalAlerts();
- alert(`【2名承認リセット完了】\n【${targetName}】の暗証番号を「0000」に初期化しました。\n対象職員本人が新しい暗証番号を設定できるようになりました。`);
- });
- return;
- }
+  const app1Obj = (gState.stamps || []).find(s => (s.name || s) === currentStaff);
+  const realApp1Pin = app1Obj ? (app1Obj.pin || "0000") : "0000";
+  if (app1Pin !== realApp1Pin) {
+    alert("操作者（承認者1）の暗証番号が正しくありません。");
+    return;
+  }
 
- // 承認者1の認証
- const app1Obj = (gState.stamps || []).find(s => (s.name || s) === currentStaff);
- const realApp1Pin = app1Obj ? (app1Obj.pin || "0000") : "0000";
- if (app1Pin !== realApp1Pin) {
- alert("承認者1（操作者）の暗証番号が正しくありません。");
- return;
- }
+  const app2Obj = (gState.stamps || []).find(s => (s.name || s) === app2Name);
+  const realApp2Pin = app2Obj ? (app2Obj.pin || "0000") : "0000";
+  if (app2Pin !== realApp2Pin) {
+    alert("立ち会い承認者（承認者2）の暗証番号が正しくありません。");
+    return;
+  }
 
- // 承認者2の認証
- const app2Obj = (gState.stamps || []).find(s => (s.name || s) === app2Name);
- const realApp2Pin = app2Obj ? (app2Obj.pin || "0000") : "0000";
- if (app2Pin !== realApp2Pin) {
- alert("承認者2（立ち会い承認者）の暗証番号が正しくありません。");
- return;
- }
+  if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？`)) {
+    return;
+  }
 
- if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？\nリセット後は対象者本人が新しい暗証番号を初回設定します。`)) {
- return;
- }
+  const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
+  if (targetObj) {
+    targetObj.pin = "0000";
+    targetObj.is_initial_pin = true;
+    db.data.stamps = gState.stamps;
+    db.save();
+  }
 
- const targetObj = (gState.stamps || []).find(s => (s.name || s) === targetName);
- if (!targetObj) return;
- targetObj.pin = "0000";
- targetObj.is_initial_pin = true;
- if (typeof db !== "undefined" && db.data) {
- db.data.stamps = gState.stamps;
- db.save();
- }
+  closeModal("resetStaffPinModal");
+  renderOfficeStaffAuth();
+  if (typeof updateStaffRoleUI === "function") updateStaffRoleUI();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
 
- const p1 = document.getElementById("staffAuthApprover1Pin");
- if (p1) p1.value = "";
- const p2 = document.getElementById("staffAuthApprover2Pin");
- if (p2) p2.value = "";
-
- renderOfficeStaffAuth();
- updateStaffRoleUI();
- checkGlobalAlerts();
- alert(`【2名承認リセット完了】\n【${targetName}】の暗証番号を「0000」に初期化しました。\n対象職員本人が新しい暗証番号を設定できるようになりました。`);
+  alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を「0000」に初期化しました。\n対象職員本人が次回ログイン時に新しい暗証番号を設定できるようになりました。`);
 }
 
-// 後方互換・直接呼び出し用
+
 function resetStaffPin(staffName) {
  if (db && db.isServerMode) {
  alert("暗証番号の初期化は、2名承認の画面から行ってください。");
@@ -14860,6 +15354,219 @@ window.changeDateByDays = changeDateByDays;
 window.setTodayDate = setTodayDate;
 window.changeLinenResident = changeLinenResident;
 window.deleteLinenRecord = deleteLinenRecord;
+
+// ==========================================================
+// 要介護認定 有効期限・更新手続き進捗管理機能
+// ==========================================================
+function renderOfficeCareRenewal() {
+  const tbody = document.querySelector("#careRenewalTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+
+  const filter = document.getElementById("careRenewalFilterSelect")?.value || "all";
+  const search = (document.getElementById("careRenewalSearchInput")?.value || "").trim().toLowerCase();
+
+  const today = new Date();
+  today.setHours(0,0,0,0);
+
+  let totalCount = 0;
+  let urgentCount = 0;
+  let warningCount = 0;
+  let inProgressCount = 0;
+  let completedCount = 0;
+
+  gState.residents.forEach(r => {
+    totalCount++;
+    r.renewal_steps = r.renewal_steps || {
+      application_submitted: false,
+      visit_scheduled: false,
+      doctor_statement: false,
+      result_pending: false,
+      completed: false
+    };
+
+    let daysDiff = 999;
+    if (r.care_expiry_date) {
+      const exp = new Date(r.care_expiry_date);
+      exp.setHours(0,0,0,0);
+      daysDiff = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
+    }
+
+    if (daysDiff <= 30) urgentCount++;
+    else if (daysDiff <= 60) warningCount++;
+
+    const isStepsStarted = Object.values(r.renewal_steps).some(v => v === true);
+    if (r.renewal_steps.completed) {
+      completedCount++;
+    } else if (isStepsStarted) {
+      inProgressCount++;
+    }
+
+    // Filter matching
+    if (search) {
+      const matchName = (r.name || "").toLowerCase().includes(search);
+      const matchRoom = (r.room_no || "").toLowerCase().includes(search);
+      if (!matchName && !matchRoom) return;
+    }
+
+    if (filter === "urgent" && daysDiff > 30) return;
+    if (filter === "warning" && (daysDiff <= 30 || daysDiff > 60)) return;
+    if (filter === "in_progress" && (!isStepsStarted || r.renewal_steps.completed)) return;
+    if (filter === "completed" && !r.renewal_steps.completed) return;
+
+    // Render row
+    const tr = document.createElement("tr");
+
+    let daysBadge = "";
+    if (r.care_expiry_date) {
+      if (daysDiff < 0) {
+        daysBadge = `<span class="badge" style="background:#dc2626; color:#fff;">期限切れ (${Math.abs(daysDiff)}日前)</span>`;
+      } else if (daysDiff <= 30) {
+        daysBadge = `<span class="badge" style="background:#dc2626; color:#fff;">残り ${daysDiff}日 (至急申請)</span>`;
+      } else if (daysDiff <= 60) {
+        daysBadge = `<span class="badge" style="background:#ea580c; color:#fff;">残り ${daysDiff}日 (注意)</span>`;
+      } else {
+        daysBadge = `<span class="badge" style="background:#16a34a; color:#fff;">残り ${daysDiff}日</span>`;
+      }
+    } else {
+      daysBadge = `<span class="badge" style="background:#94a3b8; color:#fff;">期限未設定</span>`;
+    }
+
+    const s = r.renewal_steps;
+
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
+      <td><span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">${escapeHtml(r.care_level || '要介護3')}</span></td>
+      <td><strong>${r.care_expiry_date || '未設定'}</strong></td>
+      <td>${daysBadge}</td>
+      <td>
+        <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px;">
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.application_submitted ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'application_submitted')">
+            <span>① 申請提出済</span>
+          </label>
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.visit_scheduled ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'visit_scheduled')">
+            <span>② 訪問調査確定</span>
+          </label>
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.doctor_statement ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'doctor_statement')">
+            <span>③ 意見書依頼済</span>
+          </label>
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.result_pending ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'result_pending')">
+            <span>④ 認定結果待ち</span>
+          </label>
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:bold; color:${s.completed?'#16a34a':'#475569'};">
+            <input type="checkbox" ${s.completed ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'completed')">
+            <span>⑤ 新認定反映完了</span>
+          </label>
+        </div>
+      </td>
+      <td>
+        <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px; background:#0284c7; border-color:#0284c7;" onclick="openUpdateCareLevelModal(${r.id})">
+          新認定へ更新
+        </button>
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+
+  const summaryEl = document.getElementById("careRenewalSummaryCards");
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size:12px; color:#64748b;">対象利用者 総数</div>
+        <div style="font-size:22px; font-weight:bold; color:#0f172a; margin-top:2px;">${totalCount} 名</div>
+      </div>
+      <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size:12px; color:#991b1b; font-weight:bold;">期限30日以内 (至急申請)</div>
+        <div style="font-size:22px; font-weight:bold; color:#dc2626; margin-top:2px;">${urgentCount} 名</div>
+      </div>
+      <div style="background:#fff7ed; border:1px solid #fdba74; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size:12px; color:#9a3412; font-weight:bold;">期限60日以内 (注意)</div>
+        <div style="font-size:22px; font-weight:bold; color:#ea580c; margin-top:2px;">${warningCount} 名</div>
+      </div>
+      <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size:12px; color:#166534; font-weight:bold;">更新手続き完了</div>
+        <div style="font-size:22px; font-weight:bold; color:#16a34a; margin-top:2px;">${completedCount} 名</div>
+      </div>
+    `;
+  }
+}
+
+function toggleCareRenewalStep(residentId, stepKey) {
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+  r.renewal_steps = r.renewal_steps || {};
+  r.renewal_steps[stepKey] = !r.renewal_steps[stepKey];
+  db.data.residents = gState.residents;
+  db.save();
+  renderOfficeCareRenewal();
+}
+
+function openUpdateCareLevelModal(residentId) {
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+  document.getElementById("updateCareLevelResidentId").value = r.id;
+  document.getElementById("updateCareLevelModalTitle").textContent = `要介護認定の更新登録 (${r.name} 様)`;
+  document.getElementById("newCareLevelSelect").value = r.care_level || "要介護3";
+  
+  const defaultNextYear = new Date();
+  defaultNextYear.setFullYear(defaultNextYear.getFullYear() + 1);
+  const yyyy = defaultNextYear.getFullYear();
+  const mm = String(defaultNextYear.getMonth() + 1).padStart(2, '0');
+  const dd = String(defaultNextYear.getDate()).padStart(2, '0');
+  document.getElementById("newCareExpiryDateInput").value = `${yyyy}-${mm}-${dd}`;
+
+  openModal("updateCareLevelModal");
+}
+
+function submitUpdateCareLevelModal() {
+  const residentId = Number(document.getElementById("updateCareLevelResidentId").value);
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+
+  const newLevel = document.getElementById("newCareLevelSelect").value;
+  const newExpiry = document.getElementById("newCareExpiryDateInput").value;
+
+  if (!newExpiry) {
+    alert("新しい認定有効期限を入力してください。");
+    return;
+  }
+
+  r.care_level = newLevel;
+  r.care_expiry_date = newExpiry;
+  r.renewal_steps = {
+    application_submitted: true,
+    visit_scheduled: true,
+    doctor_statement: true,
+    result_pending: true,
+    completed: true
+  };
+
+  db.data.residents = gState.residents;
+  db.save();
+
+  renderOfficeCareRenewal();
+  if (typeof renderResidentsStrip === "function") renderResidentsStrip();
+	initGlobalTimeSync();
+	
+  closeModal("updateCareLevelModal");
+  alert(`【認定更新完了】\n${r.name} 様の要介護度を「${newLevel}」、有効期限を「${newExpiry}」に更新いたしました。`);
+}
+
+function printCareRenewalList() {
+  window.print();
+}
+
+
+window.renderOfficeCareRenewal = renderOfficeCareRenewal;
+window.toggleCareRenewalStep = toggleCareRenewalStep;
+window.openUpdateCareLevelModal = openUpdateCareLevelModal;
+window.submitUpdateCareLevelModal = submitUpdateCareLevelModal;
+window.printCareRenewalList = printCareRenewalList;
+
 window.openSupplierModal = openSupplierModal;
 window.submitSupplierModal = submitSupplierModal;
 window.deleteSupplier = deleteSupplier;
@@ -14926,49 +15633,70 @@ function initStaffAccounts() {
 }
 
 // ログイン画面の職員セレクトボックス描画
+
 function renderLoginStaffSelect() {
   const sel = document.getElementById("loginStaffSelect");
   if (!sel) return;
 
-  // [Claude修正] サーバー稼働時は、ログイン前でも取得できる職員一覧 (名前と役職のみ) をサーバーから取得する
-  if (db && db.isServerMode) {
+  const prevVal = sel.value;
+  let staffList = [];
+
+  if (typeof gState !== "undefined" && Array.isArray(gState.stamps) && gState.stamps.length > 0) {
+    staffList = gState.stamps.map(s => ({
+      name: s.name || s,
+      role: s.role || "職員",
+      status: s.status || "正常",
+      is_custom: typeof cpIsInitialPin === "function" ? !cpIsInitialPin(s) : false
+    }));
+  } else if (typeof db !== "undefined" && db.data && Array.isArray(db.data.staff_accounts) && db.data.staff_accounts.length > 0) {
+    staffList = db.data.staff_accounts.map(a => ({
+      name: a.staff_name,
+      role: "職員",
+      status: a.status || "正常",
+      is_custom: a.is_custom || false
+    }));
+  } else {
+    const defaults = [
+      "木村 健一", "鈴木 美智子", "加藤 由美", "山田 孝之", "伊藤 翔太",
+      "井上 蓮", "吉田 誠", "高橋 直樹", "佐藤 健太", "小林 亮",
+      "松田 健二", "清水 翔平", "斉藤 翼", "石川 太陽", "中村 大輔",
+      "渡辺 拓也", "野村 拓海", "松本 陽子", "田中 慎一"
+    ];
+    staffList = defaults.map(name => ({ name, role: "職員", status: "正常", is_custom: false }));
+  }
+
+  sel.innerHTML = "";
+  staffList.forEach(st => {
+    if (st.status === "休止中") return; // 休止中アカウントはログイン選択肢から除外
+    const opt = document.createElement("option");
+    opt.value = st.name;
+    opt.textContent = `${st.name} 様` + (st.is_custom ? "" : " (初期設定)");
+    sel.appendChild(opt);
+  });
+
+  if (prevVal && [...sel.options].some(o => o.value === prevVal)) {
+    sel.value = prevVal;
+  }
+
+  // サーバーモード時はバックグラウンドで最新情報を取得
+  if (typeof db !== "undefined" && db.isServerMode && typeof cpApiFetch === "function") {
     cpApiFetch('/api/login-info', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(info => {
       if (!info || !Array.isArray(info.staff)) return;
       gState.loginStaffInfo = info.staff;
-      const prev = sel.value;
+      const currentVal = sel.value;
       sel.innerHTML = "";
       info.staff.forEach(st => {
+        if (st.status === "休止中") return;
         const opt = document.createElement("option");
         opt.value = st.name;
         opt.textContent = `${st.name} 様` + (st.is_custom ? "" : " (初期設定)");
         sel.appendChild(opt);
       });
-      if (prev && info.staff.some(st => st.name === prev)) sel.value = prev;
-      const facEl = document.getElementById("loginFacilityNameDisplay");
-      if (facEl && info.facility_name) facEl.textContent = info.facility_name;
-      renderResetStaffSelects();
+      if (currentVal && info.staff.some(st => st.name === currentVal)) sel.value = currentVal;
     }).catch(() => {});
-    return;
   }
-
-  sel.innerHTML = "";
-  initStaffAccounts();
-
-  (db.data.staff_accounts || []).forEach(acc => {
-    const opt = document.createElement("option");
-    opt.value = acc.staff_name;
-    opt.textContent = `${acc.staff_name} 様` + (acc.is_custom ? "" : " (初期設定)");
-    sel.appendChild(opt);
-  });
-
-  const facEl = document.getElementById("loginFacilityNameDisplay");
-  if (facEl && typeof getFacilityName === "function") {
-    facEl.textContent = getFacilityName();
-  }
-
-  // 初期化モーダル用のセレクトボックスも更新
-  renderResetStaffSelects();
 }
+
 
 function onLoginStaffSelectChange(staffName) {
   const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
@@ -15047,6 +15775,7 @@ function finishLoginUi(staffName, staffId, isCustom) {
   const mainWrap = document.getElementById("appMainWrapper");
   if (loginSec) loginSec.style.display = "none";
   if (mainWrap) mainWrap.style.display = "block";
+  document.body.style.overflow = "";
   const pwInput = document.getElementById("loginPasswordInput");
   if (pwInput) pwInput.value = "";
   goToHome();
@@ -15123,6 +15852,7 @@ function handleLoginSubmitLocal() {
   const mainWrap = document.getElementById("appMainWrapper");
   if (loginSec) loginSec.style.display = "none";
   if (mainWrap) mainWrap.style.display = "block";
+  document.body.style.overflow = "";
 
   // ホーム画面を表示
   goToHome();
@@ -15148,6 +15878,7 @@ function handleLogout() {
   const loginSec = document.getElementById("loginSection");
   if (mainWrap) mainWrap.style.display = "none";
   if (loginSec) loginSec.style.display = "flex";
+  document.body.style.overflow = "hidden";
 
   const idInput = document.getElementById("loginStaffIdInput");
   const pwInput = document.getElementById("loginPasswordInput");
@@ -15608,6 +16339,7 @@ function restoreSessionOnLoad() {
   const mainWrap = document.getElementById("appMainWrapper");
   if (loginSec) loginSec.style.display = "flex";
   if (mainWrap) mainWrap.style.display = "none";
+  document.body.style.overflow = "hidden";
   renderLoginStaffSelect();
 }
 
@@ -15757,3 +16489,19 @@ function renderCompareView() {
 // グローバル公開
 window.openCareSummaryCompareModal = openCareSummaryCompareModal;
 window.renderCompareView = renderCompareView;
+if (typeof window !== "undefined") {
+  window.toggleStaffAccountStatus = toggleStaffAccountStatus;
+  window.openResetStaffPinModal = openResetStaffPinModal;
+  window.submitTwoPersonReset = submitTwoPersonReset;
+}
+
+window.openAddMonthlyNoticeUpdateModal = openAddMonthlyNoticeUpdateModal;
+window.submitMonthlyNoticeUpdate = submitMonthlyNoticeUpdate;
+
+window.confirmDailyNotebookItem = confirmDailyNotebookItem;
+window.openAddDailyNotebookUpdateModal = openAddDailyNotebookUpdateModal;
+window.submitDailyNotebookUpdate = submitDailyNotebookUpdate;
+window.deleteDailyNotebookItem = deleteDailyNotebookItem;
+window.syncGlobalTimeToNow = syncGlobalTimeToNow;
+window.onGlobalTimeChange = onGlobalTimeChange;
+window.initGlobalTimeSync = initGlobalTimeSync;

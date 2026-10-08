@@ -9,7 +9,7 @@
 <body>
 
   <!-- 0. ログイン認証画面 (未ログイン時に全画面を覆って表示) -->
-  <div id="loginSection" style="display:flex; justify-content:center; align-items:center; min-height:100vh; background:linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); padding:20px; box-sizing:border-box;">
+  <div id="loginSection" style="position:fixed; top:0; left:0; width:100vw; height:100vh; z-index:999999; display:flex; justify-content:center; align-items:center; background:linear-gradient(135deg, #1e3a8a 0%, #0f172a 100%); overflow-y:auto; padding:20px; box-sizing:border-box;">
     <div style="background:#ffffff; border-radius:12px; box-shadow:0 12px 28px rgba(0,0,0,0.25); width:100%; max-width:440px; padding:32px 28px; box-sizing:border-box;">
       <div style="text-align:center; margin-bottom:24px;">
         <h2 style="margin:0; font-size:22px; color:#0f172a; font-weight:bold;"><span id="loginFacilityNameDisplay">施設</span> 統合ポータル</h2>
@@ -19,7 +19,25 @@
       <div style="margin-bottom:16px;">
         <label style="display:block; font-size:13px; font-weight:bold; color:#334155; margin-bottom:6px;">職員名を選択 <span style="color:#dc2626;">*</span>:</label>
         <select id="loginStaffSelect" class="form-control" style="width:100%; font-size:14px; padding:8px 10px;" onchange="onLoginStaffSelectChange(this.value)">
-          <!-- JSで職員一覧を描画 -->
+          <option value="木村 健一">木村 健一 様 (初期設定)</option>
+          <option value="鈴木 美智子">鈴木 美智子 様 (初期設定)</option>
+          <option value="加藤 由美">加藤 由美 様 (初期設定)</option>
+          <option value="山田 孝之">山田 孝之 様 (初期設定)</option>
+          <option value="伊藤 翔太">伊藤 翔太 様 (初期設定)</option>
+          <option value="井上 蓮">井上 蓮 様 (初期設定)</option>
+          <option value="吉田 誠">吉田 誠 様 (初期設定)</option>
+          <option value="高橋 直樹">高橋 直樹 様 (初期設定)</option>
+          <option value="佐藤 健太">佐藤 健太 様 (初期設定)</option>
+          <option value="小林 亮">小林 亮 様 (初期設定)</option>
+          <option value="松田 健二">松田 健二 様 (初期設定)</option>
+          <option value="清水 翔平">清水 翔平 様 (初期設定)</option>
+          <option value="斉藤 翼">斉藤 翼 様 (初期設定)</option>
+          <option value="石川 太陽">石川 太陽 様 (初期設定)</option>
+          <option value="中村 大輔">中村 大輔 様 (初期設定)</option>
+          <option value="渡辺 拓也">渡辺 拓也 様 (初期設定)</option>
+          <option value="野村 拓海">野村 拓海 様 (初期設定)</option>
+          <option value="松本 陽子">松本 陽子 様 (初期設定)</option>
+          <option value="田中 慎一">田中 慎一 様 (初期設定)</option>
         </select>
       </div>
 
@@ -153,6 +171,11 @@
        <input type="date" id="globalCareDatePicker" class="form-control" style="font-size:14px; font-weight:bold; padding:4px 8px; width:auto;" onchange="onGlobalDateChange(this.value)">
        <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="changeDateByDays(1)">翌日 ▶</button>
        <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; background:#f1f5f9;" onclick="setTodayDate()">今日</button>
+
+        <span style="border-left:1px solid #cbd5e1; height:20px; margin:0 4px;"></span>
+        <span style="font-weight:bold; font-size:13px; color:#166534; background:#f0fdf4; padding:4px 10px; border-radius:4px; border:1px solid #bbf7d0;">現在時刻連動</span>
+        <input type="time" id="globalCareTimePicker" class="form-control" style="font-size:14px; font-weight:bold; padding:4px 8px; width:auto;" onchange="onGlobalTimeChange(this.value)">
+        <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; background:#f0fdf4; color:#166534; border-color:#86efac; font-weight:bold;" onclick="syncGlobalTimeToNow()" title="ボタンを押したその瞬間の現在時刻を一回のみ取得・固定セットします">🕒 今の時刻を取得して固定セット</button>
      </div>
      <div style="display:flex; align-items:center; gap:10px;">
        <span id="globalDateDisplayLabel" style="font-size:13.5px; font-weight:bold; color:#0f172a;"></span>
@@ -189,7 +212,7 @@
  <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
  <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
  <button class="sub-tab-btn" onclick="switchCareTab('med')">服薬・点眼</button>
- <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡帳・申し送り</button>
+ <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡・申送り</button>
  </div>
 
  <!-- たまに使う（定例・状況別） -->
@@ -204,6 +227,7 @@
  <button class="sub-tab-btn" onclick="switchCareTab('visit')">面会・荷物</button>
  <button class="sub-tab-btn" onclick="switchCareTab('recreation')">レク履歴</button>
  <button class="sub-tab-btn" onclick="switchCareTab('consume')">物品消費</button>
+      <button class="sub-tab-btn" onclick="switchCareTab('incidents')">ヒヤリハット・事故</button>
  </div>
  </div>
 
@@ -747,7 +771,7 @@
 		</table>
 	</div>
 
- <!-- 14. 連絡帳 ＆ 申し送り (月間連絡表と日々の申し送りを完全分離) -->
+ <!-- 14. 連絡・申送り (月間連絡表と日々の申し送りを完全分離) -->
  <div id="tabCareNotebook" style="display:none;">
  <!-- 月間業務連絡表 (全館・当月1ヶ月間継続掲示・変更事項等) -->
  <div class="panel-card" style="margin-bottom:16px;">
@@ -792,7 +816,24 @@
  </div>
 
  <!-- 15. 現場クイック消費 (優しい「修正」ボタン付き) -->
- <div id="tabCareConsume" style="display:none;" class="panel-card">
+ 
+    <!-- 16. ヒヤリハット ＆ 事故報告書 (介護ポータル内) -->
+    <div id="tabCareIncidents" style="display:none;" class="panel-card">
+      <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <span> ヒヤリハット ＆ 事故報告書 一覧</span>
+        <button class="btn btn-primary" style="font-size:12.5px; padding:6px 14px; background:#dc2626; border-color:#b91c1c;" onclick="openNewIncidentModal()">＋ 新規報告書を作成</button>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="careIncidentsTable">
+          <thead>
+            <tr><th>発生日時</th><th>種別</th><th>氏名</th><th>場所</th><th>発生状況</th><th>再発防止策</th><th>上司コメント</th><th>状態</th><th>操作</th></tr>
+          </thead>
+          <tbody></tbody>
+        </table>
+      </div>
+    </div>
+
+<div id="tabCareConsume" style="display:none;" class="panel-card">
  <div class="panel-title">
  <span> 現場クイック消費 (オムツや手袋をタップで在庫マイナス ＆ 請求明細へ連動)</span>
  </div>
@@ -847,6 +888,7 @@
  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0;">
  <span style="font-size:12px; font-weight:bold; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:4px; white-space:nowrap;">【月次・定期・監査】</span>
  <button class="sub-tab-btn" onclick="switchOfficeTab('billing')"> 月末請求明細</button>
+ <button class="sub-tab-btn" onclick="switchOfficeTab('care_renewal')"> 要介護認定・更新管理</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('shift')"> 勤務表・シフト</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('emergency')"> 非常食・備蓄</button>
  <button class="sub-tab-btn" onclick="switchOfficeTab('suppliers')"> 取引先マスタ</button>
@@ -961,7 +1003,51 @@
  <div id="billingDetailArea"></div>
  </div>
 
- <!-- 6. 預かり金・小遣い出納帳 -->
+ 
+ <!-- 要介護認定 有効期限・更新手続き進捗管理台帳 -->
+ <div id="tabOfficeCareRenewal" style="display:none;" class="panel-card">
+  <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+   <span> 要介護認定 有効期限・更新手続き進捗管理台帳</span>
+   <div style="display:flex; gap:8px;">
+    <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="printCareRenewalList()"> 帳票を印刷</button>
+   </div>
+  </div>
+
+  <!-- サマリーカードエリア -->
+  <div id="careRenewalSummaryCards" style="display:grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); gap:12px; margin-bottom:14px;"></div>
+
+  <!-- 絞り込み・検索バー -->
+  <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap; margin-bottom:12px; background:#f8fafc; padding:10px 14px; border-radius:6px; border:1px solid #e2e8f0;">
+   <label style="font-weight:bold; font-size:13px; color:#475569;">表示絞り込み:</label>
+   <select id="careRenewalFilterSelect" class="form-control" style="width:auto; font-size:12px;" onchange="renderOfficeCareRenewal()">
+    <option value="all">全利用者を表示</option>
+    <option value="urgent">期限30日以内 (緊急・至急申請)</option>
+    <option value="warning">期限60日以内 (要確認)</option>
+    <option value="in_progress">更新手続き進行中</option>
+    <option value="completed">更新完了済み</option>
+   </select>
+   <input type="text" id="careRenewalSearchInput" class="form-control" style="width:220px; font-size:12px;" placeholder="氏名・部屋番号で検索" oninput="renderOfficeCareRenewal()">
+  </div>
+
+  <!-- 一覧テーブル -->
+  <div style="overflow-x:auto;">
+   <table class="data-table" id="careRenewalTable">
+    <thead>
+     <tr>
+      <th style="width:14%;">居室 / 利用者名</th>
+      <th style="width:10%;">要介護度</th>
+      <th style="width:13%;">認定有効期限</th>
+      <th style="width:13%;">残り日数 / ステータス</th>
+      <th style="width:36%;">更新手続きステップ (チェックで進捗保存)</th>
+      <th style="width:14%;">操作 / 新認定へ更新</th>
+     </tr>
+    </thead>
+    <tbody></tbody>
+   </table>
+  </div>
+ </div>
+
+<!-- 6. 預かり金・小遣い出納帳 -->
  <div id="tabOfficeDeposit" style="display:none;" class="panel-card">
  <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
  <span> 預かり金・小遣い出納帳</span>
@@ -1169,11 +1255,12 @@
  </table>
  </div>
 
- <!-- 13. ヒヤリハット ＆ 事故報告書 -->
- <div id="tabOfficeIncidents" style="display:none;" class="panel-card">
- <div class="panel-title">
- <span> ヒヤリハット ＆ 事故報告書 一覧 (独立修正可能)</span>
- </div>
+   <!-- 13. ヒヤリハット ＆ 事故報告書 -->
+  <div id="tabOfficeIncidents" style="display:none;" class="panel-card">
+    <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <span> ヒヤリハット ＆ 事故報告書 一覧</span>
+      <button class="btn btn-primary" style="font-size:12.5px; padding:6px 14px; background:#dc2626; border-color:#b91c1c;" onclick="openNewIncidentModal()">＋ 新規報告書を作成</button>
+    </div>
  <table class="data-table" id="incidentsTable">
  <thead>
  <tr><th>発生日時</th><th>種別</th><th>氏名</th><th>場所</th><th>発生状況</th><th>再発防止策</th><th>上司コメント</th><th>状態</th><th>操作</th></tr>
@@ -1252,187 +1339,180 @@
  <!-- 職員一覧テーブル -->
  <div style="margin-bottom:24px;">
  <div style="font-weight:bold; font-size:14px; color:#1e293b; margin-bottom:8px;">職員アカウント一覧 ＆ 暗証番号ステータス</div>
- <table class="data-table" id="staffAuthTable">
- <thead>
- <tr>
- <th>職員名</th>
- <th>役職</th>
- <th>状態</th>
- <th>初期化（リセット）</th>
- </tr>
- </thead>
- <tbody></tbody>
- </table>
- </div>
-
- <!-- 2名承認による初期化リセットフォーム -->
- <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:16px; max-width:640px;">
- <div style="font-weight:bold; font-size:14px; color:#991b1b; margin-bottom:6px;">【2名承認制】暗証番号の初期化（0000へリセット）</div>
- <p style="font-size:12px; color:#64748b; margin-bottom:12px; line-height:1.5;">
- 誤クリックや不正操作を防止するため、リセットには<strong>操作者（管理者または事務員）と、もう1名の管理者または事務員の計2名</strong>による暗証番号入力が必要です。
- </p>
-
- <div style="display:flex; flex-direction:column; gap:12px;">
- <div>
- <label style="font-size:12px; font-weight:bold; color:#334155; display:block; margin-bottom:4px;">初期化する対象職員:</label>
- <select id="staffAuthTargetSelect" class="form-control" style="width:100%; font-size:13px;"></select>
- </div>
-
- <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;">
- <div style="font-weight:bold; font-size:12.5px; color:#1e3a8a;">[承認者1] 操作者（現在ログイン中の管理者・事務員）</div>
- <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
- <div style="font-size:13px; color:#334155; font-weight:bold; min-width:140px;" id="staffAuthApprover1NameDisplay">管理者</div>
- <div style="display:flex; align-items:center; gap:6px;">
- <label style="font-size:11.5px; color:#64748b;">暗証番号(4桁):</label>
- <input type="password" id="staffAuthApprover1Pin" class="form-control" style="width:120px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
- </div>
+   <table class="data-table" id="staffAuthTable">
+   <thead>
+    <tr>
+     <th style="width:20%;">職員名</th>
+     <th style="width:15%;">役職</th>
+     <th style="width:18%;">アカウント状態</th>
+     <th style="width:18%;">暗証番号設定</th>
+     <th style="width:29%;">操作 (ロック切替 / 初期化)</th>
+    </tr>
+   </thead>
+   <tbody></tbody>
+  </table>
  </div>
  </div>
 
- <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px; display:flex; flex-direction:column; gap:8px;">
- <div style="font-weight:bold; font-size:12.5px; color:#991b1b;">[承認者2] もう1名の管理者または事務員（立ち会い承認）</div>
- <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
- <div style="flex:1; min-width:160px;">
- <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">立ち会い承認者:</label>
- <select id="staffAuthApprover2Select" class="form-control" style="width:100%; font-size:13px;"></select>
- </div>
- <div style="width:140px;">
- <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">承認者の暗証番号:</label>
- <input type="password" id="staffAuthApprover2Pin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
- </div>
- </div>
+ <!-- 【2名承認制】暗証番号の初期化モーダル (別枠) -->
+ <div class="modal-overlay" id="resetStaffPinModal" style="display:none;">
+  <div class="modal-card" style="max-width:540px;">
+   <div class="modal-header" style="background:#fee2e2; border-bottom:1px solid #fca5a5;">
+    <h3 style="margin:0; font-size:15px; color:#991b1b;">【2名承認制】暗証番号の初期化 (0000リセット)</h3>
+    <button type="button" class="close-btn" onclick="closeModal('resetStaffPinModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px;">
+    <div style="background:#fef2f2; border:1px solid #fecaca; padding:10px 14px; border-radius:6px; margin-bottom:14px;">
+     <div style="font-size:12px; color:#991b1b; font-weight:bold;">初期化対象の職員:</div>
+     <div id="resetTargetStaffDisplay" style="font-size:16px; font-weight:bold; color:#0f172a; margin-top:2px;">職員名</div>
+     <input type="hidden" id="resetTargetStaffHidden">
+    </div>
+    <p style="font-size:12px; color:#64748b; margin-bottom:12px; line-height:1.5;">
+     誤操作や不正を防止するため、リセットには<strong>操作者（管理者・事務員）と立ち会い承認者（管理者・事務員）の2名による暗証番号確認</strong>が必要です。
+    </p>
+
+    <!-- 承認者1 -->
+    <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:6px; padding:12px; margin-bottom:10px;">
+     <div style="font-weight:bold; font-size:12.5px; color:#1e3a8a; margin-bottom:4px;">[承認者1] 操作者 (現在ログイン中)</div>
+     <div style="display:flex; gap:12px; align-items:center;">
+      <div style="font-size:13px; font-weight:bold; min-width:140px;" id="staffAuthApprover1NameDisplay">管理者</div>
+      <div style="display:flex; align-items:center; gap:6px;">
+       <label style="font-size:11.5px; color:#64748b;">暗証番号(4桁):</label>
+       <input type="password" id="staffAuthApprover1Pin" class="form-control" style="width:110px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+      </div>
+     </div>
+    </div>
+
+    <!-- 承認者2 -->
+    <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:12px;">
+     <div style="font-weight:bold; font-size:12.5px; color:#991b1b; margin-bottom:4px;">[承認者2] 立ち会い承認者</div>
+     <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap;">
+      <div style="flex:1; min-width:140px;">
+       <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">承認者を選択:</label>
+       <select id="staffAuthApprover2Select" class="form-control" style="width:100%; font-size:12.5px;"></select>
+      </div>
+      <div style="width:130px;">
+       <label style="font-size:11.5px; color:#64748b; display:block; margin-bottom:2px;">承認者暗証番号:</label>
+       <input type="password" id="staffAuthApprover2Pin" class="form-control" style="width:100%; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
+      </div>
+     </div>
+    </div>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end; gap:8px;">
+    <button type="button" class="btn btn-secondary" onclick="closeModal('resetStaffPinModal')">キャンセル</button>
+    <button type="button" class="btn btn-danger" style="background:#dc2626; border-color:#b91c1c;" onclick="submitTwoPersonReset()">2名承認で「0000」にリセット実行</button>
+   </div>
+  </div>
  </div>
 
- <div style="margin-top:6px;">
- <button class="btn btn-danger" style="padding:9px 20px; font-size:13px; background:#dc2626; border-color:#b91c1c;" onclick="submitTwoPersonReset()">
- 2名承認で「0000」に初期化（リセット）を実行
- </button>
- </div>
- </div>
- </div>
+ <div class="modal-overlay" id="updateCareLevelModal" style="display:none;">
+  <div class="modal-card" style="max-width:480px;">
+   <div class="modal-header">
+    <h3 id="updateCareLevelModalTitle" style="margin:0; font-size:16px;">要介護認定の更新登録</h3>
+    <button type="button" class="close-btn" onclick="closeModal('updateCareLevelModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px;">
+    <input type="hidden" id="updateCareLevelResidentId">
+    <div style="background:#eff6ff; border:1px solid #bfdbfe; padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px; color:#1e40af;">
+     新しい要介護認定結果および有効期限を入力してください。<br>更新を確定すると、進捗チェックリストが完了状態へ自動更新されます。
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">新しい要介護度:</label>
+     <select id="newCareLevelSelect" class="form-control" style="font-size:13px;">
+      <option value="自立">自立</option>
+      <option value="要支援1">要支援1</option>
+      <option value="要支援2">要支援2</option>
+      <option value="要介護1">要介護1</option>
+      <option value="要介護2">要介護2</option>
+      <option value="要介護3">要介護3</option>
+      <option value="要介護4">要介護4</option>
+      <option value="要介護5">要介護5</option>
+     </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">新しい認定有効期限:</label>
+     <input type="date" id="newCareExpiryDateInput" class="form-control" style="font-size:13px;">
+    </div>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end; gap:8px;">
+    <button type="button" class="btn btn-secondary" onclick="closeModal('updateCareLevelModal')">キャンセル</button>
+    <button type="button" class="btn btn-primary" onclick="submitUpdateCareLevelModal()">更新内容を保存</button>
+   </div>
+  </div>
  </div>
 
+
+ <!-- 医療用語解説ポップアップ -->
+ <div id="termExplainCard" style="display:none; position:fixed; z-index:9999; background:#ffffff; border:1px solid #93c5fd; box-shadow:0 10px 25px rgba(0,0,0,0.15); border-radius:8px; width:320px; padding:14px; font-size:13px;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
+   <div>
+    <span id="termExplainRuby" style="font-size:10px; color:#64748b; display:block;"></span>
+    <strong id="termExplainTitle" style="font-size:15px; color:#1e40af;"></strong>
+   </div>
+   <span id="termExplainUrgencyBadge" class="badge"></span>
+  </div>
+  <div id="termExplainMeaning" style="color:#334155; margin-bottom:8px; line-height:1.4;"></div>
+  <div id="termExplainCheckpoint" style="background:#eff6ff; border-left:3px solid #3b82f6; padding:6px 8px; font-size:12px; color:#1e40af; border-radius:0 4px 4px 0; margin-bottom:8px;"></div>
+  <div id="termDiseaseLinkArea" style="display:flex; justify-content:space-between; align-items:center;">
+   <button type="button" id="btnJumpToDiseaseGuide" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;">病気ガイドを開く</button>
+   <button type="button" id="btnSearchDiseaseRecords" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="closeTermExplanation()">閉じる</button>
+  </div>
  </div>
 
- <!-- 事務所画面下部：要介護認定有効期限 備考欄 -->
- <section class="panel-card" style="border-top:4px solid var(--warning-color); margin-top:24px;">
- <div class="panel-title" style="color:#b45309;">
- <span> 【備考】要介護認定有効期限・更新チェック (認定切れ防止)</span>
- </div>
- <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
- 有効期限が迫っている利用者を自動抽出しています。更新申請の手続きを行ってください。
- </p>
- <div id="careExpiryNotesArea" style="display:flex; flex-direction:column; gap:8px;"></div>
- </section>
-
- </div>
-
- </main>
-
- <!-- ============================================================ -->
- <!-- モーダル群 -->
- <!-- ============================================================ -->
-
- <!-- 1. 病歴ガイド モーダル -->
+ <!-- 病気・症状ガイドモーダル -->
  <div class="modal-overlay" id="diseaseModal" style="display:none;">
- <div class="modal-card">
- <div class="modal-header">
- <h3 id="diseaseModalTitle">病歴ガイド</h3>
- <button class="modal-close-btn" onclick="closeModal('diseaseModal')">×</button>
+  <div class="modal-card" style="max-width:600px;">
+   <div class="modal-header">
+    <h3 id="diseaseModalTitle" style="margin:0; font-size:16px;">病気・症状ガイド</h3>
+    <button type="button" class="close-btn" onclick="closeModal('diseaseModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px;">
+    <div id="diseaseModalContent"></div>
+    <div id="diseaseCustomEditArea" style="margin-top:12px;">
+     <input type="hidden" id="editGuideDiseaseName">
+     <div style="font-weight:bold; font-size:13px; margin-bottom:4px;" id="diseaseCustomEditTitle">ガイド内容の編集</div>
+     <div class="form-group"><label>主な症状:</label><textarea id="editGuideSymptoms" class="form-control" rows="2"></textarea></div>
+     <div class="form-group"><label>ケア注意点:</label><textarea id="editGuideCare" class="form-control" rows="2"></textarea></div>
+     <div class="form-group"><label>受診判断:</label><textarea id="editGuideEmergency" class="form-control" rows="2"></textarea></div>
+     <div style="display:flex; justify-content:space-between; margin-top:8px;">
+      <button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="resetCustomDiseaseGuide()">初期状態に戻す</button>
+      <button type="button" class="btn btn-primary" style="font-size:12px;" onclick="saveCustomDiseaseGuide()">保存</button>
+     </div>
+    </div>
+   </div>
+  </div>
  </div>
 
- <!-- 用語・症状・病名のワンタップやさしい解説カード -->
- <div id="termExplainCard" style="display:none; background:#fff; border:2px solid #3b82f6; border-radius:10px; padding:12px 14px; margin-bottom:12px; box-shadow:0 4px 12px rgba(59,130,246,0.15);">
- <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
- <div>
- <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
- <span id="termExplainTitle" style="font-size:15px; font-weight:bold; color:#1e3a8a;"></span>
- <span id="termExplainRuby" style="font-size:11px; color:#64748b;"></span>
- <span id="termExplainUrgencyBadge" style="font-size:11px; padding:2px 8px; border-radius:10px; font-weight:bold;"></span>
- </div>
- <p id="termExplainMeaning" style="font-size:13px; color:#1e293b; margin:6px 0 2px 0; font-weight:bold; line-height:1.5;"></p>
- </div>
- <button type="button" style="border:none; background:#f1f5f9; border-radius:50%; width:24px; height:24px; cursor:pointer; font-weight:bold; color:#64748b; font-size:13px;" onclick="closeTermExplanation()">×</button>
- </div>
- <div style="background:#eff6ff; border-radius:6px; padding:8px 10px; font-size:12px; color:#1e40af; margin-top:6px;">
- <strong style="color:#1d4ed8;"> 現場での判断・観察ポイント:</strong>
- <div id="termExplainCheckpoint" style="margin-top:2px; line-height:1.5; color:#1e293b;"></div>
- </div>
- <div id="termDiseaseLinkArea" style="margin-top:8px; display:none;">
- <button type="button" class="btn btn-primary" id="btnJumpToDiseaseGuide" style="font-size:11.5px; padding:3px 10px;">
- この病気の現場ケアガイドを開く
- </button>
- </div>
- </div>
-
- <div id="diseaseModalContent"></div>
-
- <!-- 施設独自のガイド編集エリア (普段は非表示) -->
- <div id="diseaseCustomEditArea" style="display:none; background:#f8fafc; border:1px solid #94a3b8; border-radius:8px; padding:12px; margin-top:12px;">
- <h4 id="diseaseCustomEditTitle" style="font-size:13px; color:#1e3a8a; font-weight:bold; margin-bottom:8px;"> 施設独自ケアガイドを編集・保存</h4>
- <input type="hidden" id="editGuideDiseaseName">
- <div style="margin-bottom:8px;">
- <label style="font-size:11.5px; font-weight:bold; color:#991b1b;"> すぐに看護師・医師へ報告する基準（危険レベル・具体的症状）:</label>
- <textarea id="editGuideEmergency" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
- </div>
- <div style="margin-bottom:8px;">
- <label style="font-size:11.5px; font-weight:bold; color:#166534;"> 現場介護でしてよい対応・ケア（医療行為以外の安全対応）:</label>
- <textarea id="editGuideCare" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
- </div>
- <div style="margin-bottom:8px;">
- <label style="font-size:11.5px; font-weight:bold; color:#475569;"> 主な症状・日常ケア時の観察サイン:</label>
- <textarea id="editGuideSymptoms" class="form-control" style="font-size:12px; height:54px; margin-top:2px;"></textarea>
- </div>
- <div style="display:flex; justify-content:flex-end; gap:8px;">
- <button class="btn btn-secondary" style="font-size:11px; padding:3px 10px;" onclick="toggleCustomDiseaseEdit(false)">閉じる</button>
- <button class="btn btn-primary" style="font-size:11px; padding:3px 12px;" onclick="saveCustomDiseaseGuide()">保存する</button>
- </div>
- </div>
-
- <div style="margin-top:20px; display:flex; justify-content:space-between;">
- <button class="btn btn-primary" id="btnSearchDiseaseRecords">この病気の過去記録を抽出</button>
- <button class="btn btn-secondary" onclick="closeModal('diseaseModal')">閉じる</button>
- </div>
- </div>
- </div>
-
- <!-- 2. 職員・認印管理 モーダル -->
+ <!-- 職員管理モーダル -->
  <div class="modal-overlay" id="staffModal" style="display:none;">
- <div class="modal-card" style="max-width:540px;">
- <div class="modal-header">
- <h3> 職員・認印の追加 ＆ 管理</h3>
- <button class="modal-close-btn" onclick="closeModal('staffModal')">×</button>
- </div>
- <!-- 新規追加フォーム -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:14px; margin-bottom:16px;">
- <h4 style="font-size:14px; margin-bottom:8px; color:#1e40af;">＋ 新規職員の登録</h4>
- <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
- <div>
- <label style="font-size:12px; font-weight:bold;">職員名 (名字):</label>
- <input type="text" id="newStaffName" class="form-control" placeholder="例: 木村">
- </div>
- <div>
- <label style="font-size:12px; font-weight:bold;">役職・職種:</label>
- <input type="text" id="newStaffRole" class="form-control" placeholder="例: 介護職員, 看護師">
- </div>
- </div>
- <div style="margin-top:10px; text-align:right;">
- <button class="btn btn-primary" onclick="submitNewStaffStamp()">＋ 職員・認印を登録</button>
- </div>
- </div>
- <!-- 登録中職員一覧 -->
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
- <h4 style="font-size:14px; margin:0;"> 登録済み職員一覧 (役職・序列順):</h4>
- <button class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="autoSortStaffByRank()"> 役職・序列順に整列</button>
- </div>
- <div id="staffModalList" style="max-height:220px; overflow-y:auto; border:1px solid #e2e8f0; border-radius:6px;"></div>
- <div style="margin-top:16px; text-align:right;">
- <button class="btn btn-secondary" onclick="closeModal('staffModal')">閉じる</button>
- </div>
- </div>
+  <div class="modal-card" style="max-width:520px;">
+   <div class="modal-header">
+    <h3 style="margin:0; font-size:16px;">職員・電子印鑑の追加・管理</h3>
+    <button type="button" class="close-btn" onclick="closeModal('staffModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px;">
+    <div style="margin-bottom:16px; background:#f8fafc; padding:12px; border-radius:6px; border:1px solid #e2e8f0;">
+     <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">＋ 新規職員の追加</div>
+     <div style="display:flex; gap:8px; align-items:center;">
+      <input type="text" id="newStaffName" class="form-control" style="flex:1; font-size:13px;" placeholder="氏名 (例: 山田 太郎)">
+      <select id="newStaffRole" class="form-control" style="width:120px; font-size:13px;">
+       <option value="介護">介護</option>
+       <option value="看護">看護</option>
+       <option value="リーダー">リーダー</option>
+       <option value="施設長">施設長</option>
+       <option value="管理者">管理者</option>
+       <option value="事務">事務</option>
+      </select>
+      <button type="button" class="btn btn-primary" style="font-size:12px; white-space:nowrap;" onclick="submitNewStaffStamp()">追加</button>
+     </div>
+    </div>
+    <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">登録済み職員一覧</div>
+    <div id="staffModalList" style="display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto;"></div>
+   </div>
+  </div>
  </div>
 
- <!-- 新規利用者登録・編集 モーダル -->
+
  <div class="modal-overlay" id="residentModal" style="display:none;">
  <div class="modal-card" style="max-width:680px; max-height:90vh; overflow-y:auto;">
  <div class="modal-header">
@@ -2284,7 +2364,55 @@
  </div>
  </div>
 
- <!-- 13. 現場クイック消費 確認・取消 モーダル -->
+ 
+  <!-- 月間業務連絡 追記追加 モーダル -->
+  <div class="modal-overlay" id="monthlyNoticeUpdateModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3> 業務連絡への追記（追加・変更事項）</h3>
+        <button class="modal-close-btn" onclick="closeModal('monthlyNoticeUpdateModal')">&times;</button>
+      </div>
+      <input type="hidden" id="noticeUpdateParentId">
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
+        <div style="font-size:11.5px; color:#64748b;">対象の業務連絡:</div>
+        <div id="noticeUpdateTargetTitle" style="font-size:14px; font-weight:bold; color:#1e293b; margin-top:2px;"></div>
+      </div>
+      <div class="form-group">
+        <label>追記・変更内容 <span style="color:#dc2626;">*</span>:</label>
+        <textarea id="noticeUpdateContent" class="form-control" rows="4" placeholder="後から追加された変更点や補足事項を入力してください（追記後、全職員へ『追記あり・再確認が必要』のアラートが表示されます）"></textarea>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('monthlyNoticeUpdateModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitMonthlyNoticeUpdate()">追記を保存・周知</button>
+      </div>
+    </div>
+  </div>
+
+  
+  <!-- 日々申し送り 追記追加 モーダル -->
+  <div class="modal-overlay" id="dailyNotebookUpdateModal" style="display:none;">
+    <div class="modal-card" style="max-width:540px;">
+      <div class="modal-header">
+        <h3> 申し送り事項への追記（追加・変更）</h3>
+        <button class="modal-close-btn" onclick="closeModal('dailyNotebookUpdateModal')">&times;</button>
+      </div>
+      <input type="hidden" id="dailyNotebookUpdateParentId">
+      <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
+        <div style="font-size:11.5px; color:#64748b;">対象の申し送り:</div>
+        <div id="dailyNotebookUpdateTargetTitle" style="font-size:14px; font-weight:bold; color:#1e293b; margin-top:2px;"></div>
+      </div>
+      <div class="form-group">
+        <label>追記・変更内容 <span style="color:#dc2626;">*</span>:</label>
+        <textarea id="dailyNotebookUpdateContent" class="form-control" rows="4" placeholder="後から判明した状況や追記を入力してください（追記後、他職員の確認状態が『追記あり・再確認が必要』になります）"></textarea>
+      </div>
+      <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+        <button class="btn btn-secondary" onclick="closeModal('dailyNotebookUpdateModal')">キャンセル</button>
+        <button class="btn btn-primary" onclick="submitDailyNotebookUpdate()">追記を保存</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- 13. 現場クイック消費 確認・取消 モーダル -->
  <div class="modal-overlay" id="confirmConsumeModal" style="display:none;">
  <div class="modal-card" style="max-width:440px; text-align:center;">
  <div style="font-size:36px; margin-bottom:8px;"></div>
@@ -3412,7 +3540,7 @@
  </div>
 
  <script src="app.js?v=20261007_c1"></script>
-  </div> <!-- /#appMainWrapper -->
+  
 
   <!-- ============================================================ -->
   <!-- 新規モーダル群 (アラート確認, アラートログ, ID・PW設定, 初期化) -->
@@ -3976,5 +4104,7 @@
 			</div>
 		</div>
 	</div>
+
+</div> <!-- /#appMainWrapper -->
 </body>
 </html>
