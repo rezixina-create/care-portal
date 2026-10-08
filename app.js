@@ -5143,6 +5143,237 @@ function runPrintJob(html, options) {
  window.print();
 }
 
+// =====================================================================
+// [Claude修正] 監査用: 記録の取消・訂正・確認の履歴を一覧にする
+// 記録は削除せず voided / edit_history / void_history / confirm_log などで残しているため、それを集めて表示する
+// =====================================================================
+const CP_AUDIT_SOURCES = [
+ { key: "care_records", label: "介護記録", summary: r => `[${r.category || ""}] ${r.recorded_at || ""} ${r.content || ""}` },
+ { key: "meds", label: "服薬・点眼", summary: r => `${r.date || ""} ${r.slot || ""} ${r.status || ""}` },
+ { key: "vitals", label: "バイタル", summary: r => `${r.date || ""} 体温${r.temperature ?? "-"} 血圧${r.bp_high ?? "-"}/${r.bp_low ?? "-"} 脈${r.pulse ?? "-"} SpO2 ${r.spo2 ?? "-"}` },
+ { key: "weight_records", label: "体重", summary: r => `${r.date || r.month || ""} ${r.weight ?? "-"}kg` },
+ { key: "baths", label: "入浴", summary: r => `${r.date || ""} ${r.bath_type || ""} ${r.ointment_notes || ""}` },
+ { key: "groomings", label: "整容", summary: r => `${r.date || ""} 爪${r.nail_done ? "○" : "-"} 髭${r.shave_done ? "○" : "-"} 耳${r.ear_done ? "○" : "-"} ${r.notes || ""}` },
+ { key: "turns", label: "夜間巡視・体位変換", summary: r => `${r.date || ""} ${r.time || ""} ${r.action || ""}` },
+ { key: "linens", label: "シーツ交換", summary: r => `${r.date || ""} ${r.exchange_type || ""} ${r.notes || ""}` },
+ { key: "notebooks", label: "申し送り", summary: r => `${r.date || ""} ${r.content || r.title || ""}` },
+ { key: "monthly_notices", label: "業務連絡（月間）", summary: r => `${r.month || ""} ${r.title || ""} ${r.content || ""}` },
+ { key: "notebook_stamps", label: "業務日誌の確認印", summary: r => `${r.date || ""} ${r.staff_name || ""}` },
+ { key: "committees", label: "委員会・研修", summary: r => `${r.date || ""} ${r.committee_name || r.name || ""}` },
+ { key: "incidents", label: "事故・ヒヤリハット", summary: r => `${r.occurred_at || ""} ${r.report_type || ""} ${r.situation || ""}` },
+ { key: "vaccines", label: "予防接種", summary: r => `${r.date || ""} ${r.vaccine_name || ""}` },
+ { key: "fire_drills", label: "消防・避難訓練", summary: r => `${r.date || ""} ${r.drill_type || ""}` },
+ { key: "recreations", label: "レクリエーション", summary: r => `${r.date || ""} ${r.title || r.program_type || ""}` },
+ { key: "belongings", label: "預かり品", summary: r => `${r.item_name || ""} (${r.quantity || ""})` },
+ { key: "equipments", label: "福祉用具", summary: r => `${r.equipment_name || ""} (${r.ownership_type || ""})` },
+ { key: "photos", label: "写真・書類", summary: r => `${r.title || r.file_name || r.name || ""}` },
+ { key: "eyedrop_orders", label: "点眼指示", summary: r => `${r.medicine_name || ""} ${r.eye || ""}` },
+ { key: "body_schema_pins", label: "身体図（処置）", summary: r => `${r.site_name || ""} ${r.item_name || ""}` },
+ { key: "consumptions", label: "消耗品の請求", summary: r => `${r.consumed_at || ""} ${r.item_name || ""} ×${r.quantity ?? ""}` },
+ { key: "residents", label: "利用者情報", summary: r => `${r.room_no || ""}号室 ${r.name || ""}` }
+];
+
+function cpAuditBeforeText(before) {
+ if (!before || typeof before !== "object") return "";
+ return Object.keys(before).map(k => {
+ const v = before[k];
+ const s = (v !== null && typeof v === "object") ? JSON.stringify(v) : String(v ?? "");
+ return `${k}: ${s.length > 80 ? s.slice(0, 80) + "…" : s}`;
+ }).join(" / ");
+}
+
+function cpCollectAuditEntries() {
+ const out = [];
+ const resName = id => {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(id));
+ return r ? `${r.room_no}号室 ${r.name}` : "";
+ };
+ CP_AUDIT_SOURCES.forEach(src => {
+ (db.data[src.key] || []).forEach(rec => {
+ if (!rec || typeof rec !== "object") return;
+ let sum = "";
+ try { sum = src.summary(rec); } catch (e) { sum = ""; }
+ const rn = src.key === "residents" ? resName(rec.id) : resName(rec.resident_id);
+ const base = { kind: src.label, resident: rn, residentId: src.key === "residents" ? rec.id : rec.resident_id, summary: sum };
+ (rec.void_history || []).forEach(h => {
+ out.push(Object.assign({}, base, { at: h.voided_at, type: "取消", by: h.voided_by, detail: `理由: ${h.void_reason || "-"}` }));
+ out.push(Object.assign({}, base, { at: h.restored_at, type: "取消を戻す", by: h.restored_by, detail: "" }));
+ });
+ if (rec.voided) out.push(Object.assign({}, base, { at: rec.voided_at, type: "取消", by: rec.voided_by, detail: `理由: ${rec.void_reason || "-"}` }));
+ else if (rec.restored_at && !(rec.void_history || []).length) out.push(Object.assign({}, base, { at: rec.restored_at, type: "取消を戻す", by: rec.restored_by, detail: rec.void_reason ? `前回の取消理由: ${rec.void_reason}` : "" }));
+ (rec.edit_history || []).forEach(h => {
+ out.push(Object.assign({}, base, { at: h.edited_at, type: "訂正・変更", by: h.edited_by, detail: `${h.reason ? "理由: " + h.reason + " / " : ""}訂正前: ${cpAuditBeforeText(h.before)}` }));
+ });
+ (rec.confirm_log || []).forEach(h => {
+ out.push(Object.assign({}, base, { at: h.at, type: h.action === "確認" ? "確認" : "確認を取消", by: h.staff, detail: "" }));
+ });
+ if (src.key === "eyedrop_orders" && rec.ended_at) out.push(Object.assign({}, base, { at: rec.ended_at, type: "終了", by: rec.ended_by, detail: "点眼指示を終了" }));
+ if (src.key === "recreations" && rec.updated_at && !(rec.edit_history || []).length) out.push(Object.assign({}, base, { at: rec.updated_at, type: "訂正・変更", by: rec.updated_by, detail: "（訂正前の内容は記録されていない古い訂正）" }));
+ });
+ });
+ (db.data.alert_logs || []).forEach(l => {
+ out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.dismissed_at, type: "アラートを閉じた", by: l.staff_name, detail: l.alert_detail || "" });
+ if (l.restored_at) out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.restored_at, type: "未対応に戻した", by: l.restored_by, detail: "" });
+ });
+ (db.data.staff_archive || []).forEach(a => {
+ out.push({ kind: "職員名簿", resident: "", residentId: null, summary: `${a.staff && a.staff.name ? a.staff.name : ""} (${a.staff && a.staff.role ? a.staff.role : ""})`, at: a.removed_at, type: "職員を名簿から外した", by: a.removed_by, detail: "" });
+ });
+ return out.filter(e => e.at).sort((a, b) => String(b.at).localeCompare(String(a.at)));
+}
+
+function cpFilteredAuditEntries() {
+ const t = document.getElementById("auditFilterType")?.value || "";
+ const k = document.getElementById("auditFilterKind")?.value || "";
+ const rid = document.getElementById("auditFilterResident")?.value || "";
+ const from = document.getElementById("auditFilterFrom")?.value || "";
+ const to = document.getElementById("auditFilterTo")?.value || "";
+ const w = (document.getElementById("auditFilterWord")?.value || "").trim();
+ return cpCollectAuditEntries().filter(e => {
+ if (t === "確認" && !(e.type === "確認" || e.type === "確認を取消")) return false;
+ if (t === "その他" && ["取消", "取消を戻す", "訂正・変更", "確認", "確認を取消"].includes(e.type)) return false;
+ if (t && t !== "確認" && t !== "その他" && e.type !== t) return false;
+ if (k && e.kind !== k) return false;
+ if (rid && String(e.residentId) !== rid) return false;
+ const d = String(e.at).slice(0, 10);
+ if (from && d < from) return false;
+ if (to && d > to) return false;
+ if (w && !`${e.by || ""} ${e.detail || ""} ${e.summary || ""} ${e.resident || ""}`.includes(w)) return false;
+ return true;
+ });
+}
+
+function openAuditLogModal() {
+ const kSel = document.getElementById("auditFilterKind");
+ if (kSel && kSel.options.length <= 1) {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿"]).forEach(l => {
+ const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
+ });
+ }
+ const rSel = document.getElementById("auditFilterResident");
+ if (rSel) {
+ const cur = rSel.value;
+ rSel.innerHTML = '<option value="">すべて</option>';
+ (gState.residents || []).forEach(r => {
+ const o = document.createElement("option"); o.value = String(r.id); o.textContent = `${r.room_no}号室 ${r.name}`; rSel.appendChild(o);
+ });
+ rSel.value = cur;
+ }
+ renderAuditLog();
+ openModal("auditLogModal");
+}
+
+function renderAuditLog() {
+ const tbody = document.getElementById("auditLogTableBody");
+ if (!tbody) return;
+ const list = cpFilteredAuditEntries();
+ const cnt = document.getElementById("auditLogCount");
+ if (cnt) cnt.textContent = `${list.length} 件`;
+ if (list.length === 0) {
+ tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#64748b; padding:16px;">該当する履歴はありません。</td></tr>`;
+ return;
+ }
+ const color = t => t === "取消" ? "#991b1b" : (t === "訂正・変更" ? "#92400e" : (t === "取消を戻す" ? "#1d4ed8" : "#334155"));
+ tbody.innerHTML = list.slice(0, 1000).map(e => `
+ <tr>
+ <td>${escapeHtml(e.at || "")}</td>
+ <td style="font-weight:bold; color:${color(e.type)};">${escapeHtml(e.type)}</td>
+ <td>${escapeHtml(e.kind)}</td>
+ <td>${escapeHtml(e.resident || "-")}</td>
+ <td>${escapeHtml(e.by || "-")}</td>
+ <td style="white-space:pre-wrap; max-width:280px;">${escapeHtml((e.summary || "").slice(0, 160))}</td>
+ <td style="white-space:pre-wrap; max-width:320px;">${escapeHtml((e.detail || "").slice(0, 400))}</td>
+ </tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#64748b;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
+}
+
+function printAuditLog() {
+ const list = cpFilteredAuditEntries();
+ const nowStr = toLocalDateTimeStr(new Date());
+ const rows = list.map(e => `<tr><td>${escapeHtml(e.at || "")}</td><td>${escapeHtml(e.type)}</td><td>${escapeHtml(e.kind)}</td><td>${escapeHtml(e.resident || "-")}</td><td>${escapeHtml(e.by || "-")}</td><td style="white-space:pre-wrap;">${escapeHtml(e.summary || "")}</td><td style="white-space:pre-wrap;">${escapeHtml(e.detail || "")}</td></tr>`).join("");
+ const html = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color:#000; font-size:11px;">
+ <h1 style="font-size:18px; margin:0 0 4px 0;">記録の取消・訂正・確認の履歴</h1>
+ <div style="font-size:11px; margin-bottom:8px;">施設名: ${escapeHtml(getFacilityName())} / 印刷日時: ${escapeHtml(nowStr)} / 出力担当者: ${escapeHtml(cpLedgerStaff())} / ${list.length} 件</div>
+ <table style="width:100%; border-collapse:collapse;" border="1" cellpadding="3">
+ <thead><tr style="background:#eee;"><th>操作日時</th><th>操作</th><th>記録の種類</th><th>利用者</th><th>操作した職員</th><th>記録の内容</th><th>理由・訂正前の内容</th></tr></thead>
+ <tbody>${rows || '<tr><td colspan="7">該当なし</td></tr>'}</tbody>
+ </table>
+ </div>`;
+ runPrintJob(html, { page: "A4 landscape", fitOnePage: false });
+}
+
+// =====================================================================
+// [Claude修正] 利用者別・期間を指定して記録を印刷（監査で「この方のこの期間の記録」を求められた時用）
+// =====================================================================
+function openPeriodPrintModal() {
+ const sel = document.getElementById("ppResident");
+ if (sel) {
+ sel.innerHTML = "";
+ (gState.residents || []).forEach(r => {
+ const o = document.createElement("option"); o.value = String(r.id); o.textContent = `${r.room_no}号室 ${r.name}`; sel.appendChild(o);
+ });
+ if (gState.selectedResidentId) sel.value = String(gState.selectedResidentId);
+ }
+ const today = toLocalDateStr(new Date());
+ const f = document.getElementById("ppFrom"), t = document.getElementById("ppTo");
+ if (f && !f.value) f.value = today.slice(0, 8) + "01";
+ if (t && !t.value) t.value = today;
+ openModal("periodPrintModal");
+}
+
+function printPeriodRecords() {
+ const rid = Number(document.getElementById("ppResident")?.value);
+ const from = document.getElementById("ppFrom")?.value || "";
+ const to = document.getElementById("ppTo")?.value || "";
+ const incVoid = !!document.getElementById("ppIncludeVoided")?.checked;
+ const r = (gState.residents || []).find(x => Number(x.id) === rid);
+ if (!r) { alert("利用者を選んでください。"); return; }
+ if (!from || !to || from > to) { alert("開始日と終了日を正しく入れてください。"); return; }
+ const inRange = d => { const s = String(d || "").slice(0, 10); return s >= from && s <= to; };
+ const vmark = x => x.voided ? `<div style="color:#991b1b; font-weight:bold;">【取消済 ${escapeHtml(x.voided_at || "")} ${escapeHtml(x.voided_by || "")} 理由: ${escapeHtml(x.void_reason || "-")}】</div>` : "";
+ const keep = x => incVoid || !x.voided;
+ const th = 'style="background:#eee; border:1px solid #999; padding:3px;"';
+ const td = 'style="border:1px solid #999; padding:3px; vertical-align:top;"';
+ let body = "";
+
+ if (document.getElementById("ppCare")?.checked) {
+ const recs = (db.data.care_records || []).filter(c => Number(c.resident_id) === rid && inRange(c.recorded_at || c.record_time) && keep(c))
+ .sort((a, b) => String(a.recorded_at || "").localeCompare(String(b.recorded_at || "")));
+ body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">介護記録（経過記録） ${recs.length}件</h2>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日時</th><th ${th}>区分</th><th ${th}>内容</th><th ${th}>記録者</th></tr>
+ ${recs.map(c => `<tr style="${c.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(c.recorded_at || "")}</td><td ${td}>${escapeHtml(c.category || "")}</td><td ${td}><div style="white-space:pre-wrap;">${cpCareRecordPrintNote(c)}${escapeHtml(c.content || "")}</div></td><td ${td}>${escapeHtml(c.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="4">記録なし</td></tr>`}</table>`;
+ }
+ if (document.getElementById("ppVitals")?.checked) {
+ const vs = (db.data.vitals || []).filter(v => Number(v.resident_id) === rid && inRange(v.date)).sort((a, b) => `${a.date} ${a.time || ""}`.localeCompare(`${b.date} ${b.time || ""}`));
+ body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">バイタル ${vs.length}件</h2>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時刻</th><th ${th}>体温</th><th ${th}>血圧</th><th ${th}>脈拍</th><th ${th}>SpO2</th><th ${th}>いつもと違う</th><th ${th}>記録者</th><th ${th}>訂正</th></tr>
+ ${vs.map(v => `<tr><td ${td}>${escapeHtml(v.date || "")}</td><td ${td}>${escapeHtml(v.time || "")}</td><td ${td}>${v.temperature ?? "-"}</td><td ${td}>${v.bp_high ?? "-"}/${v.bp_low ?? "-"}</td><td ${td}>${v.pulse ?? "-"}</td><td ${td}>${v.spo2 ?? "-"}</td><td ${td}>${v.is_unusual ? "○" : ""}</td><td ${td}>${escapeHtml(v.staff_name || "")}</td><td ${td}>${(v.edit_history || []).length ? `${v.edit_history.length}回（最終 ${escapeHtml(v.edit_history[v.edit_history.length - 1].edited_at)} ${escapeHtml(v.edit_history[v.edit_history.length - 1].edited_by)}）` : ""}</td></tr>`).join("") || `<tr><td ${td} colspan="9">記録なし</td></tr>`}</table>`;
+ }
+ if (document.getElementById("ppMeds")?.checked) {
+ const ms = (db.data.meds || []).filter(m => Number(m.resident_id) === rid && inRange(m.date) && keep(m)).sort((a, b) => `${a.date} ${a.slot}`.localeCompare(`${b.date} ${b.slot}`));
+ body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">服薬・点眼 ${ms.length}件</h2>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態</th><th ${th}>記録者</th></tr>
+ ${ms.map(m => `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(m.slot || "")}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="4">記録なし</td></tr>`}</table>`;
+ }
+ if (document.getElementById("ppTurns")?.checked) {
+ const ts = (db.data.turns || []).filter(t => Number(t.resident_id) === rid && inRange(t.date) && keep(t)).sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
+ body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">夜間巡視・体位変換 ${ts.length}件</h2>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時刻</th><th ${th}>内容</th><th ${th}>記録者</th></tr>
+ ${ts.map(t => `<tr style="${t.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(t.date || "")}</td><td ${td}>${escapeHtml(t.time || "")}</td><td ${td}>${vmark(t)}${escapeHtml(t.action || "")}</td><td ${td}>${escapeHtml(t.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="4">記録なし</td></tr>`}</table>`;
+ }
+ const html = `
+ <div style="font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color:#000;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:6px;">
+ <div><h1 style="font-size:18px; margin:0;">個別記録（期間指定）</h1>
+ <div style="font-size:12px;">対象利用者: <strong>${escapeHtml(r.room_no + "号室 " + r.name)} 様</strong> (${escapeHtml(r.care_level || "")}) / 期間: ${escapeHtml(from)} 〜 ${escapeHtml(to)}${incVoid ? " / 取消済みを含む" : ""}</div></div>
+ <div style="font-size:11px; text-align:right;">施設名: ${escapeHtml(getFacilityName())}<br>印刷日時: ${escapeHtml(toLocalDateTimeStr(new Date()))}<br>出力担当者: ${escapeHtml(cpLedgerStaff())}</div>
+ </div>
+ ${body || "<p>印刷する記録が選ばれていません。</p>"}
+ <div style="margin-top:16px; font-size:11px; display:flex; justify-content:space-between;"><span>ケアポータル 統合管理システム（期間指定印刷）</span><span>確認印: __________________</span></div>
+ </div>`;
+ closeModal("periodPrintModal");
+ runPrintJob(html, { page: "A4 portrait", fitOnePage: false });
+}
+
 // 勤務表 (A4横・1枚) の印刷
 function printShiftTable() {
  const table = document.getElementById("shiftMatrixTable");
