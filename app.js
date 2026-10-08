@@ -839,7 +839,7 @@ class LocalDB {
  if (!b) return;
  b.textContent = ` 自動バックアップ済 (${timeStr})`;
  b.style.background = "#10b981";
- b.title = `最新データは ${timeStr} に自動3重バックアップ保管されました (PC・USB内完結)`;
+ b.title = `${timeStr} に親機PCへ保存し、data/backup/ にもバックアップしました（USBへの保存は手動です）`;
  }
 
  async initServerSync() {
@@ -15444,6 +15444,8 @@ function openBackupStatusModal() {
   const recCount = (db.data.care_records || []).length;
   recEl.textContent = `${recCount}件`;
  }
+ const tblEl = document.getElementById("backupModalTableCount");
+ if (tblEl) tblEl.textContent = `${Object.keys(db.data || {}).filter(k => Array.isArray(db.data[k])).length}種類`; // [Claude修正] 固定の「34テーブル」ではなく実際の数
  if (noticeEl) {
   noticeEl.textContent = "";
  }

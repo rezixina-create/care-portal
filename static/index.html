@@ -1284,7 +1284,7 @@
  <div>
  <div style="font-weight:bold; font-size:15px; color:#1e40af; margin-bottom:6px;">【USB・手元PCへ外部保存】</div>
  <p style="font-size:12.5px; color:#64748b; line-height:1.5; margin-bottom:12px;">
- 施設外のUSBメモリやお手元のPCへ、入居者カルテ・日誌・全ケア記録・勤務表などの全データを100%丸ごとJSONファイル形式でダウンロード保存します。
+ 入居者カルテ・日誌・ケア記録・勤務表などのデータを、JSONファイルとしてこの端末にダウンロードします（USBメモリへの保存はダウンロード後に手で行ってください）。<br><strong style="color:#b91c1c;">※ パスワード・暗証番号は含まれません。</strong>このファイルから戻すと、全職員のIDとパスワードが初期値（aaaa / 0000）になります。ふだんの戻しには親機の data/backup/ のファイルを使ってください。
  </p>
  </div>
  <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#2563eb; border-color:#1d4ed8;" onclick="downloadBackupJson()">
@@ -1296,7 +1296,7 @@
  <div>
  <div style="font-weight:bold; font-size:15px; color:#065f46; margin-bottom:6px;">【親機PCマスターへ即時同期】</div>
  <p style="font-size:12.5px; color:#64748b; line-height:1.5; margin-bottom:12px;">
- 施設内親機PCのマスターデータベースおよび世代別保管庫（data/backup/）へ、現在の最新データをスレッドセーフで手動即時保存します。
+ 親機PCのデータファイル（data/portal_database.json）と世代別の保管庫（data/backup/）へ、いまのデータを保存します。
  </p>
  </div>
  <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#059669; border-color:#047857;" onclick="triggerManualBackup()">
@@ -2135,16 +2135,18 @@
  【常時監視ステータス】多重保護システム正常稼働中
  </div>
  <div style="font-size:12.5px; color:#047857;">
- 本システムでは、記録・入力・変更が行われるたびに、ミリ秒単位で完全自動バックアップが実行されています。
+ 記録・入力・変更を保存するたびに、親機PCの data/backup/ に日時つきのファイル（同じ分の保存は上書き）と最新版（backup_latest.json）が自動で作られます。
  </div>
  </div>
 
  <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
- <div style="font-weight:bold; color:#1e293b; margin-bottom:8px;">3重バックアップの仕組み</div>
+ <div style="font-weight:bold; color:#1e293b; margin-bottom:8px;">バックアップの仕組み</div>
  <ul style="margin:0; padding-left:18px; font-size:12.5px; color:#475569; display:flex; flex-direction:column; gap:6px;">
- <li><strong>第1層（手元端末）:</strong> ブラウザ内部ストレージ（オフライン耐性・万一の通信断でも入力データ消失ゼロ）</li>
- <li><strong>第2層（親機PC）:</strong> 施設内マスターファイル（data/portal_database.json・排他ロック安全保持）</li>
- <li><strong>第3層（世代保管）:</strong> 親機内の世代別自動スナップショット（data/backup/・日時ごとの履歴を自動蓄積）</li>
+ <li><strong>手元の端末:</strong> ブラウザの中にも控えを保存（通信が切れたときのための一時的な控え）</li>
+ <li><strong>親機PC:</strong> データファイル（data/portal_database.json）</li>
+ <li><strong>親機PCの世代保管:</strong> data/backup/（保存した日時ごとのファイル）</li>
+ <li><strong>注意:</strong> どれも同じ親機PCの中です。PCの故障に備えて、data/backup/ をときどきUSBメモリなど別の場所へコピーしてください。</li>
+ <li><strong>戻し方:</strong> ①ポータルの黒い画面を閉じる ②data/backup/ の戻したい日時のファイルを data/portal_database.json という名前で上書きコピー ③run_portal.bat で起動し直す</li>
  </ul>
  </div>
 
@@ -2152,7 +2154,7 @@
  <div style="font-weight:bold; color:#1e293b; margin-bottom:6px;">現在のデータ情報</div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:12.5px;">
  <div>最終バックアップ: <strong id="backupModalLastTime" style="color:#059669;">-</strong></div>
- <div>管理テーブル数: <strong id="backupModalTableCount">34テーブル</strong></div>
+ <div>管理テーブル数: <strong id="backupModalTableCount">-</strong></div>
  <div>在所入居者数: <strong id="backupModalResidentCount">-</strong></div>
  <div>累計介護記録数: <strong id="backupModalRecordCount">-</strong></div>
  </div>
@@ -3542,7 +3544,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261008_c3"></script>
+ <script src="app.js?v=20261008_c4"></script>
   
 
   <!-- ============================================================ -->

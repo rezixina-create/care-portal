@@ -430,7 +430,10 @@ namespace CarePortal
             if (!inStamps) return null;
             JObj acc = FindByField(GetList(db, "staff_accounts"), "staff_name", name);
             if (acc == null) return new string[] { "aaaa", "0000", "false" };
-            return new string[] { acc.GetStr("staff_id") ?? "aaaa", acc.GetStr("password") ?? "0000", IsTrue(acc.Get("is_custom")) ? "true" : "false" };
+            // [Claude修正] 空のとき（パスワードを含まないバックアップから戻した場合など）は初期値として扱う
+            string sidV = acc.GetStr("staff_id"); if (string.IsNullOrEmpty(sidV)) sidV = "aaaa";
+            string pwV = acc.GetStr("password"); if (string.IsNullOrEmpty(pwV)) pwV = "0000";
+            return new string[] { sidV, pwV, IsTrue(acc.Get("is_custom")) ? "true" : "false" };
         }
 
         private int LockRemaining(string key)
