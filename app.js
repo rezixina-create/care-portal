@@ -10213,8 +10213,9 @@ function executeConsume() {
  item.current_stock -= qty;
 
  if (item.is_personal_billable === 1) {
+ var cpConsId = Date.now();
  db.data.consumptions.unshift({
- id: Date.now(),
+ id: cpConsId,
  consumed_at: nowStr,
  resident_id: resId,
  item_id: item.id,
@@ -10238,7 +10239,8 @@ function executeConsume() {
  resident_id: resId,
  resident_name: res ? res.name : "",
  staff_name: staff,
- reason: "現場ケア時使用"
+ reason: "現場ケア時使用",
+ consumption_id: (item.is_personal_billable === 1 && typeof cpConsId !== "undefined") ? cpConsId : null // [Claude修正] 取消時にどの請求行かを特定するため
  });
 
  db.save();
@@ -10301,8 +10303,9 @@ function rollbackConsume(logId) {
  if (item) item.current_stock += addQty;
 
  // 請求から削除
- const cIdx = db.data.consumptions.findIndex(c => c.resident_id === log.resident_id && c.item_id === log.item_id);
- if (cIdx >= 0) db.data.consumptions.splice(cIdx, 1);
+ // [Claude修正] 請求の行は消さずに「取消」にする。以前は同じ利用者・品目の別の行を消すことがあった
+ const cons = (db.data.consumptions || []).find(c => !c.voided && (log.consumption_id ? Number(c.id) === Number(log.consumption_id) : (c.resident_id === log.resident_id && c.item_id === log.item_id)));
+ if (cons) { cons.voided = true; cons.voided_at = nowStr; cons.voided_by = staff; cons.void_reason = "消費入力の取消"; }
 
  db.data.inventory_logs.unshift({
  id: Date.now(),
@@ -11283,7 +11286,7 @@ function renderOfficeBillingSelect() {
 function renderBillingDetail() {
  const resId = parseInt(document.getElementById("billingResidentSelect").value);
  const r = gState.residents.find(x => x.id === resId);
- const consumptions = (db.data.consumptions || []).filter(c => c.resident_id === resId);
+ const consumptions = (db.data.consumptions || []).filter(c => !c.voided && c.resident_id === resId); // [Claude修正] 取消済みは請求に含めない
  const area = document.getElementById("billingDetailArea");
 
  if (!r) return;
@@ -13053,7 +13056,11 @@ function deleteStaffStamp(index) {
  }
  const target = gState.stamps[index];
  if (!target) return;
- if (confirm(`職員「${target.name}」を削除しますか？`)) {
+ if (confirm(`職員「${target.name}」を削除しますか？\n（退職などの記録として、削除した日時と職員は残ります）`)) {
+ // [Claude修正] 職員名簿から外した記録を staff_archive に残す（過去の記録の記録者が誰だったか確認できるように）
+ if (!Array.isArray(db.data.staff_archive)) db.data.staff_archive = [];
+ const cpArch = JSON.parse(JSON.stringify(target)); delete cpArch.pin; delete cpArch.password; delete cpArch.pin_hash;
+ db.data.staff_archive.push({ id: Date.now(), staff: cpArch, removed_at: toLocalDateTimeStr(new Date()), removed_by: cpLedgerStaff() });
  gState.stamps.splice(index, 1);
  db.data.stamps = gState.stamps;
  db.save();
@@ -16620,7 +16627,7 @@ function openAlertLogModal() {
         <td style="font-size:12px; font-weight:bold; color:#0f172a;">${escapeHtml(l.staff_name)}</td>
         <td style="font-size:11.5px; color:#64748b;">${escapeHtml(l.dismissed_at)}</td>
         <td style="text-align:center;">
-          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#0284c7; border-color:#bae6fd;" onclick="restoreAlert(${l.id})">復旧</button>
+          ${l.restored_at ? `<div style="font-size:11px; color:#64748b;">未対応に戻した<br>${escapeHtml(l.restored_at)} ${escapeHtml(l.restored_by || '')}</div>` : `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#0284c7; border-color:#bae6fd;" onclick="restoreAlert(${l.id})">復旧</button>`}
         </td>
       `;
       tbody.appendChild(tr);
@@ -16650,7 +16657,7 @@ function requestDismissAlertFromButton(btn, keyOrKeys) {
 function restoreAlert(logId) {
   const logs = db.data.alert_logs || [];
   const target = logs.find(l => l.id === logId);
-  if (!target) return;
+  if (!target || target.restored_at) return;
 
   if (!confirm(`【確認】\nこのアラート（${target.alert_title}）を未対応状態に戻しますか？\n画面上に再び警告が表示されます。`)) {
     return;
@@ -16661,8 +16668,9 @@ function restoreAlert(logId) {
     (Array.isArray(target.alert_key) ? target.alert_key : [target.alert_key]).forEach(k => undismissAlert(k));
   }
 
-  // ログから削除
-  db.data.alert_logs = logs.filter(l => l.id !== logId);
+  // [Claude修正] ログは消さずに「未対応に戻した」日時と職員を残す
+  target.restored_at = toLocalDateTimeStr(new Date());
+  target.restored_by = cpLedgerStaff();
   db.save();
 
   openAlertLogModal(); // ログ表の更新
