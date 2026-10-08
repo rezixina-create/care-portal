@@ -6632,6 +6632,29 @@ function openPersonalVitalModal() {
  document.getElementById("personalVitalModal").style.display = "flex";
 }
 
+// [Claude修正] 「いつもと違う」の判定（項目ごとに、個別注意基準値があればそれを、なければ共通の値を使う）
+// 共通の値（血圧150以上・体温37.5℃以上・SpO2 92%以下）はサンプル。看護師と決めた値ではない
+function cpIsUnusualVital(res, v) {
+ const r = res || {};
+ const has = x => x !== null && x !== undefined && x !== "" && !isNaN(Number(x));
+ const n = x => Number(x);
+ if (has(v.temperature)) {
+ if (has(r.temp_max) ? n(v.temperature) > n(r.temp_max) : n(v.temperature) >= 37.5) return 1;
+ }
+ if (has(v.bp_high)) {
+ if (has(r.bp_high_max) ? n(v.bp_high) > n(r.bp_high_max) : n(v.bp_high) >= 150) return 1;
+ if (has(r.bp_high_min) && n(v.bp_high) < n(r.bp_high_min)) return 1;
+ }
+ if (has(v.spo2)) {
+ if (has(r.spo2_min) ? n(v.spo2) < n(r.spo2_min) : n(v.spo2) <= 92) return 1;
+ }
+ if (has(v.pulse)) {
+ if (has(r.pulse_max) && n(v.pulse) > n(r.pulse_max)) return 1;
+ if (has(r.pulse_min) && n(v.pulse) < n(r.pulse_min)) return 1;
+ }
+ return 0;
+}
+
 // 個人バイタル・体重編集モーダルの保存（全体連動）
 function submitPersonalVitalModal() {
  const resId = parseInt(document.getElementById("personalVitalResidentId").value, 10);
@@ -6645,6 +6668,15 @@ function submitPersonalVitalModal() {
  const spo2Val = document.getElementById("pvmSpo2").value;
  const weightVal = document.getElementById("pvmWeight").value;
  const notesVal = document.getElementById("pvmNotes").value.trim();
+
+ // [Claude修正] バイタルに空欄の項目があれば、保存してよいか確認する
+ const blankLabels = [];
+ if (!tempVal) blankLabels.push("体温");
+ if (!bpHighVal) blankLabels.push("最高血圧");
+ if (!bpLowVal) blankLabels.push("最低血圧");
+ if (!pulseVal) blankLabels.push("脈拍");
+ if (!spo2Val) blankLabels.push("SpO2");
+ if (blankLabels.length > 0 && !confirm(`次の項目が空欄です。\n${blankLabels.join("、")}\n\nこのまま保存しますか？`)) return;
 
  if (!Array.isArray(db.data.vitals)) db.data.vitals = [];
  if (!Array.isArray(db.data.weight_records)) db.data.weight_records = [];
@@ -6664,10 +6696,13 @@ function submitPersonalVitalModal() {
  bp_low: bpLowVal ? parseInt(bpLowVal, 10) : null,
  pulse: pulseVal ? parseInt(pulseVal, 10) : null,
  spo2: spo2Val ? parseInt(spo2Val, 10) : null,
- is_unusual: (bpHighVal >= 150 || tempVal >= 37.5 || spo2Val <= 92) ? 1 : 0,
+ is_unusual: 0,
  staff_name: staff,
  notes: notesVal
  };
+ // [Claude修正] 「いつもと違う」の判定: 個別注意基準値が設定されている項目はそれを使い、ない項目は共通の値を使う。空欄の項目は判定しない
+ const pvmRes = ((gState && gState.residents) || (db.data.residents || [])).find(x => x.id === resId);
+ vitalObj.is_unusual = cpIsUnusualVital(pvmRes, vitalObj);
 
  if (existingVitalIndex >= 0) {
  db.data.vitals[existingVitalIndex] = vitalObj;
