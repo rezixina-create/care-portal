@@ -6561,7 +6561,7 @@ function renderPersonalDailySummary(res, dateStr) {
  const bath = (db.data.baths || []).find(b => b.resident_id === res.id && b.date === dateStr);
 
  // 6. 服薬・口腔ケア検索
- const dayMeds = (db.data.meds || []).filter(m => m.resident_id === res.id && m.date === dateStr);
+ const dayMeds = (db.data.meds || []).filter(m => !m.voided && m.resident_id === res.id && m.date === dateStr);
  const dayOrals = (db.data.oral_cares || []).filter(o => o.resident_id === res.id && o.date === dateStr);
 
  // 血圧のハイライトスタイル
@@ -8205,7 +8205,7 @@ function renderMedTable() {
  }
  });
 
- const meds = (db.data.meds || []).filter(m => m.date === gState.selectedDate);
+ const meds = (db.data.meds || []).filter(m => !m.voided && m.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない
  const eyedropOrders = db.data.eyedrop_orders || [];
 
  gState.residents.forEach(r => {
@@ -8316,9 +8316,22 @@ function renderMedTable() {
  });
 }
 
+// [Claude修正] 服薬・点眼の実施記録を「取消」にする（消さずに、取消の日時・職員・理由を残す）
+function cpVoidMedRecord(rec, label) {
+ if (!rec || rec.voided) return false;
+ const reason = prompt(`${label}を「取消」にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入力してください (例: 押し間違い、別の方の記録)`, "");
+ if (reason === null) return false;
+ if (!reason.trim()) { alert("取消の理由を入力してください。取消は行っていません。"); return false; }
+ rec.voided = true;
+ rec.voided_at = toLocalDateTimeStr(new Date());
+ rec.voided_by = cpLedgerStaff();
+ rec.void_reason = reason.trim();
+ return true;
+}
+
 function saveMed(resId, slot) {
  const r = gState.residents.find(x => x.id === resId);
- const exists = (db.data.meds || []).some(m => m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
+ const exists = (db.data.meds || []).some(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
  if (exists) {
  alert(`この方の【${slot}】の服薬はすでに完了記録があります。`);
  return;
@@ -8336,10 +8349,10 @@ function saveMed(resId, slot) {
 
 function toggleMed(resId, slot) {
  const r = gState.residents.find(x => x.id === resId);
- const idx = (db.data.meds || []).findIndex(m => m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
+ const idx = (db.data.meds || []).findIndex(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
  if (idx >= 0) {
- if (confirm(`${r ? r.name : '利用者'}様の【${slot}】服薬記録を取り消しますか？`)) {
- db.data.meds.splice(idx, 1);
+ // [Claude修正] 服薬記録は消さずに「取消」にする（理由必須・記録は残る）
+ if (cpVoidMedRecord(db.data.meds[idx], `${r ? r.name : '利用者'}様の【${slot}】服薬記録`)) {
  db.save();
  renderMedTable();
  loadDateRecords(gState.selectedDate);
@@ -8355,11 +8368,11 @@ function toggleEyedrop(resId, slot) {
  const meds = db.data.meds || [];
  const targetSlotKey = `点眼(${slot})`;
  const altKey = `点眼_${slot}`;
- const idx = meds.findIndex(m => m.date === gState.selectedDate && m.resident_id === resId && (m.slot === targetSlotKey || m.slot === altKey || (m.slot === "点眼" && slot === "眠前")));
+ const idx = meds.findIndex(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && (m.slot === targetSlotKey || m.slot === altKey || (m.slot === "点眼" && slot === "眠前")));
 
  if (idx >= 0) {
- if (confirm(`${r ? r.name : '利用者'}様の【${slot}】点眼実施記録を取り消しますか？`)) {
- db.data.meds.splice(idx, 1);
+ // [Claude修正] 点眼記録は消さずに「取消」にする（理由必須・記録は残る）
+ if (cpVoidMedRecord(meds[idx], `${r ? r.name : '利用者'}様の【${slot}】点眼実施記録`)) {
  db.save();
  renderMedTable();
  loadDateRecords(gState.selectedDate);
