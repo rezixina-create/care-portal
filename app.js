@@ -3320,13 +3320,17 @@ function checkGlobalAlerts() {
       const curDate = new Date(todayStr);
       daysNoStool = Math.floor((curDate - latestDate) / (1000 * 60 * 60 * 24));
     } else {
-      daysNoStool = 3;
+      // [Claude修正] 排便の記録が1件もないときは「3日目」と決めつけず、記録がないことを知らせる
+      daysNoStool = null;
     }
 
-    if (daysNoStool >= 3) {
+    if (daysNoStool === null || daysNoStool >= 3) {
+      const cpStoolMsg = daysNoStool === null
+        ? `排便の記録がありません。排泄表で最後の排便を確認・記録し、看護師へ共有してください。`
+        : `便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）。水分補給・腹部マッサージ・処方された下剤の服用を確認し、看護師へ共有してください。`;
       careAlertHtml += `
         <div class="alert-banner alert-danger notice-card-urgent" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
-          <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）！水分補給・腹部マッサージ・下剤服用の確認を行ってください。</span>
+          <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：${cpStoolMsg}</span>
           <div style="display:flex; gap:6px; align-items:center;">
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="requestDismissAlertFromButton(this, '${stoolKey}')"> 処置・対応完了</button>
