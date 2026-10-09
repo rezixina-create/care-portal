@@ -21,6 +21,8 @@
   --alert-tint: #fbeceb;
   --caution: #7a5200;
   --caution-tint: #fbf1d9;
+  --sun-tint: #fbe7b5;   /* [Claude追加] 3時期比較のバッジで使われていた変数 */
+  --pine-light: #a9cfbf;
 
   --primary-color: var(--pine);
   --primary-hover: var(--pine-dark);
@@ -1648,3 +1650,7 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .drug-link-inline:hover, .drug-link-inline:focus-visible { color: var(--pine-dark); text-decoration-thickness: 2px; }
 .drug-link-strong { font-weight: bold; font-size: 13px; }
 .drug-eye-common { border-top: 1px dashed var(--line); padding-top: 8px; }
+
+/* [Claude追加] 頓服 */
+.rx-prn-note { margin-top: 4px; padding: 6px 10px; background: var(--caution-tint); color: var(--caution); border-radius: 6px; font-size: 13px; }
+.rx-prn-grid { margin-top: 8px; }
