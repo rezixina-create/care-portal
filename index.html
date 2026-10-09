@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261009_d1">
+ <link rel="stylesheet" href="style.css?v=20261009_d2">
 </head>
 <body>
 
@@ -2249,6 +2249,14 @@
  </div>
 
  <!-- 9. フルサイズ拡大表示 (ライトボックス) モーダル -->
+ <!-- [Claude追加] 薬の説明 モーダル（2つ以上の資料で一致した内容だけ） -->
+ <div class="modal-overlay" id="drugInfoModal" style="display:none; z-index:1050;" onclick="if(event.target===this) closeModal('drugInfoModal')">
+  <div class="modal-card drug-card">
+   <div class="rx-head"><span class="drug-head-label">薬の説明</span><button type="button" class="modal-close-btn" onclick="closeModal('drugInfoModal')" aria-label="閉じる">&times;</button></div>
+   <div id="drugInfoBody"></div>
+  </div>
+ </div>
+
  <!-- [Claude追加] 処方箋と処方薬 モーダル（処方箋の画像を日付ごとに保存・見比べ／処方薬の一覧は看護師だけが書き込める） -->
  <div class="modal-overlay" id="rxModal" style="display:none;">
   <div class="modal-card rx-card">
@@ -3562,7 +3570,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_c1"></script>
+ <script src="app.js?v=20261009_c2"></script>
   
 
   <!-- ============================================================ -->

@@ -1628,3 +1628,17 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   .rx-timing-grid { grid-template-columns: repeat(2, 1fr); }
   .med-row { align-items: flex-start; }
 }
+
+/* [Claude追加] 薬の説明 */
+.drug-card { max-width: 640px; }
+.drug-head-label { font-size: 14px; font-weight: bold; color: var(--ink-3); }
+.drug-title { margin: 4px 0 2px; font-size: 20px; color: var(--pine); }
+.drug-kind { margin: 0 0 12px; font-size: 13px; color: var(--ink-3); }
+#drugInfoBody section { margin-bottom: 12px; }
+#drugInfoBody h4 { font-size: 15px; margin: 0 0 4px; }
+#drugInfoBody ul { margin: 0; padding-left: 1.3em; line-height: 1.8; }
+.drug-rule { background: var(--pine-tint-2); border: 1px solid var(--line-2); border-radius: 8px; padding: 10px 12px; font-size: 14px; margin: 12px 0; }
+.drug-rule p { margin: 0 0 4px; }
+.drug-sources summary { cursor: pointer; font-size: 14px; font-weight: bold; color: var(--ink-2); }
+.drug-sources ul { font-size: 13px; }
+.topical-item.rx-med-name { font-size: 15px; }

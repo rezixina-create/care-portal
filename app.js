@@ -8598,7 +8598,7 @@ function renderTopicalTable() {
  tr.innerHTML = `
  ${i === 0 ? `<td rowspan="${pins.length}">${r.room_no}</td><td rowspan="${pins.length}"><strong>${escapeHtml(r.name)} 様</strong></td>` : ""}
  <td>
- <div class="topical-item">${escapeHtml(p.item_name)}</div>
+ <button type="button" class="topical-item rx-med-name" onclick="openDrugInfo('${escapeHtml(p.item_name).replace(/'/g, "&#39;")}')" title="押すと薬の説明">${escapeHtml(p.item_name)}</button>
  <div class="topical-meta">${escapeHtml(p.category || "")} ／ ${escapeHtml(p.site_name || "")}${p.frequency ? ` ／ 指示: ${escapeHtml(p.frequency)}` : ""}</div>
  ${nurse}${patchNote}
  </td>
@@ -9474,6 +9474,174 @@ function openMedSlotTimesEditor() {
  db.data.med_slot_times_history.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: name, before: old });
  db.save();
  renderMedOral();
+}
+
+// [Claude追加 2026-10-09] 薬の説明（介護でよく出る薬）。
+// 決まり: 互いに別の、信頼できる資料2つ以上で内容が一致したものだけを書く（1つだけの資料の内容は書かない）。
+// 一致を確かめた資料と文は claude/drug_guide_sources.md に残してある。ここにない薬は「看護師に確認」と出す。
+// what: どんな薬か / watch: 気をつけたい様子（見つけたら看護師へ） / how: 飲ませ方・使い方の注意
+const CP_DRUG_GUIDE = [
+ { name: "酸化マグネシウム", aliases: ["酸化マグネシウム", "マグミット", "重カマ"], kind: "飲み薬",
+ what: "便秘の薬。腸の中に水分を保って便をやわらかくし、出しやすくする。",
+ watch: ["吐き気・吐く", "脈が遅い", "力が入りにくい", "うとうとする（傾眠）", "（上の4つは、血液のマグネシウムが増えすぎたとき＝高マグネシウム血症の初めの様子。高齢の方・腎臓が悪い方・長く飲んでいる方は特に起きやすい）"],
+ how: [],
+ sources: [["厚生労働省 医薬品・医療機器等安全性情報 No.328（2015年12月）", "https://www.mhlw.go.jp/file/06-Seisakujouhou-11120000-Iyakushokuhinkyoku/0000185078.pdf"], ["酸化マグネシウム製剤を服用中の患者さん・ご家族の方へ（PMDA掲載、2020年8月改訂）", "https://www.pmda.go.jp/files/000235890.pdf"], ["さがみ野中央病院 薬剤科だより 2025年2・3月号", "https://www.fureai-g.or.jp/sagamino/download/hospital/pharmacy-mail/pharmacy_202502.pdf"]] },
+ { name: "ピコスルファートナトリウム", aliases: ["ピコスルファート", "ラキソベロン"], kind: "飲み薬",
+ what: "便秘の薬（腸を刺激して便を出す種類＝刺激性下剤）。",
+ watch: ["お腹の痛み", "吐き気・吐く", "下痢"],
+ how: ["長く続けて使うと効きにくくなったり、薬に頼りがちになることがある"],
+ sources: [["PMDA 医療用医薬品の添付文書（ピコスルファートナトリウム内用液）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/450064_2359005S1291_1_04"], ["一般用医薬品の添付文書（ピコスルファートナトリウム水和物の錠剤）", "https://www.info.pmda.go.jp/downfiles/otc/PDF/J0601003282_02_A.pdf"], ["さがみ野中央病院 薬剤科だより 2025年2・3月号", "https://www.fureai-g.or.jp/sagamino/download/hospital/pharmacy-mail/pharmacy_202502.pdf"], ["信州大学医学部附属病院 薬剤部 便秘症の薬の資料（2025年3月）", "https://www.shinshu-u.ac.jp/faculty/medicine/department/master/i-pharm/Constipation202606.pdf"]] },
+ { name: "センノシド", aliases: ["センノシド", "プルゼニド"], kind: "飲み薬",
+ what: "便秘の薬（腸を刺激して便を出す種類＝刺激性下剤）。",
+ watch: ["お腹の痛み", "尿の色が黄褐色〜赤色になることがある（薬によるもの）"],
+ how: ["長く続けて使うと効きにくくなることがある"],
+ sources: [["PMDA 医療用医薬品の添付文書（センノシド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/581120_2354003F2464_1_04"], ["MSDマニュアル家庭版「便秘の予防や治療に用いられる薬」", "https://www.msdmanuals.com/ja-jp/home/multimedia/table/便秘の予防や治療に用いられる薬"], ["旭川赤十字病院 クロス・レター 第41号（2021年1月）", "https://www.asahikawa.jrc.or.jp/app/wp-content/uploads/2021/08/CrossLetter-041.pdf"], ["さがみ野中央病院 薬剤科だより 2025年2・3月号", "https://www.fureai-g.or.jp/sagamino/download/hospital/pharmacy-mail/pharmacy_202502.pdf"]] },
+ { name: "アムロジピン", aliases: ["アムロジピン", "アムロジン", "ノルバスク"], kind: "飲み薬",
+ what: "血圧を下げる薬（カルシウム拮抗薬）。",
+ watch: ["めまい・ふらつき", "足のむくみ", "顔のほてり", "歯ぐきの腫れ", "脈が速い・動悸"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（アムロジピン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/830001_2171022F3110_1_20"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"]] },
+ { name: "カンデサルタン", aliases: ["カンデサルタン", "ブロプレス"], kind: "飲み薬",
+ what: "血圧を下げる薬（アンジオテンシンⅡ受容体拮抗薬）。",
+ watch: ["めまい・ふらつき", "唇や顔が急に腫れる（すぐ看護師へ）", "血液のカリウムが増えることがある"],
+ how: [],
+ sources: [["患者向医薬品ガイド（カンデサルタン錠、2023年5月）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/400278_2149040F2138_2_01G.pdf"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"]] },
+ { name: "アスピリン（血をかたまりにくくする少量のもの）", aliases: ["バイアスピリン", "アスピリン腸溶", "アスピリン"], kind: "飲み薬",
+ what: "血液をかたまりにくくして、血のかたまり（血栓）ができるのを防ぐ薬。",
+ watch: ["鼻血・歯ぐきからの出血", "あざができる", "黒い便・血が混じった便", "尿に血が混じる"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（バイアスピリン錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/630004_3399007H1021_1_21"], ["厚生労働省 重篤副作用疾患別対応マニュアル（血液疾患に関するマニュアル）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1f11.pdf"]] },
+ { name: "ワルファリン", aliases: ["ワルファリン", "ワーファリン"], kind: "飲み薬",
+ what: "血液をかたまりにくくする薬（血栓ができるのを防ぐ）。",
+ watch: ["鼻血・歯ぐきからの出血", "あざができる", "尿に血が混じる", "便が黒い・便に血が混じる"],
+ how: ["納豆・青汁・クロレラは薬の効き目を弱めるので食べない（ビタミンKが多い）", "緑黄色野菜を一度にたくさん食べない"],
+ sources: [["患者向医薬品ガイド（ワルファリンK錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/581120_3332001F1130_1_56G.pdf"], ["名古屋大学医学部附属病院 薬剤部 ワルファリンの説明書", "https://www.med.nagoya-u.ac.jp/pharmacy/pdf/warfarin_text_1.pdf"], ["厚生労働省 重篤副作用疾患別対応マニュアル（血液疾患に関するマニュアル）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1f11.pdf"]] },
+ { name: "アピキサバン", aliases: ["アピキサバン", "エリキュース"], kind: "飲み薬",
+ what: "血液をかたまりにくくして、脳梗塞などを防ぐ薬。",
+ watch: ["出血しやすくなる（出血に気づいたら看護師へ）"],
+ how: [],
+ sources: [["患者向医薬品ガイド（エリキュース錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/670605_3339004F1029_1_00G.pdf"], ["PMDA アピキサバンの使用上の注意の改訂について（2013年10月）", "https://www.pmda.go.jp/files/000146113.pdf"], ["病院薬剤科 DI室「直接経口抗凝固薬（DOAC）一覧」（2020年12月）", "https://www.tmhp.jp/tama/shared/files/010678/att_0000019.pdf"]] },
+ { name: "ランソプラゾール", aliases: ["ランソプラゾール", "タケプロン"], kind: "飲み薬",
+ what: "胃酸の分泌を抑える胃の薬（胃潰瘍・逆流性食道炎など）。",
+ watch: ["下痢・便秘（下痢が続くときは看護師へ）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（ランソプラゾール）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/400042_2329023F1047_3_09"], ["MSDマニュアル家庭版「胃酸の治療に用いられる薬剤」", "https://www.msdmanuals.com/ja-jp/home/03-消化器系の病気/胃炎と消化性潰瘍/胃酸の治療に用いられる薬剤"], ["上尾中央総合病院 PPI&P-CAB フォーミュラリー", "https://ach.or.jp/partnership/doc/ppi-and-p-cab-formulary.pdf"]] },
+ { name: "ファモチジン", aliases: ["ファモチジン", "ガスター"], kind: "飲み薬",
+ what: "胃酸を減らす胃の薬（H2受容体拮抗薬）。",
+ watch: ["意識がぼんやりする・混乱する（せん妄）。高齢の方や腎臓が悪い方で起きやすい"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（ファモチジン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380087_2325003F1393_1_04"], ["MSDマニュアル家庭版「胃酸の治療に用いられる薬剤」", "https://www.msdmanuals.com/ja-jp/home/03-消化器系の病気/胃炎と消化性潰瘍/胃酸の治療に用いられる薬剤"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"], ["一宮市立市民病院 DIニュース（2020年3月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2020.3.pdf"]] },
+ { name: "ドネペジル", aliases: ["ドネペジル", "アリセプト"], kind: "飲み薬",
+ what: "認知症の症状の進行を遅らせる薬。",
+ watch: ["吐き気・吐く", "食欲が落ちる", "下痢", "脈が遅い・めまい・気を失う"],
+ how: [],
+ sources: [["患者向医薬品ガイド（ドネペジル塩酸塩錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/460028_1190012F1107_1_00G.pdf"], ["厚生労働省 検討会資料「スイッチOTC医薬品の候補となる成分の成分情報等」", "https://www.mhlw.go.jp/content/11121000/000429048.pdf"], ["長寿科学振興財団「ケアの立場からみた薬物療法の選択」（中村祐）", "https://www.tyojyu.or.jp/kankoubutsu/gyoseki/pdf/h30-5-2.pdf"]] },
+ { name: "メマンチン", aliases: ["メマンチン", "メマリー"], kind: "飲み薬",
+ what: "認知症の症状の進行を抑える薬。",
+ watch: ["めまい・ふらつき・眠気（転びやすくなる）", "けいれん", "興奮する・落ち着かない"],
+ how: [],
+ sources: [["患者向医薬品ガイド（メマンチン塩酸塩OD錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/830001_1190018F4081_1_77G.pdf"], ["厚生労働省 検討会資料「スイッチOTC医薬品の候補となる成分の成分情報等」", "https://www.mhlw.go.jp/content/11121000/000429048.pdf"], ["長寿科学振興財団「ケアの立場からみた薬物療法の選択」（中村祐）", "https://www.tyojyu.or.jp/kankoubutsu/gyoseki/pdf/h30-5-2.pdf"]] },
+ { name: "ゾルピデム", aliases: ["ゾルピデム", "マイスリー"], kind: "飲み薬",
+ what: "眠るための薬（睡眠導入剤）。",
+ watch: ["ふらつき・転ぶ", "意識がもうろうとする", "眠ったまま歩く・食べるなど、あとで覚えていない行動", "翌朝の眠気"],
+ how: ["飲んだらすぐ床につく（飲んだあと起きて活動しない）"],
+ sources: [["患者向医薬品ガイド（ゾルピデム酒石酸塩錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/300166_1129009F1351_1_03G.pdf"], ["PMDA 医療用医薬品の添付文書（ゾルピデム酒石酸塩錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380087_1129009F1181_1_13"], ["PMDA ゾルピデム酒石酸塩の使用上の注意の改訂（別紙）", "https://www.pmda.go.jp/files/000247533.pdf"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"]] },
+ { name: "抑肝散", aliases: ["抑肝散"], kind: "飲み薬",
+ what: "漢方薬。神経がたかぶるときや眠れないときなどに使う。",
+ watch: ["むくみ", "力が抜ける（偽アルドステロン症という副作用の様子）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（ツムラ抑肝散エキス顆粒）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/460026_5200139D1037_1_19"], ["厚生労働省 重篤副作用疾患別対応マニュアル（偽アルドステロン症）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1d01.pdf"], ["ラジオNIKKEI 漢方トゥデイ（2020年10月1日、今村友裕）", "https://www.radionikkei.jp/kampotoday/docs/kampo-201001.pdf"]] },
+ { name: "フロセミド", aliases: ["フロセミド", "ラシックス"], kind: "飲み薬",
+ what: "尿を増やして、むくみをとったり血圧を下げたりする薬（利尿薬）。",
+ watch: ["立ちくらみ・ふらつき（転びやすい）", "尿の回数・量が増える", "血液のカリウムが減ることがある"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（フロセミド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/340409_2139005F1095_1_08"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"]] },
+ { name: "アレンドロン酸", aliases: ["アレンドロン酸", "フォサマック", "ボナロン"], kind: "飲み薬",
+ what: "骨粗しょう症の薬。",
+ watch: ["歯の治療の予定があるときは看護師へ（あごの骨の副作用があるため）"],
+ how: ["起床時に飲む", "飲んだあと30分は横にならない", "飲む前後は飲食を避ける（処方の指示に従う）"],
+ sources: [["アレンドロン酸錠35mgの添付文書（今日の臨床サポート掲載）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=59850"], ["健康長寿ネット「骨粗鬆症の治療」", "https://www.tyojyu.or.jp/net/byouki/kotsu-soshoushou/care.html"], ["小川赤十字病院 薬剤部 資料", "https://www.ogawa.jrc.or.jp/bumon/yakuzai/kotu.pdf"]] },
+ { name: "エルデカルシトール", aliases: ["エルデカルシトール", "エディロール"], kind: "飲み薬",
+ what: "骨粗しょう症の薬。",
+ watch: ["のどが渇く", "意識がぼんやりする（上の2つは、血液のカルシウムが増えすぎたときの様子）"],
+ how: [],
+ sources: [["患者向医薬品ガイド（エルデカルシトール）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/450045_3112006F1023_1_00G.pdf"], ["PMDA 適正使用のお願い No.13（2020年10月）", "https://www.pmda.go.jp/files/000237206.pdf"], ["健康長寿ネット「骨粗鬆症の治療」", "https://www.tyojyu.or.jp/net/byouki/kotsu-soshoushou/care.html"]] },
+ { name: "アセトアミノフェン", aliases: ["アセトアミノフェン", "カロナール"], kind: "飲み薬",
+ what: "熱を下げ、痛みをやわらげる薬。",
+ watch: [],
+ how: ["ほかのアセトアミノフェンを含む薬（市販のかぜ薬など）と一緒に飲まない（飲みすぎると肝臓を傷めるおそれ）"],
+ sources: [["PMDA 医療用医薬品の添付文書（カロナール）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/172190_1141007C1075_5_06"], ["大分大学 保健管理センター「カロナール錠について」", "https://www.oita-u.ac.jp/000053660.pdf"]] },
+ { name: "タムスロシン", aliases: ["タムスロシン", "ハルナール"], kind: "飲み薬",
+ what: "前立腺肥大症で、尿を出しやすくする薬。",
+ watch: ["めまい・ふらつき・立ちくらみ（血圧が下がることがある）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（タムスロシン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/780009_2590008F1093_1_07"], ["健康長寿ネット「前立腺肥大症の治療」", "https://www.tyojyu.or.jp/net/byouki/zenritsusenhidaishou/chiryo.html"]] },
+ { name: "メトホルミン", aliases: ["メトホルミン", "メトグルコ"], kind: "飲み薬",
+ what: "糖尿病の薬。",
+ watch: [],
+ how: ["熱がある・下痢・吐く・食事がとれないとき（シックデイ）は、飲ませる前に看護師へ（いったん中止して医師に相談することになっている）"],
+ sources: [["PMDA 医療用医薬品の添付文書（メトホルミン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/340409_3962002F1110_2_10"], ["ビグアナイド薬の適正使用に関する委員会「メトホルミンの適正使用に関するRecommendation」（2020年3月改訂）", "https://www.nittokyo.or.jp/uploads/files/recommendation_metformin_200318.pdf"]] },
+ { name: "シタグリプチン", aliases: ["シタグリプチン", "ジャヌビア", "グラクティブ"], kind: "飲み薬",
+ what: "糖尿病の薬（DPP-4阻害薬）。",
+ watch: ["低血糖（ほかの糖尿病の薬と一緒に飲んでいるときに起きやすい）。冷や汗・手足のふるえ・顔色が悪い・頭痛など"],
+ how: [],
+ sources: [["くすりのしおり（シタグリプチン錠）", "https://medical.nihon-generic.co.jp/uploadfiles/newproduct/SITAG10_SHIORI_2608.pdf"], ["厚生労働省 医薬品・医療機器等安全性情報 No.275（2010年12月）", "https://www.mhlw.go.jp/www1/kinkyu/iyaku_j/iyaku_j/anzenseijyouhou/275.pdf"], ["低血糖の様子: 健康長寿ネット「低血糖」", "https://www.tyojyu.or.jp/net/byouki/tounyoubyou/tei-kettou.html"], ["低血糖の様子: 国立病院機構 三重病院のたより", "https://mie.hosp.go.jp/common/letter/nl_1306_03.pdf"]] },
+ { name: "ヘパリン類似物質（塗り薬）", aliases: ["ヘパリン類似物質", "ヒルドイド"], kind: "塗り薬",
+ what: "保湿の塗り薬。水分を保つ成分を皮膚に補って、乾燥をやわらげる。",
+ watch: [],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（ヒルドイド）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/730155_3339950M1137_1_13"], ["東京都立北療育医療センター 薬剤検査科「保湿剤の使い方」（2017年2月）", "https://www.fukushi.metro.tokyo.lg.jp/documents/d/fukushi/hositu"]] },
+ { name: "白色ワセリン（塗り薬）", aliases: ["白色ワセリン", "プロペト", "ワセリン"], kind: "塗り薬",
+ what: "皮膚の表面を膜で覆って水分が逃げるのを防ぐ、保護・保湿の塗り薬。",
+ watch: [],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（白色ワセリン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/480199_7121703X1186_1_12"], ["東京都立北療育医療センター 薬剤検査科「保湿剤の使い方」（2017年2月）", "https://www.fukushi.metro.tokyo.lg.jp/documents/d/fukushi/hositu"]] },
+ { name: "ケトプロフェン（湿布）", aliases: ["ケトプロフェン", "モーラス"], kind: "湿布",
+ what: "痛みや炎症をやわらげる湿布。",
+ watch: ["貼った所が赤くなる・かゆい・腫れる・水ぶくれ（日光に当たったあとに出ることがある）"],
+ how: ["貼った所を日光（紫外線）に当てない。外に出るときは天気にかかわらず、衣服やサポーターで覆う", "はがした後も少なくとも4週間は同じように注意する"],
+ sources: [["PMDA 医療用医薬品の添付文書（モーラステープL40mg）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/650034_2649729S3084_1_20"], ["PMDA ケトプロフェン（テープ剤）使用上の注意の改訂", "https://www.pmda.go.jp/safety/info-services/drugs/calling-attention/revision-of-precautions/0052.html"], ["久光製薬「使用上のご注意」（ケトプロフェン外用剤、2020年9月）", "https://www.hisamitsu.co.jp/medical/data/hisamitsu-no41.pdf"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] },
+ { name: "ロキソプロフェン（湿布）", aliases: ["ロキソプロフェン", "ロキソニンテープ", "ロキソニンパップ"], kind: "湿布",
+ what: "痛みや炎症をやわらげる湿布。",
+ watch: [],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（ロキソニンパップ）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/850028_2649735S1028_1_16"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] }
+];
+const CP_DRUG_GUIDE_CHECKED = "2026-10-09";
+
+function cpNormDrugName(s) {
+ return String(s || "").replace(/[\s　]/g, "").replace(/[（(][^）)]*[）)]/g, "").toLowerCase();
+}
+function cpFindDrugGuide(name) {
+ const n = cpNormDrugName(name);
+ if (!n) return null;
+ let best = null, bestLen = 0;
+ CP_DRUG_GUIDE.forEach(g => (g.aliases || []).forEach(a => {
+ const k = cpNormDrugName(a);
+ if (k && n.includes(k) && k.length > bestLen) { best = g; bestLen = k.length; }
+ }));
+ return best;
+}
+function cpShowDrugGuide(g, shownName) {
+ const modal = document.getElementById("drugInfoModal");
+ const body = document.getElementById("drugInfoBody");
+ if (!modal || !body) return;
+ const list = arr => arr && arr.length ? `<ul>${arr.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<p class="panel-note">資料で確かめられた内容はありません。</p>`;
+ body.innerHTML = `
+ <h3 class="drug-title">${escapeHtml(shownName || g.name)}</h3>
+ <p class="drug-kind">${escapeHtml(g.kind)}・${escapeHtml(g.name)}</p>
+ <section><h4>どんな薬か</h4><p>${escapeHtml(g.what)}</p></section>
+ <section><h4>気をつけたい様子（見つけたら看護師へ）</h4>${list(g.watch)}</section>
+ ${g.how && g.how.length ? `<section><h4>${g.kind === "飲み薬" ? "飲ませ方" : "使い方"}の注意</h4>${list(g.how)}</section>` : ""}
+ <div class="drug-rule">
+ <p>これは一般的な説明です。この方に何のために使っているかは、処方薬の一覧（処方箋）を見てください。</p>
+ <p>いつもと違う様子があれば看護師へ。薬を砕く・つぶす・溶かすときは、看護師・薬剤師に確認してください。</p>
+ </div>
+ <details class="drug-sources"><summary>この説明の資料（${CP_DRUG_GUIDE_CHECKED} に確認）</summary>
+ <ul>${(g.sources || []).map(s => `<li><a href="${escapeHtml(s[1])}" target="_blank" rel="noopener">${escapeHtml(s[0])}</a></li>`).join("")}</ul>
+ <p class="panel-note">2つ以上の資料で内容が一致したものだけを載せています。</p>
+ </details>`;
+ modal.style.display = "flex";
 }
 
 // 薬の説明（2つ以上の資料で一致した内容だけ。CP_DRUG_GUIDE に登録がない薬は看護師に確認してもらう）
