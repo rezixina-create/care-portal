@@ -8531,6 +8531,8 @@ function cpTopicalSlots(pin) {
  if (/夕/.test(f)) hit.push("夕");
  if (/就寝|眠前|寝る前/.test(f)) hit.push("就寝前");
  if (/入浴/.test(f)) hit.push("入浴後");
+ // [Claude修正] 湿布は、お風呂の日に朝はがして入浴後に貼り直すことがある（現場の流れ・ユーザー）。指示に書いていなくても「入浴後」を出す
+ if (pin.category === "湿布・貼付剤" && hit.length && !hit.includes("入浴後")) hit.push("入浴後");
  return hit.length ? hit : CP_TOPICAL_TIMINGS;
 }
 
