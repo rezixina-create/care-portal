@@ -348,7 +348,7 @@ function cpRestoreLedgerRecord(key, id) {
 function cpLedgerActions(key, rec, editFn) {
  if (rec.voided) {
   return `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div>
-   <div style="font-size:10.5px; color:#64748b; white-space:normal; max-width:180px;">${escapeHtml(rec.voided_at || '')} ${escapeHtml(rec.voided_by || '')}<br>理由: ${escapeHtml(rec.void_reason || '-')}</div>
+   <div style="font-size:10.5px; color:#5f6d66; white-space:normal; max-width:180px;">${escapeHtml(rec.voided_at || '')} ${escapeHtml(rec.voided_by || '')}<br>理由: ${escapeHtml(rec.void_reason || '-')}</div>
    <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('${key}', ${Number(rec.id)})">取消を戻す</button>`;
  }
  return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="${editFn}(${Number(rec.id)})">訂正</button>
@@ -357,11 +357,11 @@ function cpLedgerActions(key, rec, editFn) {
 
 // 取消済みの行は薄く表示し、内容に取消線を引く (操作欄は除く)
 function cpMarkVoidedRow(tr) {
- tr.style.background = "#f8fafc";
- tr.style.color = "#94a3b8";
+ tr.style.background = "#f6f8f6";
+ tr.style.color = "#94a19a";
  const cells = tr.querySelectorAll("td");
  cells.forEach((td, i) => { if (i < cells.length - 1) td.style.textDecoration = "line-through"; });
- tr.querySelectorAll("td:not(:last-child) *").forEach(el => { el.style.color = "#94a3b8"; el.style.background = "transparent"; el.style.textDecoration = "line-through"; });
+ tr.querySelectorAll("td:not(:last-child) *").forEach(el => { el.style.color = "#94a19a"; el.style.background = "transparent"; el.style.textDecoration = "line-through"; });
 }
 
 // 有効な記録を先に、取消済みを後ろに並べる (元の並び順は保つ)
@@ -887,8 +887,8 @@ class LocalDB {
  updateBackupBadge(timeStr) {
  const b = document.getElementById("backupStatusBadge");
  if (!b) return;
- b.textContent = ` 自動バックアップ済 (${timeStr})`;
- b.style.background = "#10b981";
+ b.textContent = `自動バックアップ済 (${timeStr})`;
+ b.dataset.state = "ok";
  b.title = `${timeStr} に親機PCへ保存し、data/backup/ にもバックアップしました（USBへの保存は手動です）`;
  }
 
@@ -1050,17 +1050,17 @@ class LocalDB {
  if (!badge) return;
  if (this.isServerMode) {
  if (isOnline) {
- badge.innerHTML = " 施設内Wi-Fi共有中";
- badge.style.background = "#2563eb";
+ badge.textContent = "施設内Wi-Fi共有中";
+ badge.dataset.state = "ok";
  badge.title = "施設内Wi-Fiで他端末とリアルタイム共有中 (クリックで接続URL表示)";
  } else {
- badge.innerHTML = " 親機サーバー通信切断";
- badge.style.background = "#dc2626";
+ badge.textContent = "親機サーバーと通信できません";
+ badge.dataset.state = "down";
  badge.title = "親機サーバーとの通信が一時途絶しています (ローカル保存中)";
  }
  } else {
- badge.innerHTML = " 単体ローカル動作中";
- badge.style.background = "#64748b";
+ badge.textContent = "このPCだけで動作中";
+ badge.dataset.state = "local";
  badge.title = "このPC単体で動作しています (他端末共有にはサーバー起動が必要です)";
  }
  }
@@ -1091,24 +1091,24 @@ class LocalDB {
 
  // スマホ・他端末 外部接続用（統一案内 1つに統合）
  const cardDiv = document.createElement("div");
- cardDiv.style.cssText = "display:flex; gap:18px; align-items:center; background:#f8fafc; border:2px solid #2563eb; border-radius:12px; padding:16px 18px; box-shadow:0 3px 10px rgba(37,99,235,0.12); flex-wrap:wrap;";
+ cardDiv.style.cssText = "display:flex; gap:18px; align-items:center; background:#f6f8f6; border:2px solid #1e5b47; border-radius:12px; padding:16px 18px; box-shadow:0 3px 10px rgba(37,99,235,0.12); flex-wrap:wrap;";
  cardDiv.innerHTML = `
  <div style="flex-shrink:0; text-align:center; margin:0 auto;">
- <div class="cp-share-qr" style="width:130px; height:130px; border-radius:8px; border:2px solid #93c5fd; background:#fff; display:block; padding:4px; box-sizing:content-box;">${unifiedQrSvg || '<span style="font-size:11px; color:#991b1b;">URLが長すぎるためQRコードを作成できません</span>'}</div>
- <span style="font-size:11px; color:#1e40af; font-weight:bold; margin-top:5px; display:block;">カメラでスキャン</span>
+ <div class="cp-share-qr" style="width:130px; height:130px; border-radius:8px; border:2px solid #a9cfbf; background:#fff; display:block; padding:4px; box-sizing:content-box;">${unifiedQrSvg || '<span style="font-size:11px; color:#991b1b;">URLが長すぎるためQRコードを作成できません</span>'}</div>
+ <span style="font-size:11px; color:#1e5b47; font-weight:bold; margin-top:5px; display:block;">カメラでスキャン</span>
  </div>
  <div style="flex:1; min-width:260px;">
- <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1d4ed8; margin-bottom:12px; word-break:break-all; background:#ffffff; padding:8px 12px; border-radius:6px; border:1px solid #bfdbfe;">
+ <div style="font-family:monospace; font-size:14px; font-weight:bold; color:#1a4f3d; margin-bottom:12px; word-break:break-all; background:#ffffff; padding:8px 12px; border-radius:6px; border:1px solid #c9e0d5;">
  ${unifiedUrl}
  </div>
  <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
- <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#2563eb;" onclick="copyShareUrl('${unifiedUrl}')">接続URLをコピー</button>
+ <button class="btn btn-primary" style="padding:7px 18px; font-size:13px; font-weight:bold; background:#1e5b47; border-color:#1e5b47;" onclick="copyShareUrl('${unifiedUrl}')">接続URLをコピー</button>
  <a href="${unifiedUrl}" target="_blank" rel="noopener noreferrer" class="btn btn-secondary" style="padding:7px 12px; font-size:12px; text-decoration:none; display:inline-flex; align-items:center;">ブラウザで開く</a>
- <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#475569;" onclick="promptChangeTunnelUrl()">URL変更</button>
+ <button class="btn btn-outline" style="padding:6px 10px; font-size:12px; color:#4a5852;" onclick="promptChangeTunnelUrl()">URL変更</button>
  </div>
  ${isTunnel ? `
- <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cbd5e1; font-size:11px; color:#64748b; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
- <span>同一Wi-Fi内 直接アクセス: <code style="color:#334155;">${localUrl}</code></span>
+ <div style="margin-top:10px; padding-top:8px; border-top:1px dashed #cdd6d0; font-size:11px; color:#5f6d66; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
+ <span>同一Wi-Fi内 直接アクセス: <code style="color:#36443e;">${localUrl}</code></span>
  </div>` : ''}
  </div>
  `;
@@ -2894,7 +2894,7 @@ function updateStaffRoleUI() {
  const isInitial = currentStaffObj ? cpIsInitialPin(currentStaffObj) : false;
  const btnInitial = document.getElementById("btnSetInitialPin");
  if (btnInitial) {
- btnInitial.style.display = isInitial ? "inline-block" : "none";
+ btnInitial.style.display = "none"; // [Claude修正] 中身のない互換用ボタンがヘッダーに空の四角で出ていた（初期設定の案内は「ID・PW設定」とお知らせで行う）
  }
 
  // 3. 事務所ポータルの管理者専用サブタブ行
@@ -3133,6 +3133,35 @@ function cpDecorateNoticeLabels(html) {
   return html.replace(/(<strong>\s*)?(【(?!特記)[^】<]{1,40}】)(\s*<\/strong>)?/g, '<strong class="notice-label">$2</strong>');
 }
 
+// [Claude追加] お知らせは畳んでおき、見出しに件数と種類ごとの数を出す（最初の画面がお知らせで埋まらないように）。
+// 開いた・閉じたはこの端末だけに覚える
+function cpUpdateAlertFold(kind) {
+  const fold = document.getElementById(`${kind}AlertFold`);
+  const box = document.getElementById(`${kind}AlertsContainer`);
+  if (!fold || !box) return;
+  const banners = [...box.querySelectorAll(":scope > .alert-banner")];
+  const countEl = document.getElementById(`${kind}AlertCount`);
+  const kindsEl = document.getElementById(`${kind}AlertKinds`);
+  fold.dataset.empty = banners.length ? "0" : "1";
+  if (countEl) countEl.textContent = banners.length ? `${banners.length}件` : "なし";
+  const groups = {};
+  banners.forEach(b => {
+    const lab = b.querySelector(".notice-label");
+    let name = lab ? lab.textContent.replace(/[【】]/g, "").trim() : "お知らせ";
+    name = name.replace(/アラート$/, "");
+    if (/^\d+週間前$|^前日$|^当日$|^\d+日前$/.test(name)) name = "受診";
+    groups[name] = (groups[name] || 0) + 1;
+  });
+  if (kindsEl) kindsEl.textContent = Object.keys(groups).map(k => groups[k] > 1 ? `${k} ${groups[k]}` : k).join("、");
+  if (!fold.dataset.bound) {
+    fold.dataset.bound = "1";
+    try { if (localStorage.getItem(`cpAlertFoldOpen_${kind}`) === "1") fold.open = true; } catch (e) {}
+    fold.addEventListener("toggle", () => {
+      try { localStorage.setItem(`cpAlertFoldOpen_${kind}`, fold.open ? "1" : "0"); } catch (e) {}
+    });
+  }
+}
+
 function checkGlobalAlerts() {
   const careContainer = document.getElementById("careAlertsContainer");
   const officeContainer = document.getElementById("officeAlertsContainer");
@@ -3192,7 +3221,7 @@ function checkGlobalAlerts() {
           <div>
             <strong style="color:#c2410c;">【${escapeHtml(o.applicant || '職員')} 申請】</strong>
             <strong>${escapeHtml(o.item_name)}</strong> × <strong>${o.quantity}</strong>
-            <span style="color:#64748b; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
+            <span style="color:#5f6d66; font-size:12px;">(¥${(o.total_price || 0).toLocaleString()} / ${escapeHtml(o.supplier_name || '業者')})</span>
             <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '-')} / 申請日: ${o.ordered_at || '-'}</div>
           </div>
           <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
@@ -3291,7 +3320,7 @@ function checkGlobalAlerts() {
         <div class="alert-banner alert-danger notice-card-urgent">
           <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#1e5b47; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'stock_${item.id}_${item.current_stock}')"> 閉じる</button>
           </div>
         </div>
@@ -3304,7 +3333,7 @@ function checkGlobalAlerts() {
           <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
             <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
             <div style="display:flex; gap:4px;">
-              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#2563eb; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 発注申請 (+${deficit})</button>
+              <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#1e5b47; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 発注申請 (+${deficit})</button>
             </div>
           </div>
         `;
@@ -3452,10 +3481,12 @@ function checkGlobalAlerts() {
   if (careContainer && careContainer.innerHTML !== careAlertHtml) {
     careContainer.innerHTML = careAlertHtml;
   }
+  cpUpdateAlertFold("care");
   // 事務ポータル コンテナへ描画
   if (officeContainer && officeContainer.innerHTML !== officeAlertHtml) {
     officeContainer.innerHTML = officeAlertHtml;
   }
+  cpUpdateAlertFold("office");
   // 旧コンテナが存在する場合の後方互換
   if (legacyContainer) {
     const combined = careAlertHtml + officeAlertHtml;
@@ -3778,7 +3809,7 @@ function renderResidentDetail() {
  </div>
  </td>
  <td>${b.marked ? ' 記名済' : '<span style="color:#dc2626;">未確認</span>'}</td>
- <td style="color:#64748b;">${escapeHtml(b.notes || '-')}</td>
+ <td style="color:#5f6d66;">${escapeHtml(b.notes || '-')}</td>
  <td style="white-space:nowrap;">
  <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})"> 編集</button>
  <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})"> 削除</button>
@@ -3803,16 +3834,16 @@ function renderResidentDetail() {
  const resEyedrops = (db.data.eyedrop_orders || []).filter(e => e.resident_id === r.id && e.status !== '終了');
  let eyedropSummaryHtml = '';
  if (resEyedrops.length === 0 || resEyedrops.every(e => e.eye === '指示なし')) {
- eyedropSummaryHtml = '<span style="color:#64748b; font-size:12px;">定期点眼指示なし</span>';
+ eyedropSummaryHtml = '<span style="color:#5f6d66; font-size:12px;">定期点眼指示なし</span>';
  } else {
  eyedropSummaryHtml = resEyedrops.map(e => {
- const bColor = e.eye === '右のみ' ? '#1e3a8a' : (e.eye === '左のみ' ? '#065f46' : '#334155');
+ const bColor = e.eye === '右のみ' ? '#173f33' : (e.eye === '左のみ' ? '#065f46' : '#36443e');
  const bText = `[${escapeHtml(e.eye)}]`;
  const tStr = (e.timing_slots || []).join('・');
  return `<div style="display:inline-flex; align-items:center; gap:4px; margin-right:8px; margin-top:2px;">
  <span class="badge" style="background:${bColor}; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">${bText}</span>
  <strong>${escapeHtml(e.medicine_name)}</strong>
- <span style="color:#2563eb; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '用量未登録')})</span>
+ <span style="color:#1e5b47; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '用量未登録')})</span>
  </div>`;
  }).join('');
  }
@@ -3838,37 +3869,37 @@ function renderResidentDetail() {
  </div>
 
  <!-- 介護サマリー ＆ 緊急搬送・受診申し送りサマリー アクションバー -->
- <div style="background:linear-gradient(135deg, #f0fdf4 0%, #eff6ff 100%); border:1px solid #bfdbfe; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+ <div style="background:#f1f6f3; border:1px solid #c9e0d5; border-radius:8px; padding:10px 14px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
  <div>
- <div style="font-weight:bold; color:#1e40af; font-size:13.5px; display:flex; align-items:center; gap:6px;">
+ <div style="font-weight:bold; color:#1e5b47; font-size:13.5px; display:flex; align-items:center; gap:6px;">
  <span>介護サマリー ＆ 緊急搬送・受診申し送り</span>
- <span class="badge" style="background:#2563eb; color:#ffffff; font-size:11px; padding:1px 6px;">生活・ADL・救急連携</span>
+ <span class="badge" style="background:#1e5b47; color:#ffffff; font-size:11px; padding:1px 6px;">生活・ADL・救急連携</span>
  </div>
- <div style="font-size:12px; color:#475569; margin-top:3px;">
+ <div style="font-size:12px; color:#4a5852; margin-top:3px;">
  ${getResidentSummaryStatusText(r.id)}
  </div>
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap;">
- <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
+ <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1a4f3d; border:1px solid #a9cfbf; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
  介護サマリー (詳細・新規・変更)
  </button>
 				<button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryCompareModal(${r.id}); return false;">介護サマリー 新旧比較</button>
  <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
  緊急搬送・受診サマリー
  </button>
- <button type="button" class="btn btn-dark" style="font-size:12px; padding:5px 12px; background:#0f172a; border-color:#0f172a; color:#ffffff; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
+ <button type="button" class="btn btn-dark" style="font-size:12px; padding:5px 12px; background:#1c2622; border-color:#1c2622; color:#ffffff; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
  皮膚・身体シェーマ図 (軟膏・処置)
  </button>
  </div>
  </div>
 
  <!-- 1. 基本方針・見守り注意・ケアプラン目標 (アコーディオン) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span> 基本方針 ＆ ケアプラン目標・見守り注意</span>
  <div style="display:flex; align-items:center; gap:8px;">
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;"> 変更</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px;">
@@ -3900,50 +3931,50 @@ function renderResidentDetail() {
  </details>
 
  <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span>身体状況・病歴 ＆ 食形態・口腔状態</span>
  <div style="display:flex; align-items:center; gap:8px;">
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;"> 変更</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px;">
  <div style="margin-bottom:10px;">
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
  <div style="font-size:12px; font-weight:bold; color:var(--text-muted);">病歴・既往歴 (タップで現場対応ガイド表示):</div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">病歴を変更</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">病歴を変更</button>
  </div>
  <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
  </div>
  
  <!-- 身体状況・食形態情報カード -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:8px; padding:12px;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px;">
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:10px;">
  <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "未登録")}</div>
  <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "未登録")}</span></div>
  <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "未登録")}</div>
  <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
  </div>
- <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <div style="font-size:12px; color:#1e293b; flex:1; min-width:200px;">
+ <div style="background:#ffffff; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:12px; color:#22302b; flex:1; min-width:200px;">
  <strong>皮膚処置・軟膏ピン:</strong> ${renderSchemaSummaryBadges(r.id)}
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f5f9; color:#0f172a; border-color:#cbd5e1; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#eef2ef; color:#1c2622; border-color:#cdd6d0; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
  シェーマ図を開く
  </button>
  </div>
- <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <div style="font-size:12px; color:#1e293b; flex:1; min-width:200px;">
+ <div style="background:#ffffff; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:12px; color:#22302b; flex:1; min-width:200px;">
  <strong>点眼処方指示:</strong> ${eyedropSummaryHtml}
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#eff6ff; color:#1e40af; border-color:#93c5fd; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f6f3; color:#1e5b47; border-color:#a9cfbf; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
  点眼指示を変更
  </button>
  </div>
- <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cbd5e1; padding-top:8px;">
- <span style="font-size:11.5px; color:#64748b;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
- <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cdd6d0; padding-top:8px;">
+ <span style="font-size:11.5px; color:#5f6d66;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
+ <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#f1f6f3; color:#1a4f3d; border:1px solid #a9cfbf; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
   身体状況・食形態を変更
  </button>
  </div>
@@ -3952,12 +3983,12 @@ function renderResidentDetail() {
  </details>
 
  <!-- 3. 往診医・受診時指示 ＆ 特殊指示 (アコーディオン) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#eff6ff; font-weight:bold; cursor:pointer; font-size:13px; color:#1e40af; border-bottom:1px solid #bfdbfe; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f1f6f3; font-weight:bold; cursor:pointer; font-size:13px; color:#1e5b47; border-bottom:1px solid #c9e0d5; display:flex; justify-content:space-between; align-items:center;">
  <span> 往診医・受診時指示 ＆ 特殊指示 (絶食・薬のみ等)</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dbeafe; color:#1e40af; border-color:#93c5fd;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'all'); return false;">受診指示を変更</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcebe3; color:#1e5b47; border-color:#a9cfbf;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'all'); return false;">受診指示を変更</button>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px;">
@@ -3970,10 +4001,10 @@ function renderResidentDetail() {
  </div>
 
  <!-- 医師の指示内容 (受診時コメント) -->
- <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f8fafc; padding:8px 10px; border-radius:6px;">
+ <div style="font-size:13px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start; background:#f6f8f6; padding:8px 10px; border-radius:6px;">
  <div>
  <strong>医師の指示内容 (受診時コメント):</strong>
- <div style="margin-top:2px; color:#1e293b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '未登録')}</div>
+ <div style="margin-top:2px; color:#22302b; white-space:pre-wrap;">${escapeHtml(r.dr_instructions || '未登録')}</div>
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'instructions'); return false;">指示内容を変更</button>
  </div>
@@ -3990,12 +4021,12 @@ function renderResidentDetail() {
  </details>
 
  <!-- 4. 福祉用具 ＆ 私物持ち込み品台帳 (アコーディオン) -->
- <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span> 福祉用具 ＆ 私物・持ち込み品台帳 (${belongings.length}点)</span>
  <div style="display:flex; align-items:center; gap:8px;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openBelongingModal()">＋私物を追加</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px;">
@@ -4022,16 +4053,16 @@ function renderResidentDetail() {
  </details>
 
  <!-- 5. 同意書 ＆ 写真保管庫 (アコーディオン) -->
- <details class="care-accordion" style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span> 重要書類(同意書) ＆ 写真保管庫 (${resDocs.length + resPhotos.length}件)</span>
- <span style="font-size:11px; color:#64748b;">(タップで開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(タップで開閉)</span>
  </summary>
  <div style="padding:12px;">
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
  <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
  重要書類(同意書)
- <span style="background:#2563eb; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
+ <span style="background:#1e5b47; color:white; border-radius:10px; padding:1px 7px; font-size:11px; font-weight:bold;">${resDocs.length}件</span>
  </button>
  <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('personal')">
  個人写真
@@ -4042,21 +4073,21 @@ function renderResidentDetail() {
  </details>
 
  <!-- 6. 緊急連絡先 ＆ 家族の要望・生活歴・こだわり (アコーディオン) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f8fafc; font-weight:bold; cursor:pointer; font-size:13px; color:#1e3a8a; border-bottom:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
+ <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span> 緊急連絡先 ＆ 家族の要望・生活歴・こだわり</span>
  <div style="display:flex; align-items:center; gap:8px;">
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.stopPropagation(); openFamilyHistoryModal(${r.id})"> 変更・更新</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px; font-size:13px;">
  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
  <div style="flex:1;">
- <div><strong> 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
- <div style="margin-top:6px;"><strong> 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#334155;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
+ <div><strong> 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#1c2622;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
+ <div style="margin-top:6px;"><strong> 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#36443e;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
  </div>
- <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#f1f5f9; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})"> 項目を編集</button>
+ <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#eef2ef; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})"> 項目を編集</button>
  </div>
  <div style="background:#fffbeb; border:1px solid #fef3c7; padding:8px 10px; border-radius:6px; font-size:12px;">
  <strong> 生活歴・人生歴・こだわり (職歴・趣味・習慣・性格):</strong>
@@ -4065,12 +4096,12 @@ function renderResidentDetail() {
  </details>
 
  <!-- 7. 介護サマリー (生活・ADL・介助注意点 13項目一覧) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #e2e8f0; border-radius:8px; background:#fff; overflow:hidden;">
+ <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f0fdf4; font-weight:bold; cursor:pointer; font-size:13px; color:#166534; border-bottom:1px solid #bbf7d0; display:flex; justify-content:space-between; align-items:center;">
  <span> 介護サマリー要約 (生活・ADL・介助注意点 13項目)</span>
  <div style="display:flex; align-items:center; gap:8px;">
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">サマリー編集・新規</button>
- <span style="font-size:11px; color:#64748b;">(開閉)</span>
+ <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px; font-size:12.5px;">
@@ -4187,7 +4218,7 @@ function openDiseaseGuide(diseaseName) {
  } else if (matchedName && matchedName !== name) {
  subInfo = `<span style="font-size:12px; background:#e0f2fe; color:#0369a1; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 関連参照: ${escapeHtml(matchedName)}</span>`;
  } else if (isFallback) {
- subInfo = `<span style="font-size:12px; background:#f1f5f9; color:#475569; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 基本見守り基準</span>`;
+ subInfo = `<span style="font-size:12px; background:#eef2ef; color:#4a5852; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 基本見守り基準</span>`;
  }
  titleEl.innerHTML = `【${escapeHtml(name)}】 現場ケアガイド ＆ 観察ポイント ${subInfo}`;
  }
@@ -4212,16 +4243,16 @@ function openDiseaseGuide(diseaseName) {
  </div>
 
  <!-- 3. 主な症状・見守りの観察サイン -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-left:5px solid #64748b; border-radius:8px; padding:12px; margin-bottom:12px;">
- <h4 style="font-size:13.5px; color:#0f172a; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-left:5px solid #5f6d66; border-radius:8px; padding:12px; margin-bottom:12px;">
+ <h4 style="font-size:13.5px; color:#1c2622; font-weight:bold; margin-bottom:6px; display:flex; align-items:center; gap:6px;">
  <span> 主な症状 ＆ 日常ケア時の観察サイン:</span>
  </h4>
- <p style="font-size:13px; color:#334155; margin:0; line-height:1.6;" id="dispGuideSymptoms">${annotateMedicalTerms(guide.symptoms)}</p>
+ <p style="font-size:13px; color:#36443e; margin:0; line-height:1.6;" id="dispGuideSymptoms">${annotateMedicalTerms(guide.symptoms)}</p>
  </div>
 
  <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
  <div style="display:flex; gap:8px;">
- <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#1e40af; border-color:#bfdbfe; background:#eff6ff;" onclick="toggleCustomDiseaseEdit(true)">
+ <button class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; color:#1e5b47; border-color:#c9e0d5; background:#f1f6f3;" onclick="toggleCustomDiseaseEdit(true)">
   この病気の現場ケアを編集・追加
  </button>
  ${isCustom ? `
@@ -4230,7 +4261,7 @@ function openDiseaseGuide(diseaseName) {
  </button>
  ` : ''}
  </div>
- <span style="font-size:11.5px; color:#64748b;">※主治医指示が最優先されます</span>
+ <span style="font-size:11.5px; color:#5f6d66;">※主治医指示が最優先されます</span>
  </div>
  `;
  }
@@ -4328,7 +4359,7 @@ function updateRecordCharCount() {
  if (fsCountEl) fsCountEl.textContent = len;
 
  let badgeText = "";
- let badgeBg = "#64748b";
+ let badgeBg = "#5f6d66";
 
  if (len === 0) {
  if (badgeEl) badgeEl.style.display = "none";
@@ -4336,7 +4367,7 @@ function updateRecordCharCount() {
  return;
  } else if (len < 400) {
  badgeText = " B5目安: 約1/3枚";
- badgeBg = "#64748b";
+ badgeBg = "#5f6d66";
  } else if (len < 700) {
  badgeText = " B5目安: 約半分";
  badgeBg = "#0284c7";
@@ -4647,12 +4678,12 @@ function cpShowCareRecordHistory(recId) {
 // 記録カードの右上: 取消済みなら取消情報と「取消を戻す」、それ以外は「訂正・取消」と（あれば）「履歴」
 function cpCareRecordActions(r) {
  const hasHist = (r.edit_history && r.edit_history.length) || (r.void_history && r.void_history.length);
- const histBtn = hasHist ? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="cpShowCareRecordHistory(${r.id})">履歴${r.edit_history && r.edit_history.length ? `(訂正${r.edit_history.length})` : ''}</button>` : '';
+ const histBtn = hasHist ? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="cpShowCareRecordHistory(${r.id})">履歴${r.edit_history && r.edit_history.length ? `(訂正${r.edit_history.length})` : ''}</button>` : '';
  if (r.voided) {
  return `<span style="font-size:11px; color:#991b1b; font-weight:bold;">取消済 ${escapeHtml(r.voided_at || '')} ${escapeHtml(r.voided_by || '')} 理由: ${escapeHtml(r.void_reason || '-')}</span>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="cpRestoreCareRecord(${r.id})">取消を戻す</button>${histBtn}`;
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="cpRestoreCareRecord(${r.id})">取消を戻す</button>${histBtn}`;
  }
- return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cbd5e1;" onclick="openEditCareRecordModal(${r.id})">訂正・取消</button>${histBtn}`;
+ return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="openEditCareRecordModal(${r.id})">訂正・取消</button>${histBtn}`;
 }
 
 // ======================================================================
@@ -4744,7 +4775,7 @@ function renderTemplateManageList() {
  if (!tbody) return;
 
  if (templates.length === 0) {
- tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#64748b; padding:16px;">登録された定型文はありません。</td></tr>';
+ tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#5f6d66; padding:16px;">登録された定型文はありません。</td></tr>';
  return;
  }
 
@@ -4752,7 +4783,7 @@ function renderTemplateManageList() {
  <tr>
  <td><span class="badge" style="background:#e0f2fe; color:#0369a1; font-size:11px;">${escapeHtml(t.category || "共通")}</span></td>
  <td><strong>${escapeHtml(t.label || "")}</strong></td>
- <td style="color:#334155; line-height:1.4;">${escapeHtml(t.phrase || "")}</td>
+ <td style="color:#36443e; line-height:1.4;">${escapeHtml(t.phrase || "")}</td>
  <td style="text-align:center; white-space:nowrap;">
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="startEditTemplate(${idx})">編集</button>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteTemplate(${idx})">削除</button>
@@ -4880,7 +4911,7 @@ function renderResidentSummaryAccordionContent(residentId) {
  const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
  if (list.length === 0) {
  return `
- <div style="background:#f8fafc; border:1px dashed #cbd5e1; border-radius:6px; padding:14px; text-align:center; color:#64748b;">
+ <div style="background:#f6f8f6; border:1px dashed #cdd6d0; border-radius:6px; padding:14px; text-align:center; color:#5f6d66;">
  介護サマリーがまだ登録されていません。<br>
  「サマリー編集・新規」ボタンから、新規入所時または入院後再入所の生活・ADLアセスメントを作成できます。
  </div>
@@ -4889,49 +4920,49 @@ function renderResidentSummaryAccordionContent(residentId) {
 
  const s = list[0];
  return `
- <div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:#eff6ff; border:1px solid #bfdbfe; border-radius:6px; padding:6px 10px;">
+ <div style="margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; background:#f1f6f3; border:1px solid #c9e0d5; border-radius:6px; padding:6px 10px;">
  <div>
- <strong style="color:#1e40af;">［${escapeHtml(s.summary_type || "介護サマリー")}］</strong>
- <span style="color:#475569; margin-left:6px;">作成日: ${escapeHtml(s.created_at || "")} (作成者: ${escapeHtml(s.staff_name || "職員")})</span>
+ <strong style="color:#1e5b47;">［${escapeHtml(s.summary_type || "介護サマリー")}］</strong>
+ <span style="color:#4a5852; margin-left:6px;">作成日: ${escapeHtml(s.created_at || "")} (作成者: ${escapeHtml(s.staff_name || "職員")})</span>
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openCareSummaryModal(${rId}, ${s.id})">詳細確認・変更</button>
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">1. 基本情報:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.basic_info || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">1. 基本情報:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.basic_info || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">2. これまでの経過:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.background || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">2. これまでの経過:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.background || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">3. 現在の身体・認知状態:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.physical_cognitive || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">3. 現在の身体・認知状態:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.physical_cognitive || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">4. ADL (日常生活動作):</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.adl || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">4. ADL (日常生活動作):</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.adl || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">5. 食事・水分摂取:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.meals_hydration || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">5. 食事・水分摂取:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meals_hydration || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">6. 排泄:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.excretion || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">6. 排泄:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.excretion || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">7. 睡眠:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.sleep || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">7. 睡眠:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.sleep || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">8. 服薬:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.meds || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">8. 服薬:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meds || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">9. 医療的な処置:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.medical_care || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">9. 医療的な処置:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.medical_care || "特記事項なし")}</div>
  </div>
  <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:8px 10px;">
  <strong style="color:#991b1b; font-size:12px;">10. 認知症の症状や行動 (BPSD):</strong>
@@ -4941,9 +4972,9 @@ function renderResidentSummaryAccordionContent(residentId) {
  <strong style="color:#92400e; font-size:12px;">11. 介助方法・注意点:</strong>
  <div style="margin-top:2px; color:#78350f;">${escapeHtml(s.care_notes || "特記事項なし")}</div>
  </div>
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <strong style="color:#1e3a8a; font-size:12px;">12. 家族の状況:</strong>
- <div style="margin-top:2px; color:#334155;">${escapeHtml(s.family_info || "特記事項なし")}</div>
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <strong style="color:#173f33; font-size:12px;">12. 家族の状況:</strong>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.family_info || "特記事項なし")}</div>
  </div>
  </div>
  <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 10px; margin-top:10px;">
@@ -5376,22 +5407,22 @@ function renderAuditLog() {
  const cnt = document.getElementById("auditLogCount");
  if (cnt) cnt.textContent = `${list.length} 件`;
  if (list.length === 0) {
- tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#64748b; padding:16px;">該当する履歴はありません。</td></tr>`;
+ tbody.innerHTML = `<tr><td colspan="7" style="text-align:center; color:#5f6d66; padding:16px;">該当する履歴はありません。</td></tr>`;
  return;
  }
- const color = t => t === "取消" ? "#991b1b" : (t === "訂正・変更" ? "#92400e" : (t === "取消を戻す" ? "#1d4ed8" : "#334155"));
+ const color = t => t === "取消" ? "#991b1b" : (t === "訂正・変更" ? "#92400e" : (t === "取消を戻す" ? "#1a4f3d" : "#36443e"));
  // [Claude修正] スマホなど幅が狭い画面では、表ではなくカードで表示する（表だと横にはみ出し、行が縦に長くなるため）
  const narrow = window.innerWidth < 700;
  const thead = tbody.parentElement ? tbody.parentElement.querySelector("thead") : null;
  if (thead) thead.style.display = narrow ? "none" : "";
  if (narrow) {
  tbody.innerHTML = list.slice(0, 1000).map(e => `
- <tr><td colspan="7" style="padding:8px 10px; border-bottom:1px solid #e2e8f0;">
- <div style="display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap;"><strong style="color:${color(e.type)};">${escapeHtml(e.type)}</strong><span style="color:#64748b;">${escapeHtml(e.at || "")}</span></div>
+ <tr><td colspan="7" style="padding:8px 10px; border-bottom:1px solid #dfe5e1;">
+ <div style="display:flex; justify-content:space-between; gap:6px; flex-wrap:wrap;"><strong style="color:${color(e.type)};">${escapeHtml(e.type)}</strong><span style="color:#5f6d66;">${escapeHtml(e.at || "")}</span></div>
  <div style="margin-top:2px;">${escapeHtml(e.kind)}${e.resident ? " / " + escapeHtml(e.resident) : ""} / 職員: ${escapeHtml(e.by || "-")}</div>
- <div style="margin-top:2px; color:#334155; white-space:pre-wrap;">${escapeHtml((e.summary || "").slice(0, 120))}</div>
- ${e.detail ? `<div style="margin-top:2px; color:#475569; white-space:pre-wrap;">${escapeHtml((e.detail || "").slice(0, 300))}</div>` : ""}
- </td></tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#64748b;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
+ <div style="margin-top:2px; color:#36443e; white-space:pre-wrap;">${escapeHtml((e.summary || "").slice(0, 120))}</div>
+ ${e.detail ? `<div style="margin-top:2px; color:#4a5852; white-space:pre-wrap;">${escapeHtml((e.detail || "").slice(0, 300))}</div>` : ""}
+ </td></tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#5f6d66;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
  return;
  }
  tbody.innerHTML = list.slice(0, 1000).map(e => `
@@ -5403,7 +5434,7 @@ function renderAuditLog() {
  <td>${escapeHtml(e.by || "-")}</td>
  <td style="white-space:pre-wrap; max-width:280px;">${escapeHtml((e.summary || "").slice(0, 160))}</td>
  <td style="white-space:pre-wrap; max-width:320px;">${escapeHtml((e.detail || "").slice(0, 400))}</td>
- </tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#64748b;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
+ </tr>`).join("") + (list.length > 1000 ? `<tr><td colspan="7" style="text-align:center; color:#5f6d66;">先頭1000件を表示しています。条件で絞り込んでください。</td></tr>` : "");
 }
 
 function printAuditLog() {
@@ -5489,7 +5520,7 @@ function printPeriodRecords() {
  }
  const html = `
  <div style="font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color:#000;">
- <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:6px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:6px;">
  <div><h1 style="font-size:18px; margin:0;">個別記録（期間指定）</h1>
  <div style="font-size:12px;">対象利用者: <strong>${escapeHtml(r.room_no + "号室 " + r.name)} 様</strong> (${escapeHtml(r.care_level || "")}) / 期間: ${escapeHtml(from)} 〜 ${escapeHtml(to)}${incVoid ? " / 取消済みを含む" : ""}</div></div>
  <div style="font-size:11px; text-align:right;">施設名: ${escapeHtml(getFacilityName())}<br>印刷日時: ${escapeHtml(toLocalDateTimeStr(new Date()))}<br>出力担当者: ${escapeHtml(cpLedgerStaff())}</div>
@@ -5584,15 +5615,15 @@ function printCareSummary() {
 
  printArea.innerHTML = `
  <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000; padding:10px;">
- <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:8px; margin-bottom:12px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:8px; margin-bottom:12px;">
  <div>
- <h1 style="font-size:22px; margin:0; color:#1e3a8a;">介護サマリー (生活・ADLアセスメント詳細)</h1>
- <p style="font-size:13px; color:#334155; margin:4px 0 0 0;">
+ <h1 style="font-size:22px; margin:0; color:#173f33;">介護サマリー (生活・ADLアセスメント詳細)</h1>
+ <p style="font-size:13px; color:#36443e; margin:4px 0 0 0;">
  対象利用者: <strong>${r ? escapeHtml(r.name) : ""} 様</strong> (${r ? escapeHtml(r.room_no) : ""}号室 / ${r ? escapeHtml(r.care_level) : ""})
  / サマリー種別: <strong>${escapeHtml(summaryType)}</strong>
  </p>
  </div>
- <div style="text-align:right; font-size:12px; color:#475569;">
+ <div style="text-align:right; font-size:12px; color:#4a5852;">
  <div>作成日: ${escapeHtml(dateVal)}</div>
  <div>作成者: ${escapeHtml(staffVal)}</div>
  </div>
@@ -5600,55 +5631,55 @@ function printCareSummary() {
 
  <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
  <tr>
- <th style="width:160px; background:#f1f5f9; padding:6px; text-align:left;">1. 基本情報</th>
+ <th style="width:160px; background:#eef2ef; padding:6px; text-align:left;">1. 基本情報</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(basicInfo)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">2. これまでの経過</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">2. これまでの経過</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(background)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">3. 現在の身体・認知状態</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">3. 現在の身体・認知状態</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(physicalCognitive)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">4. ADL (日常生活動作)</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">4. ADL (日常生活動作)</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(adl)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">5. 食事・水分摂取</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">5. 食事・水分摂取</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(mealsHydration)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">6. 排泄</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">6. 排泄</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(excretion)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">7. 睡眠</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">7. 睡眠</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(sleep)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">8. 服薬</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">8. 服薬</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(meds)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">9. 医療的な処置</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">9. 医療的な処置</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(medicalCare)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">10. 認知症の症状や行動</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">10. 認知症の症状や行動</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(dementiaBehavior)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">11. 介助方法・注意点</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">11. 介助方法・注意点</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(careNotes)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">12. 家族の状況</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">12. 家族の状況</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(familyInfo)}</td>
  </tr>
  <tr>
- <th style="background:#f1f5f9; padding:6px; text-align:left;">13. 今後の支援で気をつけること</th>
+ <th style="background:#eef2ef; padding:6px; text-align:left;">13. 今後の支援で気をつけること</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(futureGoals)}</td>
  </tr>
  </table>
@@ -5712,13 +5743,13 @@ function renderEmergencySummaryPreview(r) {
  const latestSummary = summaries.length > 0 ? summaries[0] : null;
 
  container.innerHTML = `
- <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#0f172a;">
+ <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#1c2622;">
  <div style="display:flex; justify-content:space-between; align-items:flex-start; border-bottom:2px solid #dc2626; padding-bottom:8px; margin-bottom:12px;">
  <div>
  <h2 style="font-size:20px; font-weight:bold; margin:0; color:#b91c1c;">緊急搬送・受診 申し送りサマリー</h2>
- <div style="font-size:12.5px; color:#475569; margin-top:2px;">施設名: <strong>${escapeHtml(facility)}</strong></div>
+ <div style="font-size:12.5px; color:#4a5852; margin-top:2px;">施設名: <strong>${escapeHtml(facility)}</strong></div>
  </div>
- <div style="text-align:right; font-size:12px; color:#64748b;">
+ <div style="text-align:right; font-size:12px; color:#5f6d66;">
  <div>作成日時: <strong>${nowStr}</strong></div>
  <div>作成担当職員: <strong>${escapeHtml(staffName)}</strong></div>
  </div>
@@ -5726,28 +5757,28 @@ function renderEmergencySummaryPreview(r) {
 
  <div style="background:#fef2f2; border:2px solid #ef4444; border-radius:6px; padding:10px 12px; margin-bottom:12px;">
  <div style="font-weight:bold; color:#991b1b; font-size:13px; margin-bottom:3px;">【本日の救急搬送・受診理由 ＆ 発生状況】</div>
- <div style="font-size:13px; color:#1e293b; white-space:pre-wrap; line-height:1.5;">${escapeHtml(reasonText)}</div>
+ <div style="font-size:13px; color:#22302b; white-space:pre-wrap; line-height:1.5;">${escapeHtml(reasonText)}</div>
  </div>
 
  <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
  <tr>
- <th style="width:120px; background:#f8fafc; padding:6px; text-align:left;">氏名</th>
+ <th style="width:120px; background:#f6f8f6; padding:6px; text-align:left;">氏名</th>
  <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${r.room_no}号室)</td>
- <th style="width:100px; background:#f8fafc; padding:6px; text-align:left;">要介護度</th>
+ <th style="width:100px; background:#f6f8f6; padding:6px; text-align:left;">要介護度</th>
  <td style="padding:6px; font-weight:bold;">${escapeHtml(r.care_level)}</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">生年月日 / 年齢</th>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">生年月日 / 年齢</th>
  <td style="padding:6px;">${escapeHtml(r.birth_date || "-")}</td>
- <th style="background:#f8fafc; padding:6px; text-align:left;">基本方針</th>
- <td style="padding:6px; font-weight:bold; color:${r.policy_stamp === '看取り' ? '#b91c1c' : '#1d4ed8'};">［ ${escapeHtml(r.policy_stamp || "未設定")} ］</td>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">基本方針</th>
+ <td style="padding:6px; font-weight:bold; color:${r.policy_stamp === '看取り' ? '#b91c1c' : '#1a4f3d'};">［ ${escapeHtml(r.policy_stamp || "未設定")} ］</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">緊急連絡先</th>
- <td colspan="3" style="padding:6px; font-weight:bold; color:#0f172a;">${escapeHtml(r.emergency_contact || "未登録")}</td>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">緊急連絡先</th>
+ <td colspan="3" style="padding:6px; font-weight:bold; color:#1c2622;">${escapeHtml(r.emergency_contact || "未登録")}</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">家族要望・ACP</th>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">家族要望・ACP</th>
  <td colspan="3" style="padding:6px;">${escapeHtml(r.family_wishes || "未登録")}</td>
  </tr>
  </table>
@@ -5758,27 +5789,27 @@ function renderEmergencySummaryPreview(r) {
  <td colspan="3" style="padding:6px; color:#dc2626; font-weight:bold; font-size:13px;">${escapeHtml(r.allergies || "未登録")}</td>
  </tr>
  <tr>
- <th style="width:120px; background:#f8fafc; padding:6px; text-align:left;">既往歴・病歴</th>
+ <th style="width:120px; background:#f6f8f6; padding:6px; text-align:left;">既往歴・病歴</th>
  <td colspan="3" style="padding:6px;">${escapeHtml(r.diseases || "未登録")}</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">往診医・受診指示</th>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">往診医・受診指示</th>
  <td colspan="3" style="padding:6px;">${escapeHtml(r.dr_instructions || "未登録")}</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">身体麻痺・状態</th>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">身体麻痺・状態</th>
  <td style="padding:6px;">${escapeHtml(r.paralysis || "未登録")}</td>
- <th style="width:100px; background:#f8fafc; padding:6px; text-align:left;">食形態・口腔</th>
+ <th style="width:100px; background:#f6f8f6; padding:6px; text-align:left;">食形態・口腔</th>
  <td style="padding:6px;">${escapeHtml(r.diet_type || "未登録")} / ${escapeHtml(r.oral_state || "未登録")}</td>
  </tr>
  <tr>
- <th style="background:#f8fafc; padding:6px; text-align:left;">最新バイタル</th>
+ <th style="background:#f6f8f6; padding:6px; text-align:left;">最新バイタル</th>
  <td colspan="3" style="padding:6px; font-weight:bold;">${escapeHtml(vitalStr)}</td>
  </tr>
  </table>
 
- <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px;">
- <strong style="color:#1e3a8a;">【生活動作・ADL・介助注意点 (介護サマリー抜粋)】:</strong>
+ <div style="background:#f6f8f6; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; margin-bottom:10px; font-size:12px;">
+ <strong style="color:#173f33;">【生活動作・ADL・介助注意点 (介護サマリー抜粋)】:</strong>
  <div style="margin-top:3px; line-height:1.4;">
  <strong>ADL:</strong> ${latestSummary ? escapeHtml(latestSummary.adl) : '未登録（介護サマリー未作成）'} /
  <strong>排泄:</strong> ${latestSummary ? escapeHtml(latestSummary.excretion) : '未登録（介護サマリー未作成）'} /
@@ -5786,8 +5817,8 @@ function renderEmergencySummaryPreview(r) {
  </div>
  </div>
 
- <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:8px 10px; font-size:12px;">
- <strong style="color:#1e3a8a;">【施設内 直近の経過・特変記録抜粋】:</strong>
+ <div style="background:#f6f8f6; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; font-size:12px;">
+ <strong style="color:#173f33;">【施設内 直近の経過・特変記録抜粋】:</strong>
  <div style="margin-top:3px; line-height:1.4;">${recordsHtml}</div>
  </div>
  </div>
@@ -5867,11 +5898,11 @@ function renderSchemaSummaryBadges(residentId) {
  const allPins = ((db && db.data && db.data.body_schema_pins) ? db.data.body_schema_pins : []).filter(p => !p.voided); // [Claude修正] 取消済みは表示しない
  const pins = allPins.filter(p => Number(p.resident_id) === rId && p.status !== "治癒・終了");
  if (pins.length === 0) {
- return `<span style="color:#64748b; font-size:11.5px;">特記処置なし</span>`;
+ return `<span style="color:#5f6d66; font-size:11.5px;">特記処置なし</span>`;
  }
  pins.sort((a, b) => (Number(a.pin_no) || 0) - (Number(b.pin_no) || 0));
  return pins.map(p => `
- <span style="display:inline-flex; align-items:center; gap:3px; background:#f1f5f9; border:1px solid #cbd5e1; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px;">
+ <span style="display:inline-flex; align-items:center; gap:3px; background:#eef2ef; border:1px solid #cdd6d0; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px;">
  <span style="display:inline-block; width:15px; height:15px; line-height:15px; border-radius:50%; background:#000000; color:#ffffff; font-size:9.5px; text-align:center; font-weight:bold;">${p.pin_no}</span>
  <strong>${escapeHtml(p.site_name)}:</strong> ${escapeHtml(p.item_name)}
  </span>
@@ -5941,7 +5972,7 @@ function renderBodySchemaPins() {
 
  if (pins.length === 0) {
  tableContainer.innerHTML = `
- <div style="text-align:center; padding:24px 10px; color:#64748b; font-size:12px;">
+ <div style="text-align:center; padding:24px 10px; color:#5f6d66; font-size:12px;">
  現在登録されている処置ピンはありません。<br>
  左の人体図（正面・背面）をクリックしてピンを配置してください。
  </div>
@@ -5952,7 +5983,7 @@ function renderBodySchemaPins() {
  let tableHtml = `
  <table class="table" style="width:100%; font-size:12px; margin-bottom:0; border-collapse:collapse;">
  <thead>
- <tr style="background:#f1f5f9; color:#0f172a; border-bottom:2px solid #cbd5e1;">
+ <tr style="background:#eef2ef; color:#1c2622; border-bottom:2px solid #cdd6d0;">
  <th style="padding:6px 8px; width:40px; text-align:center;">番号</th>
  <th style="padding:6px 8px; width:85px;">部位</th>
  <th style="padding:6px 8px;">処置内容・薬剤名</th>
@@ -5968,7 +5999,7 @@ function renderBodySchemaPins() {
  const isSelected = activeEditId === Number(p.id);
  const rowBg = isSelected ? "background:#fef3c7;" : "";
  tableHtml += `
- <tr style="border-bottom:1px solid #e2e8f0; ${rowBg}">
+ <tr style="border-bottom:1px solid #dfe5e1; ${rowBg}">
  <td style="padding:6px 8px; text-align:center;">
  <span style="display:inline-block; width:22px; height:22px; line-height:20px; border-radius:50%; background:#000000; color:#ffffff; font-weight:bold; font-size:12px; text-align:center;">
  ${p.pin_no}
@@ -5976,17 +6007,17 @@ function renderBodySchemaPins() {
  </td>
  <td style="padding:6px 8px;">
  <strong>${escapeHtml(p.site_name || '-')}</strong>
- <div style="font-size:10px; color:#64748b;">${escapeHtml(p.category || '-')}</div>
+ <div style="font-size:10px; color:#5f6d66;">${escapeHtml(p.category || '-')}</div>
  </td>
  <td style="padding:6px 8px;">
- <div style="font-weight:bold; color:#0f172a;">${escapeHtml(p.item_name || '-')}</div>
- ${p.notes ? `<div style="font-size:11px; color:#475569; margin-top:2px;">${escapeHtml(p.notes)}</div>` : ''}
+ <div style="font-weight:bold; color:#1c2622;">${escapeHtml(p.item_name || '-')}</div>
+ ${p.notes ? `<div style="font-size:11px; color:#4a5852; margin-top:2px;">${escapeHtml(p.notes)}</div>` : ''}
  </td>
- <td style="padding:6px 8px; font-size:11px; color:#334155;">
+ <td style="padding:6px 8px; font-size:11px; color:#36443e;">
  ${escapeHtml(p.frequency || '-')}
  </td>
  <td style="padding:6px 8px; text-align:center;">
- <span style="font-size:10.5px; padding:2px 5px; border-radius:4px; font-weight:bold; background:${p.status === '継続中' ? '#e2e8f0' : '#dcfce7'}; color:#0f172a; border:1px solid #94a3b8;">
+ <span style="font-size:10.5px; padding:2px 5px; border-radius:4px; font-weight:bold; background:${p.status === '継続中' ? '#dfe5e1' : '#dcfce7'}; color:#1c2622; border:1px solid #94a19a;">
  ${escapeHtml(p.status || '継続中')}
  </span>
  </td>
@@ -6428,7 +6459,7 @@ function printBodySchema() {
  </div>
 
  <table style="width:100%; border-collapse:collapse; margin-bottom:8px; border:1px solid #000; font-size:11px;">
- <tr style="background:#f1f5f9; -webkit-print-color-adjust:exact;">
+ <tr style="background:#eef2ef; -webkit-print-color-adjust:exact;">
  <th style="padding:4px 6px; border:1px solid #000; width:12%; text-align:left;">利用者氏名</th>
  <td style="padding:4px 6px; border:1px solid #000; width:28%; font-size:13px; font-weight:bold;">${r ? escapeHtml(r.name) : '-'} 様</td>
  <th style="padding:4px 6px; border:1px solid #000; width:10%; text-align:left;">居室 / 介護度</th>
@@ -6467,7 +6498,7 @@ function printBodySchema() {
  </div>
  <table style="width:100%; border-collapse:collapse; border:1px solid #000; font-size:10.5px;">
  <thead>
- <tr style="background:#e2e8f0; font-weight:bold; -webkit-print-color-adjust:exact;">
+ <tr style="background:#dfe5e1; font-weight:bold; -webkit-print-color-adjust:exact;">
  <th style="padding:4px 5px; border:1px solid #000; width:35px; text-align:center;">No.</th>
  <th style="padding:4px 5px; border:1px solid #000; width:110px;">部位 (区分)</th>
  <th style="padding:4px 5px; border:1px solid #000; width:160px;">処置内容・薬剤名</th>
@@ -6609,27 +6640,27 @@ function syncCategoryButtons() {
  const buttons = btnContainer.querySelectorAll("button[data-cat]");
 
  const activeStyles = {
- "介護": { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" },
+ "介護": { bg: "#1e5b47", fg: "#ffffff", border: "#c9e0d5" },
  "特変": { bg: "#dc2626", fg: "#ffffff", border: "#fca5a5" },
  "連絡": { bg: "#ca8a04", fg: "#ffffff", border: "#fde047" },
  "看護": { bg: "#16a34a", fg: "#ffffff", border: "#bbf7d0" },
  "リハビリ": { bg: "#7c3aed", fg: "#ffffff", border: "#ddd6fe" },
  "家族": { bg: "#ea580c", fg: "#ffffff", border: "#fed7aa" },
- "巡視": { bg: "#475569", fg: "#ffffff", border: "#cbd5e1" }
+ "巡視": { bg: "#4a5852", fg: "#ffffff", border: "#cdd6d0" }
  };
 
  buttons.forEach(btn => {
  const bCat = btn.getAttribute("data-cat");
  if (bCat === currentCat) {
  btn.classList.add("active");
- const style = activeStyles[bCat] || { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" };
+ const style = activeStyles[bCat] || { bg: "#1e5b47", fg: "#ffffff", border: "#c9e0d5" };
  btn.style.background = style.bg;
  btn.style.color = style.fg;
  btn.style.borderColor = style.border;
  btn.style.fontWeight = "bold";
  } else {
  btn.classList.remove("active");
- const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#334155", border: "#cbd5e1" };
+ const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#36443e", border: "#cdd6d0" };
  btn.style.background = "#ffffff";
  btn.style.color = style.bg;
  btn.style.borderColor = style.border;
@@ -6656,9 +6687,9 @@ function toggleRecordScope() {
  if (btn) {
  if (gState.recordScope === "all") {
  btn.textContent = " 指定日の記録のみ表示";
- btn.style.background = "#eff6ff";
- btn.style.color = "#1d4ed8";
- btn.style.border = "1px solid #93c5fd";
+ btn.style.background = "#f1f6f3";
+ btn.style.color = "#1a4f3d";
+ btn.style.border = "1px solid #a9cfbf";
  } else {
  btn.textContent = " すべての過去履歴を表示";
  btn.style.background = "#f0fdf4";
@@ -6726,14 +6757,14 @@ function renderPersonalCalendar() {
  let html = `
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
  <div style="display:flex; align-items:center; gap:6px;">
- <span style="font-size:13px; font-weight:bold; color:#1e3a8a;"> 【${escapeHtml(res.name)} 様】の個人記録カレンダー:</span>
+ <span style="font-size:13px; font-weight:bold; color:#173f33;"> 【${escapeHtml(res.name)} 様】の個人記録カレンダー:</span>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="changePersonalCalendarMonth(-1)">◀ 前月</button>
- <strong style="font-size:14px; color:#0f172a; min-width:90px; text-align:center;">${year}年 ${month}月</strong>
+ <strong style="font-size:14px; color:#1c2622; min-width:90px; text-align:center;">${year}年 ${month}月</strong>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="changePersonalCalendarMonth(1)">次月 ▶</button>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-left:4px; background:#eff6ff; color:#1d4ed8; border-color:#bfdbfe;" onclick="jumpPersonalCalendarToday()">今日</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; margin-left:4px; background:#f1f6f3; color:#1a4f3d; border-color:#c9e0d5;" onclick="jumpPersonalCalendarToday()">今日</button>
  </div>
- <div style="display:flex; gap:10px; align-items:center; font-size:11px; color:#64748b;">
- <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#2563eb; margin-right:3px;"></span>バイタル</span>
+ <div style="display:flex; gap:10px; align-items:center; font-size:11px; color:#5f6d66;">
+ <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#1e5b47; margin-right:3px;"></span>バイタル</span>
  <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#16a34a; margin-right:3px;"></span>経過記録</span>
  <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#dc2626; margin-right:3px;"></span>特変</span>
  <span><span style="display:inline-block; width:8px; height:8px; border-radius:50%; background:#d97706; margin-right:3px;"></span>入院中</span>
@@ -6744,16 +6775,16 @@ function renderPersonalCalendar() {
  // カレンダーテーブル
  html += `
  <div style="overflow-x:auto;">
- <table style="width:100%; border-collapse:collapse; text-align:center; font-size:12px; background:#fff; border-radius:6px; overflow:hidden; border:1px solid #e2e8f0;">
+ <table style="width:100%; border-collapse:collapse; text-align:center; font-size:12px; background:#fff; border-radius:6px; overflow:hidden; border:1px solid #dfe5e1;">
  <thead>
- <tr style="background:#f1f5f9; color:#475569; font-weight:bold; height:26px;">
+ <tr style="background:#eef2ef; color:#4a5852; font-weight:bold; height:26px;">
  <th style="color:#dc2626; width:14.28%;">日</th>
  <th style="width:14.28%;">月</th>
  <th style="width:14.28%;">火</th>
  <th style="width:14.28%;">水</th>
  <th style="width:14.28%;">木</th>
  <th style="width:14.28%;">金</th>
- <th style="color:#2563eb; width:14.28%;">土</th>
+ <th style="color:#1e5b47; width:14.28%;">土</th>
  </tr>
  </thead>
  <tbody>
@@ -6767,7 +6798,7 @@ function renderPersonalCalendar() {
  for (let c = 0; c < 7; c++) {
  const cellIndex = r * 7 + c;
  if (cellIndex < startDayOfWeek || dayCounter > daysInMonth) {
- html += `<td style="background:#f8fafc; border:1px solid #f1f5f9;"></td>`;
+ html += `<td style="background:#f6f8f6; border:1px solid #eef2ef;"></td>`;
  } else {
  const curDay = dayCounter;
  const curDateStr = `${year}-${String(month).padStart(2, "0")}-${String(curDay).padStart(2, "0")}`;
@@ -6780,24 +6811,24 @@ function renderPersonalCalendar() {
  const hasTokukan = dayRecs.some(cr => cr.category === "特変");
  const isHospitalized = (res.status === "入院中" && (!res.hospital_date || curDateStr >= res.hospital_date)); // [Claude修正] 入院日が未登録のとき仮の日付 2026-08-25 を使っていた
 
- let cellBg = isSelected ? "#dbeafe" : "#ffffff";
- let cellBorder = isSelected ? "2px solid #2563eb" : "1px solid #e2e8f0";
+ let cellBg = isSelected ? "#dcebe3" : "#ffffff";
+ let cellBorder = isSelected ? "2px solid #1e5b47" : "1px solid #dfe5e1";
  if (isHospitalized && !isSelected) cellBg = "#fffbeb";
 
  let dotsHtml = "";
  if (isHospitalized) {
  dotsHtml = `<span style="font-size:9.5px; background:#fef3c7; color:#92400e; padding:1px 3px; border-radius:3px; font-weight:bold;">入院中</span>`;
  } else {
- if (hasVital) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#2563eb; margin:0 1px;" title="バイタル記録あり"></span>`;
+ if (hasVital) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#1e5b47; margin:0 1px;" title="バイタル記録あり"></span>`;
  if (recCount > 0) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#16a34a; margin:0 1px;" title="介護記録 ${recCount}件"></span>`;
  if (hasTokukan) dotsHtml += `<span style="display:inline-block; width:6px; height:6px; border-radius:50%; background:#dc2626; margin:0 1px;" title="特変あり"></span>`;
  }
 
- let textColor = c === 0 ? "#dc2626" : (c === 6 ? "#2563eb" : "#1e293b");
- if (isSelected) textColor = "#1e40af";
+ let textColor = c === 0 ? "#dc2626" : (c === 6 ? "#1e5b47" : "#22302b");
+ if (isSelected) textColor = "#1e5b47";
 
  html += `
- <td onclick="selectPersonalCalendarDate('${curDateStr}')" style="background:${cellBg}; border:${cellBorder}; cursor:pointer; vertical-align:top; padding:4px 2px; transition:background 0.15s;" onmouseover="if(!${isSelected})this.style.background='#f1f5f9';" onmouseout="if(!${isSelected})this.style.background='${cellBg}';">
+ <td onclick="selectPersonalCalendarDate('${curDateStr}')" style="background:${cellBg}; border:${cellBorder}; cursor:pointer; vertical-align:top; padding:4px 2px; transition:background 0.15s;" onmouseover="if(!${isSelected})this.style.background='#eef2ef';" onmouseout="if(!${isSelected})this.style.background='${cellBg}';">
  <div style="font-size:12.5px; font-weight:${isSelected ? 'bold' : 'normal'}; color:${textColor};">${curDay}</div>
  <div style="margin-top:2px; min-height:12px; display:flex; justify-content:center; align-items:center; gap:2px;">
  ${dotsHtml}
@@ -6922,23 +6953,23 @@ function renderPersonalDailySummary(res, dateStr) {
  const dayOrals = (db.data.oral_cares || []).filter(o => o.resident_id === res.id && o.date === dateStr);
 
  // 血圧のハイライトスタイル
- let bpHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+ let bpHtml = `<span style="color:#94a19a; font-size:12px;">未測定</span>`;
  if (vital && vital.bp_high !== null && vital.bp_low !== null) {
  const isHigh = vital.bp_high >= 145 || vital.bp_low >= 90;
- const bpColor = isHigh ? "#dc2626" : "#1e293b";
- bpHtml = `<strong style="font-size:15px; color:${bpColor};">${vital.bp_high} / ${vital.bp_low}</strong> <span style="font-size:11px; color:#64748b;">mmHg</span>`;
+ const bpColor = isHigh ? "#dc2626" : "#22302b";
+ bpHtml = `<strong style="font-size:15px; color:${bpColor};">${vital.bp_high} / ${vital.bp_low}</strong> <span style="font-size:11px; color:#5f6d66;">mmHg</span>`;
  }
 
  // 体温のハイライトスタイル
- let tempHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+ let tempHtml = `<span style="color:#94a19a; font-size:12px;">未測定</span>`;
  if (vital && vital.temperature !== null) {
  const isFever = vital.temperature >= 37.3;
- const tempColor = isFever ? "#dc2626" : "#1e293b";
- tempHtml = `<strong style="font-size:15px; color:${tempColor};">${vital.temperature.toFixed(1)}</strong> <span style="font-size:11px; color:#64748b;">℃</span>`;
+ const tempColor = isFever ? "#dc2626" : "#22302b";
+ tempHtml = `<strong style="font-size:15px; color:${tempColor};">${vital.temperature.toFixed(1)}</strong> <span style="font-size:11px; color:#5f6d66;">℃</span>`;
  }
 
  // 脈拍 & SpO2
- let pulseSpo2Html = `<span style="color:#94a3b8; font-size:11px;">未測定</span>`;
+ let pulseSpo2Html = `<span style="color:#94a19a; font-size:11px;">未測定</span>`;
  if (vital) {
  const pStr = vital.pulse ? `脈拍: <strong>${vital.pulse}</strong> bpm` : "";
  const sStr = vital.spo2 ? `SpO2: <strong>${vital.spo2}</strong> %` : "";
@@ -6946,78 +6977,78 @@ function renderPersonalDailySummary(res, dateStr) {
  }
 
  // 体重表示
- let weightHtml = `<span style="color:#94a3b8; font-size:12px;">未測定</span>`;
+ let weightHtml = `<span style="color:#94a19a; font-size:12px;">未測定</span>`;
  if (latestWeight) {
  const isExact = exactWeight ? " (本日測定)" : ` [${latestWeight.date.slice(5)}測定]`;
- weightHtml = `<strong style="font-size:14px; color:#1e293b;">${latestWeight.weight} kg</strong> <span style="font-size:11px; color:#64748b;">(${latestWeight.diff_prev || '前回比なし'})${isExact}</span>`;
+ weightHtml = `<strong style="font-size:14px; color:#22302b;">${latestWeight.weight} kg</strong> <span style="font-size:11px; color:#5f6d66;">(${latestWeight.diff_prev || '前回比なし'})${isExact}</span>`;
  }
 
  area.innerHTML = `
- <div style="background:#ffffff; border:1px solid #cbd5e1; border-radius:8px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #f1f5f9; padding-bottom:6px;">
- <span style="font-size:13.5px; font-weight:bold; color:#1e40af; display:flex; align-items:center; gap:6px;">
+ <div style="background:#ffffff; border:1px solid #cdd6d0; border-radius:8px; padding:12px 14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; border-bottom:1px solid #eef2ef; padding-bottom:6px;">
+ <span style="font-size:13.5px; font-weight:bold; color:#1e5b47; display:flex; align-items:center; gap:6px;">
  <span> 【${dateStr}】 個人記録・身体状況サマリー</span>
  </span>
- <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; color:#2563eb; border-color:#93c5fd; background:#eff6ff;" onclick="openPersonalVitalModal()">
+ <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:2px 8px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openPersonalVitalModal()">
   バイタル・体重を変更/追記
  </button>
  </div>
 
  <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(220px, 1fr)); gap:10px;">
  <!-- 1. バイタル & 血圧 & 体重 -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px; display:flex; justify-content:space-between;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px; display:flex; justify-content:space-between;">
  <span>バイタル & 身体測定</span>
- <span style="font-size:10px; color:#64748b;">${vital ? (vital.time || '') : ''}</span>
+ <span style="font-size:10px; color:#5f6d66;">${vital ? (vital.time || '') : ''}</span>
  </div>
  <div style="display:flex; flex-direction:column; gap:3px;">
- <div><span style="font-size:11.5px; color:#64748b;">血圧:</span> ${bpHtml}</div>
- <div><span style="font-size:11.5px; color:#64748b;">体温:</span> ${tempHtml}</div>
- <div style="font-size:11.5px; color:#334155;">${pulseSpo2Html}</div>
- <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
- <span style="font-size:11.5px; color:#64748b;"> 体重:</span> ${weightHtml}
+ <div><span style="font-size:11.5px; color:#5f6d66;">血圧:</span> ${bpHtml}</div>
+ <div><span style="font-size:11.5px; color:#5f6d66;">体温:</span> ${tempHtml}</div>
+ <div style="font-size:11.5px; color:#36443e;">${pulseSpo2Html}</div>
+ <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px;">
+ <span style="font-size:11.5px; color:#5f6d66;"> 体重:</span> ${weightHtml}
  </div>
  </div>
  </div>
 
  <!-- 2. 食事 & 水分 -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">
  食事 ＆ 水分摂取
  </div>
- <div style="font-size:11.5px; color:#334155; line-height:1.5;">
- <div>朝: ${breakfast ? `${breakfast.main_dish_ratio}/${breakfast.side_dish_ratio}割 (${breakfast.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
- <div>昼: ${lunch ? `${lunch.main_dish_ratio}/${lunch.side_dish_ratio}割 (${lunch.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
- <div>夕: ${dinner ? `${dinner.main_dish_ratio}/${dinner.side_dish_ratio}割 (${dinner.water_ml || 0}ml)` : '<span style="color:#94a3b8;">-</span>'}</div>
- <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px; color:#1e40af; font-weight:bold;">
+ <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
+ <div>朝: ${breakfast ? `${breakfast.main_dish_ratio}/${breakfast.side_dish_ratio}割 (${breakfast.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
+ <div>昼: ${lunch ? `${lunch.main_dish_ratio}/${lunch.side_dish_ratio}割 (${lunch.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
+ <div>夕: ${dinner ? `${dinner.main_dish_ratio}/${dinner.side_dish_ratio}割 (${dinner.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
+ <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px; color:#1e5b47; font-weight:bold;">
  1日合計水分: ${totalWater} ml
  </div>
  </div>
  </div>
 
  <!-- 3. 排泄 & 入浴 -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">
  排泄 ＆ 入浴
  </div>
- <div style="font-size:11.5px; color:#334155; line-height:1.5;">
+ <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
  <div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
- <div style="font-size:11px; color:#64748b;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
- <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
- 入浴: ${bath ? `<strong style="color:#16a34a;">${escapeHtml(bath.bath_type || "")}${bath.bath_type === "見合わせ" ? "" : " 実施"}</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
+ <div style="font-size:11px; color:#5f6d66;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
+ <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px;">
+ 入浴: ${bath ? `<strong style="color:#16a34a;">${escapeHtml(bath.bath_type || "")}${bath.bath_type === "見合わせ" ? "" : " 実施"}</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a19a;">本日入浴なし</span>'}
  </div>
  </div>
  </div>
 
  <!-- 4. 服薬 & 口腔ケア -->
- <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:8px 10px;">
- <div style="font-size:11px; font-weight:bold; color:#475569; margin-bottom:4px;">
+ <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
+ <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">
  服薬確認 ＆ 口腔ケア
  </div>
- <div style="font-size:11.5px; color:#334155; line-height:1.5;">
- <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
- <div>口腔ケア: ${dayOrals.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayOrals.length}回)</span>` : '<span style="color:#94a3b8;">未記録</span>'}</div>
- <div style="font-size:11px; color:#64748b; margin-top:2px;">
+ <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
+ <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a19a;">未記録</span>'}</div>
+ <div>口腔ケア: ${dayOrals.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayOrals.length}回)</span>` : '<span style="color:#94a19a;">未記録</span>'}</div>
+ <div style="font-size:11px; color:#5f6d66; margin-top:2px;">
  食形態: ${escapeHtml(res.diet_type || '未登録')}
  </div>
  </div>
@@ -7198,10 +7229,10 @@ function getCategoryBadgeStyle(cat) {
  if (cat === "看護") return "background:#dcfce7; color:#166534; font-weight:bold; border:1px solid #bbf7d0;";
  if (cat === "リハビリ") return "background:#ede9fe; color:#6b21a8; font-weight:bold; border:1px solid #ddd6fe;";
  if (cat === "家族") return "background:#ffedd5; color:#c2410c; font-weight:bold; border:1px solid #fed7aa;";
- if (cat === "巡視") return "background:#f1f5f9; color:#475569; border:1px solid #cbd5e1;";
+ if (cat === "巡視") return "background:#eef2ef; color:#4a5852; border:1px solid #cdd6d0;";
  if (cat === "バイタル") return "background:#fef3c7; color:#92400e; border:1px solid #fde68a;";
  if (cat === "頓服服用") return "background:#f3e8ff; color:#6b21a8; border:1px solid #e9d5ff;";
- return "background:#e0f2fe; color:#0369a1; border:1px solid #bfdbfe;"; // 介護・デフォルト
+ return "background:#e0f2fe; color:#0369a1; border:1px solid #c9e0d5;"; // 介護・デフォルト
 }
 
 // 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
@@ -7256,10 +7287,10 @@ function renderSelectedDateRecords() {
  if (records.length === 0) {
  if (!isAllScope && allUserRecords.length > 0) {
  list.innerHTML = `
- <div style="padding:20px; text-align:center; background:#f8fafc; border-radius:6px; border:1px dashed #cbd5e1;">
- <p style="font-size:14px; color:#64748b; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の個別記録はまだ登録されていません。</p>
- <p style="font-size:13px; color:#2563eb; margin-bottom:12px;">（※この利用者様には過去のカルテ記録が計 ${allUserRecords.length} 件あります）</p>
- <button type="button" class="btn btn-secondary" style="font-size:12px; background:#eff6ff; color:#1d4ed8; border:1px solid #93c5fd;" onclick="toggleRecordScope()">
+ <div style="padding:20px; text-align:center; background:#f6f8f6; border-radius:6px; border:1px dashed #cdd6d0;">
+ <p style="font-size:14px; color:#5f6d66; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の個別記録はまだ登録されていません。</p>
+ <p style="font-size:13px; color:#1e5b47; margin-bottom:12px;">（※この利用者様には過去のカルテ記録が計 ${allUserRecords.length} 件あります）</p>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; background:#f1f6f3; color:#1a4f3d; border:1px solid #a9cfbf;" onclick="toggleRecordScope()">
  すべての過去履歴を表示する
  </button>
  </div>
@@ -7296,15 +7327,15 @@ function renderSelectedDateRecords() {
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
  <div style="display:flex; align-items:center; gap:8px;">
  <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
- <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
- ${isLong ? `<span style="font-size:11px; background:#f1f5f9; color:#475569; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
+ <strong style="font-size:14px; color:#22302b;">${escapeHtml(resName)}</strong>
+ ${isLong ? `<span style="font-size:11px; background:#eef2ef; color:#4a5852; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
  </div>
  <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
  ${cpCareRecordActions(r)}
  </div>
  </div>
- <div class="care-record-body" style="${r.voided ? 'text-decoration:line-through; color:#94a3b8;' : ''}">${escapeHtml(displayContent)}</div>
+ <div class="care-record-body" style="${r.voided ? 'text-decoration:line-through; color:#94a19a;' : ''}">${escapeHtml(displayContent)}</div>
  ${toggleBtnHtml}
  `;
  return item;
@@ -7331,13 +7362,13 @@ function renderSelectedDateRecords() {
  const filterBar = document.createElement("div");
  filterBar.style.cssText = "display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center;";
  filterBar.innerHTML = `
- <span style="font-size:12px; font-weight:bold; color:#475569; margin-right:4px;">月別表示:</span>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
+ <span style="font-size:12px; font-weight:bold; color:#4a5852; margin-right:4px;">月別表示:</span>
+ <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
  ${ymList.map(ym => {
  const parts = ym.split("-");
  const label = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月 (${monthGroups[ym].length}件)` : ym;
  const active = gSelectedHistoryMonth === ym;
- return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1d4ed8; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
+ return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
  }).join("")}
  `;
  list.appendChild(filterBar);
@@ -7352,21 +7383,21 @@ function renderSelectedDateRecords() {
  const isOpen = gOpenMonthAccordions.has(ym);
 
  const accordionContainer = document.createElement("div");
- accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #e2e8f0; border-radius:6px; overflow:hidden; background:#fff;";
+ accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #dfe5e1; border-radius:6px; overflow:hidden; background:#fff;";
 
  // アコーディオンヘッダー
  const header = document.createElement("div");
- header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f8fafc; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3b82f6; transition:background 0.2s;";
- header.onmouseover = () => header.style.background = "#f1f5f9";
- header.onmouseout = () => header.style.background = "#f8fafc";
+ header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f6f8f6; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3d8a6e; transition:background 0.2s;";
+ header.onmouseover = () => header.style.background = "#eef2ef";
+ header.onmouseout = () => header.style.background = "#f6f8f6";
  header.onclick = () => toggleMonthAccordion(ym);
 
  header.innerHTML = `
  <div style="display:flex; align-items:center; gap:8px;">
- <span style="font-size:14px; font-weight:bold; color:#1e3a8a;"> ${ymTitle}</span>
- <span style="font-size:11px; background:#eff6ff; color:#1d4ed8; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
+ <span style="font-size:14px; font-weight:bold; color:#173f33;"> ${ymTitle}</span>
+ <span style="font-size:11px; background:#f1f6f3; color:#1a4f3d; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
  </div>
- <span style="font-size:12px; color:#64748b; font-weight:bold;">
+ <span style="font-size:12px; color:#5f6d66; font-weight:bold;">
  ${isOpen ? '▲ 折りたたむ' : '▼ 展開して表示'}
  </span>
  `;
@@ -7375,7 +7406,7 @@ function renderSelectedDateRecords() {
  // アコーディオン中身（展開時のみ表示）
  if (isOpen) {
  const body = document.createElement("div");
- body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #e2e8f0;";
+ body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #dfe5e1;";
  mRecs.forEach(r => {
  body.appendChild(createRecordItem(r));
  });
@@ -7429,18 +7460,18 @@ function printSelectedDateRecords() {
  let recordsHtml = records.map((r, idx) => {
  const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
  return `
- <div style="margin-bottom:18px; border:1px solid #cbd5e1; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
- <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
+ <div style="margin-bottom:18px; border:1px solid #cdd6d0; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
+ <div style="display:flex; justify-content:space-between; border-bottom:1px solid #dfe5e1; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
  <div>
- <span style="font-weight:bold; background:#e2e8f0; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
+ <span style="font-weight:bold; background:#dfe5e1; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
  <strong style="font-size:15px; margin-left:8px;">${escapeHtml(resName)}</strong>
  </div>
- <div style="color:#64748b;">
+ <div style="color:#5f6d66;">
  <span>日時: ${escapeHtml(timeDisplay)}</span>
  <span style="margin-left:12px;">記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
  </div>
  </div>
- <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#1e293b; padding:4px 2px;">
+ <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#22302b; padding:4px 2px;">
 ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </div>
  </div>
@@ -7449,12 +7480,12 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
 
  printArea.innerHTML = `
  <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
- <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:10px; margin-bottom:16px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:10px; margin-bottom:16px;">
  <div>
- <h1 style="font-size:22px; margin:0; color:#1e3a8a;">個別介護記録・カルテ報告書</h1>
- <p style="font-size:13px; color:#475569; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
+ <h1 style="font-size:22px; margin:0; color:#173f33;">個別介護記録・カルテ報告書</h1>
+ <p style="font-size:13px; color:#4a5852; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
  </div>
- <div style="text-align:right; font-size:12px; color:#64748b;">
+ <div style="text-align:right; font-size:12px; color:#5f6d66;">
  <div>印刷日時: ${nowStr}</div>
  <div>出力担当者: ${escapeHtml(staffName)}</div>
  <div>記録件数: 計 ${records.length} 件</div>
@@ -7465,7 +7496,7 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  ${recordsHtml}
  </div>
 
- <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+ <div style="margin-top:24px; border-top:1px solid #cdd6d0; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a19a;">
  <span>ケアポータル 統合管理システム (個別カルテ印刷)</span>
  <span>確認印: __________________</span>
  </div>
@@ -7519,20 +7550,20 @@ function renderDailyJournal() {
 
  summaryBar.innerHTML = `
  <div style="display:flex; flex-direction:column; gap:4px; max-width:65%;">
- <div style="font-size:13px; color:#1e40af; font-weight:bold;"> ${journalDateTitle}</div>
- <div style="font-size:12.5px; color:#1e293b; line-height:1.5;">${escapeHtml(shiftSummaryText)}</div>
+ <div style="font-size:13px; color:#1e5b47; font-weight:bold;"> ${journalDateTitle}</div>
+ <div style="font-size:12.5px; color:#22302b; line-height:1.5;">${escapeHtml(shiftSummaryText)}</div>
  </div>
  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
- <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
- <div style="font-size:11px; color:#64748b;">入居者状況</div>
- <div style="font-size:14px; font-weight:bold; color:#1e293b;">在所 ${presentCount}名 / 入院 ${hospitalCount}名</div>
+ <div style="background:#fff; border:1px solid #cdd6d0; padding:6px 14px; border-radius:6px; text-align:center;">
+ <div style="font-size:11px; color:#5f6d66;">入居者状況</div>
+ <div style="font-size:14px; font-weight:bold; color:#22302b;">在所 ${presentCount}名 / 入院 ${hospitalCount}名</div>
  </div>
- <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
- <div style="font-size:11px; color:#64748b;">本日の介護記録</div>
- <div style="font-size:14px; font-weight:bold; color:#2563eb;">計 ${dayRecords.length} 件</div>
+ <div style="background:#fff; border:1px solid #cdd6d0; padding:6px 14px; border-radius:6px; text-align:center;">
+ <div style="font-size:11px; color:#5f6d66;">本日の介護記録</div>
+ <div style="font-size:14px; font-weight:bold; color:#1e5b47;">計 ${dayRecords.length} 件</div>
  </div>
- <div style="background:#fff; border:1px solid #cbd5e1; padding:6px 14px; border-radius:6px; text-align:center;">
- <div style="font-size:11px; color:#64748b;">特変・要申送</div>
+ <div style="background:#fff; border:1px solid #cdd6d0; padding:6px 14px; border-radius:6px; text-align:center;">
+ <div style="font-size:11px; color:#5f6d66;">特変・要申送</div>
  <div style="font-size:14px; font-weight:bold; color:${tokukanCount > 0 ? '#dc2626' : '#16a34a'};">${tokukanCount} 件</div>
  </div>
  </div>
@@ -7560,7 +7591,7 @@ function renderDailyJournal() {
  });
 
  if (allRecords.length === 0) {
- recordsListEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:12px; text-align:center; background:#f8fafc; border-radius:6px;">この日の特変・特記事項はありません。</p>';
+ recordsListEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:12px; text-align:center; background:#f6f8f6; border-radius:6px;">この日の特変・特記事項はありません。</p>';
  } else {
  recordsListEl.innerHTML = "";
  allRecords.forEach(r => {
@@ -7575,14 +7606,14 @@ function renderDailyJournal() {
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
  <div style="display:flex; align-items:center; gap:8px;">
  <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
- <strong style="font-size:14px; color:#1e293b;">${escapeHtml(resName)}</strong>
+ <strong style="font-size:14px; color:#22302b;">${escapeHtml(resName)}</strong>
  </div>
  <div style="display:flex; align-items:center; gap:6px;">
  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
  ${cpCareRecordActions(r)}
  </div>
  </div>
- <div class="care-record-body" style="margin-top:6px; ${r.voided ? 'text-decoration:line-through; color:#94a3b8;' : ''}">${escapeHtml(r.content || '')}</div>
+ <div class="care-record-body" style="margin-top:6px; ${r.voided ? 'text-decoration:line-through; color:#94a19a;' : ''}">${escapeHtml(r.content || '')}</div>
  `;
  recordsListEl.appendChild(item);
  });
@@ -7681,8 +7712,8 @@ function printDailyJournal() {
   const fmt = l => l.length > 0 ? l.map(s => s.displayName).join("・") : "-";
 
   printRosterHtml = `
-  <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:4px; padding:6px 12px; margin-bottom:14px; font-size:11px; color:#1e293b;">
-   <strong style="color:#1e40af;">【本日の勤務体制】</strong>
+  <div style="background:#f6f8f6; border:1px solid #cdd6d0; border-radius:4px; padding:6px 12px; margin-bottom:14px; font-size:11px; color:#22302b;">
+   <strong style="color:#1e5b47;">【本日の勤務体制】</strong>
    <span>管理者: ${escapeHtml(dirT)}</span> | 
    <span>看護: ${escapeHtml(nurseT)}</span> | 
    <span>早出: ${escapeHtml(fmt(roster.early))}</span> | 
@@ -7709,12 +7740,12 @@ function printDailyJournal() {
 
  return `
  <tr>
- <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(r.care_level)}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(vitStr)}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(mealStr)}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(excStr)}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(bathStr)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(r.care_level)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(vitStr)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(mealStr)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(excStr)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(bathStr)}</td>
  </tr>
  `;
  }).join("");
@@ -7725,17 +7756,17 @@ function printDailyJournal() {
  const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
 
  return `
- <div style="margin-bottom:12px; border:1px solid #cbd5e1; border-radius:4px; padding:10px; page-break-inside:avoid;">
- <div style="display:flex; justify-content:space-between; border-bottom:1px solid #e2e8f0; padding-bottom:4px; margin-bottom:6px; font-size:12px;">
+ <div style="margin-bottom:12px; border:1px solid #cdd6d0; border-radius:4px; padding:10px; page-break-inside:avoid;">
+ <div style="display:flex; justify-content:space-between; border-bottom:1px solid #dfe5e1; padding-bottom:4px; margin-bottom:6px; font-size:12px;">
  <div>
- <span style="font-weight:bold; background:#e2e8f0; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
+ <span style="font-weight:bold; background:#dfe5e1; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
  <strong style="font-size:14px; margin-left:6px;">${escapeHtml(resName)}</strong>
  </div>
- <div style="color:#64748b;">
+ <div style="color:#5f6d66;">
  <span>${escapeHtml(timeDisplay)}</span> / <span>記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
  </div>
  </div>
- <div style="white-space:pre-wrap; font-size:13px; line-height:1.6; color:#1e293b;">
+ <div style="white-space:pre-wrap; font-size:13px; line-height:1.6; color:#22302b;">
 ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </div>
  </div>
@@ -7744,12 +7775,12 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
 
  printArea.innerHTML = `
  <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
- <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #1e3a8a; padding-bottom:8px; margin-bottom:14px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:8px; margin-bottom:14px;">
  <div>
- <h1 style="font-size:20px; margin:0; color:#1e3a8a;"> ${escapeHtml(facilityName)} フロア業務日誌 (一日の記録)</h1>
- <p style="font-size:12px; color:#475569; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 日報管理書類</p>
+ <h1 style="font-size:20px; margin:0; color:#173f33;"> ${escapeHtml(facilityName)} フロア業務日誌 (一日の記録)</h1>
+ <p style="font-size:12px; color:#4a5852; margin:4px 0 0 0;">対象日: <strong>${escapeHtml(gState.selectedDate)}</strong> / 日報管理書類</p>
  </div>
- <div style="text-align:right; font-size:11px; color:#64748b;">
+ <div style="text-align:right; font-size:11px; color:#5f6d66;">
  <div>印刷日時: ${nowStr}</div>
  <div>出力者: ${escapeHtml(staffName)}</div>
  </div>
@@ -7757,16 +7788,16 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
 
  ${printRosterHtml}
 
- <h3 style="font-size:14px; margin:12px 0 6px 0; color:#1e3a8a;">1. フロア全体 ケア実施サマリー表</h3>
+ <h3 style="font-size:14px; margin:12px 0 6px 0; color:#173f33;">1. フロア全体 ケア実施サマリー表</h3>
  <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
  <thead>
- <tr style="background:#f1f5f9;">
- <th style="border:1px solid #94a3b8; padding:5px 8px;">氏名・居室</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">介護度</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">バイタル</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">食事</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">排泄</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">入浴</th>
+ <tr style="background:#eef2ef;">
+ <th style="border:1px solid #94a19a; padding:5px 8px;">氏名・居室</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">介護度</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">バイタル</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">食事</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">排泄</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">入浴</th>
  </tr>
  </thead>
  <tbody>
@@ -7775,34 +7806,34 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </table>
 
  <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) -->
- <h3 style="font-size:14px; margin:16px 0 6px 0; color:#1e3a8a;">2. フロア一日の日課・業務スケジュール実施記録</h3>
+ <h3 style="font-size:14px; margin:16px 0 6px 0; color:#173f33;">2. フロア一日の日課・業務スケジュール実施記録</h3>
  <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
  <thead>
- <tr style="background:#f1f5f9;">
- <th style="border:1px solid #94a3b8; padding:5px 8px; width:70px;">時間</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px; width:150px;">日課・行事項目</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px;">実施内容・様子</th>
- <th style="border:1px solid #94a3b8; padding:5px 8px; width:100px;">担当</th>
+ <tr style="background:#eef2ef;">
+ <th style="border:1px solid #94a19a; padding:5px 8px; width:70px;">時間</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px; width:150px;">日課・行事項目</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px;">実施内容・様子</th>
+ <th style="border:1px solid #94a19a; padding:5px 8px; width:100px;">担当</th>
  </tr>
  </thead>
  <tbody>
  ${(db.data.daily_schedules || []).slice().sort((a,b) => (a.time||'').localeCompare(b.time||'')).map(s => `
  <tr>
- <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold; text-align:center;">${s.time}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px; font-weight:bold;">${escapeHtml(s.title)}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.content || '-')}</td>
- <td style="border:1px solid #94a3b8; padding:5px 8px;">${escapeHtml(s.staff_name || '-')}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold; text-align:center;">${s.time}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold;">${escapeHtml(s.title)}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(s.content || '-')}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(s.staff_name || '-')}</td>
  </tr>
  `).join("") || '<tr><td colspan="4" style="text-align:center; padding:8px;">スケジュール記録なし</td></tr>'}
  </tbody>
  </table>
 
- <h3 style="font-size:14px; margin:14px 0 6px 0; color:#1e3a8a;">3. 特変・申し送り記録 (計 ${records.length} 件)</h3>
+ <h3 style="font-size:14px; margin:14px 0 6px 0; color:#173f33;">3. 特変・申し送り記録 (計 ${records.length} 件)</h3>
  <div>
- ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#64748b;">記録なし</p>'}
+ ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#5f6d66;">記録なし</p>'}
  </div>
 
- <div style="margin-top:24px; border-top:1px solid #cbd5e1; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a3b8;">
+ <div style="margin-top:24px; border-top:1px solid #cdd6d0; padding-top:8px; display:flex; justify-content:space-between; font-size:11px; color:#94a19a;">
  <span>ケアポータル 統合管理システム (フロア日報印刷)</span>
  <span>施設長印: __________________ / リーダー印: __________________</span>
  </div>
@@ -7826,15 +7857,15 @@ function renderDailyScheduleTimeline() {
  let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
  list.forEach(s => {
  html += `
- <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:8px 12px; background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; font-size:13px;">
+ <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:8px 12px; background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; font-size:13px;">
  <div style="display:flex; gap:12px; align-items:flex-start;">
- <span style="background:#1e40af; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap;">
+ <span style="background:#1e5b47; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap;">
  ${s.time}
  </span>
  <div>
- <strong style="color:#0f172a; font-size:14px;">${escapeHtml(s.title)}</strong>
- ${s.content ? `<div style="font-size:12.5px; color:#475569; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
- ${s.staff_name ? `<div style="font-size:11px; color:#64748b; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
+ <strong style="color:#1c2622; font-size:14px;">${escapeHtml(s.title)}</strong>
+ ${s.content ? `<div style="font-size:12.5px; color:#4a5852; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
+ ${s.staff_name ? `<div style="font-size:11px; color:#5f6d66; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
  </div>
  </div>
  <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailySchedule(${s.id})">削除</button>
@@ -7946,7 +7977,7 @@ function selectDailyJournalCategory(cat) {
  const activeStyles = {
  "特変": { bg: "#dc2626", fg: "#ffffff", border: "#fca5a5" },
  "連絡": { bg: "#ca8a04", fg: "#ffffff", border: "#fde047" },
- "介護": { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" },
+ "介護": { bg: "#1e5b47", fg: "#ffffff", border: "#c9e0d5" },
  "看護": { bg: "#16a34a", fg: "#ffffff", border: "#bbf7d0" },
  "リハビリ": { bg: "#7c3aed", fg: "#ffffff", border: "#ddd6fe" }
  };
@@ -7955,14 +7986,14 @@ function selectDailyJournalCategory(cat) {
  const bCat = btn.getAttribute("data-cat");
  if (bCat === cat) {
  btn.classList.add("active");
- const style = activeStyles[bCat] || { bg: "#2563eb", fg: "#ffffff", border: "#bfdbfe" };
+ const style = activeStyles[bCat] || { bg: "#1e5b47", fg: "#ffffff", border: "#c9e0d5" };
  btn.style.background = style.bg;
  btn.style.color = style.fg;
  btn.style.borderColor = style.border;
  btn.style.fontWeight = "bold";
  } else {
  btn.classList.remove("active");
- const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#334155", border: "#cbd5e1" };
+ const style = activeStyles[bCat] || { bg: "#ffffff", fg: "#36443e", border: "#cdd6d0" };
  btn.style.background = "#ffffff";
  btn.style.color = style.bg;
  btn.style.borderColor = style.border;
@@ -8095,8 +8126,8 @@ function doSearch() {
  results.forEach(r => {
  const res = gState.residents.find(x => x.id === r.resident_id);
  const card = document.createElement("div");
- card.style.background = "#f8fafc";
- card.style.border = "1px solid #cbd5e1";
+ card.style.background = "#f6f8f6";
+ card.style.border = "1px solid #cdd6d0";
  card.style.borderRadius = "8px";
  card.style.padding = "10px 14px";
  card.style.marginBottom = "8px";
@@ -8112,7 +8143,7 @@ function doSearch() {
 
  card.innerHTML = `
  <div style="display:flex; justify-content:space-between; font-size:13px; margin-bottom:4px; flex-wrap:wrap; gap:4px;">
- <span style="font-weight:bold; color:#1d4ed8;"> ${escapeHtml(timeDisplay)} 【${escapeHtml(r.category || '記録')}】</span>
+ <span style="font-weight:bold; color:#1a4f3d;"> ${escapeHtml(timeDisplay)} 【${escapeHtml(r.category || '記録')}】</span>
  <strong>${res ? escapeHtml(res.room_no) + '号室 ' + escapeHtml(res.name) + ' 様' : ''}</strong>
  <span style="color:var(--text-muted);">担当: ${escapeHtml(r.staff_name || '未設定')}</span>
  </div>
@@ -8706,18 +8737,18 @@ function renderMedTable() {
  if (!order || order.eye === "指示なし") {
  eyedropCellHtml = `
  <div style="display:flex; justify-content:space-between; align-items:center;">
- <span style="color:#94a3b8; font-size:12px;">指示なし</span>
+ <span style="color:#94a19a; font-size:12px;">指示なし</span>
  <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})">指示追加</button>
  </div>
  `;
  } else {
  const eyeBadge = order.eye === "右のみ"
- ? `<span class="badge" style="background:#1e3a8a; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[右のみ]</span>`
+ ? `<span class="badge" style="background:#173f33; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[右のみ]</span>`
  : (order.eye === "左のみ"
  ? `<span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[左のみ]</span>`
- : `<span class="badge" style="background:#334155; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[両眼]</span>`);
+ : `<span class="badge" style="background:#36443e; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[両眼]</span>`);
 
- const medTitle = `<span style="font-weight:bold; font-size:12px; margin-left:4px; color:#0f172a;">${escapeHtml(order.medicine_name)}</span>`;
+ const medTitle = `<span style="font-weight:bold; font-size:12px; margin-left:4px; color:#1c2622;">${escapeHtml(order.medicine_name)}</span>`;
 
  if (filter === "all") {
  // すべて表示時: 指示されている時間帯のボタンを並べて表示
@@ -8727,7 +8758,7 @@ function renderMedTable() {
  if (done) {
  return `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')" title="クリックで解除">済 ${slot} (${done.staff_name || '済'})</button>`;
  }
- return `<button class="btn btn-outline" style="border-color:#2563eb; color:#1d4ed8; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')">未 ${slot}</button>`;
+ return `<button class="btn btn-outline" style="border-color:#1e5b47; color:#1a4f3d; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')">未 ${slot}</button>`;
  }).join("");
 
  eyedropCellHtml = `
@@ -8737,7 +8768,7 @@ function renderMedTable() {
  <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
  </div>
  <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center;">
- <span style="font-size:11px; color:#64748b; margin-right:2px;">実施:</span>
+ <span style="font-size:11px; color:#5f6d66; margin-right:2px;">実施:</span>
  ${slotButtonsHtml}
  </div>
  </div>
@@ -8763,7 +8794,7 @@ function renderMedTable() {
  } else {
  eyedropCellHtml = `
  <div style="display:flex; justify-content:space-between; align-items:center;">
- <span style="color:#64748b; font-size:12px;">この時間帯の指示なし (${order.eye} ${order.timing_slots.join('・')})</span>
+ <span style="color:#5f6d66; font-size:12px;">この時間帯の指示なし (${order.eye} ${order.timing_slots.join('・')})</span>
  <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
  </div>
  `;
@@ -9223,12 +9254,12 @@ function renderNightTable() {
  const tr = document.createElement("tr");
 
  if (isHospital) {
- tr.style.background = "#f8fafc";
+ tr.style.background = "#f6f8f6";
  tr.style.opacity = "0.7";
- const cells = times.map(() => `<td style="text-align:center; color:#94a3b8; font-size:11px;">(対象外)</td>`).join("");
+ const cells = times.map(() => `<td style="text-align:center; color:#94a19a; font-size:11px;">(対象外)</td>`).join("");
  tr.innerHTML = `
  <td>${r.room_no}</td>
- <td><strong>${escapeHtml(r.name)} 様</strong> <span class="badge" style="background:#64748b; color:#fff; font-size:10px; margin-left:4px;">${escapeHtml(r.status)}</span></td>
+ <td><strong>${escapeHtml(r.name)} 様</strong> <span class="badge" style="background:#5f6d66; color:#fff; font-size:10px; margin-left:4px;">${escapeHtml(r.status)}</span></td>
  ${cells}
  `;
  tbody.appendChild(tr);
@@ -9298,12 +9329,12 @@ function renderWeightTable() {
  const diff = (currentRec.weight - prevRec.weight).toFixed(1);
  const diffNum = parseFloat(diff);
  const diffStr = diffNum > 0 ? `+${diff} kg` : (diffNum < 0 ? `${diff} kg` : `±0.0 kg`);
- const color = diffNum > 0 ? '#16a34a' : (diffNum < 0 ? '#dc2626' : '#64748b');
+ const color = diffNum > 0 ? '#16a34a' : (diffNum < 0 ? '#dc2626' : '#5f6d66');
 			let alertBadge = "";
 			if (diffNum <= -2.0) {
 				alertBadge = `<span style="display:inline-block; font-size:10.5px; background:#fee2e2; color:#991b1b; padding:1px 5px; border-radius:4px; font-weight:bold; margin-left:4px;">急減注意</span>`;
 			} else if (diffNum >= 2.0) {
-				alertBadge = `<span style="display:inline-block; font-size:10.5px; background:#eff6ff; color:#1e40af; padding:1px 5px; border-radius:4px; font-weight:bold; margin-left:4px;">急増注意</span>`;
+				alertBadge = `<span style="display:inline-block; font-size:10.5px; background:#f1f6f3; color:#1e5b47; padding:1px 5px; border-radius:4px; font-weight:bold; margin-left:4px;">急増注意</span>`;
 			}
 			diffDisplay = `<strong style="color:${color}; font-size:13px;">${diffStr}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prevRec.weight}k)</span>${alertBadge}`;
  } else if (currentRec) {
@@ -9318,7 +9349,7 @@ function renderWeightTable() {
  const diff2 = (currentRec.weight - prev2Rec.weight).toFixed(1);
  const diff2Num = parseFloat(diff2);
  const diff2Str = diff2Num > 0 ? `+${diff2} kg` : (diff2Num < 0 ? `${diff2} kg` : `±0.0 kg`);
- const color2 = diff2Num > 0 ? '#16a34a' : (diff2Num < 0 ? '#dc2626' : '#64748b');
+ const color2 = diff2Num > 0 ? '#16a34a' : (diff2Num < 0 ? '#dc2626' : '#5f6d66');
  diff2Display = `<strong style="color:${color2}; font-size:13px;">${diff2Str}</strong> <span style="font-size:11px; color:var(--text-muted);">(${prev2Rec.weight}k)</span>`;
  } else if (currentRec) {
  diff2Display = `<span style="font-size:11px; color:var(--text-muted);">-</span>`;
@@ -9393,8 +9424,8 @@ function renderWeightChart(selectedResId = null) {
  const val = (minW + (range / steps) * s).toFixed(1);
  const yPos = padT + graphH - (s / steps) * graphH;
  gridLines += `
- <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}" stroke="#e2e8f0" stroke-dasharray="3,3" />
- <text x="${padL - 8}" y="${yPos + 4}" font-size="11" fill="#64748b" text-anchor="end">${val}kg</text>
+ <line x1="${padL}" y1="${yPos}" x2="${svgW - padR}" y2="${yPos}" stroke="#dfe5e1" stroke-dasharray="3,3" />
+ <text x="${padL - 8}" y="${yPos + 4}" font-size="11" fill="#5f6d66" text-anchor="end">${val}kg</text>
  `;
  }
 
@@ -9407,7 +9438,7 @@ function renderWeightChart(selectedResId = null) {
  points.forEach((pt, idx) => {
  const xPos = padL + (idx / (numPts - 1)) * graphW;
  const shortM = pt.month.slice(5) + "月";
- monthLabelsHtml += `<text x="${xPos}" y="${svgH - padB + 18}" font-size="11" fill="#475569" text-anchor="middle">${shortM}</text>`;
+ monthLabelsHtml += `<text x="${xPos}" y="${svgH - padB + 18}" font-size="11" fill="#4a5852" text-anchor="middle">${shortM}</text>`;
 
  if (pt.weight !== null) {
  const yPos = padT + graphH - ((pt.weight - minW) / range) * graphH;
@@ -9417,15 +9448,15 @@ function renderWeightChart(selectedResId = null) {
  pathD += ` L ${xPos} ${yPos}`;
  }
  dotsHtml += `
- <circle cx="${xPos}" cy="${yPos}" r="5" fill="#2563eb" stroke="#ffffff" stroke-width="2" />
- <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#1e3a8a" text-anchor="middle">${Number(pt.weight).toFixed(1)}kg</text>
+ <circle cx="${xPos}" cy="${yPos}" r="5" fill="#1e5b47" stroke="#ffffff" stroke-width="2" />
+ <text x="${xPos}" y="${yPos - 9}" font-size="11" font-weight="bold" fill="#173f33" text-anchor="middle">${Number(pt.weight).toFixed(1)}kg</text>
  `;
  }
  });
 
  container.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
- <div style="font-weight:bold; font-size:14px; color:#1e3a8a;">
+ <div style="font-weight:bold; font-size:14px; color:#173f33;">
  過去1年間の体重推移グラフ (${targetRes ? `${targetRes.name} 様` : ''})
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap;">
@@ -9433,9 +9464,9 @@ function renderWeightChart(selectedResId = null) {
  </div>
  </div>
  <div style="overflow-x:auto;">
- <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:${svgW}px; height:auto; background:#f8fafc; border-radius:6px; display:block;">
+ <svg viewBox="0 0 ${svgW} ${svgH}" style="width:100%; max-width:${svgW}px; height:auto; background:#f6f8f6; border-radius:6px; display:block;">
  ${gridLines}
- ${pathD ? `<path d="${pathD}" fill="none" stroke="#2563eb" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ''}
+ ${pathD ? `<path d="${pathD}" fill="none" stroke="#1e5b47" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" />` : ''}
  ${dotsHtml}
  ${monthLabelsHtml}
  </svg>
@@ -9531,7 +9562,7 @@ function renderLinenTable() {
    const res = gState.residents.find(x => x.id === l.resident_id);
    const tr = document.createElement("tr");
    const actionHtml = l.voided
-     ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#64748b; white-space:normal;">${escapeHtml(l.voided_at || '')} ${escapeHtml(l.voided_by || '')}<br>理由: ${escapeHtml(l.void_reason || '-')}</div>`
+     ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#5f6d66; white-space:normal;">${escapeHtml(l.voided_at || '')} ${escapeHtml(l.voided_by || '')}<br>理由: ${escapeHtml(l.void_reason || '-')}</div>`
      : `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteLinenRecord(${l.id})">取消</button>`;
    tr.innerHTML = `
      <td>${escapeHtml(l.date || '')}</td>
@@ -9732,11 +9763,11 @@ function renderRecreationTable() {
 		const tr = document.createElement("tr");
 		tr.innerHTML = `
 			<td>${escapeHtml(rec.date || '')}</td>
-			<td><span class="badge" style="background:#eff6ff; color:#1e40af;">${escapeHtml(rec.program_type || '機能訓練')}</span></td>
+			<td><span class="badge" style="background:#f1f6f3; color:#1e5b47;">${escapeHtml(rec.program_type || '機能訓練')}</span></td>
 			<td><strong>${escapeHtml(rec.title || '')}</strong></td>
 			<td>${rec.participants_count ? `${escapeHtml(String(rec.participants_count))}名` : '-'}</td>
 			<td>${escapeHtml(rec.content || '-')}</td>
-			<td style="color:#0f172a;">${escapeHtml(rec.reaction || '-')}</td>
+			<td style="color:#1c2622;">${escapeHtml(rec.reaction || '-')}</td>
 			<td>${escapeHtml(rec.notes || '-')}</td>
 			<td>${escapeHtml(rec.staff_name || '担当')}</td>
 			<td style="text-align:center; white-space:nowrap;">
@@ -9909,8 +9940,8 @@ function renderNotebook() {
 			const stStatus = getDailyNotebookConfirmationStatus(nb, currentStaff);
 
 			const card = document.createElement("div");
-			card.style.background = stStatus.confirmed ? "#f8fafc" : (nb.status === "未対応" ? "#ffffff" : "#f0fdf4");
-			card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : (nb.status === "未対応" ? "2px solid #2563eb" : "1px solid #bbf7d0"));
+			card.style.background = stStatus.confirmed ? "#f6f8f6" : (nb.status === "未対応" ? "#ffffff" : "#f0fdf4");
+			card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cdd6d0" : (nb.status === "未対応" ? "2px solid #1e5b47" : "1px solid #bbf7d0"));
 			card.style.borderRadius = "8px";
 			card.style.padding = "12px 14px";
 			card.style.marginBottom = "10px";
@@ -9931,7 +9962,7 @@ function renderNotebook() {
 
 			const confirmedPills = (nb.confirmed_staff && nb.confirmed_staff.length > 0)
 				? nb.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
-				: `<span style="color:#94a3b8; font-size:11.5px;">未確認</span>`;
+				: `<span style="color:#94a19a; font-size:11.5px;">未確認</span>`;
 
 			let updatesHtml = "";
 			if (Array.isArray(nb.updates) && nb.updates.length > 0) {
@@ -9953,19 +9984,19 @@ function renderNotebook() {
 					<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
 						${taskBadgeHtml}
 						${statusBadgeHtml}
-						<strong style="font-size:14.5px; color:#1e293b; margin-left:4px;">${escapeHtml(nb.content)}</strong>
+						<strong style="font-size:14.5px; color:#22302b; margin-left:4px;">${escapeHtml(nb.content)}</strong>
 					</div>
 					<div style="display:flex; gap:6px; align-items:center;">
-						<span style="font-size:11px; color:#64748b;">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
-						<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
+						<span style="font-size:11px; color:#5f6d66;">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
+						<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
 						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:11px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
 						<button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
 					</div>
 				</div>
 				${updatesHtml}
-				<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #e2e8f0; margin-top:8px; padding-top:8px; font-size:12px; line-height:1.6;">
+				<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #dfe5e1; margin-top:8px; padding-top:8px; font-size:12px; line-height:1.6;">
 					<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
-						<strong style="color:#475569; white-space:nowrap;">確認済職員:</strong>
+						<strong style="color:#4a5852; white-space:nowrap;">確認済職員:</strong>
 						<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
 					</div>
 					<div>
@@ -9978,7 +10009,7 @@ function renderNotebook() {
 								✓ 確認済み (解除)
 							</button>
 						` : `
-							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmDailyNotebookItem(${nb.id})">
+							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmDailyNotebookItem(${nb.id})">
 								☑ 確認済みにする
 							</button>
 						`)}
@@ -10034,17 +10065,17 @@ function renderMonthlyNotices() {
 
 	notices.forEach(n => {
 		const stStatus = getNoticeConfirmationStatus(n, currentStaff);
-		let prioStyle = "background:#f1f5f9; color:#475569;";
+		let prioStyle = "background:#eef2ef; color:#4a5852;";
 		if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
 		else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
 
 		const confirmedPills = (n.confirmed_staff && n.confirmed_staff.length > 0)
 			? n.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
-			: `<span style="color:#94a3b8; font-size:11.5px;">未確認</span>`;
+			: `<span style="color:#94a19a; font-size:11.5px;">未確認</span>`;
 
 		const card = document.createElement("div");
-		card.style.background = stStatus.confirmed ? "#f8fafc" : "#ffffff";
-		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : "2px solid #2563eb");
+		card.style.background = stStatus.confirmed ? "#f6f8f6" : "#ffffff";
+		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cdd6d0" : "2px solid #1e5b47");
 		card.style.borderRadius = "8px";
 		card.style.padding = "14px 16px";
 		card.style.marginBottom = "12px";
@@ -10079,20 +10110,20 @@ function renderMonthlyNotices() {
 			<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
 				<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
 					<span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
-					<strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+					<strong style="font-size:15px; color:#22302b;">${escapeHtml(n.title)}</strong>
 					${statusBadgeHtml}
 				</div>
 				<div style="display:flex; gap:6px; align-items:center;">
-					<span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
+					<span style="font-size:11px; color:#5f6d66;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
 					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
 				</div>
 			</div>
-			<div style="font-size:14px; line-height:1.7; color:#334155; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+			<div style="font-size:14px; line-height:1.7; color:#36443e; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
 			${updatesHtml}
-			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px; font-size:12.5px; line-height:1.6;">
+			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px; font-size:12.5px; line-height:1.6;">
 				<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
-					<strong style="color:#475569; white-space:nowrap;">確認済職員:</strong>
+					<strong style="color:#4a5852; white-space:nowrap;">確認済職員:</strong>
 					<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
 				</div>
 				<div>
@@ -10105,7 +10136,7 @@ function renderMonthlyNotices() {
 							✓ 確認済み (解除)
 						</button>
 					` : `
-						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmMonthlyNotice(${n.id})">
+						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmMonthlyNotice(${n.id})">
 							☑ 確認済みにする
 						</button>
 					`)}
@@ -10374,7 +10405,7 @@ function renderMonthlyNotices() {
 
 	notices.forEach(n => {
 		const stStatus = getNoticeConfirmationStatus(n, currentStaff);
-		let prioStyle = "background:#f1f5f9; color:#475569;";
+		let prioStyle = "background:#eef2ef; color:#4a5852;";
 		if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
 		else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
 
@@ -10383,8 +10414,8 @@ function renderMonthlyNotices() {
 			: "未確認";
 
 		const card = document.createElement("div");
-		card.style.background = stStatus.confirmed ? "#f8fafc" : "#ffffff";
-		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cbd5e1" : "2px solid #2563eb");
+		card.style.background = stStatus.confirmed ? "#f6f8f6" : "#ffffff";
+		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cdd6d0" : "2px solid #1e5b47");
 		card.style.borderRadius = "8px";
 		card.style.padding = "14px 16px";
 		card.style.marginBottom = "12px";
@@ -10419,19 +10450,19 @@ function renderMonthlyNotices() {
 			<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
 				<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
 					<span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
-					<strong style="font-size:15px; color:#1e293b;">${escapeHtml(n.title)}</strong>
+					<strong style="font-size:15px; color:#22302b;">${escapeHtml(n.title)}</strong>
 					${statusBadgeHtml}
 				</div>
 				<div style="display:flex; gap:6px; align-items:center;">
-					<span style="font-size:11px; color:#64748b;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e40af; border-color:#93c5fd; background:#eff6ff;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
+					<span style="font-size:11px; color:#5f6d66;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
 					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
 				</div>
 			</div>
-			<div style="font-size:14px; line-height:1.7; color:#334155; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
+			<div style="font-size:14px; line-height:1.7; color:#36443e; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
 			${updatesHtml}
-			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cbd5e1; padding-top:10px; margin-top:10px; font-size:12.5px;">
-				<div style="color:#475569;">
+			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px; font-size:12.5px;">
+				<div style="color:#4a5852;">
 					<strong>☑ 「見ました」確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
 				</div>
 				<div>
@@ -10444,7 +10475,7 @@ function renderMonthlyNotices() {
 							☑ 「見ました」済 (クリックで解除)
 						</button>
 					` : `
-						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#2563eb; border-color:#1d4ed8;" onclick="confirmMonthlyNotice(${n.id})">
+						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmMonthlyNotice(${n.id})">
 							☑ 見ました
 						</button>
 					`)}
@@ -10615,7 +10646,7 @@ function renderQuickConsume() {
 
  card.innerHTML = `
  <div>
- <div style="font-weight:bold; font-size:14px; color:#1e293b;">${item.name}</div>
+ <div style="font-weight:bold; font-size:14px; color:#22302b;">${item.name}</div>
  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
  現在庫: <strong>${item.current_stock}</strong> ${item.unit} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
  ${item.is_personal_billable ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
@@ -10660,7 +10691,7 @@ function consumeItem(itemId, qty) {
  const msgEl = document.getElementById("confirmConsumeMsg");
  if (msgEl) {
  msgEl.innerHTML = `
- <strong style="font-size:16px; color:#1e3a8a;">${res.room_no}号室 ${res.name} 様</strong> に<br>
+ <strong style="font-size:16px; color:#173f33;">${res.room_no}号室 ${res.name} 様</strong> に<br>
  【<strong>${item.name}</strong>】 を <strong>${qty} ${item.unit}</strong> 使用します。<br><br>
  対象者と物品はお間違いないですか？
  ${billNote}
@@ -10742,8 +10773,8 @@ function renderRecentConsumeLogs() {
  row.style.justifyContent = "space-between";
  row.style.alignItems = "center";
  row.style.padding = "6px 10px";
- row.style.background = "#f8fafc";
- row.style.border = "1px solid #e2e8f0";
+ row.style.background = "#f6f8f6";
+ row.style.border = "1px solid #dfe5e1";
  row.style.borderRadius = "6px";
  row.style.marginBottom = "6px";
  row.style.fontSize = "13px";
@@ -10888,7 +10919,7 @@ function renderOfficeInventory() {
      <td>
        <div style="display:inline-flex; align-items:center; gap:4px;">
          <input type="number" class="form-control" style="width:70px; font-size:12px; padding:2px 6px;" value="${alertThreshold}" min="0" onchange="updateItemAlertThreshold(${i.id}, this.value)" title="在庫がこの数を下回るとアラートが出ます">
-         <span style="font-size:12px; color:#64748b;">${i.unit}</span>
+         <span style="font-size:12px; color:#5f6d66;">${i.unit}</span>
        </div>
      </td>
      <td>¥${Number(i.unit_price || 0).toLocaleString()}</td>
@@ -11009,7 +11040,7 @@ function renderOfficeEmergencySupplies() {
 
 		tr.innerHTML = `
 			<td><strong>${escapeHtml(item.name || '')}</strong></td>
-			<td><span class="badge" style="background:#f1f5f9; color:#475569;">${escapeHtml(item.category || '主食')}</span></td>
+			<td><span class="badge" style="background:#eef2ef; color:#4a5852;">${escapeHtml(item.category || '主食')}</span></td>
 			<td><strong style="font-size:14px;">${item.quantity || 0}</strong></td>
 			<td>${escapeHtml(item.unit || '個')}</td>
 			<td><span style="${isClose || isExpired ? 'color:#dc2626; font-weight:bold;' : ''}">${item.expiry_date || '-'}</span></td>
@@ -11273,7 +11304,7 @@ function renderOfficeCommittees() {
  const list = cpLedgerOrder(db.data.committees || []); // [Claude修正] 取消済みは後ろに並べる
  if (list.length === 0) {
  const tr = document.createElement("tr");
- tr.innerHTML = `<td colspan="7" style="text-align:center; color:#64748b; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
+ tr.innerHTML = `<td colspan="7" style="text-align:center; color:#5f6d66; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
  tbody.appendChild(tr);
  return;
  }
@@ -11281,8 +11312,8 @@ function renderOfficeCommittees() {
  list.forEach(c => {
  const tr = document.createElement("tr");
  const cat = c.category || "法定委員会";
- let catBadgeColor = "#2563eb";
- let catBgColor = "#dbeafe";
+ let catBadgeColor = "#1e5b47";
+ let catBgColor = "#dcebe3";
  if (cat === "施設内研修") {
  catBadgeColor = "#166534";
  catBgColor = "#dcfce7";
@@ -11296,7 +11327,7 @@ function renderOfficeCommittees() {
 
  // [Claude修正] 削除をやめて「取消」に（理由必須・記録は残る）
  const actionHtml = c.voided
- ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#64748b; white-space:normal; max-width:180px;">${escapeHtml(c.voided_at || '')} ${escapeHtml(c.voided_by || '')}<br>理由: ${escapeHtml(c.void_reason || '-')}</div><button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('committees', ${Number(c.id)})">取消を戻す</button>`
+ ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#5f6d66; white-space:normal; max-width:180px;">${escapeHtml(c.voided_at || '')} ${escapeHtml(c.voided_by || '')}<br>理由: ${escapeHtml(c.void_reason || '-')}</div><button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('committees', ${Number(c.id)})">取消を戻す</button>`
  : `<button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#991b1b; border-color:#fca5a5;" onclick="deleteCommittee(${Number(c.id)})">取消</button>`;
  tr.innerHTML = `
  <td>${escapeHtml(c.date || '-')}</td>
@@ -11379,7 +11410,7 @@ function renderOfficeOrders() {
  (db.data.orders || []).forEach(o => {
  const tr = document.createElement("tr");
  let badgeColor = "#fef3c7; color:#92400e;";
- if (o.status === "承認済") badgeColor = "#dbeafe; color:#1e40af;";
+ if (o.status === "承認済") badgeColor = "#dcebe3; color:#1e5b47;";
  if (o.status === "納品完了") badgeColor = "#dcfce7; color:#166534;";
  if (o.status === "差戻し") badgeColor = "#fee2e2; color:#991b1b;";
 
@@ -11391,7 +11422,7 @@ function renderOfficeOrders() {
  <button class="btn btn-danger" style="padding:4px 8px; font-size:12px;" onclick="approveOrder(${o.id}, '差戻し')">差戻し</button>
  `;
  } else {
- actionButtons = `<span style="font-size:11px; color:#94a3b8; background:#f1f5f9; padding:3px 6px; border-radius:4px;">※ 承認権限: 管理者のみ</span>`;
+ actionButtons = `<span style="font-size:11px; color:#94a19a; background:#eef2ef; padding:3px 6px; border-radius:4px;">※ 承認権限: 管理者のみ</span>`;
  }
  } else if (o.status === "承認済") {
  actionButtons = `
@@ -11478,7 +11509,7 @@ function renderOfficeSuppliers() {
 
  if (!Array.isArray(gState.suppliers) || gState.suppliers.length === 0) {
    container.innerHTML = `
-     <div style="background:#ffffff; border:1px dashed #cbd5e1; border-radius:8px; padding:32px; text-align:center; color:var(--text-muted);">
+     <div style="background:#ffffff; border:1px dashed #cdd6d0; border-radius:8px; padding:32px; text-align:center; color:var(--text-muted);">
        <p style="font-size:14px; margin-bottom:10px;">登録されている取引先がありません。</p>
        <button type="button" class="btn btn-primary" style="font-size:13px;" onclick="openSupplierModal()">＋ 新規取引先を追加</button>
      </div>
@@ -11490,7 +11521,7 @@ function renderOfficeSuppliers() {
    const card = document.createElement("div");
    card.className = "supplier-card";
    card.style.background = "#ffffff";
-   card.style.border = "1px solid #e2e8f0";
+   card.style.border = "1px solid #dfe5e1";
    card.style.borderRadius = "8px";
    card.style.padding = "16px";
    card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.05)";
@@ -11504,9 +11535,9 @@ function renderOfficeSuppliers() {
      items.forEach(it => {
        itemsRows += `
          <tr>
-           <td style="font-weight:bold; font-size:13px; color:#1e293b;">${escapeHtml(it.name)}</td>
+           <td style="font-weight:bold; font-size:13px; color:#22302b;">${escapeHtml(it.name)}</td>
            <td style="font-weight:bold; font-size:13px; color:#0284c7;">¥${Number(it.unit_price || 0).toLocaleString()}</td>
-           <td style="font-size:12.5px; color:#475569;">${escapeHtml(it.unit || '個')}</td>
+           <td style="font-size:12.5px; color:#4a5852;">${escapeHtml(it.unit || '個')}</td>
            <td style="text-align:right; white-space:nowrap;">
              <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; margin-right:4px;" onclick="openSupplierItemModal(${s.id}, ${Number(it.id)})">編集</button>
              <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#dc2626; border-color:#fca5a5;" onclick="deleteSupplierItem(${s.id}, ${Number(it.id)})">削除</button>
@@ -11518,12 +11549,12 @@ function renderOfficeSuppliers() {
 
    card.innerHTML = `
      <!-- 取引先ヘッダー -->
-     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; border-bottom:1px solid #f1f5f9; padding-bottom:12px; margin-bottom:12px;">
+     <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:10px; border-bottom:1px solid #eef2ef; padding-bottom:12px; margin-bottom:12px;">
        <div>
          <div style="display:flex; align-items:center; gap:8px;">
-           <h4 style="margin:0; font-size:16px; color:#0f172a; font-weight:bold;">${escapeHtml(s.name)}</h4>
+           <h4 style="margin:0; font-size:16px; color:#1c2622; font-weight:bold;">${escapeHtml(s.name)}</h4>
          </div>
-         <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px; font-size:12.5px; color:#475569;">
+         <div style="display:flex; gap:16px; flex-wrap:wrap; margin-top:6px; font-size:12.5px; color:#4a5852;">
            <span><strong>担当者:</strong> ${escapeHtml(s.contact_person || '未設定')}</span>
            <span><strong>TEL:</strong> ${escapeHtml(s.phone || '未設定')}</span>
            <span><strong>E-mail:</strong> ${escapeHtml(s.email || '未設定')}</span>
@@ -11536,14 +11567,14 @@ function renderOfficeSuppliers() {
      </div>
 
      <!-- 取扱商品セクション -->
-     <div style="background:#f8fafc; border:1px solid #e2e8f0; border-radius:6px; padding:12px;">
+     <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:12px;">
        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
-         <span style="font-size:13px; font-weight:bold; color:#334155;">取扱商品一覧 (${items.length}品目)</span>
+         <span style="font-size:13px; font-weight:bold; color:#36443e;">取扱商品一覧 (${items.length}品目)</span>
          <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 12px; background:#0284c7; border-color:#0284c7;" onclick="openSupplierItemModal(${s.id})">＋ 取扱商品を追加</button>
        </div>
        <table class="data-table" style="background:#ffffff; margin:0;">
          <thead>
-           <tr style="background:#f1f5f9;">
+           <tr style="background:#eef2ef;">
              <th>商品名</th>
              <th style="width:110px;">単価</th>
              <th style="width:90px;">単位</th>
@@ -11795,7 +11826,7 @@ function renderBillingDetail() {
  });
 
  area.innerHTML = `
- <div style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; padding:16px;">
+ <div style="background:#f6f8f6; border:1px solid #cdd6d0; border-radius:8px; padding:16px;">
  <h3 style="font-size:16px; margin-bottom:8px;">${r.room_no}号室 ${r.name} 様　消耗品ご請求明細書</h3>
  <table class="data-table" style="background:white;">
  <thead>
@@ -11805,7 +11836,7 @@ function renderBillingDetail() {
  ${rowsHtml || '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">今月の個人請求対象の消費記録はありません。</td></tr>'}
  </tbody>
  <tfoot>
- <tr style="background:#f1f5f9; font-weight:bold; font-size:16px;">
+ <tr style="background:#eef2ef; font-weight:bold; font-size:16px;">
  <td colspan="3" style="text-align:right;">総合計金額:</td>
  <td style="color:#dc2626;">¥${totalAmount.toLocaleString()}</td>
  </tr>
@@ -11870,13 +11901,13 @@ function renderOfficeDepositTable() {
  if (gDepositFilterMode === "resident") {
  btnEl.textContent = "全利用者の履歴を表示";
  badgeEl.textContent = "この利用者の出納を表示中";
- badgeEl.style.background = "#dbeafe";
- badgeEl.style.color = "#1d4ed8";
+ badgeEl.style.background = "#dcebe3";
+ badgeEl.style.color = "#1a4f3d";
  } else {
  btnEl.textContent = "この利用者のみに絞り込む";
  badgeEl.textContent = "全利用者の出納を表示中";
- badgeEl.style.background = "#f1f5f9";
- badgeEl.style.color = "#475569";
+ badgeEl.style.background = "#eef2ef";
+ badgeEl.style.color = "#4a5852";
  }
  }
 
@@ -12096,10 +12127,10 @@ function renderOfficeIncidents() {
 				<td>${escapeHtml(situ)}</td>
 				<td>${escapeHtml(prev)}</td>
 				<td>${escapeHtml(supervisor)}</td>
-				<td><span class="badge" style="background:#dbeafe; color:#1e40af;">${escapeHtml(st)}</span></td>
+				<td><span class="badge" style="background:#dcebe3; color:#1e5b47;">${escapeHtml(st)}</span></td>
 				<td style="white-space:nowrap; text-align:center;">
 					${cpLedgerActions('incidents', inc, 'editIncident').replace('訂正', '修正・追記')}
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f8fafc; border:1px solid #cbd5e1;" onclick="printIncidentReport(${inc.id})">印刷</button>
+					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f6f8f6; border:1px solid #cdd6d0;" onclick="printIncidentReport(${inc.id})">印刷</button>
 				</td>
 			`;
 			if (inc.voided) cpMarkVoidedRow(tr);
@@ -12320,7 +12351,7 @@ function renderIncidentInjuryPins() {
 
 	if (pins.length === 0) {
 		tableContainer.innerHTML = `
-			<div style="text-align:center; padding:20px 10px; color:#64748b; font-size:12px;">
+			<div style="text-align:center; padding:20px 10px; color:#5f6d66; font-size:12px;">
 				登録されている受傷ピンはありません。<br>
 				左の人体図（正面・背面）をクリックして位置を指定してください。
 			</div>
@@ -12345,7 +12376,7 @@ function renderIncidentInjuryPins() {
 	pins.forEach(p => {
 		const isSelected = activeEditId === Number(p.id);
 		tableHtml += `
-			<tr style="border-bottom:1px solid #e2e8f0; ${isSelected ? 'background:#fef2f2;' : ''}">
+			<tr style="border-bottom:1px solid #dfe5e1; ${isSelected ? 'background:#fef2f2;' : ''}">
 				<td style="padding:6px 8px; text-align:center;">
 					<span style="display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%; background:#dc2626; color:#ffffff; font-weight:bold; font-size:11.5px; text-align:center;">
 						${p.pin_no}
@@ -12353,10 +12384,10 @@ function renderIncidentInjuryPins() {
 				</td>
 				<td style="padding:6px 8px;"><strong>${escapeHtml(p.site_name || '-')}</strong></td>
 				<td style="padding:6px 8px;">
-					<div style="font-weight:bold; color:#0f172a;">${escapeHtml(p.injury_type || '-')}</div>
-					<div style="font-size:11px; color:#475569;">処置: ${escapeHtml(p.treatment || '-')}</div>
+					<div style="font-weight:bold; color:#1c2622;">${escapeHtml(p.injury_type || '-')}</div>
+					<div style="font-size:11px; color:#4a5852;">処置: ${escapeHtml(p.treatment || '-')}</div>
 				</td>
-				<td style="padding:6px 8px; font-size:11px; color:#64748b;">${escapeHtml(p.severity || '-')}</td>
+				<td style="padding:6px 8px; font-size:11px; color:#5f6d66;">${escapeHtml(p.severity || '-')}</td>
 				<td style="padding:6px 8px; text-align:center; white-space:nowrap;">
 					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="editIncidentInjuryPin(${p.id})">訂正</button>
 					<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 6px; margin-left:3px;" onclick="deleteIncidentInjuryPin(${p.id})">削除</button>
@@ -12505,7 +12536,7 @@ function printIncidentReport(incId) {
 				body { font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 11pt; color: #111; margin: 20px; line-height: 1.5; }
 				table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
 				th, td { border: 1px solid #333; padding: 6px 8px; font-size: 10pt; }
-				th { background: #f1f5f9; text-align: left; }
+				th { background: #eef2ef; text-align: left; }
 				.h-title { text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
 				.stamp-box td { height: 45px; text-align: center; vertical-align: top; font-size: 9pt; }
 				@media print {
@@ -12541,24 +12572,24 @@ function printIncidentReport(incId) {
 			</table>
 
 			<table>
-				<tr><th style="background:#f1f5f9;">1. 発生状況 (何が起きたか・発見時の状態)</th></tr>
+				<tr><th style="background:#eef2ef;">1. 発生状況 (何が起きたか・発見時の状態)</th></tr>
 				<tr><td style="min-height:70px; padding:10px;">${escapeHtml(inc.situation || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 
 			<!-- 受傷部位シェーマ図 ＆ 外傷ピン一覧 -->
 			<div style="border:1px solid #333; padding:10px; margin-bottom:12px; page-break-inside:avoid;">
-				<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cbd5e1; padding-bottom:3px;">
+				<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cdd6d0; padding-bottom:3px;">
 					2. 受傷部位シェーマ図 ＆ 負傷箇所一覧 (${pins.length}か所)
 				</div>
 				<div style="display:flex; gap:16px; align-items:flex-start;">
-					<div style="position:relative; width:220px; border:1px solid #cbd5e1; background:#fafafa; text-align:center;">
+					<div style="position:relative; width:220px; border:1px solid #cdd6d0; background:#fafafa; text-align:center;">
 						<img src="assets/body_schema.jpg" style="width:100%; display:block;">
 						<div style="position:absolute; top:0; left:0; width:100%; height:100%;">${pinsOverlayHtml}</div>
 					</div>
 					<div style="flex:1;">
 						<table style="margin:0; font-size:9.5pt;">
 							<thead>
-								<tr style="background:#f8fafc;">
+								<tr style="background:#f6f8f6;">
 									<th style="width:35px; text-align:center;">番号</th>
 									<th style="width:85px;">部位</th>
 									<th>外傷種別</th>
@@ -12576,17 +12607,17 @@ function printIncidentReport(incId) {
 			</div>
 
 			<table>
-				<tr><th style="background:#f1f5f9;">3. 原因の分析 (なぜ起きたか・人的/環境要因)</th></tr>
+				<tr><th style="background:#eef2ef;">3. 原因の分析 (なぜ起きたか・人的/環境要因)</th></tr>
 				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.cause || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 
 			<table>
-				<tr><th style="background:#f1f5f9;">4. 再発防止策 ＆ 今後の対応方針</th></tr>
+				<tr><th style="background:#eef2ef;">4. 再発防止策 ＆ 今後の対応方針</th></tr>
 				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.prevention || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 
 			<table>
-				<tr><th style="background:#f1f5f9;">5. 施設長・管理者コメント ＆ 指導事項</th></tr>
+				<tr><th style="background:#eef2ef;">5. 施設長・管理者コメント ＆ 指導事項</th></tr>
 				<tr><td style="min-height:40px; padding:8px;">${escapeHtml(inc.supervisor_comment || '').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 		</body>
@@ -12634,14 +12665,14 @@ function renderOfficeVaccines() {
 		tr.innerHTML = `
 			<td>${res ? escapeHtml(res.room_no) : '-'}</td>
 			<td><strong>${res ? escapeHtml(res.name) + ' 様' : '-'}</strong></td>
-			<td><span class="badge" style="background:#eff6ff; color:#1e40af;">${escapeHtml(v.vaccine_name || '-')}</span></td>
+			<td><span class="badge" style="background:#f1f6f3; color:#1e5b47;">${escapeHtml(v.vaccine_name || '-')}</span></td>
 			<td>${escapeHtml(v.dose || '-')}</td>
 			<td><strong style="color:${consentColor};">${escapeHtml(v.consent || '-')}</strong></td>
 			<td>${escapeHtml(v.date || '-')}</td>
 			<td>${escapeHtml(v.doctor || '-')}</td>
 			<td>${escapeHtml(v.lot || '-')}</td>
 			<td>${escapeHtml(v.reactions || '-')}</td>
-			<td><span class="badge" style="background:#f1f5f9; color:#334155;">${escapeHtml(v.status || '登録済')}</span></td>
+			<td><span class="badge" style="background:#eef2ef; color:#36443e;">${escapeHtml(v.status || '登録済')}</span></td>
 			<td style="white-space:nowrap; text-align:center;">
 				${cpLedgerActions('vaccines', v, 'openVaccineModal')}
 			</td>
@@ -13449,13 +13480,13 @@ function renderStaffModalList() {
 
  gState.stamps.forEach((s, idx) => {
  const row = document.createElement("div");
- row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #f1f5f9; gap:8px;";
+ row.style.cssText = "display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #eef2ef; gap:8px;";
 
  // 役職バッジの色分け
  const rank = getStaffRoleRank(s.role, s.name);
- let badgeStyle = "background:#f1f5f9; color:#475569;";
+ let badgeStyle = "background:#eef2ef; color:#4a5852;";
  if (rank === 1) badgeStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
- else if (rank <= 4) badgeStyle = "background:#eff6ff; color:#1d4ed8; font-weight:bold;";
+ else if (rank <= 4) badgeStyle = "background:#f1f6f3; color:#1a4f3d; font-weight:bold;";
  else if (rank === 5) badgeStyle = "background:#f0fdf4; color:#15803d; font-weight:bold;";
  else if (rank <= 8) badgeStyle = "background:#faf5ff; color:#7e22ce;";
 
@@ -13654,7 +13685,7 @@ function onItemChangeInOrder() {
  headerEl.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
  <span> <strong>在庫現況:</strong> 現在庫: <strong style="${isLow ? 'color:#dc2626;' : ''}">${invItem.current_stock}${invItem.unit}</strong> / 安全基準: ${invItem.safety_stock}${invItem.unit} / 平常時定数: <strong>${normalStock}${invItem.unit}</strong></span>
- <span style="font-weight:bold; color:#1d4ed8;"> 平常時不足: +${deficit}${invItem.unit}</span>
+ <span style="font-weight:bold; color:#1a4f3d;"> 平常時不足: +${deficit}${invItem.unit}</span>
  </div>
  `;
  }
@@ -13949,7 +13980,7 @@ function renderPhotoGrid() {
  if (photos.length === 0) {
  const isDoc = currentPhotoCategory === 'documents';
  grid.innerHTML = `
- <div style="grid-column: 1 / -1; text-align:center; padding:36px 12px; color:var(--text-muted); background:#f8fafc; border-radius:8px; border:1px dashed #cbd5e1;">
+ <div style="grid-column: 1 / -1; text-align:center; padding:36px 12px; color:var(--text-muted); background:#f6f8f6; border-radius:8px; border:1px dashed #cdd6d0;">
  <div style="font-size:32px; margin-bottom:8px;">${isDoc ? '' : ''}</div>
  <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">
  ${isDoc ? '重要書類・同意書はまだありません' : '個人写真はまだありません'}
@@ -13962,25 +13993,25 @@ function renderPhotoGrid() {
 
  photos.forEach(p => {
  const card = document.createElement("div");
- card.style.cssText = "background:#fff; border:1px solid #e2e8f0; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; flex-direction:column; transition:transform 0.15s, box-shadow 0.15s;";
+ card.style.cssText = "background:#fff; border:1px solid #dfe5e1; border-radius:8px; overflow:hidden; box-shadow:0 1px 3px rgba(0,0,0,0.06); display:flex; flex-direction:column; transition:transform 0.15s, box-shadow 0.15s;";
  card.onmouseenter = () => { card.style.transform = "translateY(-2px)"; card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.12)"; };
  card.onmouseleave = () => { card.style.transform = "none"; card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; };
 
  const safeTitle = (p.title || "").replace(/'/g, "\\'");
  card.innerHTML = `
- <div style="position:relative; width:100%; height:130px; background:#0f172a; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
- <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a3b8; font-size:12px;\\'> 画像読込エラー</span>';">
+ <div style="position:relative; width:100%; height:130px; background:#1c2622; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
+ <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a19a; font-size:12px;\\'> 画像読込エラー</span>';">
  <div style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; border-radius:4px;"> 拡大</div>
  </div>
  <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
  <div>
- <div style="font-weight:bold; font-size:13px; color:#1e293b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${p.title || ''}">
+ <div style="font-weight:bold; font-size:13px; color:#22302b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${p.title || ''}">
  ${p.title || "名称未設定"}
  </div>
- <div style="font-size:11px; color:#64748b;"> ${p.uploaded_at || "-"}</div>
- <div style="font-size:11px; color:#64748b;"> 担当: ${p.uploader || "-"}</div>
+ <div style="font-size:11px; color:#5f6d66;"> ${p.uploaded_at || "-"}</div>
+ <div style="font-size:11px; color:#5f6d66;"> 担当: ${p.uploader || "-"}</div>
  </div>
- <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #f1f5f9; padding-top:6px;">
+ <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eef2ef; padding-top:6px;">
  <button class="btn btn-secondary" style="font-size:11px; padding:3px 8px;" onclick="openLightbox('${p.url}', '${safeTitle}')">拡大表示</button>
  <button class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;" onclick="deletePhoto(${p.id})">削除</button>
  </div>
@@ -14661,8 +14692,8 @@ function renderShiftTable(yearMonth) {
  let theadHtml = `
  <thead>
  <tr>
- <th rowspan="2" style="position:sticky; left:0; z-index:4; background:#1e3a8a; color:#fff; width:130px; min-width:130px; border:1px solid #3b82f6;">職員氏名</th>
- <th rowspan="2" style="background:#1e3a8a; color:#fff; width:80px; min-width:80px; border:1px solid #3b82f6;">役職</th>
+ <th rowspan="2" style="position:sticky; left:0; z-index:4; background:#173f33; color:#fff; width:130px; min-width:130px; border:1px solid #3d8a6e;">職員氏名</th>
+ <th rowspan="2" style="background:#173f33; color:#fff; width:80px; min-width:80px; border:1px solid #3d8a6e;">役職</th>
  `;
 
  for (let d = 1; d <= daysInMonth; d++) {
@@ -14670,15 +14701,15 @@ function renderShiftTable(yearMonth) {
  const hol = isHolidayOrYearEnd(year, month, d);
  const isSat = dow === 6;
  const isSun = dow === 0 || hol.isHoliday;
- const bg = isSun ? "#ef4444" : (isSat ? "#2563eb" : "#3b82f6");
+ const bg = isSun ? "#ef4444" : (isSat ? "#1e5b47" : "#3d8a6e");
  const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
  theadHtml += `<th style="background:${bg}; color:#fff; padding:4px 2px; min-width:32px; border:1px solid rgba(255,255,255,0.3); font-weight:bold;" ${titleAttr}>${d}</th>`;
  }
 
  theadHtml += `
- <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="出勤日数">出勤</th>
- <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="夜勤回数">夜勤</th>
- <th rowspan="2" style="background:#1e3a8a; color:#fff; min-width:38px; border:1px solid #3b82f6;" title="公休日数">公休</th>
+ <th rowspan="2" style="background:#173f33; color:#fff; min-width:38px; border:1px solid #3d8a6e;" title="出勤日数">出勤</th>
+ <th rowspan="2" style="background:#173f33; color:#fff; min-width:38px; border:1px solid #3d8a6e;" title="夜勤回数">夜勤</th>
+ <th rowspan="2" style="background:#173f33; color:#fff; min-width:38px; border:1px solid #3d8a6e;" title="公休日数">公休</th>
  </tr>
  <tr>
  `;
@@ -14688,11 +14719,11 @@ function renderShiftTable(yearMonth) {
  const hol = isHolidayOrYearEnd(year, month, d);
  const isSat = dow === 6;
  const isSun = dow === 0 || hol.isHoliday;
- const bg = isSun ? "#fee2e2" : (isSat ? "#dbeafe" : "#f1f5f9");
- const color = isSun ? "#b91c1c" : (isSat ? "#1d4ed8" : "#475569");
+ const bg = isSun ? "#fee2e2" : (isSat ? "#dcebe3" : "#eef2ef");
+ const color = isSun ? "#b91c1c" : (isSat ? "#1a4f3d" : "#4a5852");
  const dowLabel = hol.isHoliday ? (hol.name.length <= 3 ? hol.name : "祝") : dowNames[dow];
  const titleAttr = hol.isHoliday ? `title="${hol.name}"` : '';
- theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:10.5px; font-weight:bold; border:1px solid #cbd5e1;" ${titleAttr}>${dowLabel}</th>`;
+ theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:10.5px; font-weight:bold; border:1px solid #cdd6d0;" ${titleAttr}>${dowLabel}</th>`;
  }
 
  theadHtml += `
@@ -14715,8 +14746,8 @@ function renderShiftTable(yearMonth) {
  let nightDays = 0;
  let holidays = 0;
 
- let roleColor = "#64748b";
- let roleBg = "#f1f5f9";
+ let roleColor = "#5f6d66";
+ let roleBg = "#eef2ef";
  if (st.role.includes("施設長") || st.role.includes("管理者")) {
  roleColor = "#92400e"; roleBg = "#fef3c7";
  } else if (st.role.includes("事務")) {
@@ -14729,10 +14760,10 @@ function renderShiftTable(yearMonth) {
 
  tbodyHtml += `
  <tr>
- <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#1e293b; text-align:left; padding:6px 8px; border:1px solid #cbd5e1; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
+ <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#22302b; text-align:left; padding:6px 8px; border:1px solid #cdd6d0; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
  ${escapeHtml(st.name)}
  </td>
- <td style="border:1px solid #cbd5e1; padding:4px 2px; white-space:nowrap;">
+ <td style="border:1px solid #cdd6d0; padding:4px 2px; white-space:nowrap;">
  <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
  </td>
  `;
@@ -14750,7 +14781,7 @@ function renderShiftTable(yearMonth) {
  const isSat = dow === 6;
  const isSun = dow === 0 || hol.isHoliday;
 
- let cellBg = isSun ? "#fff5f5" : (isSat ? "#f8fafc" : "#ffffff");
+ let cellBg = isSun ? "#fff5f5" : (isSat ? "#f6f8f6" : "#ffffff");
    if (isHope) cellBg = "#fef2f2";
  let badgeClass = "";
  if (sym === "早") {
@@ -14784,15 +14815,15 @@ function renderShiftTable(yearMonth) {
  const safeName = escapeHtml(st.name);
  tbodyHtml += `
    <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
-   ${sym ? `<span class="${badgeClass}">${sym}</span>${hopeTag}` : `<span style="color:#cbd5e1;">-</span>`}
+   ${sym ? `<span class="${badgeClass}">${sym}</span>${hopeTag}` : `<span style="color:#cdd6d0;">-</span>`}
  </td>
  `;
  }
 
  tbodyHtml += `
- <td style="border:1px solid #cbd5e1; font-weight:bold; color:#1e293b; background:#f8fafc;">${workDays}</td>
- <td style="border:1px solid #cbd5e1; font-weight:bold; color:#3730a3; background:#f8fafc;">${nightDays}</td>
- <td style="border:1px solid #cbd5e1; font-weight:bold; color:#b91c1c; background:#f8fafc;">${holidays}</td>
+ <td style="border:1px solid #cdd6d0; font-weight:bold; color:#22302b; background:#f6f8f6;">${workDays}</td>
+ <td style="border:1px solid #cdd6d0; font-weight:bold; color:#3730a3; background:#f6f8f6;">${nightDays}</td>
+ <td style="border:1px solid #cdd6d0; font-weight:bold; color:#b91c1c; background:#f6f8f6;">${holidays}</td>
  </tr>
  `;
  });
@@ -14913,17 +14944,17 @@ function renderShiftTable(yearMonth) {
  </tr>
 
  <!-- 全体日勤人数行 (施設長・事務・看護含む) -->
- <tr style="background:#f1f5f9; font-weight:bold;">
- <td style="position:sticky; left:0; z-index:2; background:#f1f5f9; text-align:left; padding:5px 8px; border:1px solid #cbd5e1; color:#334155;" colspan="2">
+ <tr style="background:#eef2ef; font-weight:bold;">
+ <td style="position:sticky; left:0; z-index:2; background:#eef2ef; text-align:left; padding:5px 8px; border:1px solid #cdd6d0; color:#36443e;" colspan="2">
  全体日勤 (施設長・事務・看護含む)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyDayCount[d];
- tfootHtml += `<td style="border:1px solid #cbd5e1; padding:3px 2px; color:#334155;">${cnt}</td>`;
+ tfootHtml += `<td style="border:1px solid #cdd6d0; padding:3px 2px; color:#36443e;">${cnt}</td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #cbd5e1; color:#64748b; font-size:11px;">施設全体</td>
+ <td colspan="3" style="border:1px solid #cdd6d0; color:#5f6d66; font-size:11px;">施設全体</td>
  </tr>
 
  <!-- 介護公休人数行 (基準: 4名) -->
@@ -14991,10 +15022,10 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  contentHtml = `
  <div class="shift-popover-header">
  <div>
- <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
- <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+ <strong style="color:#173f33;">${escapeHtml(staffName)}</strong> 
+ <span style="color:#5f6d66; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
  </div>
- <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+ <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a19a; line-height:1;">&times;</button>
  </div>
  <div style="font-size:11px; color:#0369a1; background:#f0f9ff; border:1px solid #bae6fd; border-radius:4px; padding:3px 6px; margin-bottom:8px;">
  <strong>${roleBadgeLabel}</strong><br>日勤または公休のみ選択可能です（夜勤・早遅は自動ガード）
@@ -15004,9 +15035,9 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
-   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f8fafc; color:#475569;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
- <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
+   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
+   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f6f8f6; color:#4a5852;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
+ <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#1e5b47; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
  } else {
@@ -15014,12 +15045,12 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  contentHtml = `
  <div class="shift-popover-header">
  <div>
- <strong style="color:#1e3a8a;">${escapeHtml(staffName)}</strong> 
- <span style="color:#64748b; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
+ <strong style="color:#173f33;">${escapeHtml(staffName)}</strong> 
+ <span style="color:#5f6d66; font-size:11.5px; margin-left:4px;">${dateInfo}</span>
  </div>
- <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a3b8; line-height:1;">&times;</button>
+ <button onclick="closeShiftPopover()" style="border:none; background:none; font-size:16px; cursor:pointer; color:#94a19a; line-height:1;">&times;</button>
  </div>
- <div style="font-size:11px; color:#475569; margin-bottom:6px;">
+ <div style="font-size:11px; color:#4a5852; margin-bottom:6px;">
  介護職員シフト（基準: 早出1名・遅出1名・夜勤2名体制）
  </div>
  <div class="shift-popover-grid">
@@ -15031,9 +15062,9 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
-   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #e2e8f0; display:flex; justify-content:space-between; align-items:center;">
-   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f8fafc; color:#475569;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
- <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#2563eb; text-decoration:underline;"> 詳細設定</a>
+   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
+   <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f6f8f6; color:#4a5852;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
+ <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#1e5b47; text-decoration:underline;"> 詳細設定</a>
  </div>
  `;
  }
@@ -15140,7 +15171,7 @@ function openShiftCellModal(staffName, day) {
  if (btnDay) { btnDay.disabled = false; btnDay.style.opacity = "1"; btnDay.style.pointerEvents = "auto"; }
  if (btnHoliday) { btnHoliday.disabled = false; btnHoliday.style.opacity = "1"; btnHoliday.style.pointerEvents = "auto"; }
  } else {
- if (notice) notice.innerHTML = "<span style='color:#475569;'> 介護職員（基準: 毎日早出1名・遅出1名・夜勤2名体制）</span>";
+ if (notice) notice.innerHTML = "<span style='color:#4a5852;'> 介護職員（基準: 毎日早出1名・遅出1名・夜勤2名体制）</span>";
  [btnEarly, btnDay, btnLate, btnNight, btnDawn, btnHoliday].forEach(btn => {
  if (btn) { btn.disabled = false; btn.style.opacity = "1"; btn.style.pointerEvents = "auto"; }
  });
@@ -15217,19 +15248,19 @@ function renderShiftNgList() {
 
  const pairs = db.data.shift_ng_pairs || [];
  if (pairs.length === 0) {
- container.innerHTML = `<div style="padding:14px; text-align:center; color:#94a3b8; font-size:12px;">登録された配慮ペアはありません。</div>`;
+ container.innerHTML = `<div style="padding:14px; text-align:center; color:#94a19a; font-size:12px;">登録された配慮ペアはありません。</div>`;
  return;
  }
 
  let html = `<ul style="list-style:none; padding:0; margin:0;">`;
  pairs.forEach(p => {
  html += `
- <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+ <li style="display:flex; justify-content:space-between; align-items:center; padding:8px 12px; border-bottom:1px solid #eef2ef; font-size:12.5px;">
  <div>
- <strong style="color:#1e293b;">${escapeHtml(p.staff1)}</strong> 
+ <strong style="color:#22302b;">${escapeHtml(p.staff1)}</strong> 
  <span style="color:#dc2626; font-weight:bold; margin:0 4px;"></span> 
- <strong style="color:#1e293b;">${escapeHtml(p.staff2)}</strong>
- <span style="color:#64748b; font-size:11.5px; margin-left:8px;">(${escapeHtml(p.reason || '相性配慮')})</span>
+ <strong style="color:#22302b;">${escapeHtml(p.staff2)}</strong>
+ <span style="color:#5f6d66; font-size:11.5px; margin-left:8px;">(${escapeHtml(p.reason || '相性配慮')})</span>
  </div>
  <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftNgPair(${p.id})">削除</button>
  </li>
@@ -15338,7 +15369,7 @@ function renderShiftHopeList() {
  }
 
  if (hopeOffs.length === 0) {
-  container.innerHTML = `<div style="padding:16px; text-align:center; color:#94a3b8; font-size:12px;">今月の登録済み希望休はありません（各スタッフ月2〜3日程度の希望休を受け付けられます）。</div>`;
+  container.innerHTML = `<div style="padding:16px; text-align:center; color:#94a19a; font-size:12px;">今月の登録済み希望休はありません（各スタッフ月2〜3日程度の希望休を受け付けられます）。</div>`;
   return;
  }
 
@@ -15353,13 +15384,13 @@ function renderShiftHopeList() {
   const hol = isHolidayOrYearEnd(year, month, h.day);
   const dateStr = `${month}月${h.day}日 (${dowNames[dow]}${hol.isHoliday ? "・祝" : ""})`;
   html += `
-   <li style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-bottom:1px solid #f1f5f9; font-size:12.5px;">
+   <li style="display:flex; justify-content:space-between; align-items:center; padding:9px 12px; border-bottom:1px solid #eef2ef; font-size:12.5px;">
     <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
      <span style="display:inline-block; font-weight:bold; color:#b91c1c; background:#fee2e2; border:1px solid #fecaca; border-radius:4px; padding:2px 8px; font-size:11.5px;">
       ${dateStr}
      </span>
-     <strong style="color:#1e293b;">${escapeHtml(h.staff_name)}</strong>
-     <span style="color:#64748b; font-size:11.5px;">理由: ${escapeHtml(h.reason || "私用")}</span>
+     <strong style="color:#22302b;">${escapeHtml(h.staff_name)}</strong>
+     <span style="color:#5f6d66; font-size:11.5px;">理由: ${escapeHtml(h.reason || "私用")}</span>
     </div>
     <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; color:#ef4444; border-color:#fca5a5;" onclick="deleteShiftHopeOff(${h.id})">削除</button>
    </li>
@@ -15556,7 +15587,7 @@ function renderTodayShiftBar(targetDateStr) {
  const roster = getDailyShiftRoster(targetDateStr);
 
  // 管理者テキスト
- let directorText = "木村";
+ let directorText = "-"; // [Claude修正] 管理者がいないときに架空の「木村」と出していた
  if (roster.director.length > 0) {
   const dir = roster.director[0];
   directorText = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;
@@ -15583,47 +15614,26 @@ function renderTodayShiftBar(targetDateStr) {
  let hopeOffBadge = "";
  if (roster.hopeOffs.length > 0) {
   const hopeNames = roster.hopeOffs.map(h => (h.staff_name.split(" ")[0] || h.staff_name)).join("・");
-  hopeOffBadge = `<span style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; border-radius:4px; padding:1px 6px; font-size:11px;" title="希望休取得: ${roster.hopeOffs.map(h => h.staff_name + '(' + (h.reason || '申請') + ')').join(', ')}">希望休: ${hopeNames}</span>`;
+  hopeOffBadge = `<span class="shift-hope" title="希望休取得: ${roster.hopeOffs.map(h => h.staff_name + '(' + (h.reason || '申請') + ')').join(', ')}">希望休: ${hopeNames}</span>`;
  }
 
- const dateLabel = roster.isToday ? `本日 (${roster.month}/${roster.day})` : `${roster.month}月${roster.day}日 (選択日)`;
-
+ const dateLabel = roster.isToday ? `今日 ${roster.month}/${roster.day}` : `${roster.month}/${roster.day}（選択した日）`;
+ // [Claude修正] 見た目を作り直し（色は style.css の .shift-chip-*）。スマホでは1行で横にスクロール。
+ // 「勤務表を開く」が switchOfficeTab('shifts') になっていて何も開かなかった → 'shift'
+ const chip = (cls, label, text) => `<span class="shift-item"><span class="shift-chip shift-chip-${cls}">${label}</span>${escapeHtml(text)}</span>`;
  bar.innerHTML = `
-  <div style="display:flex; align-items:center; gap:8px;">
-   <strong style="color:#1e40af; cursor:pointer; display:inline-flex; align-items:center; gap:4px;" onclick="switchPortal('office'); switchOfficeTab('shifts');" title="クリックで勤務表（シフト表）を開く">
-    [勤務体制: ${dateLabel}]
-   </strong>
-  </div>
-  <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:12.5px;">
-   <span><span style="color:#64748b; font-size:11px;">管理者:</span> <strong>${escapeHtml(directorText)}</strong></span>
-   <span><span style="color:#64748b; font-size:11px;">看護:</span> <strong>${escapeHtml(nurseText)}</strong></span>
-   <span><span style="color:#64748b; font-size:11px;">事務:</span> <strong>${escapeHtml(officeText)}</strong></span>
-   <span style="color:#cbd5e1;">|</span>
-   <span style="display:inline-flex; align-items:center; gap:3px;">
-    <span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">早出</span>
-    <strong style="color:#0f172a;">${escapeHtml(earlyText)}</strong>
-   </span>
-   <span style="display:inline-flex; align-items:center; gap:3px;">
-    <span style="background:#f0fdf4; color:#15803d; border:1px solid #bbf7d0; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">日勤</span>
-    <strong style="color:#0f172a;">${escapeHtml(dayCareText)}</strong>
-   </span>
-   <span style="display:inline-flex; align-items:center; gap:3px;">
-    <span style="background:#fef3c7; color:#b45309; border:1px solid #fde68a; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">遅出</span>
-    <strong style="color:#0f172a;">${escapeHtml(lateText)}</strong>
-   </span>
-   <span style="display:inline-flex; align-items:center; gap:3px;">
-    <span style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">夜勤</span>
-    <strong style="color:#0f172a;">${escapeHtml(nightText)}</strong>
-   </span>
-   <span style="display:inline-flex; align-items:center; gap:3px;">
-    <span style="background:#f3e8ff; color:#7e22ce; border:1px solid #e9d5ff; padding:1px 5px; border-radius:3px; font-size:11px; font-weight:bold;">明け</span>
-    <strong style="color:#0f172a;">${escapeHtml(dawnText)}</strong>
-   </span>
+  <button type="button" class="shift-bar-title" onclick="enterPortal('office'); switchOfficeTab('shift');" title="勤務表を開く">${escapeHtml(dateLabel)}の勤務</button>
+  <div class="shift-bar-list">
+   <span class="shift-item"><span class="shift-role">管理者</span>${escapeHtml(directorText)}</span>
+   <span class="shift-item"><span class="shift-role">看護</span>${escapeHtml(nurseText)}</span>
+   <span class="shift-item"><span class="shift-role">事務</span>${escapeHtml(officeText)}</span>
+   ${chip("early", "早出", earlyText)}
+   ${chip("day", "日勤", dayCareText)}
+   ${chip("late", "遅出", lateText)}
+   ${chip("night", "夜勤", nightText)}
+   ${chip("dawn", "明け", dawnText)}
    ${hopeOffBadge}
   </div>
-  <button class="btn btn-outline" style="padding:2px 8px; font-size:11px; margin-left:auto; color:#2563eb; border-color:#93c5fd; background:#eff6ff; cursor:pointer;" onclick="switchPortal('office'); switchOfficeTab('shifts');" title="月間勤務表シフトを開きます">
-   勤務表シフトを開く
-  </button>
  `;
 }
 
@@ -15771,7 +15781,7 @@ function renderRandomKeypad() {
  const btn = document.createElement("button");
  btn.type = "button";
  btn.className = "btn btn-outline pin-key-btn";
- btn.style.cssText = "font-size:18px; font-weight:bold; padding:12px 0; background:#f8fafc; border:1px solid #cbd5e1; border-radius:8px; cursor:pointer;";
+ btn.style.cssText = "font-size:18px; font-weight:bold; padding:12px 0; background:#f6f8f6; border:1px solid #cdd6d0; border-radius:8px; cursor:pointer;";
  btn.textContent = String(n);
  btn.onclick = () => onPinKeyPress(String(n));
  container.appendChild(btn);
@@ -15808,11 +15818,11 @@ function updatePinDots() {
  const dot = document.getElementById(`pinDot${i}`);
  if (dot) {
  if (i < gEnteredPin.length) {
- dot.style.background = "#2563eb";
- dot.style.borderColor = "#1d4ed8";
+ dot.style.background = "#1e5b47";
+ dot.style.borderColor = "#1a4f3d";
  } else {
  dot.style.background = "#ffffff";
- dot.style.borderColor = "#94a3b8";
+ dot.style.borderColor = "#94a19a";
  }
  }
  }
@@ -15957,13 +15967,13 @@ function renderOfficeStaffAuth() {
 
     tr.innerHTML = `
       <td><strong>${escapeHtml(s.name)}</strong></td>
-      <td><span style="font-size:12px; color:#475569;">${escapeHtml(s.role || "職員")}</span></td>
+      <td><span style="font-size:12px; color:#4a5852;">${escapeHtml(s.role || "職員")}</span></td>
       <td>${statusBadge}</td>
       <td>${pinBadge}</td>
       <td>
         <div style="display:inline-flex; gap:6px; flex-wrap:wrap;">
           <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; ${lockBtnStyle}" onclick="toggleStaffAccountStatus('${escapeHtml(s.name)}')">${lockBtnLabel}</button>
-          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; background:#f8fafc;" onclick="openResetStaffPinModal('${escapeHtml(s.name)}')">暗証番号を初期化</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; background:#f6f8f6;" onclick="openResetStaffPinModal('${escapeHtml(s.name)}')">暗証番号を初期化</button>
         </div>
       </td>
     `;
@@ -16283,7 +16293,7 @@ function renderOfficeCareRenewal() {
         daysBadge = `<span class="badge" style="background:#16a34a; color:#fff;">残り ${daysDiff}日</span>`;
       }
     } else {
-      daysBadge = `<span class="badge" style="background:#94a3b8; color:#fff;">期限未設定</span>`;
+      daysBadge = `<span class="badge" style="background:#94a19a; color:#fff;">期限未設定</span>`;
     }
 
     const s = r.renewal_steps;
@@ -16311,7 +16321,7 @@ function renderOfficeCareRenewal() {
             <input type="checkbox" ${s.result_pending ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'result_pending')">
             <span>④ 認定結果待ち</span>
           </label>
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:bold; color:${s.completed?'#16a34a':'#475569'};">
+          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:bold; color:${s.completed?'#16a34a':'#4a5852'};">
             <input type="checkbox" ${s.completed ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'completed')">
             <span>⑤ 新認定反映完了</span>
           </label>
@@ -16329,9 +16339,9 @@ function renderOfficeCareRenewal() {
   const summaryEl = document.getElementById("careRenewalSummaryCards");
   if (summaryEl) {
     summaryEl.innerHTML = `
-      <div style="background:#ffffff; border:1px solid #e2e8f0; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
-        <div style="font-size:12px; color:#64748b;">対象利用者 総数</div>
-        <div style="font-size:22px; font-weight:bold; color:#0f172a; margin-top:2px;">${totalCount} 名</div>
+      <div style="background:#ffffff; border:1px solid #dfe5e1; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
+        <div style="font-size:12px; color:#5f6d66;">対象利用者 総数</div>
+        <div style="font-size:22px; font-weight:bold; color:#1c2622; margin-top:2px;">${totalCount} 名</div>
       </div>
       <div style="background:#fef2f2; border:1px solid #fca5a5; border-radius:8px; padding:12px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
         <div style="font-size:12px; color:#991b1b; font-weight:bold;">期限30日以内 (至急申請)</div>
@@ -17171,13 +17181,13 @@ function openAlertLogModal() {
       const tr = document.createElement("tr");
       tr.innerHTML = `
         <td>
-          <div style="font-weight:bold; font-size:12.5px; color:#1e293b;">${escapeHtml(l.alert_title)}</div>
-          <div style="font-size:11.5px; color:#64748b; margin-top:2px;">${escapeHtml(l.alert_detail || String(l.alert_key))}</div>
+          <div style="font-weight:bold; font-size:12.5px; color:#22302b;">${escapeHtml(l.alert_title)}</div>
+          <div style="font-size:11.5px; color:#5f6d66; margin-top:2px;">${escapeHtml(l.alert_detail || String(l.alert_key))}</div>
         </td>
-        <td style="font-size:12px; font-weight:bold; color:#0f172a;">${escapeHtml(l.staff_name)}</td>
-        <td style="font-size:11.5px; color:#64748b;">${escapeHtml(l.dismissed_at)}</td>
+        <td style="font-size:12px; font-weight:bold; color:#1c2622;">${escapeHtml(l.staff_name)}</td>
+        <td style="font-size:11.5px; color:#5f6d66;">${escapeHtml(l.dismissed_at)}</td>
         <td style="text-align:center;">
-          ${l.restored_at ? `<div style="font-size:11px; color:#64748b;">未対応に戻した<br>${escapeHtml(l.restored_at)} ${escapeHtml(l.restored_by || '')}</div>` : `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#0284c7; border-color:#bae6fd;" onclick="restoreAlert(${l.id})">復旧</button>`}
+          ${l.restored_at ? `<div style="font-size:11px; color:#5f6d66;">未対応に戻した<br>${escapeHtml(l.restored_at)} ${escapeHtml(l.restored_by || '')}</div>` : `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:#0284c7; border-color:#bae6fd;" onclick="restoreAlert(${l.id})">復旧</button>`}
         </td>
       `;
       tbody.appendChild(tr);
@@ -17389,16 +17399,16 @@ function renderCompareView() {
     const isDiff = lVal !== rVal;
 
     rowsHtml += `
-      <tr style="${idx % 2 === 1 ? 'background:#f8fafc;' : 'background:#ffffff;'}">
-        <td style="width:180px; vertical-align:top; border-right:1px solid #e2e8f0; padding:12px 14px;">
-          <div style="font-weight:bold; font-size:13px; color:#1e293b;">${escapeHtml(sec.title)}</div>
-          <div style="font-size:11px; color:#64748b; margin-top:2px;">${escapeHtml(sec.sub)}</div>
+      <tr style="${idx % 2 === 1 ? 'background:#f6f8f6;' : 'background:#ffffff;'}">
+        <td style="width:180px; vertical-align:top; border-right:1px solid #dfe5e1; padding:12px 14px;">
+          <div style="font-weight:bold; font-size:13px; color:#22302b;">${escapeHtml(sec.title)}</div>
+          <div style="font-size:11px; color:#5f6d66; margin-top:2px;">${escapeHtml(sec.sub)}</div>
           ${isDiff ? '<span style="display:inline-block; font-size:10.5px; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">変化あり</span>' : ''}
         </td>
-        <td style="vertical-align:top; border-right:1px solid #e2e8f0; padding:12px 14px; font-size:12.5px; color:#334155; line-height:1.6; background:${isDiff ? '#eff6ff' : 'transparent'};">
+        <td style="vertical-align:top; border-right:1px solid #dfe5e1; padding:12px 14px; font-size:12.5px; color:#36443e; line-height:1.6; background:${isDiff ? '#f1f6f3' : 'transparent'};">
           ${escapeHtml(lVal).replace(/\n/g, '<br>')}
         </td>
-        <td style="vertical-align:top; padding:12px 14px; font-size:12.5px; color:#334155; line-height:1.6; background:${isDiff ? '#f0fdf4' : 'transparent'};">
+        <td style="vertical-align:top; padding:12px 14px; font-size:12.5px; color:#36443e; line-height:1.6; background:${isDiff ? '#f0fdf4' : 'transparent'};">
           ${escapeHtml(rVal).replace(/\n/g, '<br>')}
         </td>
       </tr>
@@ -17408,9 +17418,9 @@ function renderCompareView() {
   container.innerHTML = `
     <table class="data-table" style="margin:0; width:100%; border-collapse:collapse;">
       <thead>
-        <tr style="background:#f1f5f9; border-bottom:2px solid #cbd5e1;">
+        <tr style="background:#eef2ef; border-bottom:2px solid #cdd6d0;">
           <th style="width:180px; font-size:12.5px;">評価項目</th>
-          <th style="font-size:12.5px; color:#1e40af;">【比較元】 ${escapeHtml(leftSum ? leftSum.summary_type + ' (' + leftSum.created_at + ')' : '-')}</th>
+          <th style="font-size:12.5px; color:#1e5b47;">【比較元】 ${escapeHtml(leftSum ? leftSum.summary_type + ' (' + leftSum.created_at + ')' : '-')}</th>
           <th style="font-size:12.5px; color:#166534;">【比較先】 ${escapeHtml(rightSum ? rightSum.summary_type + ' (' + rightSum.created_at + ')' : '-')}</th>
         </tr>
       </thead>
