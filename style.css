@@ -1351,6 +1351,7 @@ body {
 .topical-item { font-weight: bold; }
 .topical-meta { font-size: 13px; color: var(--text-muted); }
 .topical-nurse { font-size: 13px; font-weight: bold; color: #b3261e; margin-top: 2px; }
+.topical-patch-note { font-size: 13px; color: var(--ink-2); margin-top: 2px; }
 .topical-empty { color: var(--text-muted); font-size: 13px; }
 .topical-slots { display: flex; flex-wrap: wrap; gap: 6px; }
 .topical-slot {

@@ -8511,11 +8511,11 @@ function saveBath(resId) {
 }
 
 // [Claude追加] 塗布薬・湿布（入浴から分けた）。
-// 皮膚・身体シェーマ図に登録した塗り薬・湿布を利用者ごとに並べ、塗り薬は時間ごと、湿布は「貼った」「はがした」を記録する。
+// 皮膚・身体シェーマ図に登録した塗り薬・湿布を利用者ごとに並べ、指示の時間ごとに記録する。
+// 湿布は1回押すと「その時間に貼布対応した（前の湿布をはがして貼った）」の意味（ユーザーと決定: はがした・貼ったを別々に押すのは手間）。
 // 記録は消さずに取消（理由必須）。褥瘡・発赤、打撲・創傷は「看護師・主治医の指示に従う」と表示する
 // （根拠: 医政発第0726005号「皮膚への軟膏の塗布（褥瘡の処置を除く。）」。持続する発赤は褥瘡の段階に含まれる。claude/medical_check_20261009_evening.md）
 const CP_TOPICAL_TIMINGS = ["朝", "昼", "夕", "就寝前", "入浴後"];
-const CP_TOPICAL_PATCH_ACTIONS = ["貼った", "はがした"];
 const CP_TOPICAL_NURSE_CATEGORIES = ["褥瘡・発赤", "打撲・創傷"];
 
 function cpTopicalPins(resId) {
@@ -8524,7 +8524,6 @@ function cpTopicalPins(resId) {
 }
 
 function cpTopicalSlots(pin) {
- if (pin.category === "湿布・貼付剤") return CP_TOPICAL_PATCH_ACTIONS;
  const f = String(pin.frequency || "");
  const hit = [];
  if (/朝/.test(f)) hit.push("朝");
@@ -8557,6 +8556,10 @@ function renderTopicalTable() {
  const tr = document.createElement("tr");
  const nurse = CP_TOPICAL_NURSE_CATEGORIES.includes(p.category)
  ? `<div class="topical-nurse">看護師・主治医の指示に従って行う</div>` : "";
+ // 根拠: 看護roo!「同じ場所に貼付すると、皮膚のトラブルを起こしやすくなる」、EPARKくすりの窓口（薬剤師）「毎回貼る位置をずらし」。
+ // 「あれば看護師へ」はこのアプリの決まり（介護職の判断を超えるものは看護師・主治医へ）。claude/medical_check_20261009_evening.md
+ const patchNote = p.category === "湿布・貼付剤"
+ ? `<div class="topical-patch-note">前の湿布をはがし、位置を少しずらして貼る（同じ場所だとかぶれやすい）。はがしたときに、かゆみ・赤みがあれば看護師へ</div>` : "";
  const slots = cpTopicalSlots(p).map(slot => {
  const done = cpTopicalFind(r.id, p.id, slot);
  if (done) {
@@ -8570,7 +8573,7 @@ function renderTopicalTable() {
  <td>
  <div class="topical-item">${escapeHtml(p.item_name)}</div>
  <div class="topical-meta">${escapeHtml(p.category || "")} ／ ${escapeHtml(p.site_name || "")}${p.frequency ? ` ／ 指示: ${escapeHtml(p.frequency)}` : ""}</div>
- ${nurse}
+ ${nurse}${patchNote}
  </td>
  <td><div class="topical-slots">${slots}</div></td>`;
  tbody.appendChild(tr);
