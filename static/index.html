@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261009_c2">
+ <link rel="stylesheet" href="style.css?v=20261009_c3">
 </head>
 <body>
 
@@ -215,6 +215,7 @@
     <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
     <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
     <button class="sub-tab-btn" onclick="switchCareTab('med')">服薬・点眼</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('topical')">塗布薬・湿布</button>
     <button class="sub-tab-btn" onclick="switchCareTab('oral')">口腔ケア</button>
     <button class="sub-tab-btn" onclick="switchCareTab('recreation')">レク</button>
     <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡・申送り</button>
@@ -230,7 +231,7 @@
   <div class="care-tab-group">
    <span class="care-tab-label">曜日・月ごと</span>
    <div class="care-tab-row">
-    <button class="sub-tab-btn" onclick="switchCareTab('bath')">入浴・塗布薬</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('bath')">入浴</button>
     <button class="sub-tab-btn" onclick="switchCareTab('linen')">シーツ交換</button>
     <button class="sub-tab-btn" onclick="switchCareTab('grooming')">身だしなみ</button>
     <button class="sub-tab-btn" onclick="switchCareTab('weight')">月次体重</button>
@@ -562,23 +563,45 @@
  </table>
  </div>
 
- <!-- 5. 入浴 ＆ 塗布薬 -->
+ <!-- 5. 入浴 [Claude修正] 塗布薬・湿布は別のタブに分けた（就寝前など入浴と関係ない時間にも塗るため） -->
  <div id="tabCareBath" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 入浴チェック表 ＆ 塗布薬 (必要な薬が備考欄に表示され自由に記録可能)</span>
+ <span>入浴チェック表</span>
  </div>
+ <p class="panel-note">塗り薬・湿布は「塗布薬・湿布」のタブで記録します。</p>
  <table class="data-table" id="bathTable">
  <thead>
  <tr>
  <th>居室</th>
  <th>氏名</th>
  <th>入浴区分</th>
- <th>必要な薬・塗布後の状況 (備考欄)</th>
+ <th>入浴時のメモ（皮膚の様子など）</th>
  <th>操作</th>
  </tr>
  </thead>
  <tbody></tbody>
  </table>
+ </div>
+
+ <!-- 5-2. 塗布薬・湿布 [Claude追加] 皮膚・身体シェーマ図の登録から並べる -->
+ <div id="tabCareTopical" style="display:none;" class="panel-card">
+ <div class="panel-title">
+ <span>塗布薬・湿布チェック表</span>
+ </div>
+ <p class="panel-note">利用者カルテの「皮膚・身体シェーマ図」に登録した塗り薬・湿布が並びます。薬や回数の登録・変更はシェーマ図から行います。済みのボタンを押すと取消（理由を入力）になります。</p>
+ <div style="overflow-x:auto;">
+ <table class="data-table" id="topicalTable">
+ <thead>
+ <tr>
+ <th>居室</th>
+ <th>氏名</th>
+ <th>薬・部位</th>
+ <th>実施</th>
+ </tr>
+ </thead>
+ <tbody></tbody>
+ </table>
+ </div>
  </div>
 
  <!-- 6. 口腔ケア -->
@@ -3560,7 +3583,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_a9"></script>
+ <script src="app.js?v=20261009_b1"></script>
   
 
   <!-- ============================================================ -->
@@ -4179,6 +4202,7 @@
 					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppCare" checked> 介護記録（経過記録）</label>
 					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppVitals" checked> バイタル</label>
 					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppMeds" checked> 服薬・点眼</label>
+					<label style="margin-right:10px; display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppTopical" checked> 塗布薬・湿布</label>
 					<label style="display:inline-block; white-space:nowrap;"><input type="checkbox" id="ppTurns" checked> 夜間巡視・体位変換</label>
 				</div>
 				<div><label><input type="checkbox" id="ppIncludeVoided" checked> 取消済みの記録も含める（取消の日時・職員・理由を表示）</label></div>

@@ -1327,3 +1327,16 @@ body {
 }
 @media print { .incident-fab, .care-tab-nav { display: none !important; } }
 #portalCareSection { padding-bottom: 72px; }
+
+/* [Claude追加] 塗布薬・湿布 */
+.panel-note { font-size: 13px; color: var(--text-muted); margin: 0 0 10px 0; }
+.topical-item { font-weight: bold; }
+.topical-meta { font-size: 13px; color: var(--text-muted); }
+.topical-nurse { font-size: 13px; font-weight: bold; color: #b3261e; margin-top: 2px; }
+.topical-empty { color: var(--text-muted); font-size: 13px; }
+.topical-slots { display: flex; flex-wrap: wrap; gap: 6px; }
+.topical-slot {
+  min-height: 40px; padding: 6px 12px; border-radius: 6px; font-size: 14px; font-weight: bold; font-family: inherit;
+  border: 1px solid var(--border-color); background: #ffffff; color: var(--text-main); cursor: pointer;
+}
+.topical-slot.is-done { background: #e3f1e8; border-color: #8cc4a2; color: #1d5b39; }

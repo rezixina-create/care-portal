@@ -536,7 +536,7 @@ class LocalDB {
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
- "eyedrop_orders", "vaccines"
+ "eyedrop_orders", "vaccines", "topical_records"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -3501,7 +3501,7 @@ function switchCareTab(tab) {
  meal: "tabCareMeal", bath: "tabCareBath", oral: "tabCareOral", med: "tabCareMed",
  night: "tabCareNight", weight: "tabCareWeight", linen: "tabCareLinen",
  grooming: "tabCareGrooming", visit: "tabCareVisit", recreation: "tabCareRecreation",
- notebook: "tabCareNotebook", consume: "tabCareConsume", incidents: "tabCareIncidents"
+ notebook: "tabCareNotebook", consume: "tabCareConsume", incidents: "tabCareIncidents", topical: "tabCareTopical"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -3517,6 +3517,7 @@ function switchCareTab(tab) {
  if (tab === "excretion") renderExcretionTable();
  if (tab === "meal") renderMealsTable();
  if (tab === "bath") renderBathTable();
+ if (tab === "topical") renderTopicalTable();
  if (tab === "oral") renderOralTable();
  if (tab === "med") renderMedTable();
  if (tab === "night") renderNightTable();
@@ -3600,6 +3601,7 @@ function loadDateRecords(dt) {
  if (gState.activeCareTab === "excretion") renderExcretionTable();
  if (gState.activeCareTab === "meal") renderMealsTable();
  if (gState.activeCareTab === "bath") renderBathTable();
+ if (gState.activeCareTab === "topical") renderTopicalTable();
  if (gState.activeCareTab === "oral") renderOralTable();
  if (gState.activeCareTab === "med") renderMedTable();
  if (gState.activeCareTab === "night") renderNightTable();
@@ -5256,6 +5258,7 @@ const CP_AUDIT_SOURCES = [
  { key: "meds", label: "服薬・点眼", summary: r => `${r.date || ""} ${r.slot || ""} ${r.status || ""}` },
  { key: "vitals", label: "バイタル", summary: r => `${r.date || ""} 体温${r.temperature ?? "-"} 血圧${r.bp_high ?? "-"}/${r.bp_low ?? "-"} 脈${r.pulse ?? "-"} SpO2 ${r.spo2 ?? "-"}` },
  { key: "weight_records", label: "体重", summary: r => `${r.date || r.month || ""} ${r.weight ?? "-"}kg` },
+ { key: "topical_records", label: "塗布薬・湿布", summary: r => `${r.date || ""} ${r.timing || ""} ${r.item_name || ""} (${r.site_name || ""})` },
  { key: "baths", label: "入浴", summary: r => `${r.date || ""} ${r.bath_type || ""} ${r.ointment_notes || ""}` },
  { key: "groomings", label: "整容", summary: r => `${r.date || ""} 爪${r.nail_done ? "○" : "-"} 髭${r.shave_done ? "○" : "-"} 耳${r.ear_done ? "○" : "-"} ${r.notes || ""}` },
  { key: "turns", label: "夜間巡視・体位変換", summary: r => `${r.date || ""} ${r.time || ""} ${r.action || ""}` },
@@ -5471,6 +5474,12 @@ function printPeriodRecords() {
  body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">服薬・点眼 ${ms.length}件</h2>
  <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態</th><th ${th}>記録者</th></tr>
  ${ms.map(m => `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(m.slot || "")}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="4">記録なし</td></tr>`}</table>`;
+ }
+ if (document.getElementById("ppTopical")?.checked) {
+ const tps = (db.data.topical_records || []).filter(t => Number(t.resident_id) === rid && inRange(t.date) && keep(t)).sort((a, b) => String(a.done_at || "").localeCompare(String(b.done_at || "")));
+ body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">塗布薬・湿布 ${tps.length}件</h2>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>薬</th><th ${th}>部位</th><th ${th}>記録時刻</th><th ${th}>記録者</th></tr>
+ ${tps.map(t => `<tr style="${t.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(t.date || "")}</td><td ${td}>${escapeHtml(t.timing || "")}</td><td ${td}>${vmark(t)}${escapeHtml(t.item_name || "")}</td><td ${td}>${escapeHtml(t.site_name || "")}</td><td ${td}>${escapeHtml(String(t.done_at || "").slice(11, 16))}</td><td ${td}>${escapeHtml(t.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="6">記録なし</td></tr>`}</table>`;
  }
  if (document.getElementById("ppTurns")?.checked) {
  const ts = (db.data.turns || []).filter(t => Number(t.resident_id) === rid && inRange(t.date) && keep(t)).sort((a, b) => `${a.date} ${a.time}`.localeCompare(`${b.date} ${b.time}`));
@@ -6995,7 +7004,7 @@ function renderPersonalDailySummary(res, dateStr) {
  <div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
  <div style="font-size:11px; color:#64748b;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
  <div style="margin-top:2px; border-top:1px dashed #cbd5e1; padding-top:2px;">
- 入浴: ${bath ? `<strong style="color:#16a34a;">${bath.bath_type} 実施</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
+ 入浴: ${bath ? `<strong style="color:#16a34a;">${escapeHtml(bath.bath_type || "")}${bath.bath_type === "見合わせ" ? "" : " 実施"}</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a3b8;">本日入浴なし</span>'}
  </div>
  </div>
  </div>
@@ -8413,23 +8422,25 @@ function renderBathTable() {
  const tbody = document.querySelector("#bathTable tbody");
  tbody.innerHTML = "";
  const baths = (db.data.baths || []).filter(b => b.date === gState.selectedDate);
+ // [Claude修正] 入浴区分は「選んでください」から始める（以前は最初の「一般浴」が選ばれた状態で、メモだけ保存しても一般浴で入浴した記録になっていた）。
+ // 一覧にない区分（見本データの「機械浴」など）で保存された記録は、その区分のまま表示する（以前は一般浴に置き換わって表示され、保存すると上書きされた）
+ const bathTypes = [["一般浴", "一般浴"], ["特浴", "特浴(機械浴)"], ["清拭", "清拭"], ["見合わせ", "見合わせ"]];
 
  gState.residents.forEach(r => {
  const b = baths.find(x => x.resident_id === r.id);
+ const cur = b ? (b.bath_type || "") : "";
+ let opts = `<option value="" ${cur === "" ? "selected" : ""}>選んでください</option>`;
+ opts += bathTypes.map(([v, label]) => `<option value="${v}" ${cur === v ? "selected" : ""}>${label}</option>`).join("");
+ if (cur && !bathTypes.some(([v]) => v === cur)) opts += `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)}</option>`;
  const tr = document.createElement("tr");
 
  tr.innerHTML = `
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
  <td>
- <select id="bathType_${r.id}" class="form-control" style="width:110px;">
- <option value="一般浴" ${b && b.bath_type==='一般浴'?'selected':''}>一般浴</option>
- <option value="特浴" ${b && b.bath_type==='特浴'?'selected':''}>特浴(機械浴)</option>
- <option value="清拭" ${b && b.bath_type==='清拭'?'selected':''}>清拭</option>
- <option value="見合わせ" ${b && b.bath_type==='見合わせ'?'selected':''}>見合わせ</option>
- </select>
+ <select id="bathType_${r.id}" class="form-control" style="width:130px;">${opts}</select>
  </td>
- <td><input type="text" id="bathNotes_${r.id}" class="form-control" value="${escapeHtml(b ? (b.ointment_notes || "") : "")}"></td>
+ <td><input type="text" id="bathNotes_${r.id}" class="form-control" value="${escapeHtml(b ? (b.ointment_notes || "") : "")}" placeholder="入浴時の皮膚の様子など"></td>
  <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveBath(${r.id})">保存</button></td>
  `;
  tbody.appendChild(tr);
@@ -8440,6 +8451,10 @@ function saveBath(resId) {
  const type = document.getElementById(`bathType_${resId}`).value;
  const notes = document.getElementById(`bathNotes_${resId}`).value;
  const staff = document.getElementById("currentStaff").value;
+ if (!type) {
+ alert("入浴区分（一般浴・特浴・清拭・見合わせ）を選んでから保存してください。\n塗り薬・湿布は「塗布薬・湿布」のタブで記録します。");
+ return;
+ }
 
  let existing = (db.data.baths || []).find(b => b.date === gState.selectedDate && b.resident_id === resId);
  if (existing) {
@@ -8461,7 +8476,105 @@ function saveBath(resId) {
  db.save();
 
  loadDateRecords(gState.selectedDate);
- alert("入浴・塗布薬記録を保存しました！");
+ alert("入浴記録を保存しました。");
+}
+
+// [Claude追加] 塗布薬・湿布（入浴から分けた）。
+// 皮膚・身体シェーマ図に登録した塗り薬・湿布を利用者ごとに並べ、塗り薬は時間ごと、湿布は「貼った」「はがした」を記録する。
+// 記録は消さずに取消（理由必須）。褥瘡・発赤、打撲・創傷は「看護師・主治医の指示に従う」と表示する
+// （根拠: 医政発第0726005号「皮膚への軟膏の塗布（褥瘡の処置を除く。）」。持続する発赤は褥瘡の段階に含まれる。claude/medical_check_20261009_evening.md）
+const CP_TOPICAL_TIMINGS = ["朝", "昼", "夕", "就寝前", "入浴後"];
+const CP_TOPICAL_PATCH_ACTIONS = ["貼った", "はがした"];
+const CP_TOPICAL_NURSE_CATEGORIES = ["褥瘡・発赤", "打撲・創傷"];
+
+function cpTopicalPins(resId) {
+ return (db.data.body_schema_pins || []).filter(p => p && Number(p.resident_id) === Number(resId)
+ && p.status !== "治癒・終了" && p.category !== "麻痺・拘縮" && String(p.item_name || "").trim());
+}
+
+function cpTopicalSlots(pin) {
+ if (pin.category === "湿布・貼付剤") return CP_TOPICAL_PATCH_ACTIONS;
+ const f = String(pin.frequency || "");
+ const hit = [];
+ if (/朝/.test(f)) hit.push("朝");
+ if (/昼/.test(f)) hit.push("昼");
+ if (/夕/.test(f)) hit.push("夕");
+ if (/就寝|眠前|寝る前/.test(f)) hit.push("就寝前");
+ if (/入浴/.test(f)) hit.push("入浴後");
+ return hit.length ? hit : CP_TOPICAL_TIMINGS;
+}
+
+function cpTopicalFind(resId, pinId, slot) {
+ return (db.data.topical_records || []).find(t => !t.voided && t.date === gState.selectedDate
+ && Number(t.resident_id) === Number(resId) && Number(t.pin_id) === Number(pinId) && t.timing === slot);
+}
+
+function renderTopicalTable() {
+ const tbody = document.querySelector("#topicalTable tbody");
+ if (!tbody) return;
+ tbody.innerHTML = "";
+ (gState.residents || []).forEach(r => {
+ const pins = cpTopicalPins(r.id);
+ if (!pins.length) {
+ const tr = document.createElement("tr");
+ tr.innerHTML = `<td>${r.room_no}</td><td><strong>${escapeHtml(r.name)} 様</strong></td>
+ <td colspan="2" class="topical-empty">塗り薬・湿布の登録なし</td>`;
+ tbody.appendChild(tr);
+ return;
+ }
+ pins.forEach((p, i) => {
+ const tr = document.createElement("tr");
+ const nurse = CP_TOPICAL_NURSE_CATEGORIES.includes(p.category)
+ ? `<div class="topical-nurse">看護師・主治医の指示に従って行う</div>` : "";
+ const slots = cpTopicalSlots(p).map(slot => {
+ const done = cpTopicalFind(r.id, p.id, slot);
+ if (done) {
+ const t = String(done.done_at || "").slice(11, 16);
+ return `<button type="button" class="topical-slot is-done" onclick="toggleTopical(${r.id}, ${p.id}, '${slot}')" title="押すと取消（理由を入力）">${slot} 済 ${escapeHtml(t)} ${escapeHtml(done.staff_name || "")}</button>`;
+ }
+ return `<button type="button" class="topical-slot" onclick="toggleTopical(${r.id}, ${p.id}, '${slot}')">${slot}</button>`;
+ }).join("");
+ tr.innerHTML = `
+ ${i === 0 ? `<td rowspan="${pins.length}">${r.room_no}</td><td rowspan="${pins.length}"><strong>${escapeHtml(r.name)} 様</strong></td>` : ""}
+ <td>
+ <div class="topical-item">${escapeHtml(p.item_name)}</div>
+ <div class="topical-meta">${escapeHtml(p.category || "")} ／ ${escapeHtml(p.site_name || "")}${p.frequency ? ` ／ 指示: ${escapeHtml(p.frequency)}` : ""}</div>
+ ${nurse}
+ </td>
+ <td><div class="topical-slots">${slots}</div></td>`;
+ tbody.appendChild(tr);
+ });
+ });
+}
+
+function toggleTopical(resId, pinId, slot) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ const p = (db.data.body_schema_pins || []).find(x => Number(x.id) === Number(pinId));
+ if (!p) { alert("シェーマ図の登録が見つかりません。画面を開き直してください。"); return; }
+ if (!Array.isArray(db.data.topical_records)) db.data.topical_records = [];
+ const name = r ? r.name : "利用者";
+ const done = cpTopicalFind(resId, pinId, slot);
+ if (done) {
+ if (cpVoidMedRecord(done, `${name}様の【${p.item_name}・${slot}】の記録`)) {
+ db.save();
+ renderTopicalTable();
+ }
+ return;
+ }
+ db.data.topical_records.push({
+ id: Date.now(),
+ date: gState.selectedDate,
+ resident_id: Number(resId),
+ pin_id: Number(pinId),
+ category: p.category || "",
+ site_name: p.site_name || "",
+ item_name: p.item_name || "",
+ timing: slot,
+ done_at: toLocalDateTimeStr(new Date()),
+ staff_name: document.getElementById("currentStaff").value
+ });
+ db.save();
+ renderTopicalTable();
 }
 
 // 5. 口腔ケア
