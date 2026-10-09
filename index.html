@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="ja">
 <head>
  <meta charset="UTF-8">
@@ -3673,7 +3673,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_e1"></script>
+ <script src="app.js?v=20261009_e4"></script>
   
 
   <!-- ============================================================ -->
@@ -3853,37 +3853,41 @@
   </div>
 
 
-  <!-- 6. 介護サマリー新旧比較モーダル (左右任意日付選択・例文プレビュー) -->
+  <!-- 6. 介護サマリー新旧比較モーダル (3時期選択・比較プレビュー) -->
   <div class="modal-overlay" id="careSummaryCompareModal" style="display:none; z-index:9999;">
-    <div class="modal-card" style="max-width:1100px; width:95%; max-height:92vh; overflow-y:auto; padding:22px;">
-      <div class="modal-header" style="border-bottom:2px solid #4338ca; padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
+    <div class="modal-card" style="max-width:1260px; width:96%; max-height:92vh; overflow-y:auto; padding:22px;">
+      <div class="modal-header" style="border-bottom:2px solid var(--pine); padding-bottom:12px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:flex-start;">
         <div>
           <div style="display:flex; align-items:center; gap:8px;">
-            <h3 style="margin:0; color:#312e81; font-size:19px;">介護サマリー 新旧比較ビュー</h3>
-            <span id="compareResidentBadge" class="badge" style="background:#4338ca; color:white; font-size:13px; padding:3px 8px;"></span>
+            <h3 style="margin:0; color:var(--pine-dark); font-size:19px;">介護サマリー 3者比較ビュー（新旧・経過）</h3>
+            <span id="compareResidentBadge" class="badge" style="background:var(--pine); color:white; font-size:13px; padding:3px 8px;"></span>
           </div>
           <p style="font-size:13px; color:#5f6d66; margin:4px 0 0 0;">
-            左右それぞれで過去のサマリー履歴を選択し、心身状況やケア方針の変化を横並びで比較・確認できます。
+            初回入所時・中間経過・最新見直しなど最大3つの時期を選択し、心身状況やケア方針・処方の変化を横並びで比較・確認できます。
           </p>
         </div>
         <button type="button" class="modal-close-btn" onclick="closeModal('careSummaryCompareModal')">&times;</button>
       </div>
 
-      <!-- 左右選択コントロールバー -->
-      <div style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:16px;">
+      <!-- 3時期選択コントロールバー -->
+      <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(260px, 1fr)); gap:12px; margin-bottom:16px;">
         <div style="background:#f1f6f3; border:1px solid #c9e0d5; border-radius:8px; padding:10px 14px;">
-          <label style="font-size:13px; font-weight:bold; color:#1e5b47; display:block; margin-bottom:4px;">比較元サマリー（左側）を選択:</label>
-          <select id="compareSelectLeft" class="form-control" style="font-size:13px; font-weight:bold;" onchange="renderCompareView()"></select>
+          <label style="font-size:13px; font-weight:bold; color:var(--pine); display:block; margin-bottom:4px;">【比較1】過去・初回サマリー:</label>
+          <select id="compareSelect1" class="form-control" style="font-size:13px; font-weight:bold; width:100%;" onchange="renderCompareView()"></select>
         </div>
         <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:8px; padding:10px 14px;">
-          <label style="font-size:13px; font-weight:bold; color:#166534; display:block; margin-bottom:4px;">比較先サマリー（右側）を選択:</label>
-          <select id="compareSelectRight" class="form-control" style="font-size:13px; font-weight:bold;" onchange="renderCompareView()"></select>
+          <label style="font-size:13px; font-weight:bold; color:#166534; display:block; margin-bottom:4px;">【比較2】経過・中間サマリー:</label>
+          <select id="compareSelect2" class="form-control" style="font-size:13px; font-weight:bold; width:100%;" onchange="renderCompareView()"></select>
+        </div>
+        <div style="background:#fcfaf2; border:1px solid #fed7aa; border-radius:8px; padding:10px 14px;">
+          <label style="font-size:13px; font-weight:bold; color:#9a3412; display:block; margin-bottom:4px;">【比較3】最新・見直しサマリー:</label>
+          <select id="compareSelect3" class="form-control" style="font-size:13px; font-weight:bold; width:100%;" onchange="renderCompareView()"></select>
         </div>
       </div>
 
       <!-- 比較テーブル表示コンテナ -->
-      <div id="compareContentContainer" style="background:#ffffff; border:1px solid #cdd6d0; border-radius:8px; overflow:hidden;">
-        <!-- JSで項目別左右比較を描画 -->
+      <div id="compareContentContainer" style="background:#ffffff; border:1px solid #cdd6d0; border-radius:8px; overflow-x:auto;">
+        <!-- JSで項目別3者比較を描画 -->
       </div>
 
       <div style="margin-top:16px; display:flex; justify-content:flex-end;">

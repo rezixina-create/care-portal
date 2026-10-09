@@ -1,4 +1,4 @@
-/**
+﻿/**
  * 介護施設 統合業務ポータルシステム (Care Portal)
  * 【施設内Wi-Fiクラウド共有 ＆ スタンドアロン両対応版】
  * ・サーバー稼働時: 親機PCに全データが一元保存され、タブレット等の他端末とリアルタイム共有
@@ -1244,7 +1244,62 @@ class LocalDB {
  orders: [],
  deposits: [],
  complaints: [],
- incidents: [],
+    incidents: [
+      {
+        id: 1,
+        report_type: "ヒヤリハット",
+        occurred_at: "2026-10-07 22:15",
+        resident_id: 1,
+        place: "居室 (ベッドサイド)",
+        situation: "夜間巡回時、離床センサーマットのコール発報あり直ちに居室へ急行。佐藤様がトイレへ行こうとベッド柵を外し、歩行器を使わずに立ち上がり独歩しようとしてバランスを崩しかけていたところを、職員が背後から支えて介助。転倒・外傷はなく、そのまま歩行器を使用したトイレ誘導を行い、排泄後安全にベッドへ戻られた。",
+        cause: "【利用者要因】歩行機能が回復してきたことで「自分一人でも歩ける」という過信が生じていた。夜間の覚醒直後で覚醒度が十分でなく、歩行器の使用手順を失念していた。\n【環境・ケア要因】就寝時に歩行器がベッドから少し離れた位置（約1.5m）に置かれており、手の届く範囲になかった。",
+        prevention: "1. 就寝時、歩行器は必ずベッド柵の開口部すぐ横（手の届く定位置）に配置し、ブレーキロックを徹底する。\n2. 離床センサーマットの感度・敷設位置を再点検し、端座位になった時点で早期覚知できるようにする。\n3. 日常の声かけとして「夜間トイレの際は必ずナースコールを押してください」「歩行器を使って職員と一緒に行きましょう」と繰り返し穏やかに伝える。",
+        supervisor_comment: "離床センサーへの迅速な初動対応により転倒を未然に防止できた良好な対応。歩行自立度が上がっている時期こそ転倒リスクが高まるため、職員間の申し送りで歩行器の定位置管理を徹底し、夜勤帯の巡視タイミングにも留意すること。（管理者：高橋 健）",
+        status: "承認済",
+        staff_name: "山田 孝之 (介護職員)",
+        injury_pins: []
+      },
+      {
+        id: 2,
+        report_type: "事故報告",
+        occurred_at: "2026-10-08 12:10",
+        resident_id: 1,
+        place: "食堂・デイルーム",
+        situation: "昼食終了後、食堂椅子から車椅子へ移乗介助を行う際、車椅子の右フットサポート（足載せ台）の跳ね上げ確認が不十分であったため、佐藤様の右下腿前側がフットサポートの金属フレーム部に軽く接触。右下腿に約1.5cmの軽度表皮擦過傷（スキンテア疑いなし・毛細血管からの微小出血）が発生した。直ちに主任看護師（鈴木）に報告し、流水洗浄・消毒・保護処置を実施。骨折術創や関節への影響・疼痛の訴えはなく、バイタルサインも安定（BP 126/74, P 66）。往診医（ひだまり内科・田中医師）へ電話報告の上、長男様（佐藤 一郎様）へ電話にて事故状況・処置・謝罪の報告を実施し、了承を得た。",
+        cause: "【職員要因】昼食後の移乗が重なる時間帯で焦りが生じ、車椅子移乗の基本動作である「左右両側のフットサポート跳ね上げ確認」「ブレーキ確実確認」の指差し確認を怠っていた。\n【環境・利用者要因】加齢および皮膚乾燥（老人性乾皮症）により皮膚が脆弱な状態であり、軽微な接触でも表皮剥離を起こしやすい状態であった。",
+        prevention: "1. 車椅子移乗時は、必ずフットサポートを完全に外側へ跳ね上げたことを目視・指差し確認してから移乗動作に入ることを介助手順として再徹底する。\n2. 皮膚の脆弱性に対し、日頃の保湿ケア（ヒルドイド塗布）の継続に加え、移乗・移動時のレッグウォーマーや保護サポーターの着用を検討する。\n3. 看護師の指示に基づき、創部の経過観察（発赤・腫脹・浸出液の有無）を日勤・夜勤の申し送りで共有し、毎日の創傷処置記録に残す。",
+        supervisor_comment: "初動の看護師連携・創部処置・主治医およびご家族への即時連絡は適切に行われた。しかし、フットサポートの跳ね上げ確認という基本手順の省略が直接原因であり重大に受け止める。全介護職員を対象に移乗動作の安全点検カンファレンスを緊急開催し、指差し確認の徹底を指導した。（施設長：山田 太郎）",
+        status: "承認済",
+        staff_name: "加藤 健一 (介護職員)",
+        injury_pins: [
+          {
+            id: 1,
+            site_name: "右下腿前面",
+            injury_type: "軽度擦過傷 (表皮剥離 約1.5cm)",
+            severity: "軽度",
+            treatment: "生理食塩水清拭・ハイドロコロイド被覆保護。看護師バイタル確認、往診医報告、長男様電話報告。",
+            notes: "出血微小ですぐ止血。疼痛・腫脹なし。大腿骨術部とは離れており骨折・関節への影響なし。",
+            x_pct: 35.0,
+            y_pct: 78.0
+          }
+        ]
+      },
+      {
+        id: 3,
+        report_type: "ヒヤリハット",
+        occurred_at: "2026-10-06 08:20",
+        resident_id: 2,
+        place: "食堂 (朝食配薬時)",
+        situation: "朝食後の服薬介助時、田中 幸子 様の席へ別の方の薬袋（他利用者の降圧剤・胃薬等）を誤って手渡してしまった。直後に隣席の利用者からお茶をこぼしたとの訴えがあり視線を外して対応に入ったが、ふと手渡した薬袋の氏名相違（渡す相手を取り違えていたこと）に気がつき直ちに田中様のお席へ戻ったところ、田中様が薬包を開封し口へ運ぼうとされている寸前であったため、「田中様、少々お待ちください！」とお声がけして直前で制止・回収した。田中様ご本人の正しい薬袋（アムロジピン・酸化マグネシウム）と照合・確認の上で内服を完了。誤薬・内服には至らず、健康被害なし。",
+        cause: "【職員要因】朝の配膳・下膳と配薬が重なる繁忙帯で、手元に複数名分の薬袋を持ったまま配薬を行っていた。さらに「利用者の顔を見て、氏名・日付・何食のお薬かを声出し確認し、飲み終えるまでその場で見届ける」という基本手順を怠り、手渡した直後に他利用者の訴えに気を取られ、内服確認を完了させずにその場を離れてしまった。\n【環境要因】朝食後の離床・下膳と服薬が同時進行する時間帯における職員間の役割分担が不明確であった。",
+        prevention: "1. 配薬の鉄則である「1人ずつ薬袋を手に取り、相手の顔を見て氏名・日付・何食のお薬かを声に出して読み上げ確認し、確実に飲み終えるまでその場を離れず見届ける（手渡し放置の絶対禁止）」を徹底する。\n2. 配薬中に他利用者からのコールや訴えがあった場合、手元の配薬を一時中断して薬を回収するか、近くの他職員へ対応を依頼し、服薬介助中の職員は目の前の利用者の内服完了まで絶対に目を離さない。\n3. 配薬時は複数人分の薬袋を同時に持ち歩かず、ワゴンから1名分ずつ取り出して配薬する。",
+        supervisor_comment: "内服直前での制止により誤薬事故（重大インシデント）を水際で回避できたが、手渡し後に確認・見届けを完了せず他対応に移ったことは極めて危険な行為。服薬介助は「1人ずつ・対面読み上げ確認・最後まで見届ける」を全職員で再徹底し、朝の配薬時間帯はコール対応と配薬担当の役割分担を明確にすること。（主任看護師：鈴木 美智子）",
+        status: "承認済",
+        staff_name: "佐藤 恵美 (介護職員)",
+        injury_pins: []
+      }
+    ],
+
  // [Claude修正] 見本データは、初めて起動したデモのときだけ入れる（既存のデータには書き込まない）
  care_summaries: [
  {
@@ -1268,6 +1323,49 @@ class LocalDB {
  family_info: "長男様が週1回程度面会来訪。何かあれば長男様へ連絡希望。看取り方針については自然な経過での見守りを希望（施設での看取り・DNAR合意済）。",
  future_goals: "歩行器による安全な自立歩行を維持し、転倒防止を図る。食事摂取量を維持し低血糖・脱水を予防。他入所者とのレクリエーション参加を促す。"
  },
+  {
+    id: 5,
+    resident_id: 1,
+    created_at: "2026-10-08",
+    updated_at: "2026-10-08",
+    staff_name: "山田 孝之",
+    summary_type: "定期見直しサマリー",
+    basic_info: "要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男・佐藤 一郎様 (090-1111-2222)。認知症高齢者の日常生活自立度IIb。障害高齢者の日常生活自立度B1。",
+    background: "自宅にて長男家族と同居していたが、2026年8月に自宅内で転倒し右大腿骨頸部骨折。急性期病院にて骨接合術施行。リハビリ継続の上、在宅介護困難となり当施設へ新規入所。",
+    physical_cognitive: "右股関節可動域制限・右下肢軽度筋力低下あり。歩行時にすり足・ふらつき認める。短期記憶の低下あるが、見当識はおおむね保たれており穏やかに意思疎通可能。",
+    adl: "寝返り・起き上がり自立。立ち上がり・車椅子移乗は見守りにて自立（軽介助不要となった）。歩行器歩行にて40m程度自立移動可能（前回20m）。更衣・整容は一部介助（靴下着脱のみ）。入浴は一般浴にて洗身見守り、洗髪一部介助。",
+    meals_hydration: "普通食（一口大）継続。自力摂取良好、むせ込みは減少。水分摂取は1日平均1,100ml程度で目標1,200mlにやや届かないため、10時・15時の補水を強化。",
+    excretion: "日中はトイレ誘導にて排尿自立。夜間はリハビリパンツ＋尿取りパッド使用継続。夜間失禁なし。便秘傾向は緩下剤調整と水分促しにより改善（2日に1回排便）。",
+    sleep: "21:00就寝、6:00起床。夜間1〜2回トイレ覚醒あり。中途覚醒時は転倒注意のため離床センサーマット使用。声かけにて再入眠良好。",
+    meds: "降圧薬・血糖降下薬内服中。朝・夕食後。看護師・介護職員による配薬・服薬確認にて全量自己内服。",
+    medical_care: "毎日のバイタルチェック（血圧・体温・脈拍・SpO2）。褥瘡・皮膚剥離なし。保湿剤塗布継続。",
+    dementia_behavior: "夕方時に「そろそろ帰らないと」と帰宅願望が時折出現。お茶を勧め、大工職人時代の仕事や大相撲の話題を傾聴することで落ち着かれる。",
+    care_notes: "急がせる声かけは焦りを生み転倒リスクとなるため、ゆっくりとしたペースで対応する。声かけは気づきやすい左側（健側）から、移乗・歩行の介助は麻痺側（右）の後方から行う。大工道具や相撲の話題を好まれる。",
+    family_info: "長男様が週1回程度面会来訪。何かあれば長男様へ連絡希望。看取り方針については自然な経過での見守りを希望（施設での看取り・DNAR合意済）。",
+    future_goals: "歩行器歩行の距離をさらに伸ばし、食堂までの自立歩行を目指す。転倒ゼロを継続。水分摂取量1,200ml/日の達成。レクリエーションへの週2回以上の参加。"
+  },
+  {
+    id: 6,
+    resident_id: 1,
+    created_at: "2026-10-09",
+    updated_at: "2026-10-09",
+    staff_name: "鈴木 美智子",
+    summary_type: "状態変化・処方見直しサマリー",
+    basic_info: "要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男・佐藤 一郎様 (090-1111-2222)。認知症高齢者の日常生活自立度IIb。障害高齢者の日常生活自立度B1。",
+    background: "大腿骨頸部骨折術後入所から1週間経過。歩行器歩行自立度向上に伴い活動量増加。夕方の胸やけ症状および便通経過を往診医（ひだまり内科クリニック・田中医師）に相談し、処方見直しを実施。",
+    physical_cognitive: "右下肢筋力・右股関節可動域はリハビリ継続により着実に回復。歩行器歩行にて50m以上安定移動可能。短期記憶低下あるが、見当識はおおむね保たれ穏やかに意思疎通可能。",
+    adl: "寝返り・起き上がり・立ち上がり・車椅子移乗は完全自立。歩行器歩行にて居室から食堂まで見守り自立歩行。更衣は自立（靴下着脱のみ軽介助）。入浴は一般浴にて洗身・洗髪ほぼ自力実施（背部のみ一部介助）。",
+    meals_hydration: "普通食 (一口大)。自力全量摂取良好。むせ込みは消失。水分摂取量は1日1,200ml目標を達成（平均1,250ml）。食後の胸やけ訴えに対し、食後30分は横にならず座位を保持するよう促し、追加処方薬（ランソプラゾール）にて経過観察。",
+    excretion: "日中はトイレ誘導にて完全自立。夜間も定時排泄リズム定着により失禁ゼロ継続。酸化マグネシウム継続および水分摂取確保により、自然排便（普通便〜軟便）が1〜2日に1回順調にあり、便秘傾向は解消。",
+    sleep: "21:00就寝、6:00起床。夜間中途覚醒時もナースコール押し自力トイレ可能。声かけにて再入眠良好、良眠維持。",
+    meds: "高血圧症に対しアムロジピン錠5mg（朝1錠）、便秘症に対し酸化マグネシウム錠330mg（朝・夕各1錠）を継続。10/8往診時に食後の胸やけ・胃酸逆流傾向を認め、ランソプラゾールOD錠15mg（朝1錠）を追加処方。また必要時の頓服としてメトプロロール錠（※未登録薬サンプル）の指示あり。看護師（鈴木・加藤）による配薬セット、服薬確認および効果・副作用チェックを徹底。",
+    medical_care: "看護師による毎朝バイタル測定（血圧128/76mmHg、脈拍68、SpO2 98%、体温36.5℃で血圧良好に安定）。処方変更に伴い、胃部症状の推移、脈拍・ふらつき、軟便傾向の有無を重点観察。褥瘡・スキンテアなし。仙骨部・背部の保湿ケア継続。",
+    dementia_behavior: "夕方の帰宅願望は環境適応に伴い大幅に減少。大相撲観戦や大工職人時代の昔語りを楽しまれ、他入所者への温かい声かけも見られる。",
+    care_notes: "歩行が安定してきたことによる油断からの独歩・転倒に留意。移動時は必ず歩行器を使用するよう優しく声かけ。食後すぐ横にならず30分は座位を保つよう促す。大工道具や相撲の話題を好まれる。",
+    family_info: "長男様が週1回面会。歩行改善と顔色の良さに安心されている。処方変更の内容についても看護師より長男様へ電話報告・了承済。施設看取り方針合意済。",
+    future_goals: "歩行器での食堂・デイルームへの完全自立移動。転倒ゼロ継続。レクリエーション（書道・体操）への積極的参加。"
+  },
+
  {
  id: 2,
  resident_id: 4,
@@ -1359,6 +1457,49 @@ class LocalDB {
  status: "継続中",
  updated_at: "2026-10-01"
  },
+  {
+    id: 5,
+    resident_id: 1,
+    created_at: "2026-10-08",
+    updated_at: "2026-10-08",
+    staff_name: "山田 孝之",
+    summary_type: "定期見直しサマリー",
+    basic_info: "要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男・佐藤 一郎様 (090-1111-2222)。認知症高齢者の日常生活自立度IIb。障害高齢者の日常生活自立度B1。",
+    background: "自宅にて長男家族と同居していたが、2026年8月に自宅内で転倒し右大腿骨頸部骨折。急性期病院にて骨接合術施行。リハビリ継続の上、在宅介護困難となり当施設へ新規入所。",
+    physical_cognitive: "右股関節可動域制限・右下肢軽度筋力低下あり。歩行時にすり足・ふらつき認める。短期記憶の低下あるが、見当識はおおむね保たれており穏やかに意思疎通可能。",
+    adl: "寝返り・起き上がり自立。立ち上がり・車椅子移乗は見守りにて自立（軽介助不要となった）。歩行器歩行にて40m程度自立移動可能（前回20m）。更衣・整容は一部介助（靴下着脱のみ）。入浴は一般浴にて洗身見守り、洗髪一部介助。",
+    meals_hydration: "普通食（一口大）継続。自力摂取良好、むせ込みは減少。水分摂取は1日平均1,100ml程度で目標1,200mlにやや届かないため、10時・15時の補水を強化。",
+    excretion: "日中はトイレ誘導にて排尿自立。夜間はリハビリパンツ＋尿取りパッド使用継続。夜間失禁なし。便秘傾向は緩下剤調整と水分促しにより改善（2日に1回排便）。",
+    sleep: "21:00就寝、6:00起床。夜間1〜2回トイレ覚醒あり。中途覚醒時は転倒注意のため離床センサーマット使用。声かけにて再入眠良好。",
+    meds: "降圧薬・血糖降下薬内服中。朝・夕食後。看護師・介護職員による配薬・服薬確認にて全量自己内服。",
+    medical_care: "毎日のバイタルチェック（血圧・体温・脈拍・SpO2）。褥瘡・皮膚剥離なし。保湿剤塗布継続。",
+    dementia_behavior: "夕方時に「そろそろ帰らないと」と帰宅願望が時折出現。お茶を勧め、大工職人時代の仕事や大相撲の話題を傾聴することで落ち着かれる。",
+    care_notes: "急がせる声かけは焦りを生み転倒リスクとなるため、ゆっくりとしたペースで対応する。声かけは気づきやすい左側（健側）から、移乗・歩行の介助は麻痺側（右）の後方から行う。大工道具や相撲の話題を好まれる。",
+    family_info: "長男様が週1回程度面会来訪。何かあれば長男様へ連絡希望。看取り方針については自然な経過での見守りを希望（施設での看取り・DNAR合意済）。",
+    future_goals: "歩行器歩行の距離をさらに伸ばし、食堂までの自立歩行を目指す。転倒ゼロを継続。水分摂取量1,200ml/日の達成。レクリエーションへの週2回以上の参加。"
+  },
+  {
+    id: 6,
+    resident_id: 1,
+    created_at: "2026-10-09",
+    updated_at: "2026-10-09",
+    staff_name: "鈴木 美智子",
+    summary_type: "状態変化・処方見直しサマリー",
+    basic_info: "要介護3。生年月日: 1940-10-15 (85歳)。キーパーソン: 長男・佐藤 一郎様 (090-1111-2222)。認知症高齢者の日常生活自立度IIb。障害高齢者の日常生活自立度B1。",
+    background: "大腿骨頸部骨折術後入所から1週間経過。歩行器歩行自立度向上に伴い活動量増加。夕方の胸やけ症状および便通経過を往診医（ひだまり内科クリニック・田中医師）に相談し、処方見直しを実施。",
+    physical_cognitive: "右下肢筋力・右股関節可動域はリハビリ継続により着実に回復。歩行器歩行にて50m以上安定移動可能。短期記憶低下あるが、見当識はおおむね保たれ穏やかに意思疎通可能。",
+    adl: "寝返り・起き上がり・立ち上がり・車椅子移乗は完全自立。歩行器歩行にて居室から食堂まで見守り自立歩行。更衣は自立（靴下着脱のみ軽介助）。入浴は一般浴にて洗身・洗髪ほぼ自力実施（背部のみ一部介助）。",
+    meals_hydration: "普通食 (一口大)。自力全量摂取良好。むせ込みは消失。水分摂取量は1日1,200ml目標を達成（平均1,250ml）。食後の胸やけ訴えに対し、食後30分は横にならず座位を保持するよう促し、追加処方薬（ランソプラゾール）にて経過観察。",
+    excretion: "日中はトイレ誘導にて完全自立。夜間も定時排泄リズム定着により失禁ゼロ継続。酸化マグネシウム継続および水分摂取確保により、自然排便（普通便〜軟便）が1〜2日に1回順調にあり、便秘傾向は解消。",
+    sleep: "21:00就寝、6:00起床。夜間中途覚醒時もナースコール押し自力トイレ可能。声かけにて再入眠良好、良眠維持。",
+    meds: "高血圧症に対しアムロジピン錠5mg（朝1錠）、便秘症に対し酸化マグネシウム錠330mg（朝・夕各1錠）を継続。10/8往診時に食後の胸やけ・胃酸逆流傾向を認め、ランソプラゾールOD錠15mg（朝1錠）を追加処方。また必要時の頓服としてメトプロロール錠（※未登録薬サンプル）の指示あり。看護師（鈴木・加藤）による配薬セット、服薬確認および効果・副作用チェックを徹底。",
+    medical_care: "看護師による毎朝バイタル測定（血圧128/76mmHg、脈拍68、SpO2 98%、体温36.5℃で血圧良好に安定）。処方変更に伴い、胃部症状の推移、脈拍・ふらつき、軟便傾向の有無を重点観察。褥瘡・スキンテアなし。仙骨部・背部の保湿ケア継続。",
+    dementia_behavior: "夕方の帰宅願望は環境適応に伴い大幅に減少。大相撲観戦や大工職人時代の昔語りを楽しまれ、他入所者への温かい声かけも見られる。",
+    care_notes: "歩行が安定してきたことによる油断からの独歩・転倒に留意。移動時は必ず歩行器を使用するよう優しく声かけ。食後すぐ横にならず30分は座位を保つよう促す。大工道具や相撲の話題を好まれる。",
+    family_info: "長男様が週1回面会。歩行改善と顔色の良さに安心されている。処方変更の内容についても看護師より長男様へ電話報告・了承済。施設看取り方針合意済。",
+    future_goals: "歩行器での食堂・デイルームへの完全自立移動。転倒ゼロ継続。レクリエーション（書道・体操）への積極的参加。"
+  },
+
  {
  id: 2,
  resident_id: 2,
@@ -1395,7 +1536,86 @@ class LocalDB {
  status: "継続中",
  updated_at: "2026-10-01"
  }
- ]
+ ],
+    prescriptions: [
+      {
+        id: 1,
+        resident_id: 1,
+        issued_date: "2026-10-01",
+        note: "新規入所時処方（高血圧・便秘）",
+        uploaded_at: "2026-10-01 10:30",
+        uploaded_by: "鈴木 美智子 (主任看護師)",
+        url: "data/photos/prescriptions/r1/rx_20261001_sato.jpg"
+      },
+      {
+        id: 2,
+        resident_id: 1,
+        issued_date: "2026-10-08",
+        note: "定期往診・処方見直し（胃薬追加・頓服指示）",
+        uploaded_at: "2026-10-08 14:15",
+        uploaded_by: "鈴木 美智子 (主任看護師)",
+        url: "data/photos/prescriptions/r1/rx_20261008_sato.jpg"
+      }
+    ],
+    resident_medications: [
+      {
+        id: 1,
+        resident_id: 1,
+        name: "アムロジピン錠 5mg",
+        unit: "錠",
+        status: "服用中",
+        timings: [ { key: "朝", count: 1 } ],
+        purpose: "高血圧症の治療（血圧を下げる）",
+        source_type: "処方箋",
+        source_detail: "2026-10-08 の処方箋",
+        added_at: "2026-10-01 11:00",
+        added_by: "鈴木 美智子",
+        edit_history: []
+      },
+      {
+        id: 2,
+        resident_id: 1,
+        name: "酸化マグネシウム錠 330mg",
+        unit: "錠",
+        status: "服用中",
+        timings: [ { key: "朝", count: 1 }, { key: "夕", count: 1 } ],
+        purpose: "便秘症の改善（便をやわらかくする緩下剤）",
+        source_type: "処方箋",
+        source_detail: "2026-10-08 の処方箋",
+        added_at: "2026-10-01 11:00",
+        added_by: "鈴木 美智子",
+        edit_history: []
+      },
+      {
+        id: 3,
+        resident_id: 1,
+        name: "ランソプラゾールOD錠 15mg",
+        unit: "錠",
+        status: "服用中",
+        timings: [ { key: "朝", count: 1 } ],
+        purpose: "逆流性食道炎・食後の胸やけ予防（胃酸分泌抑制）",
+        source_type: "処方箋",
+        source_detail: "2026-10-08 の処方箋",
+        added_at: "2026-10-08 14:30",
+        added_by: "鈴木 美智子",
+        edit_history: []
+      },
+      {
+        id: 4,
+        resident_id: 1,
+        name: "メトプロロール錠 20mg",
+        unit: "錠",
+        status: "服用中",
+        timings: [ { key: "眠前", count: 1 } ],
+        purpose: "頻脈・動悸時のコントロール（頓服指示・未登録薬見本）",
+        source_type: "処方箋",
+        source_detail: "2026-10-08 の処方箋",
+        added_at: "2026-10-08 14:35",
+        added_by: "鈴木 美智子",
+        edit_history: []
+      }
+    ]
+
  };
  this.storeLocalCopy(JSON.stringify(seed));
  return seed;
@@ -3903,7 +4123,7 @@ function renderResidentDetail() {
  <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1a4f3d; border:1px solid #a9cfbf; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
  介護サマリー (詳細・新規・変更)
  </button>
-				<button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#e0e7ff; color:#3730a3; border:1px solid #c7d2fe; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryCompareModal(${r.id}); return false;">介護サマリー 新旧比較</button>
+				<button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:var(--pine-tint); color:var(--pine); border:1px solid var(--pine-light); font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryCompareModal(${r.id}); return false;">介護サマリー 新旧比較</button>
  <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
  緊急搬送・受診サマリー
  </button>
@@ -18301,40 +18521,58 @@ function openCareSummaryCompareModal(targetResId) {
   const badge = document.getElementById("compareResidentBadge");
   if (badge) badge.textContent = r ? `${r.room_no}号室 ${r.name} 様` : "利用者";
 
-  const selLeft = document.getElementById("compareSelectLeft");
-  const selRight = document.getElementById("compareSelectRight");
-  if (!selLeft || !selRight) return;
+  const sel1 = document.getElementById("compareSelect1") || document.getElementById("compareSelectLeft");
+  const sel2 = document.getElementById("compareSelect2") || document.getElementById("compareSelectRight");
+  const sel3 = document.getElementById("compareSelect3");
+  if (!sel1 || !sel2) return;
 
-  selLeft.innerHTML = "";
-  selRight.innerHTML = "";
+  sel1.innerHTML = "";
+  sel2.innerHTML = "";
+  if (sel3) sel3.innerHTML = "";
 
   // 対象利用者のサマリー履歴を取得
   let summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(gState.selectedResidentId));
 
-  // [Claude修正] 旧実装は履歴が1件以下だと、架空の例文サマリー (別人の生年月日・既往歴を含む) を
-  // その利用者の実データとして保存していた。実データには一切書き込まず、手持ちの履歴だけで比較する。
   if (summaries.length === 0) {
-    alert("この利用者の介護サマリーはまだありません。サマリーを作成すると新旧比較ができます。");
+    alert("この利用者の介護サマリーはまだありません。サマリーを作成すると比較ができます。");
     return;
   }
   // ソート (古い順)
   summaries.sort((a, b) => (a.created_at || a.date || "").localeCompare(b.created_at || b.date || "") || (Number(a.id) - Number(b.id)));
 
-  summaries.forEach((s, idx) => {
-    const optLeft = document.createElement("option");
-    optLeft.value = s.id;
-    optLeft.textContent = `[${s.created_at || s.date || '-'}] ${s.summary_type || 'サマリー'}${s.previous_id ? ' (更新版)' : ''} (${s.staff_name || '担当'})`;
-    selLeft.appendChild(optLeft);
-
-    const optRight = document.createElement("option");
-    optRight.value = s.id;
-    optRight.textContent = `[${s.created_at || s.date || '-'}] ${s.summary_type || 'サマリー'}${s.previous_id ? ' (更新版)' : ''} (${s.staff_name || '担当'})`;
-    selRight.appendChild(optRight);
+  summaries.forEach((s) => {
+    const text = `[${s.created_at || s.date || '-'}] ${s.summary_type || 'サマリー'}${s.previous_id ? ' (更新版)' : ''} (${s.staff_name || '担当'})`;
+    const opt1 = document.createElement("option"); opt1.value = s.id; opt1.textContent = text; sel1.appendChild(opt1);
+    const opt2 = document.createElement("option"); opt2.value = s.id; opt2.textContent = text; sel2.appendChild(opt2);
+    if (sel3) {
+      const opt3 = document.createElement("option"); opt3.value = s.id; opt3.textContent = text; sel3.appendChild(opt3);
+    }
   });
 
-  // 初期選択: 左側は最古(初回)、右側は最新
-  if (selLeft.options.length > 0) selLeft.selectedIndex = 0;
-  if (selRight.options.length > 1) selRight.selectedIndex = selRight.options.length - 1;
+  if (sel3) {
+    const optNone = document.createElement("option");
+    optNone.value = "none";
+    optNone.textContent = "（なし - 2列で比較）";
+    sel3.appendChild(optNone);
+  }
+
+  // 初期選択:
+  // 3件以上ある場合: 1st=最古(初回), 2nd=中間, 3rd=最新
+  if (summaries.length >= 3) {
+    sel1.selectedIndex = 0;
+    sel2.selectedIndex = 1;
+    if (sel3) {
+      sel3.selectedIndex = 2; // summaries[2]
+    }
+  } else if (summaries.length === 2) {
+    sel1.selectedIndex = 0;
+    sel2.selectedIndex = 1;
+    if (sel3) sel3.value = "none";
+  } else {
+    sel1.selectedIndex = 0;
+    sel2.selectedIndex = 0;
+    if (sel3) sel3.value = "none";
+  }
 
   renderCompareView();
   openModal("careSummaryCompareModal");
@@ -18344,13 +18582,21 @@ function openCareSummaryCompareModal(targetResId) {
 }
 
 function renderCompareView() {
-  const leftId = Number(document.getElementById("compareSelectLeft").value);
-  const rightId = Number(document.getElementById("compareSelectRight").value);
+  const sel1 = document.getElementById("compareSelect1") || document.getElementById("compareSelectLeft");
+  const sel2 = document.getElementById("compareSelect2") || document.getElementById("compareSelectRight");
+  const sel3 = document.getElementById("compareSelect3");
   const container = document.getElementById("compareContentContainer");
-  if (!container) return;
+  if (!container || !sel1 || !sel2) return;
 
-  const leftSum = (db.data.care_summaries || []).find(s => Number(s.id) === leftId);
-  const rightSum = (db.data.care_summaries || []).find(s => Number(s.id) === rightId);
+  const id1 = Number(sel1.value);
+  const id2 = Number(sel2.value);
+  const id3 = sel3 && sel3.value !== "none" ? Number(sel3.value) : null;
+
+  const s1 = (db.data.care_summaries || []).find(s => Number(s.id) === id1);
+  const s2 = (db.data.care_summaries || []).find(s => Number(s.id) === id2);
+  const s3 = id3 ? (db.data.care_summaries || []).find(s => Number(s.id) === id3) : null;
+
+  const has3Cols = s3 !== null && s3 !== undefined;
 
   const sections = [
     { title: "1. サマリー基本情報・区分", key: "basic_info", sub: "要介護度、生年月日、キーパーソン、自立度区分" },
@@ -18370,34 +18616,59 @@ function renderCompareView() {
 
   let rowsHtml = "";
   sections.forEach((sec, idx) => {
-    const lVal = leftSum ? (leftSum[sec.key] || "（未記入）") : "—";
-    const rVal = rightSum ? (rightSum[sec.key] || "（未記入）") : "—";
-    const isDiff = lVal !== rVal;
+    const v1 = s1 ? (s1[sec.key] || "（未記入）") : "—";
+    const v2 = s2 ? (s2[sec.key] || "（未記入）") : "—";
+    const v3 = has3Cols ? (s3 ? (s3[sec.key] || "（未記入）") : "—") : null;
+
+    const diff12 = v1 !== v2;
+    const diff23 = has3Cols && (v2 !== v3);
+
+    let badgeHtml = "";
+    if (diff12 && diff23) {
+      badgeHtml = `<span class="badge" style="display:inline-block; font-size:10.5px; background:var(--sun-tint); color:var(--ink); padding:2px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">各時期で変化あり</span>`;
+    } else if (diff12) {
+      badgeHtml = `<span class="badge" style="display:inline-block; font-size:10.5px; background:var(--pine-tint); color:var(--pine); padding:2px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">①→②で変化</span>`;
+    } else if (diff23) {
+      badgeHtml = `<span class="badge" style="display:inline-block; font-size:10.5px; background:var(--caution-tint); color:var(--caution); padding:2px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">②→③で変化</span>`;
+    }
+
+    const fmtText = (val) => {
+      return escapeHtml(val).replace(/\n/g, '<br>');
+    };
 
     rowsHtml += `
-      <tr style="${idx % 2 === 1 ? 'background:#f6f8f6;' : 'background:#ffffff;'}">
-        <td style="width:180px; vertical-align:top; border-right:1px solid #dfe5e1; padding:12px 14px;">
-          <div style="font-weight:bold; font-size:13px; color:#22302b;">${escapeHtml(sec.title)}</div>
-          <div style="font-size:11px; color:#5f6d66; margin-top:2px;">${escapeHtml(sec.sub)}</div>
-          ${isDiff ? '<span style="display:inline-block; font-size:10.5px; background:#fef3c7; color:#92400e; padding:1px 6px; border-radius:10px; font-weight:bold; margin-top:4px;">変化あり</span>' : ''}
+      <tr style="${idx % 2 === 1 ? 'background:#f9faf9;' : 'background:#ffffff;'}">
+        <td style="width:160px; min-width:140px; vertical-align:top; border-right:1px solid var(--line); padding:10px 12px;">
+          <div style="font-weight:bold; font-size:13px; color:var(--ink);">${escapeHtml(sec.title)}</div>
+          <div style="font-size:11px; color:var(--ink-3); margin-top:2px;">${escapeHtml(sec.sub)}</div>
+          ${badgeHtml}
         </td>
-        <td style="vertical-align:top; border-right:1px solid #dfe5e1; padding:12px 14px; font-size:12.5px; color:#36443e; line-height:1.6; background:${isDiff ? '#f1f6f3' : 'transparent'};">
-          ${escapeHtml(lVal).replace(/\n/g, '<br>')}
+        <td style="vertical-align:top; border-right:1px solid var(--line); padding:10px 12px; font-size:12.5px; color:var(--ink); line-height:1.6; background:${diff12 ? 'var(--ground)' : 'transparent'};">
+          ${fmtText(v1)}
         </td>
-        <td style="vertical-align:top; padding:12px 14px; font-size:12.5px; color:#36443e; line-height:1.6; background:${isDiff ? '#f0fdf4' : 'transparent'};">
-          ${escapeHtml(rVal).replace(/\n/g, '<br>')}
+        <td style="vertical-align:top; ${has3Cols ? 'border-right:1px solid var(--line);' : ''} padding:10px 12px; font-size:12.5px; color:var(--ink); line-height:1.6; background:${diff12 ? 'var(--pine-tint-2)' : 'transparent'};">
+          ${fmtText(v2)}
         </td>
+        ${has3Cols ? `
+        <td style="vertical-align:top; padding:10px 12px; font-size:12.5px; color:var(--ink); line-height:1.6; background:${diff23 ? 'var(--caution-tint)' : (diff12 ? 'var(--pine-tint-2)' : 'transparent')};">
+          ${fmtText(v3)}
+        </td>` : ''}
       </tr>
     `;
   });
 
+  const header1 = s1 ? `${escapeHtml(s1.summary_type)} [${escapeHtml(s1.created_at || s1.date || '')}] (${escapeHtml(s1.staff_name || '')})` : '-';
+  const header2 = s2 ? `${escapeHtml(s2.summary_type)} [${escapeHtml(s2.created_at || s2.date || '')}] (${escapeHtml(s2.staff_name || '')})` : '-';
+  const header3 = has3Cols && s3 ? `${escapeHtml(s3.summary_type)} [${escapeHtml(s3.created_at || s3.date || '')}] (${escapeHtml(s3.staff_name || '')})` : '-';
+
   container.innerHTML = `
     <table class="data-table" style="margin:0; width:100%; border-collapse:collapse;">
       <thead>
-        <tr style="background:#eef2ef; border-bottom:2px solid #cdd6d0;">
-          <th style="width:180px; font-size:12.5px;">評価項目</th>
-          <th style="font-size:12.5px; color:#1e5b47;">【比較元】 ${escapeHtml(leftSum ? leftSum.summary_type + ' (' + leftSum.created_at + ')' : '-')}</th>
-          <th style="font-size:12.5px; color:#166534;">【比較先】 ${escapeHtml(rightSum ? rightSum.summary_type + ' (' + rightSum.created_at + ')' : '-')}</th>
+        <tr style="background:#eef2ef; border-bottom:2px solid var(--line-2);">
+          <th style="width:160px; min-width:140px; font-size:12.5px;">評価項目</th>
+          <th style="font-size:12.5px; color:var(--pine-dark); text-align:left;">【比較1】${header1}</th>
+          <th style="font-size:12.5px; color:var(--pine); text-align:left;">【比較2】${header2}</th>
+          ${has3Cols ? `<th style="font-size:12.5px; color:#9a3412; text-align:left;">【比較3】${header3}</th>` : ''}
         </tr>
       </thead>
       <tbody>
@@ -18407,7 +18678,7 @@ function renderCompareView() {
   `;
 }
 
-// グローバル公開
+
 window.openCareSummaryCompareModal = openCareSummaryCompareModal;
 window.renderCompareView = renderCompareView;
 if (typeof window !== "undefined") {
