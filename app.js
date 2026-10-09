@@ -4135,24 +4135,25 @@ function openTermExplanation(termKey) {
  const checkpointEl = document.getElementById("termExplainCheckpoint");
  if (checkpointEl) checkpointEl.textContent = info.checkPoint;
 
- const linkArea = document.getElementById("termDiseaseLinkArea");
+ // [Claude修正] 病名でない用語のときにボタンの並び全体を隠していたため、「閉じる」も消えて閉じられなかった。
+ // 隠すのはガイドへ進むボタンだけにする
  const btnJump = document.getElementById("btnJumpToDiseaseGuide");
- if (linkArea && btnJump) {
+ if (btnJump) {
  if (info.isDisease) {
- linkArea.style.display = "block";
+ btnJump.style.display = "";
  btnJump.onclick = () => {
  openDiseaseGuide(info.term);
  };
  btnJump.textContent = `『${info.term}』の現場ケアガイドを開く`;
  } else {
- linkArea.style.display = "none";
+ btnJump.style.display = "none";
+ btnJump.onclick = null;
  }
  }
 
+ // 画面の中央に固定して出す (以前の scrollIntoView は固定表示のカードには効かなかった)
+ card.scrollTop = 0;
  card.style.display = "block";
- try {
- card.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
- } catch (e) {}
 }
 
 function closeTermExplanation() {

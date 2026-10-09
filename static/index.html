@@ -1442,7 +1442,8 @@
 
 
  <!-- 医療用語解説ポップアップ -->
- <div id="termExplainCard" style="display:none; position:fixed; z-index:9999; background:#ffffff; border:1px solid #93c5fd; box-shadow:0 10px 25px rgba(0,0,0,0.15); border-radius:8px; width:320px; padding:14px; font-size:13px;">
+ <!-- [Claude修正] 表示位置が決まっておらず、ページの末尾の位置に出ていた（スマホや長いページでは画面の外）。画面の中央に出す -->
+ <div id="termExplainCard" style="display:none; position:fixed; z-index:9999; top:50%; left:50%; transform:translate(-50%, -50%); background:#ffffff; border:1px solid #93c5fd; box-shadow:0 10px 25px rgba(0,0,0,0.25); border-radius:8px; width:360px; max-width:calc(100vw - 32px); max-height:80vh; overflow-y:auto; box-sizing:border-box; padding:14px; font-size:13px;">
   <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:6px;">
    <div>
     <span id="termExplainRuby" style="font-size:10px; color:#64748b; display:block;"></span>
@@ -1454,7 +1455,8 @@
   <div id="termExplainCheckpoint" style="background:#eff6ff; border-left:3px solid #3b82f6; padding:6px 8px; font-size:12px; color:#1e40af; border-radius:0 4px 4px 0; margin-bottom:8px;"></div>
   <div id="termDiseaseLinkArea" style="display:flex; justify-content:space-between; align-items:center;">
    <button type="button" id="btnJumpToDiseaseGuide" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;">病気ガイドを開く</button>
-   <button type="button" id="btnSearchDiseaseRecords" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="closeTermExplanation()">閉じる</button>
+   <!-- [Claude修正] 別のボタン用のID(btnSearchDiseaseRecords)が付いていたため、病名ガイドを開いた後は「閉じる」でガイドごと閉じて検索が始まっていた -->
+   <button type="button" id="btnCloseTermExplain" class="btn btn-secondary" style="font-size:11px; padding:2px 6px; margin-left:auto;" onclick="closeTermExplanation()">閉じる</button>
   </div>
  </div>
 
@@ -3545,7 +3547,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_a8"></script>
+ <script src="app.js?v=20261009_a9"></script>
   
 
   <!-- ============================================================ -->
