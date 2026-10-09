@@ -1642,3 +1642,9 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .drug-sources summary { cursor: pointer; font-size: 14px; font-weight: bold; color: var(--ink-2); }
 .drug-sources ul { font-size: 13px; }
 .topical-item.rx-med-name { font-size: 15px; }
+
+/* [Claude追加] 薬の名前を押すと説明（カルテの皮膚処置ピン・点眼指示、服薬タブの目薬） */
+.drug-link-inline { background: none; border: none; padding: 0; margin: 0; font: inherit; font-size: inherit; color: var(--pine); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--sun); cursor: pointer; text-align: left; }
+.drug-link-inline:hover, .drug-link-inline:focus-visible { color: var(--pine-dark); text-decoration-thickness: 2px; }
+.drug-link-strong { font-weight: bold; font-size: 13px; }
+.drug-eye-common { border-top: 1px dashed var(--line); padding-top: 8px; }

@@ -3862,7 +3862,7 @@ function renderResidentDetail() {
  const tStr = (e.timing_slots || []).join('・');
  return `<div style="display:inline-flex; align-items:center; gap:4px; margin-right:8px; margin-top:2px;">
  <span class="badge" style="background:${bColor}; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">${bText}</span>
- <strong>${escapeHtml(e.medicine_name)}</strong>
+ ${cpDrugLink(e.medicine_name, "drug-link-inline drug-link-strong", "目薬")}
  <span style="color:#1e5b47; font-size:11.5px;">(${escapeHtml(tStr)} ${escapeHtml(e.dosage || '用量未登録')})</span>
  </div>`;
  }).join('');
@@ -5929,7 +5929,7 @@ function renderSchemaSummaryBadges(residentId) {
  return pins.map(p => `
  <span style="display:inline-flex; align-items:center; gap:3px; background:#eef2ef; border:1px solid #cdd6d0; border-radius:4px; padding:1px 6px; font-size:11px; margin-right:4px;">
  <span style="display:inline-block; width:15px; height:15px; line-height:15px; border-radius:50%; background:#000000; color:#ffffff; font-size:9.5px; text-align:center; font-weight:bold;">${p.pin_no}</span>
- <strong>${escapeHtml(p.site_name)}:</strong> ${escapeHtml(p.item_name)}
+ <strong>${escapeHtml(p.site_name)}:</strong> ${cpDrugLink(p.item_name, "drug-link-inline")}
  </span>
  `).join("");
 }
@@ -8598,7 +8598,7 @@ function renderTopicalTable() {
  tr.innerHTML = `
  ${i === 0 ? `<td rowspan="${pins.length}">${r.room_no}</td><td rowspan="${pins.length}"><strong>${escapeHtml(r.name)} 様</strong></td>` : ""}
  <td>
- <button type="button" class="topical-item rx-med-name" onclick="openDrugInfo('${escapeHtml(p.item_name).replace(/'/g, "&#39;")}')" title="押すと薬の説明">${escapeHtml(p.item_name)}</button>
+ ${cpDrugLink(p.item_name, "topical-item rx-med-name")}
  <div class="topical-meta">${escapeHtml(p.category || "")} ／ ${escapeHtml(p.site_name || "")}${p.frequency ? ` ／ 指示: ${escapeHtml(p.frequency)}` : ""}</div>
  ${nurse}${patchNote}
  </td>
@@ -8725,7 +8725,7 @@ function renderMedTable() {
  ? `<span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[左のみ]</span>`
  : `<span class="badge" style="background:#36443e; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[両眼]</span>`);
 
- const medTitle = `<span style="font-weight:bold; font-size:12px; margin-left:4px; color:#1c2622;">${escapeHtml(order.medicine_name)}</span>`;
+ const medTitle = cpDrugLink(order.medicine_name, "drug-link-inline drug-link-strong", "目薬");
 
 
  {
@@ -9114,7 +9114,7 @@ function cpRenderRxMeds() {
  const row = (m, isActive) => `
  <div class="rx-med ${isActive ? "" : "is-stopped"}">
  <div class="rx-med-main">
- <button type="button" class="rx-med-name" onclick="openDrugInfo('${escapeHtml(m.name).replace(/'/g, "&#39;")}')" title="押すと薬の説明">${escapeHtml(m.name)}</button>
+ ${cpDrugLink(m.name, "rx-med-name")}
  <div class="rx-sub">${escapeHtml(timingText(m))}</div>
  ${m.purpose ? `<div>何のため: ${escapeHtml(m.purpose)}</div>` : ""}
  <div class="rx-sub">資料: ${escapeHtml(m.source_type || "")}${m.source_detail ? `（${escapeHtml(m.source_detail)}）` : ""} ／ 追加 ${escapeHtml(m.added_at || "")} ${escapeHtml(m.added_by || "")}${(m.edit_history || []).length ? ` ／ 変更 ${m.edit_history.length}回` : ""}</div>
@@ -9605,48 +9605,101 @@ const CP_DRUG_GUIDE = [
  what: "痛みや炎症をやわらげる湿布。",
  watch: [],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（ロキソニンパップ）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/850028_2649735S1028_1_16"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] }
+ sources: [["PMDA 医療用医薬品の添付文書（ロキソニンパップ）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/850028_2649735S1028_1_16"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] },
+ // ---- 目薬（介護でよく使われるもの。2つ以上の資料で一致した内容だけ） ----
+ { name: "ラタノプロスト（目薬）", aliases: ["ラタノプロスト", "キサラタン"], kind: "目薬",
+ what: "緑内障・高眼圧症で、目の中の圧（眼圧）を下げる目薬。",
+ watch: ["黒目（虹彩）の色が濃くなる", "まぶた・目のまわりが黒っぽくなる", "まつ毛が長く・太く・濃くなる"],
+ how: ["まぶたや目のまわりの皮膚に付いた液は、すぐにふき取る"],
+ sources: [["PMDA 患者向医薬品ガイド（キサラタン点眼液）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/671450_1319739Q1037_4_00G.pdf"], ["PMDA 医療用医薬品の添付文書（キサラタン点眼液）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/671450_1319739Q1037_4_02"]] },
+ { name: "チモロール（目薬）", aliases: ["チモロール", "チモプトール"], kind: "目薬",
+ what: "緑内障・高眼圧症で、眼圧を下げる目薬。喘息や心臓の病気（脈が遅いなど）がある人には使えない・注意が必要な薬なので、使うかどうかは看護師・主治医の指示に従う。",
+ watch: ["目がしみる・かゆい・ゴロゴロする", "息切れ・ゼーゼーする・息が苦しい", "めまい・気を失う（心臓や脳への影響のことがある）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（チモロール点眼液）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/530113_1319702Q1140_1_03"], ["わかもと製薬 くすりのしおり（チモロール点眼液0.25%「わかもと」）", "https://www.wakamoto-pharm.co.jp/upd/medic/0000000025_03.pdf"]] },
+ { name: "ヒアルロン酸ナトリウム（目薬）", aliases: ["ヒアルロン酸", "ヒアレイン"], kind: "目薬",
+ what: "ドライアイなどで傷ついた目の表面（角膜・結膜）を治す目薬。",
+ watch: ["目のかゆみ"],
+ how: [],
+ sources: [["わかもと製薬 くすりのしおり（ヒアルロン酸Na点眼液）", "https://www.wakamoto-pharm.co.jp/upd/medic/0000000083_03.pdf"], ["PMDA 医療用医薬品の添付文書（ヒアルロン酸ナトリウム点眼液）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/530304_1319720Q3132_1_12"]] },
+ { name: "シアノコバラミン（目薬）", aliases: ["シアノコバラミン点眼", "サンコバ"], eyeAliases: ["シアノコバラミン"], kind: "目薬",
+ what: "目の疲れ（ピントを合わせる働きの疲れ）をやわらげる目薬。",
+ watch: ["アレルギーのような症状（過敏症状）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（サンコバ点眼液0.02%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319710Q2078_1_06"], ["今日の臨床サポート（シアノコバラミン点眼液0.02%「センジュ」）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=69035"]] },
+ { name: "ピレノキシン（目薬）", aliases: ["ピレノキシン", "カタリン"], kind: "目薬",
+ what: "初期の老人性白内障に使う目薬。",
+ watch: ["目の充血・かゆみ・しみる", "かすんで見える・目やに・涙が出る"],
+ how: ["錠剤（顆粒）を付いている液に溶かしてから使う", "溶かした後は冷所・遮光で保存し、3週間以内に使う", "冷やしていた液は続けて落ちることがあるので、手で少し温めてからさす"],
+ sources: [["PMDA 医療用医薬品の添付文書（カタリン点眼用0.005%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380086_1319706Q2039_1_08"], ["今日の臨床サポート（カタリンK点眼用0.005%）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=53899"]] },
+ { name: "レボフロキサシン（目薬）", aliases: ["クラビット点眼", "レボフロキサシン点眼"], eyeAliases: ["クラビット", "レボフロキサシン"], kind: "目薬",
+ what: "細菌による目の感染症（結膜炎・まぶたの炎症・ものもらいなど）を治す目薬。効かない菌を増やさないため、使う期間は必要な間だけ（期間は主治医の指示に従う）。",
+ watch: [],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（クラビット点眼液1.5%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319742Q2027_1_11"], ["今日の臨床サポート（レボフロキサシン点眼液1.5%「FFP」）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=61548"]] }
 ];
+const CP_EYEDROP_COMMON = {
+ how: ["さす前に手を洗う", "容器の先が目・まつ毛・まぶたに触れないようにする", "さした後は目を閉じ、目頭を軽く押さえる", "あふれた液はガーゼやティッシュでふき取る", "2種類以上の目薬をさすときは、5分以上あける"],
+ sources: [["さいたま市民医療センター「目薬の正しいさし方」", "https://www.saimiya.com/images/stories/content/miyanowa/miyanowa48/4803.pdf"], ["わかもと製薬「目薬の正しいさし方」", "https://www.wakamoto-pharm.co.jp/upd/pdf/0000000759_1.pdf"]]
+};
 const CP_DRUG_GUIDE_CHECKED = "2026-10-09";
 
 function cpNormDrugName(s) {
  return String(s || "").replace(/[\s　]/g, "").replace(/[（(][^）)]*[）)]/g, "").toLowerCase();
 }
-function cpFindDrugGuide(name) {
+function cpFindDrugGuide(name, kindHint) {
  const n = cpNormDrugName(name);
  if (!n) return null;
+ // 目薬の欄から開いたとき・名前に「点眼」「目薬」があるときは、目薬の説明だけを探す
+ // （クラビットのように飲み薬と目薬で同じ名前のものがあるため。eyeAliases はこのときだけ使う）
+ const eyeCtx = kindHint === "目薬" || /点眼|目薬/.test(String(name || ""));
  let best = null, bestLen = 0;
- CP_DRUG_GUIDE.forEach(g => (g.aliases || []).forEach(a => {
+ CP_DRUG_GUIDE.forEach(g => {
+ if (eyeCtx && g.kind !== "目薬") return;
+ const names = (g.aliases || []).concat(eyeCtx ? (g.eyeAliases || []) : []);
+ names.forEach(a => {
  const k = cpNormDrugName(a);
  if (k && n.includes(k) && k.length > bestLen) { best = g; bestLen = k.length; }
- }));
+ });
+ });
  return best;
+}
+// 薬の名前を「押すと説明が出る」ボタンにする（名前は data 属性で渡す。' や \ が入っても壊れない）
+function cpDrugLink(name, cls, kindHint) {
+ const nm = String(name || "");
+ if (!nm.trim()) return "";
+ return `<button type="button" class="${cls || "rx-med-name"}" data-drug="${escapeHtml(nm)}"${kindHint ? ` data-kind="${escapeHtml(kindHint)}"` : ""} onclick="event.preventDefault(); event.stopPropagation(); openDrugInfo(this.dataset.drug, this.dataset.kind);" title="押すと薬の説明">${escapeHtml(nm)}</button>`;
 }
 function cpShowDrugGuide(g, shownName) {
  const modal = document.getElementById("drugInfoModal");
  const body = document.getElementById("drugInfoBody");
  if (!modal || !body) return;
  const list = arr => arr && arr.length ? `<ul>${arr.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>` : `<p class="panel-note">資料で確かめられた内容はありません。</p>`;
+ const isEye = g.kind === "目薬";
+ // 目薬は共通のさし方の資料も一緒に出す（同じURLは1回だけ）
+ const srcs = [];
+ (g.sources || []).concat(isEye ? CP_EYEDROP_COMMON.sources : []).forEach(x => { if (!srcs.some(y => y[1] === x[1])) srcs.push(x); });
  body.innerHTML = `
  <h3 class="drug-title">${escapeHtml(shownName || g.name)}</h3>
  <p class="drug-kind">${escapeHtml(g.kind)}・${escapeHtml(g.name)}</p>
  <section><h4>どんな薬か</h4><p>${escapeHtml(g.what)}</p></section>
  <section><h4>気をつけたい様子（見つけたら看護師へ）</h4>${list(g.watch)}</section>
- ${g.how && g.how.length ? `<section><h4>${g.kind === "飲み薬" ? "飲ませ方" : "使い方"}の注意</h4>${list(g.how)}</section>` : ""}
+ ${g.how && g.how.length ? `<section><h4>${g.kind === "飲み薬" ? "飲ませ方" : (g.kind === "目薬" ? "さし方" : "使い方")}の注意</h4>${list(g.how)}</section>` : ""}
+ ${isEye ? `<section class="drug-eye-common"><h4>目薬のさし方（どの目薬でも共通）</h4>${list(CP_EYEDROP_COMMON.how)}</section>` : ""}
  <div class="drug-rule">
  <p>これは一般的な説明です。この方に何のために使っているかは、処方薬の一覧（処方箋）を見てください。</p>
- <p>いつもと違う様子があれば看護師へ。薬を砕く・つぶす・溶かすときは、看護師・薬剤師に確認してください。</p>
+ <p>${isEye ? "いつもと違う様子があれば看護師へ。さす目・回数は点眼指示に従ってください。" : "いつもと違う様子があれば看護師へ。薬を砕く・つぶす・溶かすときは、看護師・薬剤師に確認してください。"}</p>
  </div>
  <details class="drug-sources"><summary>この説明の資料（${CP_DRUG_GUIDE_CHECKED} に確認）</summary>
- <ul>${(g.sources || []).map(s => `<li><a href="${escapeHtml(s[1])}" target="_blank" rel="noopener">${escapeHtml(s[0])}</a></li>`).join("")}</ul>
+ <ul>${srcs.map(s => `<li><a href="${escapeHtml(s[1])}" target="_blank" rel="noopener">${escapeHtml(s[0])}</a></li>`).join("")}</ul>
  <p class="panel-note">2つ以上の資料で内容が一致したものだけを載せています。</p>
  </details>`;
  modal.style.display = "flex";
 }
 
 // 薬の説明（2つ以上の資料で一致した内容だけ。CP_DRUG_GUIDE に登録がない薬は看護師に確認してもらう）
-function openDrugInfo(name) {
- const g = (typeof cpFindDrugGuide === "function") ? cpFindDrugGuide(name) : null;
+function openDrugInfo(name, kindHint) {
+ const g = (typeof cpFindDrugGuide === "function") ? cpFindDrugGuide(name, kindHint) : null;
  if (!g) {
  alert(`「${name}」の説明は、まだ登録されていません。\nどんな薬か・気をつけることは、看護師に確認してください。`);
  return;
