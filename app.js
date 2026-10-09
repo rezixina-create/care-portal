@@ -16662,6 +16662,18 @@ function renderOfficeBackup() {
  }
 }
 
+// [Claude修正] サーバーの返す記号（forbidden_role など）を、職員に分かる言葉にする
+function cpExtBackupErrorText(result) {
+  const code = result && result.error;
+  if (result && result.message) return result.message;
+  if (code === "forbidden_role") return "外部バックアップの設定・実行は、管理者・事務の職員だけができます。";
+  if (code === "unauthorized") return "ログインの有効期限が切れています。ログインし直してください。";
+  if (code === "bad_request") return "送った内容を読み取れませんでした。画面を開き直してください。";
+  if (code === "no_data") return "データを読み込めませんでした。";
+  if (code === "save_failed") return "設定を保存できませんでした。";
+  return code || "エラー";
+}
+
 // [Antigravity追加] 外部への自動二重バックアップ
 async function loadExternalBackupStatus() {
   try {
@@ -16789,7 +16801,7 @@ async function saveExternalBackupConfig() {
     } else {
       if (noticeEl) {
         noticeEl.style.color = "var(--alert)";
-        noticeEl.textContent = "保存に失敗しました: " + (result.error || "権限がありません");
+        noticeEl.textContent = "保存できませんでした: " + cpExtBackupErrorText(result);
       }
     }
   } catch (e) {
@@ -16832,7 +16844,7 @@ async function runManualExternalBackup() {
       setNotice(`外部バックアップに成功しました（保管フォルダ: ${result.backup_dir}、合計 ${result.files_count} ファイル）`, false);
       await loadExternalBackupStatus();
     } else {
-      setNotice(`外部バックアップに失敗しました: ${result.error || "エラー"}`, true);
+      setNotice(`外部バックアップに失敗しました: ${cpExtBackupErrorText(result)}`, true);
       await loadExternalBackupStatus();
     }
   } catch (e) {

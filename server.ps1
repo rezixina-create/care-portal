@@ -1,4 +1,4 @@
-# Care Portal Server Script (Windows Standard PowerShell + .NET)
+﻿# Care Portal Server Script (Windows Standard PowerShell + .NET)
 param(
     [switch]$NoBrowser,
     [switch]$NoTunnel
@@ -964,7 +964,14 @@ namespace CarePortal
         {
             if (maxGenerations <= 0) return;
             if (!Directory.Exists(destPath)) return;
-            string[] dirs = Directory.GetDirectories(destPath, "backup_*");
+            // [Claude修正] このアプリが作った名前（backup_YYYYMMDD_HHmmss）のフォルダだけを数え、消す。
+            // 以前は「backup_」で始まる別のフォルダ（例: backup_old）も対象になり、名前の並びで本物の世代が消されるおそれがあった
+            List<string> own = new List<string>();
+            foreach (string d0 in Directory.GetDirectories(destPath, "backup_*"))
+            {
+                if (System.Text.RegularExpressions.Regex.IsMatch(Path.GetFileName(d0), "^backup_[0-9]{8}_[0-9]{6}$")) own.Add(d0);
+            }
+            string[] dirs = own.ToArray();
             if (dirs.Length <= maxGenerations) return;
             Array.Sort(dirs);
             int toDelete = dirs.Length - maxGenerations;
@@ -1042,6 +1049,26 @@ namespace CarePortal
                 }
 
                 res.DestPath = destPath;
+
+                string destProblem = CheckExtBackupDest(destPath);
+                if (destProblem != null)
+                {
+                    res.Error = destProblem;
+                    try
+                    {
+                        UpdateDb(delegate(JObj d)
+                        {
+                            JObj ec = d.Get("external_backup") as JObj;
+                            if (ec == null) { ec = new JObj(); d.Set("external_backup", ec); }
+                            ec.Set("last_attempt_at", res.Timestamp);
+                            ec.Set("last_status", "failed");
+                            ec.Set("last_error", destProblem);
+                            return true;
+                        });
+                    }
+                    catch { }
+                    return res;
+                }
 
                 try
                 {
@@ -1127,6 +1154,24 @@ namespace CarePortal
             return res;
         }
 
+        // [Claude追加] 外部保存先の確認。問題があれば理由（日本語）、なければ null。
+        // ポータルのフォルダの中（data/ など）を指定すると、写真フォルダを自分の中へ写し続けて止まらなくなる。
+        // 相対パスは起動場所で行き先が変わるため使わない
+        private string CheckExtBackupDest(string dest)
+        {
+            if (string.IsNullOrEmpty(dest)) return "外部保存先のパスが空です。管理画面から設定してください。";
+            if (!Path.IsPathRooted(dest)) return "外部保存先は、ドライブ名（D:\\ など）か共有フォルダ（\\\\PC名\\共有名 など）から始まるパスで指定してください。";
+            string full;
+            try { full = Path.GetFullPath(dest).TrimEnd(Path.DirectorySeparatorChar); } catch { return "外部保存先のパスの書き方が正しくありません。"; }
+            string baseFull = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar);
+            if (string.Equals(full, baseFull, StringComparison.OrdinalIgnoreCase)
+                || full.StartsWith(baseFull + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase))
+            {
+                return "外部保存先に、ポータルのフォルダ（" + baseFull + "）の中は指定できません。別のPCの共有フォルダなどを指定してください。";
+            }
+            return null;
+        }
+
         private void HandleExternalBackupStatus(NetworkStream stream)
         {
             JObj db = null;
@@ -1168,6 +1213,17 @@ namespace CarePortal
             {
                 int p;
                 if (int.TryParse(mgNum.Raw, out p) && p > 0) maxGen = p;
+            }
+            // [Claude修正] 保存先の確認（ポータルのフォルダの中・相対パスは不可）と、世代数は 1〜365
+            if (maxGen > 365) maxGen = 365;
+            if (dest.Length > 0)
+            {
+                string problem = CheckExtBackupDest(dest);
+                if (problem != null)
+                {
+                    SendJsonResponse(stream, 400, "{\"error\":\"bad_destination\",\"message\":" + MiniJson.Quote(problem) + "}");
+                    return;
+                }
             }
 
             bool saved = UpdateDb(delegate(JObj d)

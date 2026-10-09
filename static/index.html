@@ -1296,7 +1296,7 @@
  <!-- 注意書き（職員以外が見られない場所、USBメモリは紛失・情報漏洩リスク） -->
  <div class="panel-note" style="background:#fbf1d9; border:1px solid #e8a317; color:#7a5200; margin-bottom:14px; padding:10px 14px; border-radius:6px; font-size:13px; line-height:1.6;">
  <strong>※ 保管場所に関する注意:</strong><br>
- ・保存先は、施設内の別のPCにある共有フォルダ（例: <code>\\192.168.1.100\share\care_portal_backup</code> や <code>D:\shared_backup</code> 等）を指定してください。<br>
+ ・保存先は、施設内の別のPCにある共有フォルダ（例: <code>\\192.168.1.100\share\care_portal_backup</code>）を指定してください。ポータルのフォルダ（care_portal）の中は指定できません。<br>
  ・職員以外が閲覧・アクセスできないよう、アクセス権（パスワード保護・職員限定）が設定された安全なフォルダを指定してください。<br>
  ・USBメモリ等の持ち出し可能な記憶媒体は、紛失・盗難時に全入居者の個人情報が漏洩する恐れがあるため推奨されません。
  </div>
@@ -1309,7 +1309,7 @@
  <label style="display:block; font-size:13px; font-weight:bold; color:#22302b; margin-bottom:4px;">
  保存先フォルダのパス（UNCパス または ローカル/ネットワークドライブ）:
  </label>
- <input type="text" id="extBackupDestPath" class="form-input" style="width:100%; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;" placeholder="例: \\192.168.1.100\share\care_portal_backup または D:\backup">
+ <input type="text" id="extBackupDestPath" class="form-control" style="width:100%; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;" placeholder="例: \\192.168.1.100\share\care_portal_backup または D:\backup">
  </div>
  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
  <div>
@@ -1317,7 +1317,7 @@
  保持世代数:
  </label>
  <div style="display:flex; align-items:center; gap:6px;">
- <input type="number" id="extBackupRetention" class="form-input" min="1" max="365" value="30" style="width:90px; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;">
+ <input type="number" id="extBackupRetention" class="form-control" min="1" max="365" value="30" style="width:90px; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;">
  <span style="font-size:13px; color:#4a5852;">世代（日付ごとに保管し、古い世代から自動消去。初期値: 30世代）</span>
  </div>
  </div>
@@ -1364,7 +1364,7 @@
  <li>設定した外部保存先フォルダを開き、戻したい日時のフォルダ（例: <code>backup_20261009_204500</code>）を開きます。</li>
  <li>その中にある <code>portal_database.json</code> を、親機PCの <code>care_portal/data/portal_database.json</code> に上書きコピーします。</li>
  <li>その中にある <code>photos</code> フォルダを、親機PCの <code>care_portal/data/photos/</code> に上書きコピーします（写真・重要書類・処方箋画像が元に戻ります）。</li>
- <li>親機PCの <code>Care Portal 起動 (クリック).bat</code>（または <code>run_portal.bat</code>）を起動し直します。</li>
+ <li>親機PCの <code>run_portal.bat</code> を起動し直します。</li>
  <li>ブラウザを再読み込み（F5）し、記録や画像が正しく戻っていることを確認します。</li>
  </ol>
  <div style="font-size:12px; color:#66736d; margin-top:6px;">
@@ -3673,7 +3673,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_d1"></script>
+ <script src="app.js?v=20261009_d2"></script>
   
 
   <!-- ============================================================ -->
