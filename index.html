@@ -89,7 +89,6 @@
         <button id="btnSetInitialPin" style="display:none;"></button>
         <button id="btnHeaderStaffManage" style="display:none;" onclick="openStaffModal()"></button>
       </div>
-    </div>
   </header>
 
  <!-- 2. 本日の勤務体制バー (介護現場ポータル上部に自動連携) -->
@@ -1352,6 +1351,7 @@
  <!-- [Claude修正] 上の2つの閉じタグと </main> が消えていたため、以降のモーダル（入力画面）がすべて
  事務ポータルの中に入ってしまい、介護ポータルでは表示されなくなっていた -->
  </main>
+</div> <!-- /#appMainWrapper [Claude修正] ヘッダーの閉じタグが1つ多く、ログイン後だけ見せる入れ物がヘッダーしか包んでいなかった。ログイン前でも本体画面が見えていたため、本体の終わりで閉じる -->
 
  <!-- 【2名承認制】暗証番号の初期化モーダル (別枠) -->
  <div class="modal-overlay" id="resetStaffPinModal" style="display:none;">
@@ -4177,6 +4177,5 @@
 		</div>
 	</div>
 
-</div> <!-- /#appMainWrapper -->
 </body>
 </html>
