@@ -178,6 +178,14 @@
  <button class="btn btn-secondary" onclick="openAddResidentModal()">＋ 利用者を登録</button>
  </div>
  </div>
+    <!-- 棟（ユニット）切り替えタブ -->
+    <div class="wing-filter-nav" style="display:flex; gap:6px; margin:6px 0 10px 0; align-items:center;">
+      <span style="font-size:12px; font-weight:bold; color:var(--ink-2); margin-right:4px;">棟切替:</span>
+      <button type="button" class="btn btn-secondary wing-filter-btn active" id="wingBtnAll" onclick="filterResidentsByWing('all')" style="font-size:12px; padding:4px 10px; font-weight:bold; background:var(--pine-tint); color:var(--pine); border:1px solid var(--pine-light);">すべて <span class="badge" id="wingCountAll" style="background:var(--pine); color:#fff; font-size:10.5px; padding:1px 5px; border-radius:8px; margin-left:3px;">4名</span></button>
+      <button type="button" class="btn btn-secondary wing-filter-btn" id="wingBtnEast" onclick="filterResidentsByWing('東棟')" style="font-size:12px; padding:4px 10px; font-weight:bold; background:var(--ground); color:var(--ink-2); border:1px solid var(--line);">東棟 <span class="badge" id="wingCountEast" style="background:#c2410c; color:#fff; font-size:10.5px; padding:1px 5px; border-radius:8px; margin-left:3px;">2名</span></button>
+      <button type="button" class="btn btn-secondary wing-filter-btn" id="wingBtnWest" onclick="filterResidentsByWing('西棟')" style="font-size:12px; padding:4px 10px; font-weight:bold; background:var(--ground); color:var(--ink-2); border:1px solid var(--line);">西棟 <span class="badge" id="wingCountWest" style="background:#047857; color:#fff; font-size:10.5px; padding:1px 5px; border-radius:8px; margin-left:3px;">2名</span></button>
+    </div>
+
  <div class="residents-strip" id="residentsStrip"></div>
  </section>
 
@@ -1439,6 +1447,27 @@
    <tbody></tbody>
   </table>
  </div>
+  <!-- 職員・保有資格者一覧（施設基準管理） -->
+  <div style="margin-top:24px; padding-top:20px; border-top:2px dashed var(--line-2);">
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
+      <div style="font-weight:bold; font-size:14px; color:var(--ink);">職員・保有資格者一覧 ＆ 施設基準配置状況</div>
+      <div id="qualificationSummaryBadges" style="display:inline-flex; gap:6px; flex-wrap:wrap; font-size:12px;"></div>
+    </div>
+    <table class="data-table" id="staffQualificationsTable" style="width:100%; font-size:12.5px;">
+      <thead>
+        <tr style="background:#eef2ef;">
+          <th style="width:60px; text-align:center;">区分</th>
+          <th style="width:130px;">氏名</th>
+          <th style="width:140px;">役職 / 担当棟</th>
+          <th style="width:90px; text-align:center;">雇用形態</th>
+          <th style="width:90px; text-align:center;">勤務形態</th>
+          <th>主な保有資格</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+  </div>
+
  </div>
 
  </div><!-- /officeTabContent -->
@@ -1591,13 +1620,18 @@
      <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">＋ 新規職員の追加</div>
      <div style="display:flex; gap:8px; align-items:center;">
       <input type="text" id="newStaffName" class="form-control" style="flex:1; font-size:13px;" placeholder="氏名 (例: 山田 太郎)">
-      <select id="newStaffRole" class="form-control" style="width:120px; font-size:13px;">
-       <option value="介護">介護</option>
-       <option value="看護">看護</option>
-       <option value="リーダー">リーダー</option>
-       <option value="施設長">施設長</option>
+      <select id="newStaffRole" class="form-control" style="width:140px; font-size:13px;">
+       <option value="介護職員">介護職員</option>
+       <option value="東棟ユニットリーダー">東棟ユニットリーダー</option>
+       <option value="西棟ユニットリーダー">西棟ユニットリーダー</option>
+       <option value="生活相談員">生活相談員</option>
+       <option value="介護支援専門員">介護支援専門員 (ケアマネ)</option>
+       <option value="看護師">看護師</option>
+       <option value="主任看護師">主任看護師</option>
        <option value="管理者">管理者</option>
-       <option value="事務">事務</option>
+       <option value="施設長">施設長</option>
+       <option value="事務員">事務員</option>
+       <option value="事務員 (パート)">事務員 (パート)</option>
       </select>
       <button type="button" class="btn btn-primary" style="font-size:13px; white-space:nowrap;" onclick="submitNewStaffStamp()">追加</button>
      </div>
@@ -1617,6 +1651,14 @@
  </div>
  <input type="hidden" id="resEditId" value="">
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+  <div class="form-group">
+   <label>棟区分 <span style="color:#dc2626;">*</span>:</label>
+   <select id="resWing" class="form-control">
+    <option value="東棟" selected>東棟</option>
+    <option value="西棟">西棟</option>
+   </select>
+  </div>
+
  <div class="form-group">
  <label>居室番号 <span style="color:#dc2626;">*</span>:</label>
  <input type="text" id="resRoomNo" class="form-control" placeholder="例: 106">
@@ -1710,6 +1752,14 @@
  <textarea id="resLifeHistory" class="form-control" rows="2" placeholder="例: 元大工職人。相撲観戦が大好き。"></textarea>
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+  <div class="form-group">
+   <label>棟区分 <span style="color:#dc2626;">*</span>:</label>
+   <select id="resWing" class="form-control">
+    <option value="東棟" selected>東棟</option>
+    <option value="西棟">西棟</option>
+   </select>
+  </div>
+
  <div class="form-group">
  <label>往診医・受診時指示:</label>
  <input type="text" id="resDrInstructions" class="form-control" placeholder="例: 定期採血・低血糖留意">
@@ -2391,6 +2441,14 @@
  <button class="modal-close-btn" onclick="closeModal('committeeModal')">&times;</button>
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+  <div class="form-group">
+   <label>棟区分 <span style="color:#dc2626;">*</span>:</label>
+   <select id="resWing" class="form-control">
+    <option value="東棟" selected>東棟</option>
+    <option value="西棟">西棟</option>
+   </select>
+  </div>
+
  <div class="form-group">
  <label>開催日 <span style="color:#dc2626;">*</span>:</label>
  <input type="date" id="comDate" class="form-control">
