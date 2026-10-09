@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261007_c1">
+ <link rel="stylesheet" href="style.css?v=20261009_c2">
 </head>
 <body>
 
@@ -204,35 +204,48 @@
  <div class="residents-strip" id="residentsStrip"></div>
  </section>
 
- <!-- 介護サブタブ切り替え (普段使う業務 ＆ 定例・状況別業務) -->
- <div style="background:#ffffff; border-radius:8px; padding:10px 14px; margin-bottom:14px; box-shadow:0 1px 3px rgba(0,0,0,0.05);">
- <!-- 普段使う（日常ケア） -->
- <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;">
- <span style="font-size:12px; font-weight:bold; color:#1e40af; background:#eff6ff; padding:3px 8px; border-radius:4px; white-space:nowrap;">【普段使う】</span>
- <button class="sub-tab-btn active" onclick="switchCareTab('record')">個別介護記録</button>
- <button class="sub-tab-btn" onclick="switchCareTab('daily_journal')">業務日誌 (一日の記録)</button>
- <button class="sub-tab-btn" onclick="switchCareTab('vitals')">バイタル</button>
- <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
- <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
- <button class="sub-tab-btn" onclick="switchCareTab('med')">服薬・点眼</button>
- <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡・申送り</button>
- </div>
-
- <!-- たまに使う（定例・状況別） -->
- <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding-top:6px; border-top:1px dashed #e2e8f0;">
- <span style="font-size:12px; font-weight:bold; color:#64748b; background:#f1f5f9; padding:3px 8px; border-radius:4px; white-space:nowrap;">【定例・状況別】</span>
- <button class="sub-tab-btn" onclick="switchCareTab('bath')">入浴・塗布薬</button>
- <button class="sub-tab-btn" onclick="switchCareTab('oral')">口腔ケア</button>
- <button class="sub-tab-btn" onclick="switchCareTab('night')">夜勤体位変換</button>
- <button class="sub-tab-btn" onclick="switchCareTab('linen')">シーツ交換</button>
- <button class="sub-tab-btn" onclick="switchCareTab('grooming')">身だしなみ</button>
- <button class="sub-tab-btn" onclick="switchCareTab('weight')">月次体重</button>
- <button class="sub-tab-btn" onclick="switchCareTab('visit')">面会・荷物</button>
- <button class="sub-tab-btn" onclick="switchCareTab('recreation')">レク履歴</button>
- <button class="sub-tab-btn" onclick="switchCareTab('consume')">物品消費</button>
-      <button class="sub-tab-btn" onclick="switchCareTab('incidents')">ヒヤリハット・事故</button>
- </div>
- </div>
+<!-- 介護サブタブ切り替え [Claude修正] 「普段使う／定例・状況別」から、現場の動き（毎日・夜勤・曜日や月ごと・起きたとき）で分け直した。
+      口腔ケア（毎食後）とレク（毎日推奨）は毎日の段へ。ヒヤリハット・事故は画面右下のボタンからも開ける -->
+ <nav class="care-tab-nav" aria-label="介護記録の種類">
+  <div class="care-tab-group">
+   <span class="care-tab-label">毎日</span>
+   <div class="care-tab-row">
+    <button class="sub-tab-btn active" onclick="switchCareTab('record')">個別介護記録</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('vitals')">バイタル</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('med')">服薬・点眼</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('oral')">口腔ケア</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('recreation')">レク</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('notebook')">連絡・申送り</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('daily_journal')">業務日誌</button>
+   </div>
+  </div>
+  <div class="care-tab-group">
+   <span class="care-tab-label">夜勤</span>
+   <div class="care-tab-row">
+    <button class="sub-tab-btn" onclick="switchCareTab('night')">夜勤体位変換</button>
+   </div>
+  </div>
+  <div class="care-tab-group">
+   <span class="care-tab-label">曜日・月ごと</span>
+   <div class="care-tab-row">
+    <button class="sub-tab-btn" onclick="switchCareTab('bath')">入浴・塗布薬</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('linen')">シーツ交換</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('grooming')">身だしなみ</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('weight')">月次体重</button>
+   </div>
+  </div>
+  <div class="care-tab-group">
+   <span class="care-tab-label">起きたとき</span>
+   <div class="care-tab-row">
+    <button class="sub-tab-btn" onclick="switchCareTab('visit')">面会・荷物</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('consume')">物品消費</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('incidents')">ヒヤリハット・事故</button>
+   </div>
+  </div>
+ </nav>
+ <button type="button" class="incident-fab" onclick="openNewIncidentModal()" title="ヒヤリハット・事故の報告書を書く">ヒヤリハット・事故を報告</button>
 
  <!-- 介護タブ内コンテンツ -->
  <div id="careTabContent">
