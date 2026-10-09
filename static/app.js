@@ -3,6 +3,7 @@
  * 【施設内Wi-Fiクラウド共有 ＆ スタンドアロン両対応版】
  * ・サーバー稼働時: 親機PCに全データが一元保存され、タブレット等の他端末とリアルタイム共有
  * ・単体起動時: ブラウザのlocalStorageで永久保存
+ * ・サーバー稼働時は、端末(ブラウザ)に全データの控えを残さない (共用端末の個人情報対策)
  */
 
 // HTMLエスケープヘルパー (XSS防止・表示崩れ防止)
@@ -389,8 +390,8 @@ let cpSessionExpiredShown = false;
 function handleSessionExpired() {
  if (!gState || !gState.session || cpSessionExpiredShown) return;
  cpSessionExpiredShown = true;
- alert("ログインの有効期限が切れたか、サーバーが再起動されました。\nお手数ですが、もう一度ログインしてください。");
- handleLogout();
+ // [Claude修正] 先に画面を閉じてから知らせる (handleLogout がお知らせを出す)
+ handleLogout({ reason: "expired" });
  setTimeout(() => { cpSessionExpiredShown = false; }, 3000);
 }
 
@@ -490,7 +491,17 @@ class LocalDB {
  constructor() {
  this.key = "CARE_PORTAL_DATABASE_V1";
  this.isServerMode = window.location.protocol.startsWith("http");
+ // [Claude修正] サーバー接続時は、端末(ブラウザ)に全データの控えを残さない。
+ // 以前は保存のたびに全データ(利用者の病歴・連絡先・記録)を端末に書き込み、ログアウト後や
+ // タブを閉じた後も残っていた。次にページを開くと、ログイン前から前の職員が見ていたデータが
+ // メモリに読み込まれていた。正本はサーバー(親機)にあり、ログイン後にサーバーから取得する。
+ // 以前の版が残した控えもここで消す。単体起動時はブラウザが保存先なので従来どおり。
+ if (this.isServerMode) {
+ this.clearLocalCopy();
+ this.data = this.ensureDefaultArrays({});
+ } else {
  this.data = this.loadLocal();
+ }
  this.serverIPs = [];
  this.serverPort = window.location.port || 8888;
  this.hasSyncedWithServer = !this.isServerMode;
@@ -731,15 +742,44 @@ class LocalDB {
  }
 
  save() {
- // 1. ローカルストレージに即時保険保存
- try {
- localStorage.setItem(this.key, JSON.stringify(this.data));
- } catch (e) {}
+ // 1. 単体起動時はブラウザに保存 ([Claude修正] サーバー接続時は端末に控えを残さない)
+ this.storeLocalCopy(JSON.stringify(this.data));
 
  // 2. サーバーモードなら親機へ即時送信 (初回同期完了後のみ)
  if (this.isServerMode && this.hasSyncedWithServer) {
  this.saveToServer();
  }
+ }
+
+ // [Claude修正] 端末(ブラウザ)への控えは単体起動時だけ書く
+ storeLocalCopy(json) {
+ if (this.isServerMode) return;
+ try { localStorage.setItem(this.key, json); } catch (e) {}
+ }
+
+ clearLocalCopy() {
+ try { localStorage.removeItem(this.key); } catch (e) {}
+ }
+
+ // [Claude修正] まだ親機へ送れていない変更があるか (サーバー接続時のみ)
+ hasUnsentChanges() {
+ if (!this.isServerMode) return false;
+ try { return JSON.stringify(this.data) !== this.lastSavedJson; } catch (e) { return true; }
+ }
+
+ // [Claude修正] ログアウトの前に、未送信の変更を親機へ送り切る。
+ // 送れた (または未送信がない) ときは true、送れなかったときは false
+ async flushUnsentChanges() {
+ if (!this.isServerMode) return true;
+ try { if (this._saveChain) await this._saveChain; } catch (e) {}
+ if (!this.hasUnsentChanges()) return true;
+ if (!this.hasSyncedWithServer || !cpGetToken()) return false;
+ for (let i = 0; i < 2; i++) {
+ try { await this.saveToServer(); } catch (e) {}
+ if (!this.hasUnsentChanges()) return true;
+ await new Promise(r => setTimeout(r, 1000));
+ }
+ return !this.hasUnsentChanges();
  }
 
  // [Claude修正] 保存の競合対策 (別々の端末でほぼ同時に保存すると、後から保存した端末が
@@ -789,7 +829,7 @@ class LocalDB {
  if (res.ok) {
  this.baseJson = payload;
  this.lastSavedJson = payload;
- try { localStorage.setItem(this.key, payload); } catch (e) {}
+ this.storeLocalCopy(payload);
  this.updateSyncBadge(true);
  try {
  const resp = await res.json();
@@ -879,11 +919,13 @@ class LocalDB {
  const text = await res.text();
  if (text && text.trim() !== "" && text.trim() !== "{}") {
  const serverData = JSON.parse(text);
- if (serverData && serverData.residents && serverData.residents.length > 0) {
+ // [Claude修正] 端末に控えを持たなくなったので、サーバーのデータを常に正本として使う
+ // (以前は利用者が0人のとき、端末の控えを残してサーバーへ送っていた)
+ if (serverData && typeof serverData === "object" && !Array.isArray(serverData)) {
  this.data = this.ensureDefaultArrays(serverData);
  this.lastSavedJson = JSON.stringify(this.data);
  this.baseJson = this.lastSavedJson;
- try { localStorage.setItem(this.key, this.lastSavedJson); } catch (e) {}
+ this.storeLocalCopy(this.lastSavedJson);
  // 画面を再初期化して最新データを表示
  setTimeout(() => {
  if (typeof reloadStateFromDb === 'function') {
@@ -893,8 +935,15 @@ class LocalDB {
  }
  } else {
  // サーバーが空ならローカル初期データをサーバーへ初回登録
+ // [Claude修正] 端末に控えを持たないので、初回 (デモ) の見本データはここで作る
+ if (!Array.isArray(this.data.residents) || this.data.residents.length === 0) {
+ this.data = this.initSeedData();
+ }
  this.hasSyncedWithServer = true;
  await this.saveToServer();
+ setTimeout(() => {
+ if (typeof reloadStateFromDb === 'function') reloadStateFromDb();
+ }, 100);
  }
  this.hasSyncedWithServer = true;
  this.updateSyncBadge(true);
@@ -977,7 +1026,7 @@ class LocalDB {
  this.mergeRemoteData(serverData);
  this.baseJson = normalizedJson;
  this.lastSavedJson = normalizedJson;
- try { localStorage.setItem(this.key, JSON.stringify(this.data)); } catch (e) {}
+ this.storeLocalCopy(JSON.stringify(this.data));
  this.updateSyncBadge(true);
  // 合流後もサーバーと異なる (未送信の自分の変更がある) 場合は保存する
  if (JSON.stringify(this.data) !== normalizedJson && localJsonBefore !== this.baseJson) {
@@ -1348,7 +1397,7 @@ class LocalDB {
  }
  ]
  };
- localStorage.setItem(this.key, JSON.stringify(seed));
+ this.storeLocalCopy(JSON.stringify(seed));
  return seed;
  }
 }
@@ -16280,8 +16329,9 @@ const AUTO_LOGOUT_MS = 15 * 60 * 1000; // 15分無操作で自動ログアウト
 function startAutoLogoutTimer() {
   clearAutoLogoutTimer();
   autoLogoutTimerId = setTimeout(() => {
-    alert("一定時間（15分）操作がなかったため、セキュリティ保護のため自動ログアウトしました。");
-    handleLogout();
+    // [Claude修正] 先に画面を閉じてから知らせる
+    // (以前はお知らせのOKが押されるまで、利用者の情報が画面に出たままだった)
+    handleLogout({ reason: "auto" });
   }, AUTO_LOGOUT_MS);
 }
 
@@ -16558,30 +16608,103 @@ function handleLoginSubmitLocal() {
 }
 
 // ログアウト実行
-function handleLogout() {
-  clearAutoLogoutTimer();
-  // [Claude修正] サーバー側のセッションも破棄する
-  if (db && db.isServerMode && cpGetToken()) {
-    try { fetch('/api/logout', { method: 'POST', headers: { 'X-Session-Token': cpGetToken() }, credentials: 'same-origin' }); } catch (e) {}
-  }
-  cpSetToken("");
-  gState.session = null;
-  try {
-    sessionStorage.removeItem("carePortalSession");
-  } catch(e) {}
+// [Claude修正] ログアウト (手動・15分の自動・ログインの有効期限切れ)
+// ・まだ親機へ送れていない記録があれば、送り切ってからログアウトする。
+//   手動のときに送れなければ、ログアウトするか確かめる (キャンセルで画面に戻る)
+// ・自動・期限切れのときは、先に画面を閉じてから送る (席を外している間に情報が出たままにならないように)
+// ・サーバー接続時は、端末に残った控えを消し、ページを読み込み直してメモリ上のデータも消す
+let cpLogoutInProgress = false;
+const CP_LOGOUT_NOTICE_KEY = "carePortalLogoutNotice";
 
+function cpHideAppForLogout() {
   const mainWrap = document.getElementById("appMainWrapper");
   const loginSec = document.getElementById("loginSection");
   if (mainWrap) mainWrap.style.display = "none";
   if (loginSec) loginSec.style.display = "flex";
   document.body.style.overflow = "hidden";
+  document.querySelectorAll(".modal-overlay").forEach(m => { m.style.display = "none"; });
+}
 
-  const idInput = document.getElementById("loginStaffIdInput");
-  const pwInput = document.getElementById("loginPasswordInput");
-  if (idInput) idInput.value = "";
-  if (pwInput) pwInput.value = "";
+function cpLogoutNoticeText(reason, unsentLost) {
+  const parts = [];
+  if (reason === "auto") parts.push("一定時間（15分）操作がなかったため、自動でログアウトしました。");
+  if (reason === "expired") parts.push("ログインの有効期限が切れたか、サーバーが再起動されたため、ログアウトしました。\nお手数ですが、もう一度ログインしてください。");
+  if (unsentLost) parts.push("【注意】親機に送れていない記録がありました（通信が切れていた可能性があります）。\nログイン後、入力した内容が記録に残っているかを確かめ、残っていなければ入力し直してください。");
+  return parts.join("\n\n");
+}
 
-  renderLoginStaffSelect();
+async function handleLogout(opts) {
+  const reason = (opts && opts.reason) || "manual";
+  if (cpLogoutInProgress) return;
+  cpLogoutInProgress = true;
+  clearAutoLogoutTimer();
+  try {
+    const serverMode = !!(db && db.isServerMode);
+    let unsentLost = false;
+    if (serverMode) {
+      if (reason === "manual") {
+        const sent = await db.flushUnsentChanges();
+        if (!sent) {
+          const go = confirm("まだ親機に送れていない記録があります（通信が切れている可能性があります）。\n\nこのままログアウトすると、この端末で入力した未送信の記録は消えます。\n\n［OK］ログアウトする\n［キャンセル］ログアウトせずに戻る（通信を確かめてから、もう一度ログアウトしてください）");
+          if (!go) {
+            cpLogoutInProgress = false;
+            startAutoLogoutTimer();
+            return;
+          }
+          unsentLost = true;
+        }
+        cpHideAppForLogout();
+      } else {
+        cpHideAppForLogout();
+        // 期限切れのときはサーバーが受け付けないので送らない
+        const sent = (reason === "auto") ? await db.flushUnsentChanges() : !db.hasUnsentChanges();
+        unsentLost = !sent;
+      }
+      // サーバー側のセッションも破棄する
+      if (cpGetToken()) {
+        try { await fetch('/api/logout', { method: 'POST', headers: { 'X-Session-Token': cpGetToken() }, credentials: 'same-origin', keepalive: true }); } catch (e) {}
+      }
+    } else {
+      cpHideAppForLogout();
+    }
+
+    cpSetToken("");
+    gState.session = null;
+    try {
+      sessionStorage.removeItem("carePortalSession");
+    } catch(e) {}
+
+    const notice = cpLogoutNoticeText(reason, unsentLost);
+    if (serverMode) {
+      // 端末の控えを消し、ページを読み込み直してメモリ上のデータも消す。お知らせは読み込み後に出す
+      try { if (notice) sessionStorage.setItem(CP_LOGOUT_NOTICE_KEY, notice); } catch (e) {}
+      db.clearLocalCopy();
+      window.location.reload();
+      return;
+    }
+
+    const idInput = document.getElementById("loginStaffIdInput");
+    const pwInput = document.getElementById("loginPasswordInput");
+    if (idInput) idInput.value = "";
+    if (pwInput) pwInput.value = "";
+
+    renderLoginStaffSelect();
+    cpLogoutInProgress = false;
+    if (notice) alert(notice);
+  } catch (e) {
+    cpLogoutInProgress = false;
+    console.warn("Logout error:", e);
+  }
+}
+
+// [Claude修正] ログアウトで読み込み直した後に、お知らせを出す (ログイン画面の上に出る)
+function cpShowLogoutNoticeOnLoad() {
+  let msg = "";
+  try {
+    msg = sessionStorage.getItem(CP_LOGOUT_NOTICE_KEY) || "";
+    sessionStorage.removeItem(CP_LOGOUT_NOTICE_KEY);
+  } catch (e) {}
+  if (msg) setTimeout(() => alert(msg), 300);
 }
 
 // ホーム画面への遷移
@@ -16998,6 +17121,7 @@ function restoreAlert(logId) {
 // 既存セッションの復元 (リロード対策)
 // ---------------------------------------------------------------------
 function restoreSessionOnLoad() {
+  cpShowLogoutNoticeOnLoad();
   try {
     const saved = sessionStorage.getItem("carePortalSession");
     // [Claude修正] サーバー稼働時は、サーバーの鍵 (トークン) が無ければログイン画面に戻す
