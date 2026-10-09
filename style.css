@@ -1654,3 +1654,6 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 /* [Claude追加] 頓服 */
 .rx-prn-note { margin-top: 4px; padding: 6px 10px; background: var(--caution-tint); color: var(--caution); border-radius: 6px; font-size: 13px; }
 .rx-prn-grid { margin-top: 8px; }
+
+/* [Claude追加] 職員・保有資格の一覧の数 */
+.qual-badge { background: var(--pine-tint-2); color: var(--ink); border: 1px solid var(--line); padding: 3px 8px; font-size: 13px; font-weight: bold; }

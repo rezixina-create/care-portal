@@ -1,4 +1,4 @@
-﻿/**
+/**
  * 介護施設 統合業務ポータルシステム (Care Portal)
  * 【施設内Wi-Fiクラウド共有 ＆ スタンドアロン両対応版】
  * ・サーバー稼働時: 親機PCに全データが一元保存され、タブレット等の他端末とリアルタイム共有
@@ -1122,32 +1122,37 @@ class LocalDB {
 
  const seed = {
  residents: [
- { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (移乗・歩行の介助は麻痺側（右）の後方から)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 高血圧, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
- { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
- { id: 3, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "やわらか食 (舌でつぶせる・とろみでまとめる)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
- { id: 4, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
+ { id: 1, wing: "東棟", name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (移乗・歩行の介助は麻痺側（右）の後方から)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 高血圧, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
+ { id: 2, wing: "東棟", name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
+ { id: 3, wing: "西棟", name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "やわらか食 (舌でつぶせる・とろみでまとめる)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+ { id: 4, wing: "西棟", name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
  ],
+ // [Claude修正] 職員22名（2ユニット）。役職・棟・資格はアンチさんのデータに合わせた
  stamps: [
- { name: "木村 健一", role: "管理者" },
- { name: "鈴木 美智子", role: "主任看護師" },
- { name: "加藤 由美", role: "看護師" },
- { name: "山田 孝之", role: "介護リーダー" },
- { name: "伊藤 翔太", role: "介護職員" },
- { name: "井上 蓮", role: "介護職員" },
- { name: "吉田 誠", role: "介護職員" },
- { name: "高橋 直樹", role: "介護職員" },
- { name: "佐藤 健太", role: "介護職員" },
- { name: "小林 亮", role: "介護職員" },
- { name: "松田 健二", role: "介護職員" },
- { name: "清水 翔平", role: "介護職員" },
- { name: "斉藤 翼", role: "介護職員" },
- { name: "石川 太陽", role: "介護職員" },
- { name: "中村 大輔", role: "介護職員" },
- { name: "渡辺 拓也", role: "介護職員" },
- { name: "野村 拓海", role: "介護職員" },
- { name: "松本 陽子", role: "事務員" },
- { name: "田中 慎一", role: "事務員" }
+ { name: "木村 健一", role: "管理者", qualifications: "社会福祉主事・介護福祉士・認知症対応型サービス事業管理者研修修了", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "佐々木 浩二", role: "生活相談員", qualifications: "社会福祉士・介護福祉士", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "小林 恵子", role: "計画作成担当者（ケアマネ）", qualifications: "介護支援専門員・介護福祉士・認知症介護実践者研修修了", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "鈴木 美智子", role: "主任看護師", qualifications: "看護師 (正看護師)", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "加藤 由美", role: "看護師", qualifications: "看護師 (正看護師)", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "山田 孝之", role: "東棟ユニットリーダー", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "吉田 誠", role: "西棟ユニットリーダー", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "伊藤 翔太", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "井上 蓮", role: "介護職員", wing: "東棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "高橋 直樹", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "佐藤 健太", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "小林 亮", role: "介護職員", wing: "東棟", qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "松田 健二", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "清水 翔平", role: "介護職員", wing: "東棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "斉藤 翼", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "石川 太陽", role: "介護職員", wing: "西棟", qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "中村 大輔", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "渡辺 拓也", role: "介護職員", wing: "西棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "野村 拓海", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "三浦 拓也", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "松本 陽子", role: "事務員", qualifications: "医療事務・日商簿記", employment_type: "常勤", duty_type: "日勤専従" },
+ { name: "田中 慎一", role: "事務員 (パート)", qualifications: "普通自動車免許", employment_type: "非常勤 (パート)", duty_type: "日勤専従" }
  ],
+
  templates: [
  { category: "巡視", label: "安眠中", phrase: "訪室確認。安眠中。呼吸状態安定。" },
  { category: "巡視", label: "左側臥位", phrase: "確認のため訪室。左側臥位にて入眠中。" },
@@ -1256,7 +1261,7 @@ class LocalDB {
         prevention: "1. 就寝時、歩行器は必ずベッド柵の開口部すぐ横（手の届く定位置）に配置し、ブレーキロックを徹底する。\n2. 離床センサーマットの感度・敷設位置を再点検し、端座位になった時点で早期覚知できるようにする。\n3. 日常の声かけとして「夜間トイレの際は必ずナースコールを押してください」「歩行器を使って職員と一緒に行きましょう」と繰り返し穏やかに伝える。",
         supervisor_comment: "離床センサーへの迅速な初動対応により転倒を未然に防止できた良好な対応。歩行自立度が上がっている時期こそ転倒リスクが高まるため、職員間の申し送りで歩行器の定位置管理を徹底し、夜勤帯の巡視タイミングにも留意すること。（管理者：木村 健一）",
         status: "承認済",
-        staff_name: "山田 孝之 (介護リーダー)",
+        staff_name: "山田 孝之 (東棟ユニットリーダー)",
         injury_pins: []
       },
       {
@@ -1295,7 +1300,7 @@ class LocalDB {
         prevention: "1. 配薬の鉄則である「1人ずつ薬袋を手に取り、相手の顔を見て氏名・日付・何食のお薬かを声に出して読み上げ確認し、確実に飲み終えるまでその場を離れず見届ける（手渡し放置の絶対禁止）」を徹底する。\n2. 配薬中に他利用者からのコールや訴えがあった場合、手元の配薬を一時中断して薬を回収するか、近くの他職員へ対応を依頼し、服薬介助中の職員は目の前の利用者の内服完了まで絶対に目を離さない。\n3. 配薬時は複数人分の薬袋を同時に持ち歩かず、ワゴンから1名分ずつ取り出して配薬する。",
         supervisor_comment: "内服直前での制止により誤薬事故（重大インシデント）を水際で回避できたが、手渡し後に確認・見届けを完了せず他対応に移ったことは極めて危険な行為。服薬介助は「1人ずつ・対面読み上げ確認・最後まで見届ける」を全職員で再徹底し、朝の配薬時間帯はコール対応と配薬担当の役割分担を明確にすること。（主任看護師：鈴木 美智子）",
         status: "承認済",
-        staff_name: "吉田 誠 (介護職員)",
+        staff_name: "小林 亮 (介護職員)",
         injury_pins: []
       }
     ],
@@ -3877,27 +3882,6 @@ function setTodayDate() {
 }
 
 // 利用者カード一覧
-function renderResidentsStrip() {
- const strip = document.getElementById("residentsStrip");
- strip.innerHTML = "";
- const countLabel = document.getElementById("residentCountLabel");
- if (countLabel) countLabel.textContent = `登録利用者: ${gState.residents.length}名`;
-
- gState.residents.forEach(r => {
- const card = document.createElement("div");
- card.className = `resident-card ${r.id === gState.selectedResidentId ? "selected" : ""} ${r.status !== "在所" ? "inactive" : ""}`;
- card.onclick = () => selectResident(r.id);
-
- card.innerHTML = `
-		<div class="card-top">
-			<span class="room-badge">${r.room_no}号室</span>
-		</div>
-		<div class="res-name">${r.name} 様</div>
-	`;
- strip.appendChild(card);
- });
-}
-
 function selectResident(id) {
  gState.selectedResidentId = id;
  renderResidentsStrip();
@@ -13959,7 +13943,7 @@ function openAddResidentModal() {
  document.getElementById("resModalTitle").textContent = " 新規利用者の登録";
  document.getElementById("resEditId").value = "";
  document.getElementById("resRoomNo").value = "";
-  if (document.getElementById("resWing")) document.getElementById("resWing").value = "譚ｱ譽・;
+  if (document.getElementById("resWing")) document.getElementById("resWing").value = "";
  document.getElementById("resName").value = "";
  document.getElementById("resCareLevel").value = ""; // [Claude修正] 未選択のまま「要介護3」で登録されないように
  document.getElementById("resStatus").value = "在所";
@@ -13996,7 +13980,7 @@ function openEditResidentModal(id) {
  document.getElementById("resModalTitle").textContent = ` 利用者情報の編集 (${r.name} 様)`;
  document.getElementById("resEditId").value = r.id;
  document.getElementById("resRoomNo").value = r.room_no || "";
-  if (document.getElementById("resWing")) document.getElementById("resWing").value = r.wing || "譚ｱ譽・;
+  if (document.getElementById("resWing")) document.getElementById("resWing").value = r.wing || "";
  document.getElementById("resName").value = r.name || "";
  document.getElementById("resCareLevel").value = r.care_level || "要介護3";
  document.getElementById("resStatus").value = r.status || "在所";
@@ -14042,11 +14026,16 @@ function submitResidentForm() {
  alert("基本方針（緊急搬送・看取りなど）を選んでください。");
  return;
  }
+ // [Claude修正] 棟は選ばずに登録できないようにする（最初から「東棟」が選ばれていると、確かめずに登録されてしまう）
+ if (document.getElementById("resWing") && !document.getElementById("resWing").value) {
+ alert("棟（東棟・西棟）を選んでください。");
+ return;
+ }
 
  const editId = document.getElementById("resEditId").value;
  const residentData = {
  room_no: roomNo,
-    wing: (document.getElementById("resWing") ? document.getElementById("resWing").value : "譚ｱ譽・),
+    wing: (document.getElementById("resWing") ? document.getElementById("resWing").value : ""),
  name: name,
  care_level: document.getElementById("resCareLevel").value,
  status: document.getElementById("resStatus").value,
@@ -15135,7 +15124,7 @@ function generateMonthlyShiftAction() {
  }
  generateMonthlyShiftData(ym);
  renderShiftTable(ym);
- alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・施設長・事務員：日勤専従（土日祝・年末年始休み）\n・公休：全員週休2日配分`);
+ alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・管理者・計画作成担当者・相談員・事務員：日勤専従（土日祝・年末年始休み）\n・夜勤：東棟と西棟から1人ずつを優先\n・公休：全員週休2日配分`);
 }
 
 // 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
@@ -15210,7 +15199,7 @@ function isHolidayOrYearEnd(year, month, day) {
 
 // 職員の職種カテゴリ判定 (director:施設長, office:事務員, nurse:看護師, care:介護職員)
 // =====================================================================
-// 棟（ユニット）切り替え ＆ 施設基準・資格者一覧 ＆ シフト職種識別マーク
+// 棟（ユニット）切り替え ＆ 職員・保有資格の一覧 ＆ シフト職種識別マーク
 // =====================================================================
 
 // 1. 棟（ユニット）フィルター機能
@@ -15295,7 +15284,7 @@ function renderResidentsStrip() {
     card.innerHTML = `
       <div class="card-top" style="display:flex; justify-content:space-between; align-items:center;">
         <span class="room-badge">${escapeHtml(r.room_no)}号室</span>
-        <span style="font-size:10px; font-weight:bold; padding:1px 5px; border-radius:4px; ${wingBadgeColor}">${escapeHtml(wingLabel)}</span>
+        <span style="font-size:13px; font-weight:bold; padding:1px 6px; border-radius:4px; ${wingBadgeColor}">${escapeHtml(wingLabel)}</span>
       </div>
       <div class="res-name">${escapeHtml(r.name)} 様</div>
     `;
@@ -15306,17 +15295,23 @@ window.renderResidentsStrip = renderResidentsStrip;
 
 // 2. 職員の職種識別マークとカテゴリ判定
 function getStaffRoleCategory(staffName) {
+  // [Claude修正] 役職（role）で判定する。名前での判定（「鈴木」「加藤」なら看護師など）は、役職が空のときだけ使う
   const allStamps = db.data.stamps || [];
   const staff = allStamps.find(s => (s.name || s) === staffName);
   const role = staff && staff.role ? staff.role : "";
+  if (role) {
+    if (role.includes("施設長") || role.includes("管理者")) return "director";
+    if (role.includes("計画作成") || role.includes("介護支援専門員") || role.includes("ケアマネ")) return "caremanager";
+    if (role.includes("相談員")) return "counselor";
+    if (role.includes("看護")) return "nurse";
+    if (role.includes("事務") && role.includes("パート")) return "parttime";
+    if (role.includes("事務")) return "office";
+    return "care";
+  }
   const name = staffName || "";
-
-  if (role.includes("施設長") || role.includes("管理者") || name.includes("木村")) return "director";
-  if (role.includes("相談員") || name.includes("佐々木")) return "counselor";
-  if (role.includes("介護支援専門員") || role.includes("ケアマネ") || name.includes("小林 恵子")) return "caremanager";
-  if (role.includes("看護") || name.includes("鈴木") || name.includes("加藤")) return "nurse";
-  if (role.includes("パート") || name.includes("田中 慎一")) return "parttime";
-  if (role.includes("事務") || name.includes("松本")) return "office";
+  if (name.includes("木村")) return "director";
+  if (name.includes("鈴木 美智子") || name.includes("加藤 由美")) return "nurse";
+  if (name.includes("田中 慎一") || name.includes("松本 陽子")) return "office";
   return "care";
 }
 
@@ -15327,31 +15322,31 @@ function getStaffRoleBadgeHtml(staffName) {
   const role = staff && staff.role ? staff.role : "";
 
   if (role.includes("管理者") || role.includes("施設長")) {
-    return `<span class="badge" style="background:var(--pine-dark); color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="管理者">管</span>`;
+    return `<span class="badge" style="background:var(--pine-dark); color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="管理者">管</span>`;
   }
   if (role.includes("相談員")) {
-    return `<span class="badge" style="background:#c2410c; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="生活相談員">生</span>`;
+    return `<span class="badge" style="background:#c2410c; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="生活相談員">生</span>`;
   }
-  if (role.includes("介護支援専門員") || role.includes("ケアマネ")) {
-    return `<span class="badge" style="background:#7c2d12; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="介護支援専門員 (ケアマネ)">ケ</span>`;
+  if (role.includes("計画作成") || role.includes("介護支援専門員") || role.includes("ケアマネ")) {
+    return `<span class="badge" style="background:#7c2d12; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="計画作成担当者 (ケアマネ)">ケ</span>`;
   }
   if (role.includes("看護")) {
-    return `<span class="badge" style="background:#047857; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="看護師">看</span>`;
+    return `<span class="badge" style="background:#047857; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="看護師">看</span>`;
   }
   if (role.includes("リーダー")) {
-    return `<span class="badge" style="background:#0f766e; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="ユニットリーダー">リ</span>`;
+    return `<span class="badge" style="background:#0f766e; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="ユニットリーダー">リ</span>`;
   }
   if (role.includes("パート")) {
-    return `<span class="badge" style="background:#d97706; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="パート事務">パ</span>`;
+    return `<span class="badge" style="background:#d97706; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="パート事務">パ</span>`;
   }
   if (role.includes("事務")) {
-    return `<span class="badge" style="background:#4b5563; color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="事務員 (常勤)">事</span>`;
+    return `<span class="badge" style="background:#4b5563; color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="事務員 (常勤)">事</span>`;
   }
-  return `<span class="badge" style="background:var(--pine); color:#ffffff; font-size:10.5px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="介護職員">介</span>`;
+  return `<span class="badge" style="background:var(--pine); color:#ffffff; font-size:13px; padding:1px 5px; border-radius:3px; margin-right:4px; font-weight:bold;" title="介護職員">介</span>`;
 }
 window.getStaffRoleBadgeHtml = getStaffRoleBadgeHtml;
 
-// 3. 事務ポータル：職員・保有資格者一覧（施設基準管理）
+// 3. 事務ポータル：職員・保有資格の一覧
 function renderStaffQualificationsTable() {
   const tbody = document.querySelector("#staffQualificationsTable tbody");
   if (!tbody) return;
@@ -15364,7 +15359,7 @@ function renderStaffQualificationsTable() {
   let partTimeCount = 0;
 
   allStamps.forEach(s => {
-    const isCareStaff = (s.role || "").includes("介護") || (s.role || "").includes("リーダー");
+    const isCareStaff = getStaffRoleCategory(s.name) === "care"; // [Claude修正] 役職名に「介護」が入る計画作成担当者（介護支援専門員）を介護職に数えない
     if (isCareStaff) {
       careCount++;
       if ((s.qualifications || "").includes("介護福祉士")) certifiedCareWorkerCount++;
@@ -15377,27 +15372,29 @@ function renderStaffQualificationsTable() {
 
     const tr = document.createElement("tr");
     const badgeHtml = getStaffRoleBadgeHtml(s.name);
-    const wingText = s.wing ? `<span style="font-size:11px; color:var(--ink-3); margin-left:4px;">(${escapeHtml(s.wing)})</span>` : "";
+    const wingText = s.wing ? `<span style="font-size:13px; color:var(--ink-3); margin-left:4px;">(${escapeHtml(s.wing)})</span>` : "";
 
     tr.innerHTML = `
       <td style="text-align:center;">${badgeHtml}</td>
       <td><strong>${escapeHtml(s.name)}</strong></td>
       <td>${escapeHtml(s.role || '職員')}${wingText}</td>
-      <td style="text-align:center;"><span class="badge" style="font-size:11px; padding:2px 6px; ${s.employment_type === '非常勤 (パート)' ? 'background:#fef3c7; color:#92400e;' : 'background:#eef2ef; color:var(--ink);'}">${escapeHtml(s.employment_type || '常勤')}</span></td>
-      <td style="text-align:center;"><span class="badge" style="font-size:11px; padding:2px 6px; ${s.duty_type === '日勤専従' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#f0fdf4; color:#15803d;'}">${escapeHtml(s.duty_type || '交替勤務')}</span></td>
+      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.employment_type === '非常勤 (パート)' ? 'background:#fef3c7; color:#92400e;' : 'background:#eef2ef; color:var(--ink);'}">${escapeHtml(s.employment_type || '常勤')}</span></td>
+      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.duty_type === '日勤専従' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#f0fdf4; color:#15803d;'}">${escapeHtml(s.duty_type || '交替勤務')}</span></td>
       <td>${escapeHtml(s.qualifications || '—')}</td>
     `;
     tbody.appendChild(tr);
   });
 
-  // 施設基準サマリーバッジ
+  // [Claude修正] 「基準適合」「専任配置済」の断定をやめ、数だけを出す（グループホームの人員基準は自治体の資料で確かめる）
   const badgeContainer = document.getElementById("qualificationSummaryBadges");
   if (badgeContainer) {
-    const carePct = careCount > 0 ? ((certifiedCareWorkerCount / careCount) * 100).toFixed(1) : 0;
+    const carePct = careCount > 0 ? ((certifiedCareWorkerCount / careCount) * 100).toFixed(1) : "0";
+    const planners = allStamps.filter(s => getStaffRoleCategory(s.name) === "caremanager");
+    const plannerCm = planners.filter(s => (s.qualifications || "").includes("介護支援専門員")).length;
     badgeContainer.innerHTML = `
-      <span class="badge" style="background:var(--pine-tint); color:var(--pine); padding:3px 8px; font-weight:bold; border:1px solid var(--pine-light);">全職員: ${allStamps.length}名 (常勤${fullTimeCount}名 / パート${partTimeCount}名)</span>
-      <span class="badge" style="background:#f0fdf4; color:#15803d; padding:3px 8px; font-weight:bold; border:1px solid #bbf7d0;">介護福祉士比率: ${certifiedCareWorkerCount}/${careCount}名 (${carePct}%) [基準適合]</span>
-      <span class="badge" style="background:#e0f2fe; color:#0369a1; padding:3px 8px; font-weight:bold; border:1px solid #bae6fd;">ケアマネ・相談員: 専任配置済</span>
+      <span class="badge qual-badge">全職員 ${allStamps.length}名（常勤${fullTimeCount}名・パート${partTimeCount}名）</span>
+      <span class="badge qual-badge">介護職のうち介護福祉士 ${certifiedCareWorkerCount}/${careCount}名（${carePct}%）</span>
+      <span class="badge qual-badge">計画作成担当者 ${planners.length}名（うち介護支援専門員 ${plannerCm}名）</span>
     `;
   }
 }
@@ -15405,186 +15402,334 @@ window.renderStaffQualificationsTable = renderStaffQualificationsTable;
 
 // 4. 月間シフト自動生成ロジックの拡張 (22名体制: 相談員・ケアマネ日勤、介護15名毎日公休5名)
 function generateMonthlyShiftData(yearMonth) {
-  if (!yearMonth) yearMonth = getShiftYearMonth();
-  const [yearStr, monthStr] = yearMonth.split("-");
-  const year = parseInt(yearStr, 10);
-  const month = parseInt(monthStr, 10);
-  const daysInMonth = new Date(year, month, 0).getDate();
+ if (!yearMonth) yearMonth = getShiftYearMonth();
+ const [yearStr, monthStr] = yearMonth.split("-");
+ const year = parseInt(yearStr, 10);
+ const month = parseInt(monthStr, 10);
+ const daysInMonth = new Date(year, month, 0).getDate();
 
-  const allStamps = sortStaffList(db.data.stamps || []);
-  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+ // 1. スタッフ分類（役職で判定。管理者・計画作成担当者・相談員・事務は日勤専従）
+ const allStamps = sortStaffList(db.data.stamps || []);
+ const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
 
-  // 職種分類 (22名体制: 管理者1, 相談員1, ケアマネ1, 看護2, 介護15, 事務2)
-  const isDirector = s => getStaffRoleCategory(s.name) === "director";
-  const isCounselor = s => getStaffRoleCategory(s.name) === "counselor";
-  const isCareManager = s => getStaffRoleCategory(s.name) === "caremanager";
-  const isNurse = s => getStaffRoleCategory(s.name) === "nurse";
-  const isOffice = s => getStaffRoleCategory(s.name) === "office" || getStaffRoleCategory(s.name) === "parttime";
-  const isCare = s => getStaffRoleCategory(s.name) === "care";
+ const isDirector = s => ["director", "caremanager", "counselor"].includes(getStaffRoleCategory(s.name));
+ const isOffice = s => ["office", "parttime"].includes(getStaffRoleCategory(s.name));
+ const isNurse = s => getStaffRoleCategory(s.name) === "nurse";
+ const isCare = s => getStaffRoleCategory(s.name) === "care";
 
-  const directors = staffList.filter(isDirector);
-  const counselors = staffList.filter(isCounselor);
-  const careManagers = staffList.filter(isCareManager);
-  const nurses = staffList.filter(isNurse);
-  const officeStaff = staffList.filter(isOffice);
-  const careStaff = staffList.filter(isCare);
+ const directors = staffList.filter(isDirector);
+ const officeStaff = staffList.filter(isOffice);
+ const nurses = staffList.filter(isNurse);
+ const careStaff = staffList.filter(isCare);
 
-  const ngPairs = db.data.shift_ng_pairs || [];
-  const isNgPair = (name1, name2) => {
-    return ngPairs.some(p => 
-      (p.staff1 === name1 && p.staff2 === name2) || 
-      (p.staff1 === name2 && p.staff2 === name1)
-    );
-  };
+ // NGペアチェック関数
+ const ngPairs = db.data.shift_ng_pairs || [];
+ const isNgPair = (name1, name2) => {
+  return ngPairs.some(p => 
+   (p.staff1 === name1 && p.staff2 === name2) || 
+   (p.staff1 === name2 && p.staff2 === name1)
+  );
+ };
 
-  const hopeOffList = (db.data.shift_hope_offs || []).filter(h => h.year_month === yearMonth);
-  const staffHopeDays = {};
-  hopeOffList.forEach(h => {
-    if (!staffHopeDays[h.staff_name]) staffHopeDays[h.staff_name] = new Set();
-    staffHopeDays[h.staff_name].add(parseInt(h.day, 10));
+ // 希望休データの取得と索引化 (対象年月)
+ const hopeOffList = (db.data.shift_hope_offs || []).filter(h => h.year_month === yearMonth);
+ const staffHopeDays = {};
+ hopeOffList.forEach(h => {
+  if (!staffHopeDays[h.staff_name]) staffHopeDays[h.staff_name] = new Set();
+  staffHopeDays[h.staff_name].add(parseInt(h.day, 10));
+ });
+ const isHopeOff = (name, day) => {
+  return Boolean(staffHopeDays[name] && staffHopeDays[name].has(day));
+ };
+
+ const shiftData = {};
+ staffList.forEach(s => {
+  shiftData[s.name] = {};
+ });
+
+ // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
+ directors.forEach(s => {
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const hol = isHolidayOrYearEnd(year, month, d);
+   if (dow === 0 || dow === 6 || hol.isHoliday || isHopeOff(s.name, d)) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
+ });
+
+ // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
+ officeStaff.forEach((s) => {
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const hol = isHolidayOrYearEnd(year, month, d);
+   if (dow === 0 || dow === 6 || hol.isHoliday || isHopeOff(s.name, d)) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
+ });
+
+ // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置、希望休配慮)
+ nurses.forEach((s, idx) => {
+  for (let d = 1; d <= daysInMonth; d++) {
+   const dow = new Date(year, month - 1, d).getDay();
+   const defOff = (idx === 0) ? (dow === 0 || dow === 3) : (dow === 4 || dow === 6);
+   if (isHopeOff(s.name, d) || defOff) {
+    shiftData[s.name][d] = "休";
+   } else {
+    shiftData[s.name][d] = "日";
+   }
+  }
+ });
+
+ // 5. 介護職員 (14名体制): 毎日必ず「早出2名」「遅出2名」「日勤2名」「夜勤2名」「明け2名」「公休4名」
+ if (careStaff.length > 0) {
+  const careNames = careStaff.map(s => s.name);
+  const nightCount = {};
+  const earlyCount = {};
+  const lateCount = {};
+  const dayCount = {};
+  const holidayCount = {};
+  careNames.forEach(n => {
+   nightCount[n] = 0;
+   earlyCount[n] = 0;
+   lateCount[n] = 0;
+   dayCount[n] = 0;
+   holidayCount[n] = 0;
   });
-  const isHopeOff = (name, day) => Boolean(staffHopeDays[name] && staffHopeDays[name].has(day));
 
-  const shiftData = {};
-  staffList.forEach(s => { shiftData[s.name] = {}; });
-
-  // A. 管理者・生活相談員・ケアマネ・事務員: 日勤専従 ＆ 週休2日 (土日祝・年末年始公休「休」、希望休配慮)
-  const dayOnlyStaff = [].concat(directors, counselors, careManagers, officeStaff);
-  dayOnlyStaff.forEach(s => {
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dow = new Date(year, month - 1, d).getDay();
-      const hol = isHolidayOrYearEnd(year, month, d);
-      if (dow === 0 || dow === 6 || hol.isHoliday || isHopeOff(s.name, d)) {
-        shiftData[s.name][d] = "休";
-      } else {
-        shiftData[s.name][d] = "日";
-      }
-    }
+  // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
+  // [Claude修正] 1日の公休の人数 = 介護職の人数 − 10（早2・遅2・日2・夜2・明2）。14名なら4名、15名なら5名
+  const OFF_PER_DAY = Math.max(0, careNames.length - 10);
+  const totalMonthHolidays = daysInMonth * OFF_PER_DAY;
+  const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
+  const extraHolidays = totalMonthHolidays % careNames.length;
+  const targetHolidays = {};
+  careNames.forEach((n, idx) => {
+   targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
   });
 
-  // B. 看護師 (2名体制): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置)
-  nurses.forEach((s, idx) => {
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dow = new Date(year, month - 1, d).getDay();
-      const defOff = (idx === 0) ? (dow === 0 || dow === 3) : (dow === 4 || dow === 6);
-      if (isHopeOff(s.name, d) || defOff) {
-        shiftData[s.name][d] = "休";
-      } else {
-        shiftData[s.name][d] = "日";
-      }
-    }
+  const dailyCareHolidays = {};
+  for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
+
+  // 【希望休の事前確定】介護職員の希望休を最優先で公休「休」としてロック
+  careNames.forEach(n => {
+   if (staffHopeDays[n]) {
+    staffHopeDays[n].forEach(d => {
+     if (d >= 1 && d <= daysInMonth) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    });
+   }
   });
 
-  // C. 介護職員 (15名体制: リーダー2名 + 介護職13名)
-  // 毎日必ず「早出2名」「遅出2名」「日勤2名」「夜勤2名」「明け2名」「公休5名」 (計15名)
-  if (careStaff.length > 0) {
-    const careNames = careStaff.map(s => s.name);
-    const nightCount = {};
-    const earlyCount = {};
-    const lateCount = {};
-    const dayCount = {};
-    const holidayCount = {};
-    careNames.forEach(n => {
-      nightCount[n] = 0; earlyCount[n] = 0; lateCount[n] = 0; dayCount[n] = 0; holidayCount[n] = 0;
-    });
-
-    // 毎日5名公休: 31日の場合 31*5 = 155人日。1人あたり10〜11日公休！
-    const totalMonthHolidays = daysInMonth * 5;
-    const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
-    const extraHolidays = totalMonthHolidays % careNames.length;
-    const targetHolidays = {};
-    careNames.forEach((n, idx) => {
-      targetHolidays[n] = baseTarget + (idx < extraHolidays ? 1 : 0);
-    });
-
-    const dailyCareHolidays = {};
-    for (let d = 1; d <= daysInMonth; d++) dailyCareHolidays[d] = 0;
-
-    // 希望休を事前確定
-    careNames.forEach(n => {
-      if (staffHopeDays[n]) {
-        staffHopeDays[n].forEach(d => {
-          if (d >= 1 && d <= daysInMonth) {
-            shiftData[n][d] = "休";
-            holidayCount[n]++;
-            dailyCareHolidays[d]++;
-          }
-        });
-      }
-    });
-
-    // 日ごとのシフト割り当て (毎日 夜勤2, 明け2, 早出2, 遅出2, 日勤2, 休5)
-    for (let d = 1; d <= daysInMonth; d++) {
-      // 1. 前日夜勤の人は本日自動的に「明け」
-      const assignedToday = new Set();
-      careNames.forEach(n => {
-        if (d > 1 && shiftData[n][d - 1] === "夜") {
-          shiftData[n][d] = "明";
-          assignedToday.add(n);
-        }
-      });
-
-      // 既に希望休で休みの人
-      careNames.forEach(n => {
-        if (shiftData[n][d] === "休") assignedToday.add(n);
-      });
-
-      // 2. 残りの公休枠（目標5名）を補充
-      const needOff = Math.max(0, 5 - dailyCareHolidays[d]);
-      if (needOff > 0) {
-        const offCandidates = careNames
-          .filter(n => !assignedToday.has(n))
-          .sort((a, b) => (holidayCount[a] - holidayCount[b]));
-        for (let i = 0; i < needOff && i < offCandidates.length; i++) {
-          const n = offCandidates[i];
-          shiftData[n][d] = "休";
-          assignedToday.add(n);
-          holidayCount[n]++;
-          dailyCareHolidays[d]++;
-        }
-      }
-
-      // 3. 夜勤2名割り当て (翌日も範囲内の場合のみ)
-      if (d < daysInMonth) {
-        const nightCandidates = careNames
-          .filter(n => !assignedToday.has(n) && (d === 1 || shiftData[n][d - 1] !== "明") && !isHopeOff(n, d + 1))
-          .sort((a, b) => (nightCount[a] - nightCount[b]));
-        let nAssigned = 0;
-        for (const n of nightCandidates) {
-          if (nAssigned >= 2) break;
-          shiftData[n][d] = "夜";
-          assignedToday.add(n);
-          nightCount[n]++;
-          nAssigned++;
-        }
-      }
-
-      // 4. 早出2名、遅出2名、残りは日勤
-      const dutyCandidates = careNames.filter(n => !assignedToday.has(n));
-      let eCount = 0;
-      let lCount = 0;
-      dutyCandidates.forEach((n) => {
-        if (eCount < 2) {
-          shiftData[n][d] = "早";
-          earlyCount[n]++;
-          eCount++;
-        } else if (lCount < 2) {
-          shiftData[n][d] = "遅";
-          lateCount[n]++;
-          lCount++;
-        } else {
-          shiftData[n][d] = "日";
-          dayCount[n]++;
-        }
-      });
-    }
+  // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
+  // ※ 1日に希望休を出している職員は初日明けから除外
+  if (careNames.length >= 2) {
+   const availForAke1 = careNames.filter(n => !isHopeOff(n, 1));
+   const prevNightStaff = (availForAke1.length >= 2 ? availForAke1 : careNames).slice(-2);
+   prevNightStaff.forEach(pn => {
+    shiftData[pn][1] = "明";
+   });
   }
 
-  return shiftData;
+  // Step A: 毎日夜勤2名の選定 (1日〜daysInMonth)
+  for (let d = 1; d <= daysInMonth; d++) {
+   // 候補者選定:
+   // ・当日すでに「休」（希望休等）または「明」でない人
+   // ・当日希望休でない人
+   // ・翌日希望休でない人 (※当夜勤に入ると翌日が「明」となり希望休が潰れるため回避)
+   // ・前日夜勤でない人 (※前日夜勤＝当日明のため夜勤不可)
+   let candidates = careNames.filter(name => {
+    if (isHopeOff(name, d)) return false;
+    if (d + 1 <= daysInMonth && isHopeOff(name, d + 1)) return false;
+    if (shiftData[name][d] === "休") return false;
+    if (shiftData[name][d] === "明") return false;
+    if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+    return true;
+   });
+
+   // 万一候補が2名未満の場合は翌日希望休ガードのみ緩和
+   if (candidates.length < 2) {
+    candidates = careNames.filter(name => {
+     if (isHopeOff(name, d)) return false;
+     if (shiftData[name][d] === "休") return false;
+     if (shiftData[name][d] === "明") return false;
+     if (d > 1 && shiftData[name][d - 1] === "夜") return false;
+     return true;
+    });
+   }
+
+   // 夜勤回数が少なく、前々日夜勤でない人を優先
+   candidates.sort((a, b) => {
+    const countDiff = nightCount[a] - nightCount[b];
+    if (countDiff !== 0) return countDiff;
+    const aPrev2 = (d > 2 && shiftData[a][d - 2] === "夜") ? 1 : 0;
+    const bPrev2 = (d > 2 && shiftData[b][d - 2] === "夜") ? 1 : 0;
+    if (aPrev2 !== bPrev2) return aPrev2 - bPrev2;
+    return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
+   });
+
+   // 特例配慮(NGペア: 佐藤 健太 高橋 直樹)を回避する2名を選出
+   // [Claude追加] グループホームの夜勤はユニットごとに1人以上 → 東棟と西棟から1人ずつを優先（棟が登録されている職員どうし）
+   const wingOf = n => { const st = staffList.find(x => x.name === n); return st && st.wing ? st.wing : ""; };
+   let selectedPair = null;
+   for (let i = 0; i < candidates.length && !selectedPair; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+     const w1 = wingOf(candidates[i]), w2 = wingOf(candidates[j]);
+     if (w1 && w2 && w1 !== w2 && !isNgPair(candidates[i], candidates[j])) { selectedPair = [candidates[i], candidates[j]]; break; }
+    }
+   }
+   for (let i = 0; i < candidates.length && !selectedPair; i++) {
+    for (let j = i + 1; j < candidates.length; j++) {
+     const c1 = candidates[i];
+     const c2 = candidates[j];
+     if (!isNgPair(c1, c2)) {
+      selectedPair = [c1, c2];
+      break;
+     }
+    }
+    if (selectedPair) break;
+   }
+   if (!selectedPair) {
+    selectedPair = [candidates[0], candidates[1] || candidates[0]];
+   }
+
+   selectedPair.forEach(n => {
+    shiftData[n][d] = "夜";
+    nightCount[n]++;
+    if (d + 1 <= daysInMonth) {
+     shiftData[n][d + 1] = "明";
+    }
+   });
+  }
+
+  // Step B: 公休「休」の配分 (毎日必ず4名)
+  // 優先1: 夜勤明けの翌日を優先して「休」とする
+  for (let d = 1; d <= daysInMonth; d++) {
+   careNames.forEach(n => {
+    if (!shiftData[n][d]) {
+     if (d > 1 && shiftData[n][d - 1] === "明" && holidayCount[n] < targetHolidays[n] && dailyCareHolidays[d] < OFF_PER_DAY) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    }
+   });
+  }
+
+  // 優先2: 各日に公休をバランス配分 (1日4名になるまで)
+  for (let d = 1; d <= daysInMonth; d++) {
+   if (dailyCareHolidays[d] < OFF_PER_DAY) {
+    const sortedCare = [...careNames].sort((a, b) => holidayCount[a] - holidayCount[b]);
+    for (const n of sortedCare) {
+     if (holidayCount[n] < targetHolidays[n] && !shiftData[n][d] && dailyCareHolidays[d] < OFF_PER_DAY) {
+      shiftData[n][d] = "休";
+      holidayCount[n]++;
+      dailyCareHolidays[d]++;
+     }
+    }
+   }
+  }
+
+  // 4名未満の日があれば空いている人を公休に充当して毎日必ず4名にする
+  for (let d = 1; d <= daysInMonth; d++) {
+   while (dailyCareHolidays[d] < OFF_PER_DAY) {
+    const unassigned = careNames.filter(n => !shiftData[n][d]);
+    if (unassigned.length > 0) {
+     unassigned.sort((a, b) => holidayCount[a] - holidayCount[b]);
+     const pick = unassigned[0];
+     shiftData[pick][d] = "休";
+     holidayCount[pick]++;
+     dailyCareHolidays[d]++;
+    } else {
+     break;
+    }
+   }
+  }
+
+  // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
+  for (let d = 1; d <= daysInMonth; d++) {
+   const avail = careNames.filter(n => !shiftData[n][d]);
+
+   // 早出の選定 (2名選定): 前日遅番でない人を最優先し、月間早出回数が少ない人を割り当て
+   const earlyCandidates = [...avail].sort((a, b) => {
+    const aPrevLate = (d > 1 && shiftData[a][d - 1] === "遅") ? 1 : 0;
+    const bPrevLate = (d > 1 && shiftData[b][d - 1] === "遅") ? 1 : 0;
+    if (aPrevLate !== bPrevLate) return aPrevLate - bPrevLate;
+    const eDiff = earlyCount[a] - earlyCount[b];
+    if (eDiff !== 0) return eDiff;
+    return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
+   });
+   const pickedEarly = earlyCandidates.slice(0, 2);
+   pickedEarly.forEach(n => {
+    shiftData[n][d] = "早";
+    earlyCount[n]++;
+   });
+
+   // 遅出の選定 (2名選定): 早出以外の候補者から、月間遅出回数が少ない人を割り当て
+   const lateCandidates = avail.filter(n => !pickedEarly.includes(n)).sort((a, b) => {
+    const lDiff = lateCount[a] - lateCount[b];
+    if (lDiff !== 0) return lDiff;
+    return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
+   });
+   const pickedLate = lateCandidates.slice(0, 2);
+   pickedLate.forEach(n => {
+    shiftData[n][d] = "遅";
+    lateCount[n]++;
+   });
+
+   // 残りの介護職員（2名）はすべて「日」（日勤）
+   const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
+   remainingDay.forEach(n => {
+    shiftData[n][d] = "日";
+    dayCount[n]++;
+   });
+  }
+
+  // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
+  // ※ 希望休の職員は絶対に日勤・早番・遅番へ転換しない
+  for (let d = 1; d <= daysInMonth; d++) {
+   let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
+   let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
+   let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
+
+   // 早出を2名に
+   while (eCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
+   }
+   // 遅出を2名に
+   while (lCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
+   }
+   // 日勤を2名に (希望休でない公休職員のみ日勤へ充当)
+   while (dCount < 2) {
+    const cand = careNames.find(n => shiftData[n][d] === "休" && !isHopeOff(n, d));
+    if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
+   }
+  }
+ }
+
+ if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
+ db.data.monthly_shifts[yearMonth] = shiftData;
+ db.save();
+ if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
+ if (typeof renderDailyJournal === "function" && gState.activeCareTab === "daily_journal") renderDailyJournal();
+ return shiftData;
 }
 
 
 function renderShiftTable(yearMonth) {
+ // [Claude修正] 介護公休の基準人数（介護職の人数 − 10。勤務表の自動生成と同じ考え方）
+ const careOffTarget = Math.max(0, (db.data.stamps || []).filter(st => getStaffRoleCategory(st.name || st) === "care").length - 10);
  const ym = yearMonth || getShiftYearMonth();
  const [yearStr, monthStr] = ym.split("-");
  const year = parseInt(yearStr, 10);
@@ -15889,10 +16034,10 @@ function renderShiftTable(yearMonth) {
  <td colspan="3" style="border:1px solid #bae6fd; color:#0369a1; font-size:11px;">毎日2名</td>
  </tr>
 
- <!-- 全体日勤人数行 (施設長・事務・看護含む) -->
+ <!-- 全体日勤人数行 -->
  <tr style="background:#eef2ef; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#eef2ef; text-align:left; padding:5px 8px; border:1px solid #cdd6d0; color:#36443e;" colspan="2">
- 全体日勤 (施設長・事務・看護含む)
+ 全体日勤 (管理者・計画作成・相談員・事務・看護含む)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
@@ -15903,16 +16048,16 @@ function renderShiftTable(yearMonth) {
  <td colspan="3" style="border:1px solid #cdd6d0; color:#5f6d66; font-size:11px;">施設全体</td>
  </tr>
 
- <!-- 介護公休人数行 (基準: 4名) -->
+ <!-- 介護公休人数行（基準は介護職の人数−10） -->
  <tr style="background:#fef2f2; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#fef2f2; text-align:left; padding:5px 8px; border:1px solid #fecaca; color:#991b1b;" colspan="2">
- 介護公休 (週休2日・基準: 4名)
+ 介護公休 (基準: ${careOffTarget}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyHolidayCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 4) {
+ if (cnt === careOffTarget) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -15957,8 +16102,10 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  const roleCategory = getStaffRoleCategory(staffName);
 
  let roleBadgeLabel = "介護職員";
- if (roleCategory === "director") roleBadgeLabel = "施設長（日勤専従）";
- else if (roleCategory === "office") roleBadgeLabel = "事務員（日勤専従）";
+ if (roleCategory === "director") roleBadgeLabel = "管理者（日勤専従）";
+ else if (roleCategory === "caremanager") roleBadgeLabel = "計画作成担当者（日勤専従）";
+ else if (roleCategory === "counselor") roleBadgeLabel = "相談員（日勤専従）";
+ else if (roleCategory === "office" || roleCategory === "parttime") roleBadgeLabel = "事務員（日勤専従）";
  else if (roleCategory === "nurse") roleBadgeLabel = "看護師（日勤専従）";
 
  let contentHtml = "";
@@ -16109,7 +16256,7 @@ function openShiftCellModal(staffName, day) {
  const btnHoliday = document.querySelector("#shiftEditButtonsContainer button:nth-child(6)");
 
  if (roleCategory !== "care") {
- if (notice) notice.innerHTML = "<span style='color:#0369a1; font-weight:bold;'> 施設長・事務員・看護師は日勤専従（土日祝・年末年始休み）です。<br>日勤または公休のみ選択可能です。</span>";
+ if (notice) notice.innerHTML = "<span style='color:#0369a1; font-weight:bold;'> 日勤専従の職種（管理者・計画作成担当者・相談員・看護師・事務員）は日勤専従（土日祝・年末年始休み）です。<br>日勤または公休のみ選択可能です。</span>";
  if (btnEarly) { btnEarly.disabled = true; btnEarly.style.opacity = "0.35"; btnEarly.style.pointerEvents = "none"; }
  if (btnLate) { btnLate.disabled = true; btnLate.style.opacity = "0.35"; btnLate.style.pointerEvents = "none"; }
  if (btnNight) { btnNight.disabled = true; btnNight.style.opacity = "0.35"; btnNight.style.pointerEvents = "none"; }
@@ -16467,6 +16614,7 @@ function getDailyShiftRoster(targetDateStr) {
   day: day,
   isToday: (targetDate === todayStr),
   director: [],
+  planner: [],
   nurse: [],
   office: [],
   early: [],
@@ -16505,11 +16653,13 @@ function getDailyShiftRoster(targetDateStr) {
 
   if (cat === "director") {
    roster.director.push(staffInfo);
+  } else if (cat === "caremanager" || cat === "counselor") {
+   if (shift === "日") roster.planner.push(staffInfo);
   } else if (cat === "nurse") {
    if (shift === "日") {
     roster.nurse.push(staffInfo);
    }
-  } else if (cat === "office") {
+  } else if (cat === "office" || cat === "parttime") {
    if (shift === "日") {
     roster.office.push(staffInfo);
    }
@@ -16571,6 +16721,7 @@ function renderTodayShiftBar(targetDateStr) {
   <button type="button" class="shift-bar-title" onclick="enterPortal('office'); switchOfficeTab('shift');" title="勤務表を開く">${escapeHtml(dateLabel)}の勤務</button>
   <div class="shift-bar-list">
    <span class="shift-item"><span class="shift-role">管理者</span>${escapeHtml(directorText)}</span>
+   ${roster.planner.length ? `<span class="shift-item"><span class="shift-role">計画・相談</span>${escapeHtml(roster.planner.map(p => p.shortName).join("・"))}</span>` : ""}
    <span class="shift-item"><span class="shift-role">看護</span>${escapeHtml(nurseText)}</span>
    <span class="shift-item"><span class="shift-role">事務</span>${escapeHtml(officeText)}</span>
    ${chip("early", "早出", earlyText)}
