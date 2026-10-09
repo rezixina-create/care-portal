@@ -536,7 +536,7 @@ class LocalDB {
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
- "eyedrop_orders", "vaccines", "topical_records"
+ "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -3428,6 +3428,24 @@ function checkGlobalAlerts() {
     }
   });
 
+  // [Claude追加] 服薬: 予定時刻を1時間過ぎても記録がない方（今日・処方薬の一覧がある方）。責めるためではなく、早く気づいて確かめるため
+  if (typeof cpMedMissingList === "function") {
+    cpMedMissingList().forEach(g => {
+      const mKey = `med_missing_${toLocalDateStr(new Date())}_${g.key}_${g.residents.map(r => r.id).join("-")}`;
+      if (isAlertDismissed(mKey)) return;
+      const names = g.residents.map(r => `${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様`).join("、");
+      careAlertHtml += `
+        <div class="alert-banner alert-danger notice-card-urgent">
+          <span><strong>【服薬の記録がない方】</strong> ${escapeHtml(g.key)}（予定 ${cpRxSlotTime(g.key)}）: ${names}。飲んだかを確かめて記録してください。</span>
+          <div style="display:flex; gap:6px; align-items:center;">
+            <button class="btn btn-secondary" onclick="enterPortal('care'); switchCareTab('med'); cpSelectMedTiming('${g.key}');">服薬表を開く</button>
+            <button class="btn btn-secondary" onclick="requestDismissAlertFromButton(this, '${mKey}')">確認した・閉じる</button>
+          </div>
+        </div>
+      `;
+    });
+  }
+
   // 6. 【介護専用：月間業務連絡 未確認アラート】
   const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
   const curMonth = todayStr.slice(0, 7);
@@ -3517,6 +3535,7 @@ function switchPortal(portal) {
 
 // 介護サブタブ切り替え
 function switchCareTab(tab) {
+ if (gState.activeCareTab === "med" && tab !== "med" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
  gState.activeCareTab = tab;
  const tabs = document.querySelectorAll("#portalCareSection .sub-tab-btn");
  tabs.forEach(btn => {
@@ -3724,6 +3743,7 @@ function updateRecordFormCustomTime() {
 
 function onGlobalDateChange(newDate) {
  if (!newDate) return;
+ if (typeof cpMedPendingGuard === "function") cpMedPendingGuard();
  gState.selectedDate = newDate;
  gState.currentMonth = newDate.slice(0, 7);
  loadDateRecords(newDate);
@@ -3889,6 +3909,9 @@ function renderResidentDetail() {
  </button>
  <button type="button" class="btn btn-dark" style="font-size:12px; padding:5px 12px; background:#1c2622; border-color:#1c2622; color:#ffffff; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
  皮膚・身体シェーマ図 (軟膏・処置)
+ </button>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openRxModal(${r.id}, 'meds'); return false;">
+ 処方箋と処方薬
  </button>
  </div>
  </div>
@@ -5286,7 +5309,9 @@ function runPrintJob(html, options) {
 // =====================================================================
 const CP_AUDIT_SOURCES = [
  { key: "care_records", label: "介護記録", summary: r => `[${r.category || ""}] ${r.recorded_at || ""} ${r.content || ""}` },
- { key: "meds", label: "服薬・点眼", summary: r => `${r.date || ""} ${r.slot || ""} ${r.status || ""}` },
+ { key: "meds", label: "服薬・点眼", summary: r => `${r.date || ""} ${r.timing_key || r.slot || ""} ${r.status || ""}${r.given_time ? ` 飲んだ${r.given_time}` : ""}${r.recorded_at ? ` 記録${r.recorded_at}` : ""}` },
+ { key: "prescriptions", label: "処方箋の画像", summary: r => `${r.issued_date || ""} の処方箋 (登録 ${r.uploaded_by || ""})` },
+ { key: "resident_medications", label: "処方薬の一覧", summary: r => `${r.name || ""} ${(r.timings || []).map(t => t.key + t.count).join("・")}${r.status === "中止" ? " 中止" : ""}` },
  { key: "vitals", label: "バイタル", summary: r => `${r.date || ""} 体温${r.temperature ?? "-"} 血圧${r.bp_high ?? "-"}/${r.bp_low ?? "-"} 脈${r.pulse ?? "-"} SpO2 ${r.spo2 ?? "-"}` },
  { key: "weight_records", label: "体重", summary: r => `${r.date || r.month || ""} ${r.weight ?? "-"}kg` },
  { key: "topical_records", label: "塗布薬・湿布", summary: r => `${r.date || ""} ${r.timing || ""} ${r.item_name || ""} (${r.site_name || ""})` },
@@ -5503,8 +5528,8 @@ function printPeriodRecords() {
  if (document.getElementById("ppMeds")?.checked) {
  const ms = (db.data.meds || []).filter(m => Number(m.resident_id) === rid && inRange(m.date) && keep(m)).sort((a, b) => `${a.date} ${a.slot}`.localeCompare(`${b.date} ${b.slot}`));
  body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">服薬・点眼 ${ms.length}件</h2>
- <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態</th><th ${th}>記録者</th></tr>
- ${ms.map(m => `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(m.slot || "")}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="4">記録なし</td></tr>`}</table>`;
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態</th><th ${th}>飲んだ時刻</th><th ${th}>記録した時刻</th><th ${th}>記録者</th></tr>
+ ${ms.map(m => `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(m.timing_key || m.slot || "")}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}${m.bag ? `（袋の中 ${escapeHtml(m.bag)}）` : ""}</td><td ${td}>${escapeHtml(m.given_time || "")}${m.given_on_time ? "（時間どおり）" : ""}</td><td ${td}>${escapeHtml(m.recorded_at || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="6">記録なし</td></tr>`}</table>`;
  }
  if (document.getElementById("ppTopical")?.checked) {
  const tps = (db.data.topical_records || []).filter(t => Number(t.resident_id) === rid && inRange(t.date) && keep(t)).sort((a, b) => String(a.done_at || "").localeCompare(String(b.done_at || "")));
@@ -7046,7 +7071,7 @@ function renderPersonalDailySummary(res, dateStr) {
  服薬確認 ＆ 口腔ケア
  </div>
  <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
- <div>服薬: ${dayMeds.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayMeds.map(m=>m.slot).join('・')})</span>` : '<span style="color:#94a19a;">未記録</span>'}</div>
+ <div>服薬: ${(() => { const ok = dayMeds.filter(m => (m.status || "済") === "済"); const ng = dayMeds.filter(m => m.status && m.status !== "済"); return (ok.length ? `<span style="color:#16a34a; font-weight:bold;">済 (${ok.map(m => escapeHtml(m.timing_key || m.slot)).join('・')})</span>` : '<span style="color:#94a19a;">未記録</span>') + (ng.length ? ` <span style="color:#b3261e; font-weight:bold;">${ng.map(m => escapeHtml((m.timing_key || m.slot) + ' ' + m.status)).join('・')}</span>` : ''); })()}</div>
  <div>口腔ケア: ${dayOrals.length > 0 ? `<span style="color:#16a34a; font-weight:bold;"> 実施済 (${dayOrals.length}回)</span>` : '<span style="color:#94a19a;">未記録</span>'}</div>
  <div style="font-size:11px; color:#5f6d66; margin-top:2px;">
  食形態: ${escapeHtml(res.diet_type || '未登録')}
@@ -8672,69 +8697,16 @@ function setMedTimingFilter(slot) {
 }
 
 function renderMedTable() {
+ // [Claude修正] 飲み薬は renderMedOral（時間帯ごとにまとめて記録）。この表は点眼だけ
+ if (typeof renderMedOral === "function") renderMedOral();
  const tbody = document.querySelector("#medTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
- const theadRow = document.getElementById("medTableHeaderRow");
- const filter = gState.medTimingFilter || "all";
-
- // テーブルヘッダーの動的切り替え
- if (theadRow) {
- if (filter === "all") {
- theadRow.innerHTML = `
- <th>居室</th>
- <th>氏名</th>
- <th>朝食後</th>
- <th>昼食後</th>
- <th>夕食後</th>
- <th>就寝前</th>
- <th>点眼 (眼指定・指示内容・時間帯別実施)</th>
- `;
- } else {
- const slotLabel = filter === "朝" ? "朝食後" : (filter === "昼" ? "昼食後" : (filter === "夕" ? "夕食後" : "就寝前"));
- theadRow.innerHTML = `
- <th>居室</th>
- <th>氏名</th>
- <th>${slotLabel} (内服薬)</th>
- <th>点眼 [${filter}] (眼指定・指示内容・実施)</th>
- `;
- }
- }
-
- // フィルターボタンのアクティブ表示切替
- const filterBtns = [
- { id: "btnMedFilterAll", key: "all" },
- { id: "btnMedFilterMorn", key: "朝" },
- { id: "btnMedFilterNoon", key: "昼" },
- { id: "btnMedFilterEve", key: "夕" },
- { id: "btnMedFilterBed", key: "眠前" }
- ];
- filterBtns.forEach(b => {
- const el = document.getElementById(b.id);
- if (el) {
- if (filter === b.key) {
- el.className = "btn btn-primary";
- } else {
- el.className = "btn btn-secondary";
- }
- }
- });
-
  const meds = (db.data.meds || []).filter(m => !m.voided && m.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない
  const eyedropOrders = db.data.eyedrop_orders || [];
 
  gState.residents.forEach(r => {
  const tr = document.createElement("tr");
-
- // 内服薬ボタン生成
- const getOralMedBtn = (slot, label) => {
- const done = meds.find(m => m.resident_id === r.id && m.slot === slot);
- if (done) {
- return `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 8px;" onclick="toggleMed(${r.id}, '${slot}')" title="クリックで解除">済 (${done.staff_name || '済'})</button>`;
- }
- return `<button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="saveMed(${r.id}, '${slot}')">${label}</button>`;
- };
-
  // 点眼欄生成 (絵ではなく「右のみ」「左のみ」「両眼」を高コントラストバッジ明示、時間帯別切り替え対応)
  const order = eyedropOrders.find(e => e.resident_id === r.id && e.status !== "終了");
  let eyedropCellHtml = "";
@@ -8755,7 +8727,8 @@ function renderMedTable() {
 
  const medTitle = `<span style="font-weight:bold; font-size:12px; margin-left:4px; color:#1c2622;">${escapeHtml(order.medicine_name)}</span>`;
 
- if (filter === "all") {
+
+ {
  // すべて表示時: 指示されている時間帯のボタンを並べて表示
  const targetSlots = order.timing_slots && order.timing_slots.length > 0 ? order.timing_slots : ["眠前"];
  const slotButtonsHtml = targetSlots.map(slot => {
@@ -8778,55 +8751,14 @@ function renderMedTable() {
  </div>
  </div>
  `;
- } else {
- // 特定の時間帯フィルター時 (朝・昼・夕・眠前)
- const isTargetSlot = order.timing_slots && order.timing_slots.includes(filter);
- if (isTargetSlot) {
- const done = meds.find(m => m.resident_id === r.id && (m.slot === `点眼(${filter})` || m.slot === `点眼_${filter}` || (m.slot === "点眼" && filter === "眠前")));
- const actionBtn = done
- ? `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 8px;" onclick="toggleEyedrop(${r.id}, '${filter}')" title="クリックで解除">済 [${filter}] (${done.staff_name || '済'})</button>`
- : `<button class="btn btn-primary" style="font-size:11px; padding:3px 8px;" onclick="toggleEyedrop(${r.id}, '${filter}')">未 [${filter}] 実施する</button>`;
-
- eyedropCellHtml = `
- <div style="display:flex; justify-content:space-between; align-items:center;">
- <div>${eyeBadge} ${medTitle}</div>
- <div style="display:flex; align-items:center; gap:4px;">
- ${actionBtn}
- <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
- </div>
- </div>
- `;
- } else {
- eyedropCellHtml = `
- <div style="display:flex; justify-content:space-between; align-items:center;">
- <span style="color:#5f6d66; font-size:12px;">この時間帯の指示なし (${order.eye} ${order.timing_slots.join('・')})</span>
- <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
- </div>
- `;
- }
  }
  }
 
- if (filter === "all") {
  tr.innerHTML = `
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
- <td>${getOralMedBtn("朝", "朝食後")}</td>
- <td>${getOralMedBtn("昼", "昼食後")}</td>
- <td>${getOralMedBtn("夕", "夕食後")}</td>
- <td>${getOralMedBtn("眠前", "眠前")}</td>
  <td>${eyedropCellHtml}</td>
  `;
- } else {
- const slotLabel = filter === "朝" ? "朝食後" : (filter === "昼" ? "昼食後" : (filter === "夕" ? "夕食後" : "就寝前"));
- tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
- <td>${getOralMedBtn(filter, slotLabel)}</td>
- <td>${eyedropCellHtml}</td>
- `;
- }
-
  tbody.appendChild(tr);
  });
 }
@@ -8941,6 +8873,617 @@ function toggleEyedrop(resId, slot) {
  renderMedTable();
  loadDateRecords(gState.selectedDate);
  alert(`${r ? r.name : '利用者'}様の【${slot}】点眼 (${eyeSide}・${medName}) 完了を記録しました！`);
+}
+
+// ==========================================
+// [Claude追加 2026-10-09] 処方箋の画像・処方薬の一覧・飲み薬のまとめて記録
+// ユーザーと決めたこと（claude/dev_log.md 19:42〜20:02）
+// - 処方箋は日付ごとに画像で残し、2つの日付を左右に並べて見比べる（押すと拡大）
+// - 処方薬の一覧（薬名・時間・1回の数・目的・資料）は看護師だけが書き込める。追加した人・日時・資料を残す
+// - 介護職の確認は「袋の中の合計の数」だけ。足りないときは「数が合わない」で看護師へ報告（何が足りないかの確認と対応は看護師）
+// - 飲み薬は時間帯ごとにまとめて付けて、最後に「保存」。保存前なら押し直すだけで直せる
+// - 時刻は「記録した時刻（自動）」と「飲んだ時刻（時間どおり＝予定時刻、ずれたときだけ入力）」を分けて残す
+// - 予定から2時間以上たって記録するときは「飲ませたことを確かめましたか？」。分からなければ「済」にせず看護師へ報告
+// - 予定時刻を1時間過ぎても記録がない方は、お知らせに出す
+// ==========================================
+const CP_RX_TIMINGS = [
+ { key: "起床時", slot: "起床時", time: "06:30" },
+ { key: "朝食前", slot: "朝食前", time: "07:30" },
+ { key: "朝食後", slot: "朝", time: "08:00" },
+ { key: "昼食前", slot: "昼食前", time: "11:30" },
+ { key: "昼食後", slot: "昼", time: "12:30" },
+ { key: "夕食前", slot: "夕食前", time: "17:30" },
+ { key: "夕食後", slot: "夕", time: "18:30" },
+ { key: "眠前", slot: "眠前", time: "20:30" }
+];
+// 処方薬の一覧がまだない方は、これまでどおりの4つの時間帯で記録する
+const CP_RX_FALLBACK_TIMINGS = ["朝食後", "昼食後", "夕食後", "眠前"];
+const CP_RX_UNITS = ["錠", "包", "カプセル"];
+const CP_RX_SOURCES = ["処方箋", "お薬手帳", "医師・看護師の指示", "その他"];
+const CP_MED_LATE_MINUTES = 120;
+const CP_MED_MISSING_MINUTES = 60;
+
+function cpRxTiming(key) { return CP_RX_TIMINGS.find(t => t.key === key) || null; }
+function cpRxTimingBySlot(slot) { return CP_RX_TIMINGS.find(t => t.slot === slot) || null; }
+function cpRxSlotTime(key) {
+ const custom = db.data.med_slot_times && db.data.med_slot_times[key];
+ if (custom && /^\d{2}:\d{2}$/.test(custom)) return custom;
+ const t = cpRxTiming(key);
+ return t ? t.time : "00:00";
+}
+function cpLoginStaffName() {
+ return (gState.session && gState.session.staffName) || cpLedgerStaff();
+}
+function cpStaffRoleOf(name) {
+ const st = (gState.stamps || []).find(s => (s && (s.name || s)) === name);
+ return st && st.role ? String(st.role) : "";
+}
+function cpIsNurseStaff(name) { return cpStaffRoleOf(name).includes("看護"); }
+function cpIsCurrentNurse() { return cpIsNurseStaff(cpLoginStaffName()); }
+function cpResidentIsHere(r) { return r && r.status !== "入院中" && r.status !== "退所"; }
+function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
+function cpMinutes(hhmm) { const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
+
+// ---------- 処方薬の一覧 ----------
+function cpActiveRxMeds(resId) {
+ return (db.data.resident_medications || []).filter(m => m && !m.voided && m.status !== "中止" && Number(m.resident_id) === Number(resId));
+}
+function cpResidentHasRxList(resId) { return cpActiveRxMeds(resId).length > 0; }
+function cpResidentTimings(resId) {
+ const meds = cpActiveRxMeds(resId);
+ if (!meds.length) return CP_RX_FALLBACK_TIMINGS.slice();
+ const used = new Set();
+ meds.forEach(m => (m.timings || []).forEach(t => { if (t && Number(t.count) > 0) used.add(t.key); }));
+ return CP_RX_TIMINGS.map(t => t.key).filter(k => used.has(k));
+}
+// 袋の中の合計（単位ごと）。例: 「3錠・1包」
+function cpBagText(resId, timingKey) {
+ const sum = {};
+ cpActiveRxMeds(resId).forEach(m => (m.timings || []).forEach(t => {
+ if (t.key === timingKey && Number(t.count) > 0) { const u = m.unit || "錠"; sum[u] = (sum[u] || 0) + Number(t.count); }
+ }));
+ const parts = CP_RX_UNITS.filter(u => sum[u]).map(u => `${sum[u]}${u}`);
+ Object.keys(sum).filter(u => !CP_RX_UNITS.includes(u)).forEach(u => parts.push(`${sum[u]}${u}`));
+ return parts.join("・");
+}
+
+// ---------- 処方箋と処方薬 モーダル ----------
+let cpRxState = { resId: null, tab: "meds", pickedDataUrl: "", editId: null, cmpLeft: null, cmpRight: null };
+
+function openRxModal(resId, tab) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || gState.selectedResidentId));
+ if (!r) { alert("利用者を選んでください。"); return; }
+ cpRxState = { resId: r.id, tab: tab || "meds", pickedDataUrl: "", editId: null, cmpLeft: null, cmpRight: null };
+ const title = document.getElementById("rxModalTitle");
+ if (title) title.textContent = `${r.room_no}号室 ${r.name} 様の処方箋と処方薬`;
+ const modal = document.getElementById("rxModal");
+ if (modal) modal.style.display = "flex";
+ renderRxModal();
+}
+
+function switchRxTab(tab) {
+ cpRxState.tab = tab;
+ cpRxState.editId = null;
+ renderRxModal();
+}
+
+function cpRxList(resId) {
+ return (db.data.prescriptions || []).filter(p => p && !p.voided && Number(p.resident_id) === Number(resId))
+ .sort((a, b) => `${b.issued_date} ${b.uploaded_at}`.localeCompare(`${a.issued_date} ${a.uploaded_at}`));
+}
+function cpRxSrc(p) { return p.url || p.data_url || ""; }
+
+function renderRxModal() {
+ const body = document.getElementById("rxModalBody");
+ if (!body) return;
+ ["Meds", "Rx"].forEach(k => {
+ const b = document.getElementById(`rxTab${k}`);
+ if (b) b.classList.toggle("active", cpRxState.tab === k.toLowerCase());
+ });
+ body.innerHTML = cpRxState.tab === "rx" ? cpRenderRxImages() : cpRenderRxMeds();
+}
+
+function cpRenderRxImages() {
+ const list = cpRxList(cpRxState.resId);
+ const today = gState.selectedDate || toLocalDateStr(new Date());
+ const opts = sel => list.map(p => `<option value="${p.id}" ${String(p.id) === String(sel) ? "selected" : ""}>${escapeHtml(p.issued_date)} の処方箋</option>`).join("");
+ if (cpRxState.cmpLeft === null && list[1]) cpRxState.cmpLeft = list[1].id;
+ if (cpRxState.cmpRight === null && list[0]) cpRxState.cmpRight = list[0].id;
+ const pane = id => {
+ const p = list.find(x => String(x.id) === String(id));
+ if (!p) return `<div class="rx-cmp-empty">処方箋を選んでください</div>`;
+ const cap = `${p.issued_date} の処方箋（登録 ${p.uploaded_at} ${p.uploaded_by || ""}）`;
+ return `<button type="button" class="rx-cmp-img" onclick="openLightbox('${escapeHtml(cpRxSrc(p))}', '${escapeHtml(cap)}')" title="押すと大きく表示">
+ <img src="${escapeHtml(cpRxSrc(p))}" alt="${escapeHtml(cap)}"></button>
+ <div class="rx-cmp-cap">${escapeHtml(cap)}</div>`;
+ };
+ const cards = list.map(p => `
+ <div class="rx-item">
+ <button type="button" class="rx-thumb" onclick="openLightbox('${escapeHtml(cpRxSrc(p))}', '${escapeHtml(p.issued_date)} の処方箋')"><img src="${escapeHtml(cpRxSrc(p))}" alt="${escapeHtml(p.issued_date)} の処方箋"></button>
+ <div class="rx-item-meta">
+ <div><strong>${escapeHtml(p.issued_date)}</strong> の処方箋</div>
+ <div class="rx-sub">登録 ${escapeHtml(p.uploaded_at || "")} ${escapeHtml(p.uploaded_by || "")}${p.note ? ` ／ ${escapeHtml(p.note)}` : ""}</div>
+ <button type="button" class="btn btn-secondary rx-small" onclick="voidRxImage(${p.id})">取消</button>
+ </div>
+ </div>`).join("");
+ return `
+ <section class="rx-section">
+ <h4>見比べる</h4>
+ ${list.length >= 1 ? `
+ <div class="rx-cmp-selects">
+ <select class="form-control" onchange="cpRxState.cmpLeft=this.value; renderRxModal();">${opts(cpRxState.cmpLeft)}</select>
+ <select class="form-control" onchange="cpRxState.cmpRight=this.value; renderRxModal();">${opts(cpRxState.cmpRight)}</select>
+ </div>
+ <div class="rx-cmp">
+ <div class="rx-cmp-pane">${pane(cpRxState.cmpLeft)}</div>
+ <div class="rx-cmp-pane">${pane(cpRxState.cmpRight)}</div>
+ </div>
+ <p class="panel-note">画像を押すと大きく表示します。薬の写真を見比べて、ある日とない日の違いを確かめられます。</p>`
+ : `<p class="panel-note">まだ処方箋が登録されていません。下から追加してください。</p>`}
+ </section>
+ <section class="rx-section">
+ <h4>処方箋を追加する</h4>
+ <div class="rx-add">
+ <label>処方日 <input type="date" id="rxIssuedDate" class="form-control" value="${escapeHtml(today)}"></label>
+ <label>画像 <input type="file" id="rxFileInput" accept="image/*" class="form-control" onchange="cpPickRxFile(event)"></label>
+ <label>メモ（任意） <input type="text" id="rxNote" class="form-control" maxlength="100"></label>
+ <button type="button" class="btn btn-primary" onclick="saveRxImage()">登録する</button>
+ </div>
+ <img id="rxPreview" class="rx-preview" alt="" style="display:none;">
+ </section>
+ <section class="rx-section">
+ <h4>登録した処方箋（新しい順）</h4>
+ ${cards || `<p class="panel-note">まだありません。</p>`}
+ </section>`;
+}
+
+function cpPickRxFile(event) {
+ const file = event.target.files && event.target.files[0];
+ cpRxState.pickedDataUrl = "";
+ if (!file) return;
+ const reader = new FileReader();
+ reader.onload = e => {
+ const img = new Image();
+ img.onload = () => {
+ // 処方箋の文字と薬の写真が読める大きさ（長い辺 1600px）にそろえる
+ const maxDim = 1600;
+ let w = img.width, h = img.height;
+ if (w > maxDim || h > maxDim) { if (w > h) { h = Math.round(h * maxDim / w); w = maxDim; } else { w = Math.round(w * maxDim / h); h = maxDim; } }
+ const canvas = document.createElement("canvas");
+ canvas.width = w; canvas.height = h;
+ canvas.getContext("2d").drawImage(img, 0, 0, w, h);
+ cpRxState.pickedDataUrl = canvas.toDataURL("image/jpeg", 0.85);
+ const pv = document.getElementById("rxPreview");
+ if (pv) { pv.src = cpRxState.pickedDataUrl; pv.style.display = "block"; }
+ };
+ img.src = e.target.result;
+ };
+ reader.readAsDataURL(file);
+}
+
+async function saveRxImage() {
+ const date = (document.getElementById("rxIssuedDate") || {}).value || "";
+ const note = ((document.getElementById("rxNote") || {}).value || "").trim();
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) { alert("処方日を入れてください。"); return; }
+ if (!cpRxState.pickedDataUrl) { alert("処方箋の画像を選んでください。"); return; }
+ const rec = { id: Date.now(), resident_id: cpRxState.resId, issued_date: date, note: note, uploaded_at: toLocalDateTimeStr(new Date()), uploaded_by: cpLoginStaffName() };
+ if (db.isServerMode) {
+ // サーバー接続時は画像をファイルとして保存し、全データには保存場所だけを入れる
+ try {
+ const res = await cpApiFetch("/api/prescription-upload", {
+ method: "POST", headers: { "Content-Type": "application/json" },
+ body: JSON.stringify({ resident_id: cpRxState.resId, date: date, data: cpRxState.pickedDataUrl })
+ });
+ if (!res.ok) { alert("処方箋の画像を保存できませんでした。通信を確かめて、もう一度登録してください。"); return; }
+ const j = await res.json();
+ rec.url = j.url;
+ if (j.uploaded_by) rec.uploaded_by = j.uploaded_by;
+ } catch (e) {
+ alert("処方箋の画像を保存できませんでした。通信を確かめて、もう一度登録してください。");
+ return;
+ }
+ } else {
+ rec.data_url = cpRxState.pickedDataUrl; // 単体起動（このPCだけ）のときはデータの中に入れる
+ }
+ if (!Array.isArray(db.data.prescriptions)) db.data.prescriptions = [];
+ db.data.prescriptions.push(rec);
+ db.save();
+ cpRxState.pickedDataUrl = "";
+ cpRxState.cmpLeft = null; cpRxState.cmpRight = null;
+ renderRxModal();
+ alert(`${date} の処方箋を登録しました。`);
+}
+
+function voidRxImage(id) {
+ const p = (db.data.prescriptions || []).find(x => Number(x.id) === Number(id));
+ if (!p) return;
+ if (cpVoidMedRecord(p, `${p.issued_date} の処方箋の画像`)) {
+ db.save();
+ cpRxState.cmpLeft = null; cpRxState.cmpRight = null;
+ renderRxModal();
+ }
+}
+
+// ---------- 処方薬の一覧（看護師だけ書き込める） ----------
+function cpRenderRxMeds() {
+ const nurse = cpIsCurrentNurse();
+ const all = (db.data.resident_medications || []).filter(m => m && !m.voided && Number(m.resident_id) === Number(cpRxState.resId));
+ const active = all.filter(m => m.status !== "中止");
+ const stopped = all.filter(m => m.status === "中止");
+ const timingText = m => (m.timings || []).filter(t => Number(t.count) > 0).map(t => `${t.key} ${t.count}${m.unit || "錠"}`).join("、");
+ const row = (m, isActive) => `
+ <div class="rx-med ${isActive ? "" : "is-stopped"}">
+ <div class="rx-med-main">
+ <button type="button" class="rx-med-name" onclick="openDrugInfo('${escapeHtml(m.name).replace(/'/g, "&#39;")}')" title="押すと薬の説明">${escapeHtml(m.name)}</button>
+ <div class="rx-sub">${escapeHtml(timingText(m))}</div>
+ ${m.purpose ? `<div>何のため: ${escapeHtml(m.purpose)}</div>` : ""}
+ <div class="rx-sub">資料: ${escapeHtml(m.source_type || "")}${m.source_detail ? `（${escapeHtml(m.source_detail)}）` : ""} ／ 追加 ${escapeHtml(m.added_at || "")} ${escapeHtml(m.added_by || "")}${(m.edit_history || []).length ? ` ／ 変更 ${m.edit_history.length}回` : ""}</div>
+ ${isActive ? "" : `<div class="rx-sub">中止 ${escapeHtml(m.stopped_at || "")} ${escapeHtml(m.stopped_by || "")}（理由: ${escapeHtml(m.stop_reason || "-")}）</div>`}
+ </div>
+ ${nurse && isActive ? `<div class="rx-med-actions"><button type="button" class="btn btn-secondary rx-small" onclick="editRxMed(${m.id})">変更</button><button type="button" class="btn btn-secondary rx-small" onclick="stopRxMed(${m.id})">中止</button></div>` : ""}
+ </div>`;
+ const editing = nurse && cpRxState.editId !== null ? all.find(m => Number(m.id) === Number(cpRxState.editId)) : null;
+ return `
+ ${nurse ? "" : `<div class="rx-locked">処方薬の追加・変更は看護師だけができます。追加・変更したいときは看護師に依頼してください。</div>`}
+ <section class="rx-section">
+ <h4>飲んでいる薬（${active.length}）</h4>
+ ${active.map(m => row(m, true)).join("") || `<p class="panel-note">まだ登録されていません。登録されるまで、服薬チェック表は「朝食後・昼食後・夕食後・眠前」で記録します。</p>`}
+ </section>
+ ${nurse ? cpRenderRxMedForm(editing) : ""}
+ ${stopped.length ? `<details class="rx-section"><summary>中止した薬（${stopped.length}）</summary>${stopped.map(m => row(m, false)).join("")}</details>` : ""}`;
+}
+
+function cpRenderRxMedForm(m) {
+ const rxDates = cpRxList(cpRxState.resId).map(p => p.issued_date);
+ const cnt = key => { const t = m && (m.timings || []).find(x => x.key === key); return t ? t.count : ""; };
+ const src = m ? m.source_type : "処方箋";
+ return `
+ <section class="rx-section rx-form">
+ <h4>${m ? "薬の内容を変える" : "薬を追加する"}</h4>
+ <div class="rx-form-grid">
+ <label>薬の名前（処方箋のとおり） <input type="text" id="rxMedName" class="form-control" maxlength="80" value="${m ? escapeHtml(m.name) : ""}"></label>
+ <label>単位 <select id="rxMedUnit" class="form-control">${CP_RX_UNITS.map(u => `<option ${m && m.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+ </div>
+ <div class="rx-timing-grid">
+ ${CP_RX_TIMINGS.map(t => `<label>${t.key}<input type="number" min="0" max="20" step="0.5" inputmode="decimal" id="rxMedCnt_${t.key}" class="form-control" value="${escapeHtml(String(cnt(t.key)))}"></label>`).join("")}
+ </div>
+ <p class="panel-note">飲む時間帯に、1回に飲む数を入れます（飲まない時間帯は空欄）。</p>
+ <label class="rx-block">何のため（処方箋や薬の説明書きのとおり） <input type="text" id="rxMedPurpose" class="form-control" maxlength="120" value="${m ? escapeHtml(m.purpose || "") : ""}"></label>
+ <div class="rx-form-grid">
+ <label>何を見て書いたか <select id="rxMedSource" class="form-control">${CP_RX_SOURCES.map(s => `<option ${src === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+ <label>資料の詳しい内容（処方日など） <input type="text" id="rxMedSourceDetail" class="form-control" list="rxMedSourceDates" maxlength="80" value="${m ? escapeHtml(m.source_detail || "") : (rxDates[0] ? `${rxDates[0]} の処方箋` : "")}">
+ <datalist id="rxMedSourceDates">${rxDates.map(d => `<option value="${escapeHtml(d)} の処方箋">`).join("")}</datalist></label>
+ </div>
+ ${m ? `<label class="rx-block">変更の理由 <input type="text" id="rxMedEditReason" class="form-control" maxlength="120"></label>` : ""}
+ <div class="rx-form-actions">
+ ${m ? `<button type="button" class="btn btn-secondary" onclick="cpRxState.editId=null; renderRxModal();">やめる</button>` : ""}
+ <button type="button" class="btn btn-primary" onclick="saveRxMed()">${m ? "変更を保存" : "追加する"}</button>
+ </div>
+ </section>`;
+}
+
+function editRxMed(id) {
+ if (!cpIsCurrentNurse()) { alert("処方薬の変更は看護師だけができます。看護師に依頼してください。"); return; }
+ cpRxState.editId = id;
+ renderRxModal();
+ const f = document.querySelector("#rxModalBody .rx-form");
+ if (f) f.scrollIntoView({ block: "start" });
+}
+
+function saveRxMed() {
+ // 画面のボタンを隠すだけでなく、保存の処理でも看護師かどうかを確かめる
+ if (!cpIsCurrentNurse()) { alert("処方薬の追加・変更は看護師だけができます。看護師に依頼してください。"); return; }
+ const val = id => ((document.getElementById(id) || {}).value || "").trim();
+ const name = val("rxMedName");
+ if (!name) { alert("薬の名前を入れてください。"); return; }
+ const timings = [];
+ for (const t of CP_RX_TIMINGS) {
+ const raw = val(`rxMedCnt_${t.key}`);
+ if (!raw) continue;
+ const n = Number(raw);
+ if (!(n > 0) || n > 20) { alert(`${t.key}の数を正しく入れてください（0より大きい数）。`); return; }
+ timings.push({ key: t.key, count: n });
+ }
+ if (!timings.length) { alert("飲む時間帯と1回の数を、少なくとも1つ入れてください。"); return; }
+ const sourceType = val("rxMedSource");
+ const sourceDetail = val("rxMedSourceDetail");
+ if (!sourceType) { alert("何を見て書いたかを選んでください。"); return; }
+ if (!Array.isArray(db.data.resident_medications)) db.data.resident_medications = [];
+ const now = toLocalDateTimeStr(new Date());
+ const who = cpLoginStaffName();
+ const fields = { name: name, unit: val("rxMedUnit") || "錠", timings: timings, purpose: val("rxMedPurpose"), source_type: sourceType, source_detail: sourceDetail };
+ if (cpRxState.editId !== null) {
+ const target = db.data.resident_medications.find(m => Number(m.id) === Number(cpRxState.editId));
+ if (!target) { alert("変更する薬が見つかりません。画面を開き直してください。"); return; }
+ const reason = val("rxMedEditReason");
+ if (!reason) { alert("変更の理由を入れてください（例: 処方変更 10/9）。"); return; }
+ const old = JSON.parse(JSON.stringify(target));
+ const before = (target.edit_history || []).length;
+ Object.assign(target, fields);
+ cpAppendEditHistory(target, old, Object.keys(fields));
+ if ((target.edit_history || []).length > before) target.edit_history[target.edit_history.length - 1].reason = reason;
+ else { alert("内容が変わっていません。"); return; }
+ cpRxState.editId = null;
+ } else {
+ db.data.resident_medications.push(Object.assign({ id: Date.now(), resident_id: cpRxState.resId, status: "服用中", added_at: now, added_by: who }, fields));
+ }
+ db.save();
+ renderRxModal();
+ if (gState.activeCareTab === "med") renderMedTable();
+}
+
+function stopRxMed(id) {
+ if (!cpIsCurrentNurse()) { alert("処方薬の中止は看護師だけができます。看護師に依頼してください。"); return; }
+ const m = (db.data.resident_medications || []).find(x => Number(x.id) === Number(id));
+ if (!m) return;
+ const reason = prompt(`「${m.name}」を中止にします。記録は消えずに「中止した薬」に残ります。\n\n中止の理由を入れてください（例: 処方終了 10/9）`, "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("中止の理由を入れてください。何も変えていません。"); return; }
+ m.status = "中止"; m.stopped_at = toLocalDateTimeStr(new Date()); m.stopped_by = cpLoginStaffName(); m.stop_reason = reason.trim();
+ db.save();
+ renderRxModal();
+ if (gState.activeCareTab === "med") renderMedTable();
+}
+
+// ---------- 飲み薬のまとめて記録 ----------
+// 未保存の印: キー「日付|利用者ID|時間帯」→ { status: "済" | "未確認", time: "" (時間どおり) | "HH:MM" }
+if (!gState.medPending) gState.medPending = {};
+
+function cpMedPendingCount() { return Object.keys(gState.medPending || {}).length; }
+function cpMedKey(date, resId, timingKey) { return `${date}|${resId}|${timingKey}`; }
+function cpMedSavedRecord(date, resId, timingKey) {
+ const t = cpRxTiming(timingKey);
+ const slot = t ? t.slot : timingKey;
+ return (db.data.meds || []).find(m => !m.voided && m.date === date && Number(m.resident_id) === Number(resId) && m.slot === slot);
+}
+function cpMedIsLate(date, timingKey) {
+ const today = toLocalDateStr(new Date());
+ if (date < today) return true;
+ if (date > today) return false;
+ const sched = cpMinutes(cpRxSlotTime(timingKey));
+ return sched !== null && cpMinutes(cpNowHHMM()) > sched + CP_MED_LATE_MINUTES;
+}
+function cpMedTimingsInUse() {
+ const used = new Set();
+ (gState.residents || []).filter(cpResidentIsHere).forEach(r => cpResidentTimings(r.id).forEach(k => used.add(k)));
+ return CP_RX_TIMINGS.map(t => t.key).filter(k => used.has(k));
+}
+function cpMedDefaultTiming(keys) {
+ if (!keys.length) return null;
+ const now = cpMinutes(cpNowHHMM());
+ let pick = keys[0];
+ keys.forEach(k => { if (cpMinutes(cpRxSlotTime(k)) <= now + 30) pick = k; });
+ return pick;
+}
+
+function renderMedOral() {
+ const area = document.getElementById("medOralArea");
+ if (!area) return;
+ const date = gState.selectedDate;
+ const keys = cpMedTimingsInUse();
+ if (!keys.includes(gState.medTiming)) gState.medTiming = cpMedDefaultTiming(keys);
+ const cur = gState.medTiming;
+ const here = (gState.residents || []).filter(cpResidentIsHere);
+ const away = (gState.residents || []).filter(r => !cpResidentIsHere(r));
+ const chips = keys.map(k => {
+ const targets = here.filter(r => cpResidentTimings(r.id).includes(k));
+ const done = targets.filter(r => cpMedSavedRecord(date, r.id, k)).length;
+ return `<button type="button" class="med-slot ${k === cur ? "active" : ""}" onclick="cpSelectMedTiming('${k}')">${k}<span class="med-slot-sub">${cpRxSlotTime(k)}・記録 ${done}/${targets.length}</span></button>`;
+ }).join("");
+ const late = cur ? cpMedIsLate(date, cur) : false;
+ const rows = cur ? here.filter(r => cpResidentTimings(r.id).includes(cur)).map(r => cpMedRowHtml(r, cur, date, late)).join("") : "";
+ const pending = cpMedPendingCount();
+ area.innerHTML = `
+ <div class="med-slots" role="tablist" aria-label="時間帯">${chips}</div>
+ ${cur ? `
+ <div class="med-toolbar">
+ <div><strong>${escapeHtml(cur)}</strong>（予定 ${cpRxSlotTime(cur)}）${late ? `<span class="med-late-note">予定から2時間以上たっています。飲ませたことを確かめてから付けてください。</span>` : ""}</div>
+ <button type="button" class="btn btn-secondary" onclick="cpMedMarkAll()">まだ付けていない方に「済」を付ける</button>
+ </div>
+ <div class="med-rows">${rows || `<p class="panel-note">この時間帯に飲む方はいません。</p>`}</div>
+ ${away.length ? `<p class="panel-note">入院中・退所の方（${away.map(r => escapeHtml(r.name)).join("、")}）は表示していません。</p>` : ""}
+ <p class="panel-note">袋の中の数を数えて、合っていれば「済」。押しただけではまだ保存されません。最後に「保存する」を押してください。数が足りないときは「数が合わない」（すぐに看護師への報告として記録されます）。</p>`
+ : `<p class="panel-note">記録する時間帯がありません。</p>`}
+ <div class="med-savebar ${pending ? "has-pending" : ""}">
+ <span>${pending ? `未保存 ${pending}件` : "未保存はありません"}</span>
+ <div>
+ ${pending ? `<button type="button" class="btn btn-secondary" onclick="cpMedDiscardPending()">未保存を消す</button>` : ""}
+ <button type="button" class="btn btn-primary" ${pending ? "" : "disabled"} onclick="saveMedPending()">保存する</button>
+ </div>
+ </div>`;
+}
+
+function cpMedRowHtml(r, k, date, late) {
+ const hasList = cpResidentHasRxList(r.id);
+ const bag = hasList ? cpBagText(r.id, k) : "";
+ const bagHtml = hasList ? `<span class="med-bag">袋の中 <strong>${escapeHtml(bag)}</strong></span>` : `<span class="med-bag is-none">処方薬の一覧が未登録</span>`;
+ const saved = cpMedSavedRecord(date, r.id, k);
+ let action = "";
+ if (saved) {
+ const st = saved.status || "済";
+ const given = saved.given_time ? `飲んだ ${escapeHtml(saved.given_time)}${saved.given_on_time ? "（時間どおり）" : ""}` : "";
+ const label = st === "済" ? `済 ${given}` : (st === "数が合わない" ? "数が合わない（看護師へ報告済み）" : (st === "未確認" ? "飲ませたか分からない（看護師へ報告済み）" : escapeHtml(st)));
+ const rec = saved.recorded_at ? `記録 ${escapeHtml(String(saved.recorded_at).slice(5, 16))}` : "";
+ action = `<button type="button" class="med-saved ${st === "済" ? "is-done" : "is-alert"}" onclick="voidOralMed(${saved.id})" title="押すと取消（理由を入力）">${label}<span class="med-saved-sub">${rec} ${escapeHtml(saved.staff_name || "")}</span></button>`;
+ } else {
+ const key = cpMedKey(date, r.id, k);
+ const p = gState.medPending[key];
+ const timeInput = p && p.status === "済"
+ ? `<label class="med-time">飲んだ時刻 <select onchange="cpMedSetTimeMode('${key}', this.value)"><option value="" ${!p.time ? "selected" : ""}>時間どおり（${cpRxSlotTime(k)}）</option><option value="other" ${p.time ? "selected" : ""}>ずれた</option></select>${p.time ? `<input type="time" value="${escapeHtml(p.time)}" onchange="cpMedSetTime('${key}', this.value)">` : ""}</label>` : "";
+ action = `
+ <button type="button" class="med-btn ${p && p.status === "済" ? "is-pending" : ""}" onclick="cpMedToggle('${key}', '済')">${p && p.status === "済" ? "済（未保存）" : "済"}</button>
+ ${late ? `<button type="button" class="med-btn ${p && p.status === "未確認" ? "is-pending-alert" : ""}" onclick="cpMedToggle('${key}', '未確認')">${p && p.status === "未確認" ? "分からない（未保存）" : "分からない"}</button>` : ""}
+ <button type="button" class="med-btn is-mismatch" onclick="reportMedCountMismatch(${r.id}, '${k}')">数が合わない</button>
+ ${timeInput}`;
+ }
+ return `<div class="med-row"><div class="med-who"><strong>${escapeHtml(r.room_no)} ${escapeHtml(r.name)} 様</strong>${bagHtml}${hasList ? `<button type="button" class="tool-link" onclick="openRxModal(${r.id}, 'meds')">処方薬</button>` : ""}</div><div class="med-actions">${action}</div></div>`;
+}
+
+function cpSelectMedTiming(k) { gState.medTiming = k; renderMedOral(); }
+function cpMedToggle(key, status) {
+ const p = gState.medPending[key];
+ if (p && p.status === status) delete gState.medPending[key];
+ else gState.medPending[key] = { status: status, time: "" };
+ renderMedOral();
+}
+function cpMedSetTimeMode(key, mode) {
+ const p = gState.medPending[key];
+ if (!p) return;
+ p.time = mode === "other" ? cpNowHHMM() : "";
+ renderMedOral();
+}
+function cpMedSetTime(key, v) { const p = gState.medPending[key]; if (p) p.time = v; }
+function cpMedMarkAll() {
+ const date = gState.selectedDate, k = gState.medTiming;
+ if (!k) return;
+ (gState.residents || []).filter(cpResidentIsHere).filter(r => cpResidentTimings(r.id).includes(k)).forEach(r => {
+ const key = cpMedKey(date, r.id, k);
+ if (!cpMedSavedRecord(date, r.id, k) && !gState.medPending[key]) gState.medPending[key] = { status: "済", time: "" };
+ });
+ renderMedOral();
+}
+function cpMedDiscardPending() {
+ if (!confirm(`未保存の ${cpMedPendingCount()}件 を消します。よろしいですか？`)) return;
+ gState.medPending = {};
+ renderMedOral();
+}
+
+function cpMedCareRecord(resId, date, content, medId) {
+ if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+ const rec = { id: medId + 1, recorded_at: `${date} ${cpNowHHMM()}`, resident_id: Number(resId), category: "連絡", content: content, staff_name: cpLoginStaffName(), source_med_id: medId };
+ db.data.care_records.unshift(rec);
+}
+
+function saveMedPending() {
+ const keys = Object.keys(gState.medPending || {});
+ if (!keys.length) return true;
+ const lateDone = keys.filter(key => { const [d, , k] = key.split("|"); return gState.medPending[key].status === "済" && cpMedIsLate(d, k); });
+ if (lateDone.length && !confirm(`予定の時間から2時間以上たってから付ける記録が ${lateDone.length}件あります。\n飲ませたことを確かめましたか？（空の袋、本人、一緒にいた職員など）\n\nOK：確かめた（保存する）\nキャンセル：戻る（分からない方は「分からない」を選んでください）`)) return false;
+ const now = toLocalDateTimeStr(new Date());
+ const who = cpLoginStaffName();
+ let n = 0;
+ keys.forEach(key => {
+ const [date, rid, k] = key.split("|");
+ const p = gState.medPending[key];
+ if (cpMedSavedRecord(date, rid, k)) return; // 別の端末で先に記録されていたら重ねない
+ const t = cpRxTiming(k);
+ const id = Date.now() + n * 10;
+ const rec = { id: id, date: date, slot: t ? t.slot : k, timing_key: k, resident_id: Number(rid), status: p.status, staff_name: who, recorded_at: now };
+ const bag = cpResidentHasRxList(rid) ? cpBagText(rid, k) : "";
+ if (bag) rec.bag = bag;
+ if (p.status === "済") {
+ rec.given_time = p.time || cpRxSlotTime(k);
+ rec.given_on_time = !p.time;
+ } else {
+ cpMedCareRecord(rid, date, `服薬（${k}）: 飲ませたか確かめられなかったため「済」にせず、看護師へ報告。`, id);
+ }
+ db.data.meds.push(rec);
+ n++;
+ });
+ gState.medPending = {};
+ db.save();
+ renderMedOral();
+ loadDateRecords(gState.selectedDate);
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+ return true;
+}
+
+function reportMedCountMismatch(resId, k) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ const date = gState.selectedDate;
+ if (cpMedSavedRecord(date, resId, k)) { alert("この時間帯はすでに記録があります。直すときは、記録を押して取消にしてから付け直してください。"); return; }
+ const bag = cpResidentHasRxList(resId) ? cpBagText(resId, k) : "";
+ if (!confirm(`${r ? r.name : "利用者"}様の【${k}】の袋の中の数が合わないことを、看護師への報告として記録します。よろしいですか？\n${bag ? `（予定: ${bag}）\n` : ""}何が足りないかの確認と、その後の対応は看護師が行います。`)) return;
+ const t = cpRxTiming(k);
+ const id = Date.now();
+ const rec = { id: id, date: date, slot: t ? t.slot : k, timing_key: k, resident_id: Number(resId), status: "数が合わない", staff_name: cpLoginStaffName(), recorded_at: toLocalDateTimeStr(new Date()) };
+ if (bag) rec.bag = bag;
+ db.data.meds.push(rec);
+ cpMedCareRecord(resId, date, `服薬（${k}）: 袋の中の数が合わない${bag ? `（予定 ${bag}）` : ""}。看護師へ報告。`, id);
+ delete gState.medPending[cpMedKey(date, resId, k)];
+ db.save();
+ renderMedOral();
+ loadDateRecords(gState.selectedDate);
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+function voidOralMed(id) {
+ const m = (db.data.meds || []).find(x => Number(x.id) === Number(id));
+ if (!m) return;
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(m.resident_id));
+ const label = `${r ? r.name : "利用者"}様の【${m.timing_key || m.slot}】服薬記録（${m.status || "済"}）`;
+ if (!cpVoidMedRecord(m, label)) return;
+ // 連動した介護記録も取消にする（消さずに残す）
+ (db.data.care_records || []).forEach(c => {
+ if (Number(c.source_med_id) === Number(id) && !c.voided) {
+ c.voided = true; c.voided_at = m.voided_at; c.voided_by = m.voided_by; c.void_reason = `服薬記録の取消: ${m.void_reason}`;
+ }
+ });
+ db.save();
+ renderMedOral();
+ loadDateRecords(gState.selectedDate);
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// 画面を離れるときに未保存があれば聞く（OK: 保存する／キャンセル: 保存せずに進む）
+function cpMedPendingGuard() {
+ const n = cpMedPendingCount();
+ if (!n) return;
+ if (confirm(`未保存の服薬記録が ${n}件 あります。保存しますか？\n\nOK：保存する\nキャンセル：保存せずに進む（未保存の印は消えます）`)) {
+ if (saveMedPending()) return;
+ }
+ gState.medPending = {};
+}
+
+// 予定時刻を1時間過ぎても記録がない方（今日の分・処方薬の一覧がある方だけ）
+function cpMedMissingList() {
+ const today = toLocalDateStr(new Date());
+ const now = cpMinutes(cpNowHHMM());
+ const out = [];
+ CP_RX_TIMINGS.forEach(t => {
+ if (cpMinutes(cpRxSlotTime(t.key)) + CP_MED_MISSING_MINUTES > now) return;
+ const who = (gState.residents || []).filter(cpResidentIsHere).filter(r => cpResidentHasRxList(r.id) && cpResidentTimings(r.id).includes(t.key) && !cpMedSavedRecord(today, r.id, t.key));
+ if (who.length) out.push({ key: t.key, residents: who });
+ });
+ return out;
+}
+
+// 予定時刻の変更（看護師・管理者）
+function openMedSlotTimesEditor() {
+ const name = cpLoginStaffName();
+ if (!cpIsNurseStaff(name) && !(typeof isStaffAdminOrClerk === "function" && isStaffAdminOrClerk(name))) {
+ alert("予定時刻の変更は、看護師・管理者だけができます。");
+ return;
+ }
+ const cur = CP_RX_TIMINGS.map(t => `${t.key}=${cpRxSlotTime(t.key)}`).join(", ");
+ const input = prompt(`服薬の予定時刻を変えます（施設の決まりに合わせてください）。\n「時間帯=時刻」をカンマで区切って入れます。\n\n今の設定:\n${cur}`, cur);
+ if (input === null) return;
+ const next = {};
+ for (const part of input.split(",")) {
+ const m = part.trim().match(/^(\S+?)=(\d{1,2}):(\d{2})$/);
+ if (!m) continue;
+ if (!cpRxTiming(m[1])) continue;
+ const hh = Number(m[2]), mm = Number(m[3]);
+ if (hh > 23 || mm > 59) continue;
+ next[m[1]] = `${String(hh).padStart(2, "0")}:${m[3]}`;
+ }
+ if (!Object.keys(next).length) { alert("読み取れませんでした。何も変えていません。"); return; }
+ const old = Object.assign({}, db.data.med_slot_times || {});
+ db.data.med_slot_times = Object.assign({}, old, next);
+ if (!Array.isArray(db.data.med_slot_times_history)) db.data.med_slot_times_history = [];
+ db.data.med_slot_times_history.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: name, before: old });
+ db.save();
+ renderMedOral();
+}
+
+// 薬の説明（2つ以上の資料で一致した内容だけ。CP_DRUG_GUIDE に登録がない薬は看護師に確認してもらう）
+function openDrugInfo(name) {
+ const g = (typeof cpFindDrugGuide === "function") ? cpFindDrugGuide(name) : null;
+ if (!g) {
+ alert(`「${name}」の説明は、まだ登録されていません。\nどんな薬か・気をつけることは、看護師に確認してください。`);
+ return;
+ }
+ if (typeof cpShowDrugGuide === "function") cpShowDrugGuide(g, name);
 }
 
 // 点眼指示モーダル制御
@@ -16765,6 +17308,9 @@ function cpLogoutNoticeText(reason, unsentLost) {
 async function handleLogout(opts) {
   const reason = (opts && opts.reason) || "manual";
   if (cpLogoutInProgress) return;
+  // [Claude追加] 未保存の服薬記録: 手動のログアウトでは聞く。自動ログアウト・期限切れでは消す（記録がない方はお知らせで気づける）
+  if (reason === "manual" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
+  if (gState.medPending) gState.medPending = {};
   cpLogoutInProgress = true;
   clearAutoLogoutTimer();
   try {
@@ -16838,6 +17384,7 @@ function cpShowLogoutNoticeOnLoad() {
 
 // ホーム画面への遷移
 function goToHome() {
+  if (typeof cpMedPendingGuard === "function") cpMedPendingGuard();
   const homeSec = document.getElementById("portalHomeSection");
   const careSec = document.getElementById("portalCareSection");
   const officeSec = document.getElementById("portalOfficeSection");
@@ -16865,6 +17412,7 @@ function goToHome() {
 
 // ポータルへ入る
 function enterPortal(portalType) {
+  if (portalType !== "care" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
   const homeSec = document.getElementById("portalHomeSection");
   const careSec = document.getElementById("portalCareSection");
   const officeSec = document.getElementById("portalOfficeSection");

@@ -1559,3 +1559,72 @@ button, input, select, textarea { font-family: inherit; }
 @media print {
   .portal-header, .shift-bar, #todayShiftBar, .alerts-area, .calendar-bar { display: none !important; }
 }
+
+/* [Claude追加] 処方箋と処方薬 */
+.rx-card { max-width: 980px; }
+.rx-head { display: flex; justify-content: space-between; align-items: center; gap: 10px; margin-bottom: 8px; }
+.rx-head h3 { margin: 0; font-size: 18px; }
+.rx-tabs { display: flex; gap: 6px; border-bottom: 1px solid var(--line-2); margin-bottom: 12px; }
+.rx-tab { background: none; border: none; border-bottom: 3px solid transparent; padding: 8px 12px; min-height: 40px; font-size: 15px; font-weight: bold; color: var(--ink-2); cursor: pointer; }
+.rx-tab.active { color: var(--pine); border-bottom-color: var(--sun); }
+.rx-section { margin-bottom: 18px; }
+.rx-section > h4, .rx-section > summary { font-size: 15px; margin: 0 0 8px; cursor: default; }
+details.rx-section > summary { cursor: pointer; font-weight: bold; }
+.rx-locked { background: var(--caution-tint); color: var(--caution); border-radius: 8px; padding: 10px 12px; font-size: 14px; font-weight: bold; margin-bottom: 12px; }
+.rx-sub { font-size: 13px; color: var(--ink-3); }
+.rx-small { min-height: 32px; padding: 4px 10px; font-size: 13px; }
+.rx-cmp-selects, .rx-cmp { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.rx-cmp-pane { background: #f3f6f4; border: 1px solid var(--line); border-radius: 8px; padding: 8px; min-height: 160px; }
+.rx-cmp-img { display: block; width: 100%; padding: 0; border: none; background: none; cursor: zoom-in; }
+.rx-cmp-img img { width: 100%; max-height: 420px; object-fit: contain; background: #ffffff; border-radius: 6px; }
+.rx-cmp-cap { font-size: 13px; color: var(--ink-2); margin-top: 4px; }
+.rx-cmp-empty { color: var(--ink-3); font-size: 14px; padding: 40px 0; text-align: center; }
+.rx-add { display: flex; flex-wrap: wrap; align-items: flex-end; gap: 10px; }
+.rx-add label { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: bold; color: var(--ink-2); }
+.rx-preview { max-width: 240px; max-height: 240px; margin-top: 8px; border: 1px solid var(--line); border-radius: 6px; }
+.rx-item { display: flex; gap: 12px; align-items: flex-start; padding: 8px 0; border-top: 1px solid var(--line-2); }
+.rx-thumb { padding: 0; border: 1px solid var(--line); border-radius: 6px; background: #fff; cursor: zoom-in; flex: none; }
+.rx-thumb img { width: 96px; height: 96px; object-fit: cover; border-radius: 6px; display: block; }
+.rx-item-meta { display: flex; flex-direction: column; gap: 4px; align-items: flex-start; }
+.rx-med { display: flex; justify-content: space-between; gap: 10px; padding: 10px 0; border-top: 1px solid var(--line-2); }
+.rx-med.is-stopped { color: var(--ink-3); }
+.rx-med-main { display: flex; flex-direction: column; gap: 2px; }
+.rx-med-name { background: none; border: none; padding: 0; text-align: left; font-size: 16px; font-weight: bold; color: var(--pine); text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--sun); cursor: pointer; }
+.rx-med-actions { display: flex; gap: 6px; align-items: flex-start; flex: none; }
+.rx-form { background: var(--pine-tint-2); border: 1px solid var(--line-2); border-radius: 10px; padding: 12px; }
+.rx-form-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 10px; margin-bottom: 8px; }
+.rx-form label, .rx-block { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: bold; color: var(--ink-2); margin-bottom: 8px; }
+.rx-timing-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+.rx-form-actions { display: flex; justify-content: flex-end; gap: 8px; }
+
+/* [Claude追加] 飲み薬のまとめて記録 */
+.med-slots { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 10px; }
+.med-slot { display: flex; flex-direction: column; align-items: flex-start; min-height: 48px; padding: 6px 12px; border-radius: 8px; border: 1px solid var(--line); background: #f3f6f4; color: var(--ink); font-size: 15px; font-weight: bold; cursor: pointer; }
+.med-slot.active { background: var(--pine); border-color: var(--pine); color: #ffffff; }
+.med-slot-sub { font-size: 12.5px; font-weight: normal; opacity: 0.85; }
+.med-toolbar { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px; margin-bottom: 8px; }
+.med-late-note { display: block; color: var(--caution); font-size: 13px; font-weight: bold; }
+.med-row { display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 8px 14px; padding: 10px 0; border-top: 1px solid var(--line-2); }
+.med-who { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 12px; }
+.med-bag { font-size: 14px; background: var(--pine-tint); color: var(--pine); border-radius: 6px; padding: 2px 8px; }
+.med-bag.is-none { background: #f3f5f3; color: var(--ink-3); }
+.med-actions { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.med-btn { min-height: 40px; padding: 6px 14px; border-radius: 6px; border: 1px solid var(--line); background: #ffffff; color: var(--ink); font-size: 14px; font-weight: bold; cursor: pointer; }
+.med-btn.is-pending { background: #fdf3d8; border-color: var(--sun); color: var(--ink); }
+.med-btn.is-pending-alert { background: var(--caution-tint); border-color: var(--caution); color: var(--caution); }
+.med-btn.is-mismatch { color: var(--alert); border-color: #e3b5b1; }
+.med-time { display: inline-flex; align-items: center; gap: 4px; font-size: 13px; color: var(--ink-2); }
+.med-time select, .med-time input { min-height: 36px; border: 1px solid var(--line); border-radius: 6px; padding: 2px 6px; font-size: 14px; }
+.med-saved { display: flex; flex-direction: column; align-items: flex-start; min-height: 40px; padding: 4px 12px; border-radius: 6px; font-size: 14px; font-weight: bold; cursor: pointer; text-align: left; }
+.med-saved.is-done { background: #e3f1e8; border: 1px solid #8cc4a2; color: #1d5b39; }
+.med-saved.is-alert { background: var(--alert-tint); border: 1px solid #e3b5b1; color: var(--alert); }
+.med-saved-sub { font-size: 12.5px; font-weight: normal; }
+.med-savebar { position: sticky; bottom: 76px; z-index: 5; display: flex; justify-content: space-between; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0 18px; padding: 10px 14px; border-radius: 10px; background: #f3f6f4; border: 1px solid var(--line); font-weight: bold; }
+.med-savebar.has-pending { background: #fdf3d8; border-color: var(--sun); }
+.med-savebar > div { display: flex; gap: 8px; }
+.med-eye-title { margin-top: 10px; }
+@media (max-width: 768px) {
+  .rx-cmp-selects, .rx-cmp, .rx-form-grid { grid-template-columns: 1fr; }
+  .rx-timing-grid { grid-template-columns: repeat(2, 1fr); }
+  .med-row { align-items: flex-start; }
+}

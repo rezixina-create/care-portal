@@ -851,6 +851,46 @@ namespace CarePortal
         }
 
         // 施設名の変更 (管理者・事務員の2名承認)
+        // [Claude追加] 処方箋の画像の保存。本文: {"resident_id":1,"date":"2026-10-09","data":"(JPEGのbase64)"}
+        // 返り値: {"success":true,"url":"data/photos/prescriptions/r1/2026-10-09_123456_ab12cd.jpg","uploaded_by":"..."}
+        private void HandlePrescriptionUpload(NetworkStream stream, string body, string staff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string rid = (req.GetStr("resident_id") ?? "").Trim();
+            string date = (req.GetStr("date") ?? "").Trim();
+            string data = req.GetStr("data") ?? "";
+            if (!System.Text.RegularExpressions.Regex.IsMatch(rid, "^[0-9]{1,9}$") || !System.Text.RegularExpressions.Regex.IsMatch(date, "^[0-9]{4}-[0-9]{2}-[0-9]{2}$"))
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}");
+                return;
+            }
+            int comma = data.IndexOf(',');
+            if (data.StartsWith("data:") && comma > 0) data = data.Substring(comma + 1);
+            byte[] img;
+            try { img = Convert.FromBase64String(data); } catch { img = null; }
+            if (img == null || img.Length < 4 || img.Length > 8 * 1024 * 1024 || img[0] != 0xFF || img[1] != 0xD8)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_image\"}");
+                return;
+            }
+            string folder = Path.Combine(Path.Combine(Path.Combine(_dataDir, "photos"), "prescriptions"), "r" + rid);
+            string fileName = date + "_" + DateTime.Now.ToString("HHmmss") + "_" + NewToken().Substring(0, 6) + ".jpg";
+            try
+            {
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                File.WriteAllBytes(Path.Combine(folder, fileName), img);
+            }
+            catch
+            {
+                SendJsonResponse(stream, 500, "{\"error\":\"save_failed\"}");
+                return;
+            }
+            string url = "data/photos/prescriptions/r" + rid + "/" + fileName;
+            string who = (staff ?? "").Replace("\\", "").Replace("\"", "");
+            SendJsonResponse(stream, 200, "{\"success\":true,\"url\":\"" + url + "\",\"uploaded_by\":\"" + who + "\"}");
+        }
+
         private void HandleFacilityName(NetworkStream stream, string body)
         {
             JObj req = ParseBody(body);
@@ -1121,6 +1161,14 @@ namespace CarePortal
                     if (urlPath == "/api/facility-name" && method == "POST")
                     {
                         HandleFacilityName(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+
+                    // [Claude追加] 処方箋の画像を data/photos/prescriptions/ にファイルとして保存する
+                    // （全データの JSON に画像を入れると、保存・同期のたびに重くなるため）。登録者はセッションの職員名
+                    if (urlPath == "/api/prescription-upload" && method == "POST")
+                    {
+                        HandlePrescriptionUpload(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
                         return;
                     }
 

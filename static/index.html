@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261009_c5">
+ <link rel="stylesheet" href="style.css?v=20261009_d1">
 </head>
 <body>
 
@@ -604,44 +604,30 @@
 
  <!-- 7. 服薬 ＆ 点眼 -->
  <div id="tabCareMed" style="display:none;" class="panel-card">
- <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
- <span>服薬 ＆ 点眼チェック表 (処方指示・眼指定・時間帯別チェック・監査対応)</span>
- <div style="display:flex; gap:8px;">
- <button id="btnOpenEyedropModal" class="btn btn-primary" style="font-size:13px; padding:6px 12px;" onclick="openEyedropOrderModal()">点眼指示の登録・変更</button>
+ <!-- [Claude修正] 飲み薬は時間帯ごとに「まとめて記録 → 保存」。時間は処方薬の一覧から（起床時など）。点眼はこれまでどおり下の表 -->
+ <div class="panel-title">
+ <span>服薬チェック表（飲み薬）</span>
+ <button type="button" class="btn btn-secondary" onclick="openMedSlotTimesEditor()">時間帯の予定時刻</button>
  </div>
- </div>
+ <div id="medOralArea"></div>
 
- <!-- 時間帯切り替えバー -->
- <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:10px 14px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px;">
- <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
- <span style="font-size:13px; font-weight:bold; color:#36443e;">時間帯切替:</span>
- <div class="btn-group" id="medTimeFilterGroup" style="display:inline-flex; gap:4px;">
- <button id="btnMedFilterAll" class="btn btn-primary" style="font-size:13px; padding:5px 12px;" onclick="setMedTimingFilter('all')">すべて表示</button>
- <button id="btnMedFilterMorn" class="btn btn-secondary" style="font-size:13px; padding:5px 12px;" onclick="setMedTimingFilter('朝')">朝 (朝食後)</button>
- <button id="btnMedFilterNoon" class="btn btn-secondary" style="font-size:13px; padding:5px 12px;" onclick="setMedTimingFilter('昼')">昼 (昼食後)</button>
- <button id="btnMedFilterEve" class="btn btn-secondary" style="font-size:13px; padding:5px 12px;" onclick="setMedTimingFilter('夕')">夕 (夕食後)</button>
- <button id="btnMedFilterBed" class="btn btn-secondary" style="font-size:13px; padding:5px 12px;" onclick="setMedTimingFilter('眠前')">就寝前 (眠前)</button>
+ <div class="panel-title med-eye-title">
+ <span>点眼チェック表</span>
+ <button id="btnOpenEyedropModal" class="btn btn-secondary" onclick="openEyedropOrderModal()">点眼指示の登録・変更</button>
  </div>
- </div>
- <div style="font-size:13px; color:#5f6d66;">
- ※点眼は【右のみ】【左のみ】【両眼】を高コントラスト明示。各時間帯ボタンをタップして［済］記録／解除できます。
- </div>
- </div>
-
+ <p class="panel-note">点眼は【右のみ】【左のみ】【両眼】を確かめて、時間帯のボタンを押します。済みを押すと取消（理由を入力）になります。</p>
+ <div style="overflow-x:auto;">
  <table class="data-table" id="medTable">
  <thead>
  <tr id="medTableHeaderRow">
  <th>居室</th>
  <th>氏名</th>
- <th>朝食後</th>
- <th>昼食後</th>
- <th>夕食後</th>
- <th>就寝前</th>
- <th>点眼 (眼指定・指示内容・時間帯別実施)</th>
+ <th>点眼（眼の指定・薬・時間帯ごとの実施）</th>
  </tr>
  </thead>
  <tbody></tbody>
  </table>
+ </div>
  </div>
 
  <!-- 8. 夜勤体位変換 -->
@@ -2263,6 +2249,21 @@
  </div>
 
  <!-- 9. フルサイズ拡大表示 (ライトボックス) モーダル -->
+ <!-- [Claude追加] 処方箋と処方薬 モーダル（処方箋の画像を日付ごとに保存・見比べ／処方薬の一覧は看護師だけが書き込める） -->
+ <div class="modal-overlay" id="rxModal" style="display:none;">
+  <div class="modal-card rx-card">
+   <div class="rx-head">
+    <h3 id="rxModalTitle">処方箋と処方薬</h3>
+    <button type="button" class="modal-close-btn" onclick="closeModal('rxModal')" aria-label="閉じる">&times;</button>
+   </div>
+   <div class="rx-tabs" role="tablist">
+    <button type="button" class="rx-tab" id="rxTabMeds" onclick="switchRxTab('meds')">処方薬の一覧</button>
+    <button type="button" class="rx-tab" id="rxTabRx" onclick="switchRxTab('rx')">処方箋の画像</button>
+   </div>
+   <div id="rxModalBody"></div>
+  </div>
+ </div>
+
  <div class="modal-overlay" id="lightboxModal" style="display:none; z-index:1100; background:rgba(0,0,0,0.85);" onclick="closeModal('lightboxModal')">
  <div style="position:relative; max-width:90vw; max-height:90vh; text-align:center;" onclick="event.stopPropagation()">
  <button class="modal-close-btn" style="position:absolute; top:-36px; right:0; color:white; font-size:28px;" onclick="closeModal('lightboxModal')">&times;</button>
@@ -3561,7 +3562,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261009_b4"></script>
+ <script src="app.js?v=20261009_c1"></script>
   
 
   <!-- ============================================================ -->
