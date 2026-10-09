@@ -16383,6 +16383,10 @@ function openBackupStatusModal() {
   noticeEl.textContent = "";
  }
 
+ if (typeof loadExternalBackupStatus === "function") {
+  loadExternalBackupStatus();
+ }
+
  modal.style.display = "flex";
 }
 
@@ -16653,6 +16657,189 @@ function submitInitialPinModal() {
 function renderOfficeBackup() {
  const notice = document.getElementById("officeBackupNotice");
  if (notice) notice.textContent = "";
+ if (typeof loadExternalBackupStatus === "function") {
+  loadExternalBackupStatus();
+ }
+}
+
+// [Antigravity追加] 外部への自動二重バックアップ
+async function loadExternalBackupStatus() {
+  try {
+    const res = await cpApiFetch("/api/external-backup-status");
+    if (!res.ok) return;
+    const data = await res.json();
+
+    const pathInput = document.getElementById("extBackupDestPath");
+    const retInput = document.getElementById("extBackupRetention");
+    const lastSuccEl = document.getElementById("extBackupLastSuccess");
+    const lastAttEl = document.getElementById("extBackupLastAttempt");
+    const badgeContainer = document.getElementById("extBackupStatusBadgeContainer");
+    const errInfo = document.getElementById("extBackupErrorInfo");
+    const errTime = document.getElementById("extBackupErrorTime");
+    const errReason = document.getElementById("extBackupErrorReason");
+
+    if (pathInput && document.activeElement !== pathInput) {
+      pathInput.value = data.destination_path || "";
+    }
+    if (retInput && document.activeElement !== retInput) {
+      retInput.value = data.max_generations || 30;
+    }
+    if (lastSuccEl) {
+      lastSuccEl.textContent = data.last_success_at || "未実行";
+      lastSuccEl.style.color = data.last_success_at ? "var(--pine)" : "var(--ink-3)";
+    }
+    if (lastAttEl) {
+      lastAttEl.textContent = data.last_attempt_at || "-";
+    }
+
+    if (errInfo) {
+      if (data.last_status === "failed") {
+        errInfo.style.display = "block";
+        if (errTime) errTime.textContent = data.last_attempt_at || "-";
+        if (errReason) errReason.textContent = data.last_error || "外部共有フォルダへの保存に失敗しました";
+      } else {
+        errInfo.style.display = "none";
+      }
+    }
+
+    if (badgeContainer) {
+      if (data.last_status === "failed") {
+        badgeContainer.innerHTML = `<span class="badge" style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); padding:4px 10px; font-size:12px; font-weight:bold;">外部保存 失敗</span>`;
+      } else if (data.last_status === "success" && data.last_success_at) {
+        badgeContainer.innerHTML = `<span class="badge" style="background:var(--pine-tint); color:var(--pine); border:1px solid var(--pine); padding:4px 10px; font-size:12px; font-weight:bold;">外部二重保管 稼働中</span>`;
+      } else if (data.destination_path) {
+        badgeContainer.innerHTML = `<span class="badge" style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--sun); padding:4px 10px; font-size:12px; font-weight:bold;">外部保存 設定済 (未実行)</span>`;
+      } else {
+        badgeContainer.innerHTML = `<span class="badge" style="background:var(--ground); color:var(--ink-3); border:1px solid var(--line); padding:4px 10px; font-size:12px;">外部保存 未設定</span>`;
+      }
+    }
+
+    // モーダル内の情報更新
+    const modalExtStat = document.getElementById("backupModalExtStatus");
+    const modalExtSucc = document.getElementById("backupModalExtSuccess");
+    const modalExtErrRow = document.getElementById("backupModalExtErrRow");
+    const modalExtErrTime = document.getElementById("backupModalExtErrTime");
+    const modalExtErrMsg = document.getElementById("backupModalExtErrMsg");
+
+    if (modalExtStat) {
+      if (data.last_status === "failed") {
+        modalExtStat.textContent = "保存失敗 (エラー)";
+        modalExtStat.style.color = "var(--alert)";
+      } else if (data.last_status === "success") {
+        modalExtStat.textContent = "正常稼働中";
+        modalExtStat.style.color = "var(--pine)";
+      } else if (data.destination_path) {
+        modalExtStat.textContent = "設定済み (未実行)";
+        modalExtStat.style.color = "var(--caution)";
+      } else {
+        modalExtStat.textContent = "未設定";
+        modalExtStat.style.color = "var(--ink-3)";
+      }
+    }
+    if (modalExtSucc) {
+      modalExtSucc.textContent = data.last_success_at || "未実行";
+    }
+    if (modalExtErrRow) {
+      if (data.last_status === "failed") {
+        modalExtErrRow.style.display = "block";
+        if (modalExtErrTime) modalExtErrTime.textContent = data.last_attempt_at || "-";
+        if (modalExtErrMsg) modalExtErrMsg.textContent = data.last_error || "エラー";
+      } else {
+        modalExtErrRow.style.display = "none";
+      }
+    }
+  } catch (e) {
+    console.error("loadExternalBackupStatus error", e);
+  }
+}
+
+async function saveExternalBackupConfig() {
+  const pathEl = document.getElementById("extBackupDestPath");
+  const retEl = document.getElementById("extBackupRetention");
+  const noticeEl = document.getElementById("extBackupSaveNotice");
+  if (!pathEl || !retEl) return;
+
+  const destPath = pathEl.value.trim();
+  const maxGen = parseInt(retEl.value, 10) || 30;
+
+  if (noticeEl) {
+    noticeEl.style.color = "var(--ink-2)";
+    noticeEl.textContent = "設定を保存中...";
+  }
+
+  try {
+    const res = await cpApiFetch("/api/external-backup-config", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        destination_path: destPath,
+        max_generations: maxGen
+      })
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      if (noticeEl) {
+        noticeEl.style.color = "var(--pine)";
+        noticeEl.textContent = "外部バックアップ設定を保存しました。";
+        setTimeout(() => { if (noticeEl) noticeEl.textContent = ""; }, 4000);
+      }
+      await loadExternalBackupStatus();
+    } else {
+      if (noticeEl) {
+        noticeEl.style.color = "var(--alert)";
+        noticeEl.textContent = "保存に失敗しました: " + (result.error || "権限がありません");
+      }
+    }
+  } catch (e) {
+    if (noticeEl) {
+      noticeEl.style.color = "var(--alert)";
+      noticeEl.textContent = "通信エラー: " + e.message;
+    }
+  }
+}
+
+async function runManualExternalBackup() {
+  const noticeEl = document.getElementById("extBackupRunNotice");
+  const modalNoticeEl = document.getElementById("backupManualNotice");
+  const btn = document.getElementById("btnRunExtBackup");
+
+  const setNotice = (msg, isErr) => {
+    if (noticeEl) {
+      noticeEl.style.color = isErr ? "var(--alert)" : "var(--pine)";
+      noticeEl.textContent = msg;
+    }
+    if (modalNoticeEl) {
+      modalNoticeEl.style.color = isErr ? "var(--alert)" : "var(--pine)";
+      modalNoticeEl.textContent = msg;
+    }
+  };
+
+  setNotice("外部共有フォルダへバックアップ中... (全データと写真をコピーしています)", false);
+  if (btn) btn.disabled = true;
+
+  try {
+    const res = await cpApiFetch("/api/external-backup-run", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: "{}"
+    });
+    const result = await res.json();
+    if (res.ok && result.success) {
+      setNotice(`外部バックアップに成功しました（保管フォルダ: ${result.backup_dir}、合計 ${result.files_count} ファイル）`, false);
+      await loadExternalBackupStatus();
+    } else {
+      setNotice(`外部バックアップに失敗しました: ${result.error || "エラー"}`, true);
+      await loadExternalBackupStatus();
+    }
+  } catch (e) {
+    setNotice("通信エラー: " + e.message, true);
+  } finally {
+    if (btn) btn.disabled = false;
+  }
 }
 
 // 事務所ポータル：職員アカウント・暗証番号管理
@@ -16902,6 +17089,9 @@ if (typeof window !== "undefined") {
  window.openInitialPinModal = openInitialPinModal;
  window.submitInitialPinModal = submitInitialPinModal;
  window.renderOfficeBackup = renderOfficeBackup;
+ window.loadExternalBackupStatus = loadExternalBackupStatus;
+ window.saveExternalBackupConfig = saveExternalBackupConfig;
+ window.runManualExternalBackup = runManualExternalBackup;
  window.renderOfficeStaffAuth = renderOfficeStaffAuth;
  window.submitTwoPersonReset = submitTwoPersonReset;
  window.resetStaffPin = resetStaffPin;

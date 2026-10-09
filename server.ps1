@@ -1,4 +1,4 @@
-﻿# Care Portal Server Script (Windows Standard PowerShell + .NET)
+# Care Portal Server Script (Windows Standard PowerShell + .NET)
 param(
     [switch]$NoBrowser,
     [switch]$NoTunnel
@@ -295,6 +295,8 @@ namespace CarePortal
         private string _backupDir;
         private TcpListener _listener;
         private readonly object _fileLock = new object();
+        private readonly object _extBackupLock = new object();
+        private System.Threading.Timer _extBackupTimer;
 
         // [Claude修正] ログインの照合とセッション管理 (サーバー側)。
         // 旧実装はログイン画面を画面側で表示するだけで、サーバーは誰にでもデータを渡していた。
@@ -922,6 +924,297 @@ namespace CarePortal
             SendJsonResponse(stream, saved ? 200 : 500, saved ? "{\"success\":true}" : "{\"error\":\"save_failed\"}");
         }
 
+        // [Antigravity追加] 外部への自動二重バックアップ
+        public class ExtBackupResult
+        {
+            public bool Success;
+            public string Timestamp;
+            public string BackupDir;
+            public string Error;
+            public string DestPath;
+            public int FilesCount;
+        }
+
+        private static int CopyDirectoryRecursive(string sourceDir, string targetDir)
+        {
+            int count = 0;
+            if (!Directory.Exists(sourceDir)) return 0;
+            if (!Directory.Exists(targetDir)) Directory.CreateDirectory(targetDir);
+
+            string[] files = Directory.GetFiles(sourceDir);
+            for (int i = 0; i < files.Length; i++)
+            {
+                string f = files[i];
+                string dest = Path.Combine(targetDir, Path.GetFileName(f));
+                File.Copy(f, dest, true);
+                count++;
+            }
+
+            string[] dirs = Directory.GetDirectories(sourceDir);
+            for (int i = 0; i < dirs.Length; i++)
+            {
+                string d = dirs[i];
+                string dest = Path.Combine(targetDir, Path.GetFileName(d));
+                count += CopyDirectoryRecursive(d, dest);
+            }
+            return count;
+        }
+
+        private static void EnforceRetention(string destPath, int maxGenerations)
+        {
+            if (maxGenerations <= 0) return;
+            if (!Directory.Exists(destPath)) return;
+            string[] dirs = Directory.GetDirectories(destPath, "backup_*");
+            if (dirs.Length <= maxGenerations) return;
+            Array.Sort(dirs);
+            int toDelete = dirs.Length - maxGenerations;
+            for (int i = 0; i < toDelete; i++)
+            {
+                try { Directory.Delete(dirs[i], true); } catch { }
+            }
+        }
+
+        private void OnExtBackupTimerTick(object state)
+        {
+            try
+            {
+                TryRunExternalBackup(false);
+            }
+            catch { }
+        }
+
+        private ExtBackupResult TryRunExternalBackup(bool isManual)
+        {
+            ExtBackupResult res = new ExtBackupResult();
+            res.Success = false;
+            res.Timestamp = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss");
+            res.BackupDir = "";
+            res.Error = "";
+            res.DestPath = "";
+            res.FilesCount = 0;
+
+            lock (_extBackupLock)
+            {
+                JObj db = null;
+                try { db = LoadDb(); } catch { db = null; }
+                if (db == null)
+                {
+                    res.Error = "データベースの読み込みに失敗しました";
+                    return res;
+                }
+
+                JObj extCfg = db.Get("external_backup") as JObj;
+                if (extCfg == null)
+                {
+                    if (isManual)
+                    {
+                        res.Error = "外部保存先のパスが設定されていません。管理画面から保存先パスを設定してください。";
+                    }
+                    return res;
+                }
+
+                string destPath = (extCfg.GetStr("destination_path") ?? "").Trim();
+                if (string.IsNullOrEmpty(destPath))
+                {
+                    if (isManual)
+                    {
+                        res.Error = "外部保存先のパスが空です。管理画面から有効なパスを設定してください。";
+                    }
+                    return res;
+                }
+
+                int maxGen = 30;
+                JNum mgNum = extCfg.Get("max_generations") as JNum;
+                if (mgNum != null)
+                {
+                    int parsed;
+                    if (int.TryParse(mgNum.Raw, out parsed) && parsed > 0) maxGen = parsed;
+                }
+
+                string todayStr = DateTime.Now.ToString("yyyy-MM-dd");
+                string lastSuccess = extCfg.GetStr("last_success_at") ?? "";
+                if (!isManual && lastSuccess.StartsWith(todayStr))
+                {
+                    res.Success = true;
+                    res.Timestamp = lastSuccess;
+                    res.BackupDir = extCfg.GetStr("last_backup_dir") ?? "";
+                    return res;
+                }
+
+                res.DestPath = destPath;
+
+                try
+                {
+                    if (!Directory.Exists(destPath))
+                    {
+                        Directory.CreateDirectory(destPath);
+                    }
+
+                    string tsFolder = "backup_" + DateTime.Now.ToString("yyyyMMdd_HHmmss");
+                    string targetFolder = Path.Combine(destPath, tsFolder);
+                    Directory.CreateDirectory(targetFolder);
+
+                    // 1. data/portal_database.json の保存
+                    lock (_fileLock)
+                    {
+                        if (File.Exists(_dbFile))
+                        {
+                            File.Copy(_dbFile, Path.Combine(targetFolder, "portal_database.json"), true);
+                            res.FilesCount++;
+                        }
+                    }
+
+                    // 2. data/photos/ 以下の全ファイル・フォルダの保存
+                    string photosSrc = Path.Combine(_dataDir, "photos");
+                    if (Directory.Exists(photosSrc))
+                    {
+                        string photosTarget = Path.Combine(targetFolder, "photos");
+                        int photoCopied = CopyDirectoryRecursive(photosSrc, photosTarget);
+                        res.FilesCount += photoCopied;
+                    }
+
+                    // 3. バックアップ情報ファイル backup_info.json の出力
+                    string infoContent = "{\"backup_time\":\"" + res.Timestamp + "\",\"generation\":\"" + tsFolder + "\",\"files_count\":" + res.FilesCount + "}";
+                    File.WriteAllText(Path.Combine(targetFolder, "backup_info.json"), infoContent, Encoding.UTF8);
+
+                    // 4. 世代管理
+                    EnforceRetention(destPath, maxGen);
+
+                    res.Success = true;
+                    res.BackupDir = tsFolder;
+
+                    UpdateDb(delegate(JObj d)
+                    {
+                        JObj ec = d.Get("external_backup") as JObj;
+                        if (ec == null)
+                        {
+                            ec = new JObj();
+                            d.Set("external_backup", ec);
+                        }
+                        ec.Set("last_success_at", res.Timestamp);
+                        ec.Set("last_attempt_at", res.Timestamp);
+                        ec.Set("last_status", "success");
+                        ec.Set("last_error", "");
+                        ec.Set("last_backup_dir", tsFolder);
+                        return true;
+                    });
+                }
+                catch (Exception ex)
+                {
+                    res.Success = false;
+                    res.Error = ex.Message;
+
+                    try
+                    {
+                        UpdateDb(delegate(JObj d)
+                        {
+                            JObj ec = d.Get("external_backup") as JObj;
+                            if (ec == null)
+                            {
+                                ec = new JObj();
+                                d.Set("external_backup", ec);
+                            }
+                            ec.Set("last_attempt_at", res.Timestamp);
+                            ec.Set("last_status", "failed");
+                            ec.Set("last_error", ex.Message);
+                            return true;
+                        });
+                    }
+                    catch { }
+                }
+            }
+
+            return res;
+        }
+
+        private void HandleExternalBackupStatus(NetworkStream stream)
+        {
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            JObj ext = db != null ? (db.Get("external_backup") as JObj) : null;
+            if (ext == null)
+            {
+                SendJsonResponse(stream, 200, "{\"configured\":false,\"destination_path\":\"\",\"max_generations\":30,\"last_success_at\":\"\",\"last_attempt_at\":\"\",\"last_status\":\"\",\"last_error\":\"\",\"last_backup_dir\":\"\"}");
+            }
+            else
+            {
+                string json = MiniJson.Serialize(ext);
+                SendJsonResponse(stream, 200, json);
+            }
+        }
+
+        private void HandleExternalBackupConfig(NetworkStream stream, string body, string sessionStaff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            if (string.IsNullOrEmpty(sessionStaff)) { SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}"); return; }
+
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (db == null) { SendJsonResponse(stream, 500, "{\"error\":\"no_data\"}"); return; }
+
+            List<object> stamps = GetList(db, "stamps");
+            JObj st = FindStamp(stamps, sessionStaff);
+            if (!IsAdminRole(st) && !IsClerkRole(st))
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"forbidden_role\"}");
+                return;
+            }
+
+            string dest = (req.GetStr("destination_path") ?? "").Trim();
+            int maxGen = 30;
+            JNum mgNum = req.Get("max_generations") as JNum;
+            if (mgNum != null)
+            {
+                int p;
+                if (int.TryParse(mgNum.Raw, out p) && p > 0) maxGen = p;
+            }
+
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                JObj ec = d.Get("external_backup") as JObj;
+                if (ec == null)
+                {
+                    ec = new JObj();
+                    d.Set("external_backup", ec);
+                }
+                ec.Set("destination_path", dest);
+                ec.Set("max_generations", new JNum(maxGen.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                return true;
+            });
+
+            SendJsonResponse(stream, saved ? 200 : 500, saved ? "{\"success\":true}" : "{\"error\":\"save_failed\"}");
+        }
+
+        private void HandleExternalBackupRun(NetworkStream stream, string sessionStaff)
+        {
+            if (string.IsNullOrEmpty(sessionStaff)) { SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}"); return; }
+
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            if (db == null) { SendJsonResponse(stream, 500, "{\"error\":\"no_data\"}"); return; }
+
+            List<object> stamps = GetList(db, "stamps");
+            JObj st = FindStamp(stamps, sessionStaff);
+            if (!IsAdminRole(st) && !IsClerkRole(st))
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"forbidden_role\"}");
+                return;
+            }
+
+            ExtBackupResult res = TryRunExternalBackup(true);
+
+            JObj respObj = new JObj();
+            respObj.Set("success", res.Success);
+            respObj.Set("timestamp", res.Timestamp);
+            respObj.Set("backup_dir", res.BackupDir);
+            respObj.Set("error", res.Error);
+            respObj.Set("files_count", new JNum(res.FilesCount.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
+            string respJson = MiniJson.Serialize(respObj);
+            SendJsonResponse(stream, res.Success ? 200 : 500, respJson);
+        }
+
         // 端末から届いたデータの暗証番号・施設名は使わず、サーバーの値を保つ (新しく追加された職員は初期値)
         private static void MergeServerOwnedFields(JObj posted, JObj cur)
         {
@@ -950,6 +1243,10 @@ namespace CarePortal
             if (cur != null && cur.Get("facility_name") is string)
             {
                 posted.Set("facility_name", cur.Get("facility_name"));
+            }
+            if (cur != null && cur.Get("external_backup") != null)
+            {
+                posted.Set("external_backup", cur.Get("external_backup"));
             }
         }
 
@@ -1033,6 +1330,14 @@ namespace CarePortal
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
 
+            // [Antigravity追加] 外部への自動二重バックアップ
+            // 起動5秒後に初回の外部バックアップ確認を行い、以降30分ごとに定期確認 (1日1回自動保存)
+            try
+            {
+                _extBackupTimer = new System.Threading.Timer(OnExtBackupTimerTick, null, 5000, 30 * 60 * 1000);
+            }
+            catch { }
+
             while (true)
             {
                 try
@@ -1045,6 +1350,35 @@ namespace CarePortal
                     break;
                 }
             }
+        }
+
+        public void StartAsync()
+        {
+            ThreadPool.QueueUserWorkItem(delegate(object state)
+            {
+                Start();
+            });
+        }
+
+        public void Stop()
+        {
+            try
+            {
+                if (_extBackupTimer != null)
+                {
+                    _extBackupTimer.Dispose();
+                    _extBackupTimer = null;
+                }
+            }
+            catch { }
+            try
+            {
+                if (_listener != null)
+                {
+                    _listener.Stop();
+                }
+            }
+            catch { }
         }
 
         private void HandleClient(object obj)
@@ -1161,6 +1495,23 @@ namespace CarePortal
                     if (urlPath == "/api/facility-name" && method == "POST")
                     {
                         HandleFacilityName(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+
+                    // [Antigravity追加] 外部への自動二重バックアップ
+                    if (urlPath == "/api/external-backup-status" && (method == "GET" || method == "POST"))
+                    {
+                        HandleExternalBackupStatus(stream);
+                        return;
+                    }
+                    if (urlPath == "/api/external-backup-config" && method == "POST")
+                    {
+                        HandleExternalBackupConfig(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        return;
+                    }
+                    if (urlPath == "/api/external-backup-run" && method == "POST")
+                    {
+                        HandleExternalBackupRun(stream, sessStaff);
                         return;
                     }
 
@@ -1545,5 +1896,8 @@ try {
     $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
     $server.Start()
 } finally {
+    if ($server) {
+        try { $server.Stop() } catch { }
+    }
     & $cleanup
 }
