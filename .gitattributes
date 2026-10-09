@@ -1,0 +1,12 @@
+# 改行コードをそろえる設定（2026-10-09 Claude追加）
+# GitHub上には LF で保存し、PCで取り出すときは Windows 式の CRLF にする。
+# USBでコピーしたファイルが CRLF でも、改行の違いだけで「変更あり」にはならない。
+* text=auto eol=crlf
+
+# 画像はテキストとして扱わない
+*.jpg  binary
+*.jpeg binary
+*.png  binary
+*.gif  binary
+*.ico  binary
+*.pdf  binary
