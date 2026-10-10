@@ -3115,29 +3115,7 @@ function dismissAlert(alertKey, forceConfirmed, alertTitle, alertDetail) {
  dismissAlerts([alertKey]);
 }
 
-function executeDismissAlert() {
- if (!pendingDismissData) {
-   closeModal("alertConfirmModal");
-   return;
- }
- const data = pendingDismissData;
- pendingDismissData = null;
- closeModal("alertConfirmModal");
-
- // 対応ログに記録
- if (!Array.isArray(db.data.alert_logs)) db.data.alert_logs = [];
- const staff = (gState.session && gState.session.staffName) ? gState.session.staffName : ((document.getElementById("currentStaff")?.value) || "担当者");
- db.data.alert_logs.unshift({
-   id: Date.now(),
-   alert_key: data.key,
-   alert_title: data.title,
-   alert_detail: data.detail,
-   staff_name: staff,
-   dismissed_at: toLocalDateTimeStr(new Date())
- });
-
- dismissAlert(data.key, true);
-}
+// [Claude修正] 同じ名前の関数がもう1つ後ろにあり、こちらは使われていなかった（後ろの定義が有効）ため削除: executeDismissAlert
 
 function undismissAlert(alertKey) {
  const store = getDismissedAlertStore();
@@ -10945,156 +10923,10 @@ function renderNotebook() {
 }
 
 // 月間業務連絡表
-function renderMonthlyNotices() {
-	const container = document.getElementById("monthlyNoticeList");
-	const alertArea = document.getElementById("monthlyNoticeAlertArea");
-	if (!container) return;
-	container.innerHTML = "";
-	if (alertArea) alertArea.innerHTML = "";
-
-	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
-	const notices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth); // [Claude修正] 取消済みは表示しない（データには残る）
-	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
-
-	// 未確認アラート表示
-	if (currentStaff && notices.length > 0) {
-		const unconfirmed = notices.filter(n => {
-			const st = getNoticeConfirmationStatus(n, currentStaff);
-			return !st.confirmed;
-		});
-		if (unconfirmed.length > 0 && alertArea) {
-			alertArea.innerHTML = `
-			<div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
-				 ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認業務連絡・追記が <strong>${unconfirmed.length}件</strong> あります。各項目の「☑ 確認済みにする」を押してください。
-			</div>
-			`;
-		}
-	}
-
-	if (notices.length === 0) {
-		container.innerHTML = `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">${curMonth}月の業務連絡はありません。「＋ 業務連絡を追加」から追加できます。</p>`;
-		return;
-	}
-
-	notices.forEach(n => {
-		const stStatus = getNoticeConfirmationStatus(n, currentStaff);
-		let prioStyle = "background:#eef2ef; color:#4a5852;";
-		if (n.priority === "至急") prioStyle = "background:#fee2e2; color:#991b1b; font-weight:bold;";
-		else if (n.priority === "重要") prioStyle = "background:#fef3c7; color:#92400e; font-weight:bold;";
-
-		const confirmedPills = (n.confirmed_staff && n.confirmed_staff.length > 0)
-			? n.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
-			: `<span style="color:#94a19a; font-size:11.5px;">未確認</span>`;
-
-		const card = document.createElement("div");
-		card.style.background = stStatus.confirmed ? "#f6f8f6" : "#ffffff";
-		card.style.border = stStatus.hasNewUpdate ? "2px solid #f59e0b" : (stStatus.confirmed ? "1px solid #cdd6d0" : "2px solid #1e5b47");
-		card.style.borderRadius = "8px";
-		card.style.padding = "14px 16px";
-		card.style.marginBottom = "12px";
-		card.style.boxShadow = stStatus.confirmed ? "none" : "0 2px 8px rgba(37,99,235,0.12)";
-
-		let statusBadgeHtml = "";
-		if (stStatus.hasNewUpdate) {
-			statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再確認)</span>`;
-		} else if (stStatus.confirmed) {
-			statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #86efac;">✓ 確認済み</span>`;
-		} else {
-			statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認</span>`;
-		}
-
-		// 追記リスト
-		let updatesHtml = "";
-		if (Array.isArray(n.updates) && n.updates.length > 0) {
-			updatesHtml += `<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:10px 12px; margin:10px 0 6px 0;">`;
-			updatesHtml += `<div style="font-weight:bold; font-size:12px; color:#b45309; margin-bottom:4px; display:flex; align-items:center; gap:4px;"> 【追記・変更事項】 (計 ${n.updates.length}件)</div>`;
-			n.updates.forEach(u => {
-				updatesHtml += `
-					<div style="font-size:12.5px; color:#78350f; margin-top:6px; padding-top:6px; border-top:1px dashed #fde68a;">
-						<span style="font-weight:bold; color:#92400e;">[${escapeHtml(u.created_at || '')} 追記 by ${escapeHtml(u.staff_name || '職員')}]:</span>
-						<div style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(u.content)}</div>
-					</div>
-				`;
-			});
-			updatesHtml += `</div>`;
-		}
-
-		card.innerHTML = `
-			<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
-				<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
-					<span style="font-size:11px; padding:2px 8px; border-radius:4px; ${prioStyle}">［${escapeHtml(n.priority || '通常')}］</span>
-					<strong style="font-size:15px; color:#22302b;">${escapeHtml(n.title)}</strong>
-					${statusBadgeHtml}
-				</div>
-				<div style="display:flex; gap:6px; align-items:center;">
-					<span style="font-size:11px; color:#5f6d66;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
-					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
-				</div>
-			</div>
-			<div style="font-size:14px; line-height:1.7; color:#36443e; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
-			${updatesHtml}
-			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px; font-size:12.5px; line-height:1.6;">
-				<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
-					<strong style="color:#4a5852; white-space:nowrap;">確認済職員:</strong>
-					<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
-				</div>
-				<div>
-					${stStatus.hasNewUpdate ? `
-						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmMonthlyNotice(${n.id})">
-							☑ 追記も含めて確認済みにする
-						</button>
-					` : (stStatus.confirmed ? `
-						<button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
-							✓ 確認済み (解除)
-						</button>
-					` : `
-						<button class="btn btn-primary" style="padding:5px 16px; font-size:12.5px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmMonthlyNotice(${n.id})">
-							☑ 確認済みにする
-						</button>
-					`)}
-				</div>
-			</div>
-		`;
-		container.appendChild(card);
-	});
-}
+// [Claude修正] 同じ名前の関数がもう1つ後ろにあり、こちらは使われていなかった（後ろの定義が有効）ため削除: renderMonthlyNotices
 
 // 一括確認機能（ボタン押下時に全項目に現在の職員名を反映）
-function toggleNotebookStamp() {
-	const staff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
-	if (!staff) {
-		alert("担当職員を選択してください。");
-		return;
-	}
-
-	const nowStr = new Date().toISOString();
-
-	// 1. 本日の引き継ぎ・申し送り事項を一括確認
-	const notebooks = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない（データには残る）
-	notebooks.forEach(nb => {
-		if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
-		if (!nb.confirmed_versions) nb.confirmed_versions = {};
-		if (!nb.confirmed_staff.includes(staff)) nb.confirmed_staff.push(staff);
-		const lastUpdated = nb.last_updated_at || nb.created_at || nowStr;
-		nb.confirmed_versions[staff] = lastUpdated;
-	});
-
-	// 2. 当月の月間業務連絡を一括確認
-	const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
-	const notices = (db.data.monthly_notices || []).filter(n => !n.voided && n.month === curMonth); // [Claude修正] 取消済みは表示しない（データには残る）
-	notices.forEach(n => {
-		if (!Array.isArray(n.confirmed_staff)) n.confirmed_staff = [];
-		if (!n.confirmed_versions) n.confirmed_versions = {};
-		if (!n.confirmed_staff.includes(staff)) n.confirmed_staff.push(staff);
-		const lastUpdated = n.last_updated_at || n.created_at || nowStr;
-		n.confirmed_versions[staff] = lastUpdated;
-	});
-
-	db.save();
-	renderNotebook();
-	alert(`［${staff}］さんで本日の全申送りおよび月間業務連絡を全件確認済みにしました。`);
-}
+// [Claude修正] 同じ名前の関数がもう1つ後ろにあり、こちらは使われていなかった（後ろの定義が有効）ため削除: toggleNotebookStamp
 
 
 function confirmDailyNotebookItem(id) {
@@ -14767,6 +14599,7 @@ async function openShareModal() {
  modal.style.display = "flex";
  if (db) {
  db.renderShareModalUrls();
+ if (!db.isServerMode) return; // [Claude修正] 単体起動ではサーバーに問い合わせない
  try {
  const res = await cpApiFetch('/api/ip');
  if (res.ok) {
@@ -17303,6 +17136,12 @@ function cpExtBackupErrorText(result) {
 
 // [Antigravity追加] 外部への自動二重バックアップ
 async function loadExternalBackupStatus() {
+  // [Claude修正] 単体起動（サーバーなし）では外部バックアップの状態は取れないので、問い合わせない
+  if (!db || !db.isServerMode) {
+    const bc = document.getElementById("extBackupStatusBadgeContainer");
+    if (bc) bc.textContent = "単体起動のときは使えません（サーバーで起動したときに使えます）";
+    return;
+  }
   try {
     const res = await cpApiFetch("/api/external-backup-status");
     if (!res.ok) return;
