@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261010_e1">
+ <link rel="stylesheet" href="style.css?v=20261011_a1">
 </head>
 <body>
 
@@ -1654,6 +1654,26 @@
  </div>
 
 
+  <!-- [Claude追加] 退所の手続き -->
+  <div class="modal-overlay" id="dischargeModal" style="display:none;">
+   <div class="modal-card" style="max-width:520px;">
+    <div class="modal-header">
+     <h3 id="dischargeTitle" style="margin:0; font-size:16px;">退所の手続き</h3>
+     <button type="button" class="modal-close-btn" onclick="closeModal('dischargeModal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:12px 4px;">
+     <div class="form-group"><label>退所日 <span style="color:#b3261e;">*</span></label><input type="date" id="dischargeDate" class="form-control"></div>
+     <div class="form-group"><label>理由 <span style="color:#b3261e;">*</span></label><select id="dischargeReason" class="form-control"></select></div>
+     <div class="form-group"><label>くわしい内容（「その他」のときは必須）</label><input type="text" id="dischargeNote" class="form-control" maxlength="120"></div>
+     <p class="panel-note">退所しても記録は消えません。利用者一覧の「退所した方」から、カルテや過去の記録を見られます。退所した方は、毎日の表・お知らせ・区分の人数から外れます（退所日までの日付の表には出ます）。間違えたときは「退所を取り消す」で戻せます。</p>
+     <div class="rx-form-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('dischargeModal')">やめる</button>
+      <button type="button" class="btn btn-primary" onclick="submitDischarge()">退所にする</button>
+     </div>
+    </div>
+   </div>
+  </div>
+
  <div class="modal-overlay" id="residentModal" style="display:none;">
  <div class="modal-card" style="max-width:680px; max-height:90vh; overflow-y:auto;">
  <div class="modal-header">
@@ -1695,7 +1715,7 @@
  <option value="入院中">入院中</option>
  <option value="外泊中">外泊中</option>
  <option value="ショート利用">ショート利用</option>
- <option value="退所">退所</option>
+ <option value="退所" disabled>退所（カルテの「退所の手続き」から）</option>
  </select>
  </div>
  <div class="form-group">
@@ -3722,7 +3742,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261010_e1"></script>
+ <script src="app.js?v=20261011_a1"></script>
   
 
   <!-- ============================================================ -->

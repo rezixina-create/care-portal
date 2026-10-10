@@ -1688,3 +1688,11 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .staffing-calc { margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--pine-tint-2); font-size: 13px; color: var(--ink); }
 .staffing-calc.is-short { background: var(--caution-tint); color: var(--caution); font-weight: bold; }
 @media (max-width: 600px) { .staffing-grid { grid-template-columns: repeat(2, 1fr); } }
+
+/* [Claude追加] 退所 */
+.discharged-toggle { font: inherit; font-size: 13px; font-weight: bold; color: var(--ink-2); background: var(--ground); border: 1px dashed var(--line); border-radius: 8px; padding: 8px 12px; cursor: pointer; min-height: 44px; align-self: stretch; }
+.resident-card.discharged { opacity: 0.75; }
+.discharge-badge { font-size: 13px; font-weight: bold; padding: 1px 6px; border-radius: 4px; background: var(--ink-3); color: #ffffff; }
+.discharge-date { font-size: 13px; color: var(--ink-3); }
+.discharge-banner { margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--ground); border: 1px solid var(--line); font-size: 13px; font-weight: bold; color: var(--ink); text-align: left; }
+.discharge-by { font-weight: normal; color: var(--ink-3); }

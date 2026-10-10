@@ -3372,7 +3372,7 @@ function checkGlobalAlerts() {
   const birthdayKey = `birthday_${today.getMonth() === 11 ? today.getFullYear() + 1 : today.getFullYear()}_${nextMonthNum}`;
   if (!isAlertDismissed(birthdayKey)) {
     const nextMonthBirthdays = [];
-    gState.residents.forEach(r => {
+    cpCurrentResidents().forEach(r => {
       if (r.birth_date && typeof r.birth_date === 'string' && r.birth_date.includes("-")) {
         const parts = r.birth_date.split("-");
         if (parts.length >= 2) {
@@ -3473,7 +3473,7 @@ function checkGlobalAlerts() {
   }
 
   // 4. 【介護専用：受診2週前・1週前事前告知 ＆ 往診特殊指示アラート】
-  gState.residents.forEach(r => {
+  cpCurrentResidents().forEach(r => {
     if (r.next_clinic_date) {
       const clinicDate = new Date(r.next_clinic_date);
       const diffDays = Math.ceil((clinicDate - today) / (1000 * 60 * 60 * 24));
@@ -3511,7 +3511,7 @@ function checkGlobalAlerts() {
 
   // 5. 【介護専用：排便3日以上なしアラート (便秘コントロール)】
   const excretions = db.data.excretions || [];
-  gState.residents.forEach(r => {
+  cpCurrentResidents().forEach(r => {
     if (r.status !== "在所") return;
     const resExcs = excretions.filter(e => e.resident_id === r.id && e.stool_amount && e.stool_amount !== "なし");
     resExcs.sort((a, b) => (b.date || "").localeCompare(a.date || ""));
@@ -3585,7 +3585,7 @@ function checkGlobalAlerts() {
   // 7. 【事務専用：要介護認定有効期限 (満了60日以内)】
   {
     const expiringResidents = [];
-    gState.residents.forEach(r => {
+    cpCurrentResidents().forEach(r => {
       if (r.care_expiry_date) {
         const expiryDate = new Date(r.care_expiry_date);
         const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
@@ -3973,14 +3973,21 @@ function renderResidentDetail() {
  </div>
  <div style="text-align:right;">
  <div class="policy-stamp ${stampClass}" style="font-size:14px; padding:4px 10px;">［ ${r.policy_stamp} ］</div>
+ ${cpIsDischarged(r) ? `
+ <div class="discharge-banner">退所 ${escapeHtml(r.discharge_date || "")}（${escapeHtml(r.discharge_reason || "")}）${r.discharge_note ? `<br>${escapeHtml(r.discharge_note)}` : ""}<br><span class="discharge-by">手続き ${escapeHtml(r.discharged_at || "")} ${escapeHtml(r.discharged_by || "")}</span></div>
  <div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end;">
- <select class="form-control" style="font-size:12px; padding:3px 6px;" onchange="updateResidentStatus(${r.id}, this.value)">
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})"> 編集</button>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="cancelDischarge(${r.id})">退所を取り消す</button>
+ </div>` : `
+ <div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end; flex-wrap:wrap;">
+ <select class="form-control" style="font-size:13px; padding:3px 6px; width:auto;" onchange="updateResidentStatus(${r.id}, this.value)">
  <option value="在所" ${r.status==='在所'?'selected':''}>在所</option>
  <option value="入院中" ${r.status==='入院中'?'selected':''}>入院中</option>
  <option value="外泊中" ${r.status==='外泊中'?'selected':''}>外泊中</option>
  </select>
- <button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})"> 編集</button>
- </div>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openEditResidentModal(${r.id})"> 編集</button>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openDischargeModal(${r.id})">退所の手続き</button>
+ </div>`}
  </div>
  </div>
 
@@ -5510,7 +5517,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -7750,7 +7757,7 @@ function renderDailyJournal() {
  // 3. フロア全体ケアサマリー表 (バイタル・食事・排泄・入浴)
  const summaryTableEl = document.getElementById("dailyJournalCareSummaryTable");
  if (summaryTableEl) {
- let rowsHtml = gState.residents.map(r => {
+ let rowsHtml = cpResidentsOn(gState.selectedDate).map(r => {
  // 本日のバイタル
  const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
  const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
@@ -7853,7 +7860,7 @@ function printDailyJournal() {
   `;
  }
 
- let summaryTableRows = gState.residents.map(r => {
+ let summaryTableRows = cpResidentsOn(gState.selectedDate).map(r => {
  const vit = (db.data.vitals || []).find(v => v.resident_id === r.id && v.date === gState.selectedDate);
  const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
  const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
@@ -8054,7 +8061,7 @@ function openDailyJournalAddRecordModal(prefillCategory) {
  // 1. 対象利用者セレクトの同期
  const resSelect = document.getElementById("djmResidentSelect");
  if (resSelect && Array.isArray(gState.residents)) {
- let opts = gState.residents.map(r => `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</option>`);
+ let opts = cpCurrentResidents().map(r => `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</option>`);
  opts.push('<option value="0">【全体・フロア共通】（特定入居者なし）</option>');
  resSelect.innerHTML = opts.join("");
  if (gState.selectedResidentId) {
@@ -8325,7 +8332,7 @@ function renderVitalsTable() {
  tbody.innerHTML = "";
  const vitals = (db.data.vitals || []).filter(v => v.date === gState.selectedDate);
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
    const v = vitals.find(x => x.resident_id === r.id);
    const tr = document.createElement("tr");
    if (r.status !== "在所") tr.style.opacity = "0.5";
@@ -8520,7 +8527,7 @@ function renderMealsTable() {
  tbody.innerHTML = "";
  const meals = (db.data.meals || []).filter(m => m.date === gState.selectedDate);
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const userMeals = meals.filter(m => m.resident_id === r.id);
  const totalWater = userMeals.reduce((acc, cur) => acc + (cur.water_ml || 0), 0);
  const tr = document.createElement("tr");
@@ -8584,7 +8591,7 @@ function renderBathTable() {
  // 一覧にない区分（見本データの「機械浴」など）で保存された記録は、その区分のまま表示する（以前は一般浴に置き換わって表示され、保存すると上書きされた）
  const bathTypes = [["一般浴", "一般浴"], ["特浴", "特浴(機械浴)"], ["清拭", "清拭"], ["見合わせ", "見合わせ"]];
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const b = baths.find(x => x.resident_id === r.id);
  const cur = b ? (b.bath_type || "") : "";
  let opts = `<option value="" ${cur === "" ? "selected" : ""}>選んでください</option>`;
@@ -8672,7 +8679,7 @@ function renderTopicalTable() {
  const tbody = document.querySelector("#topicalTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
- (gState.residents || []).forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const pins = cpTopicalPins(r.id);
  if (!pins.length) {
  const tr = document.createElement("tr");
@@ -8746,7 +8753,7 @@ function renderOralTable() {
  tbody.innerHTML = "";
  const oralCares = (db.data.oral_cares || []).filter(o => o.date === gState.selectedDate);
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const tr = document.createElement("tr");
 
  const getOralBtn = (timing) => {
@@ -8807,7 +8814,7 @@ function renderMedTable() {
  const meds = (db.data.meds || []).filter(m => !m.voided && m.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない
  const eyedropOrders = db.data.eyedrop_orders || [];
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const tr = document.createElement("tr");
  // 点眼欄生成 (絵ではなく「右のみ」「左のみ」「両眼」を高コントラストバッジ明示、時間帯別切り替え対応)
  const order = eyedropOrders.find(e => e.resident_id === r.id && e.status !== "終了");
@@ -9386,7 +9393,7 @@ function renderMedOral() {
  if (!keys.includes(gState.medTiming)) gState.medTiming = cpMedDefaultTiming(keys);
  const cur = gState.medTiming;
  const here = (gState.residents || []).filter(cpResidentIsHere);
- const away = (gState.residents || []).filter(r => !cpResidentIsHere(r));
+ const away = (gState.residents || []).filter(r => !cpResidentIsHere(r) && !cpIsDischarged(r));
  const chips = keys.map(k => {
  const targets = here.filter(r => cpResidentTimings(r.id).includes(k));
  const done = targets.filter(r => cpMedSavedRecord(date, r.id, k)).length;
@@ -9836,7 +9843,7 @@ function openEyedropOrderModal(residentId) {
 
  const resSelect = document.getElementById("eoResidentSelect");
  if (resSelect) {
- resSelect.innerHTML = gState.residents.map(r => `
+ resSelect.innerHTML = cpCurrentResidents().map(r => `
  <option value="${r.id}" ${r.id === (residentId || gState.selectedResidentId) ? 'selected' : ''}>${r.room_no}号室: ${r.name} 様</option>
  `).join("");
  }
@@ -10140,7 +10147,7 @@ function renderNightTable() {
 
  const times = ["22:00", "00:00", "02:00", "04:00", "06:00"];
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const isHospital = r.status === "入院中" || r.status === "ショート終了" || r.status !== "在所";
  const tr = document.createElement("tr");
 
@@ -10209,7 +10216,7 @@ function renderWeightTable() {
  const prev2Date = new Date(y, m - 3, 1);
  const prev2Month = `${prev2Date.getFullYear()}-${String(prev2Date.getMonth() + 1).padStart(2, "0")}`;
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const currentRec = records.filter(w => w.resident_id === r.id && (w.month === gState.currentMonth || (w.date && w.date.startsWith(gState.currentMonth)))).sort((a,b) => b.id - a.id)[0];
  const prevRec = records.filter(w => w.resident_id === r.id && (w.month === prevMonth || (w.date && w.date.startsWith(prevMonth)))).sort((a,b) => b.id - a.id)[0];
  const prev2Rec = records.filter(w => w.resident_id === r.id && (w.month === prev2Month || (w.date && w.date.startsWith(prev2Month)))).sort((a,b) => b.id - a.id)[0];
@@ -10287,7 +10294,7 @@ function renderWeightChart(selectedResId = null) {
  });
 
  // 利用者切り替えボタン
- const resButtons = gState.residents.map(r => `
+ const resButtons = cpCurrentResidents().map(r => `
  <button class="btn ${r.id === targetResId ? 'btn-primary' : 'btn-secondary'}" style="padding:3px 10px; font-size:12px;" onclick="renderWeightChart(${r.id})">
  ${r.room_no}号室 ${r.name}様
  </button>
@@ -10430,7 +10437,7 @@ function renderLinenTable() {
  const sel = document.getElementById("linenResidentSelect");
  if (sel) {
    sel.innerHTML = "";
-   gState.residents.forEach(res => {
+   cpResidentsOn(gState.selectedDate).forEach(res => {
      const opt = document.createElement("option");
      opt.value = res.id;
      opt.textContent = `${res.room_no}号室 ${res.name} 様 (${res.status})`;
@@ -10534,7 +10541,7 @@ function renderGroomingTable() {
  tbody.innerHTML = "";
  const groomings = (db.data.groomings || []).filter(g => g.date === gState.selectedDate);
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const g = groomings.find(x => x.resident_id === r.id);
  const tr = document.createElement("tr");
  tr.innerHTML = `
@@ -10581,7 +10588,7 @@ function submitGroomingsBatch() {
  const nowTm = new Date().toTimeString().slice(0, 5);
  let savedCount = 0;
 
- gState.residents.forEach(r => {
+ cpResidentsOn(gState.selectedDate).forEach(r => {
  const nailEl = document.getElementById(`gNail_${r.id}`);
  const shaveEl = document.getElementById(`gShave_${r.id}`);
  const earEl = document.getElementById(`gEar_${r.id}`);
@@ -11368,7 +11375,7 @@ function renderQuickConsume() {
  // 利用者切り替えドロップダウンの同期
  const sel = document.getElementById("consumeResidentSelect");
  if (sel) {
- sel.innerHTML = gState.residents.map(res => `
+ sel.innerHTML = cpCurrentResidents().map(res => `
  <option value="${res.id}" ${res.id === gState.selectedResidentId ? 'selected' : ''}>
  ${res.room_no}号室 ${res.name} 様
  </option>
@@ -12822,7 +12829,7 @@ function openNewIncidentModal() {
 		const sel = document.getElementById("incResidentSelect");
 		if (sel) {
 			sel.innerHTML = "";
-			(gState.residents || []).forEach(r => {
+			cpCurrentResidents().forEach(r => {
 				const opt = document.createElement("option");
 				opt.value = r.id;
 				opt.textContent = `${r.room_no}号室 ${r.name} 様`;
@@ -12927,7 +12934,7 @@ function openIncidentFromRecord() {
 
 	const sel = document.getElementById("incResidentSelect");
 	sel.innerHTML = "";
-	gState.residents.forEach(r => {
+	cpCurrentResidents().forEach(r => {
 		const opt = document.createElement("option");
 		opt.value = r.id;
 		opt.textContent = `${r.room_no}号室 ${r.name} 様`;
@@ -13441,7 +13448,7 @@ function openVaccineModal(editId = null) {
 	const reactEl = document.getElementById("vacReactions");
 
 	selEl.innerHTML = "";
-	(gState.residents || []).forEach(r => {
+	cpCurrentResidents().forEach(r => {
 		const opt = document.createElement("option");
 		opt.value = r.id;
 		opt.textContent = `${r.room_no}号室 ${r.name} 様`;
@@ -13897,6 +13904,26 @@ function submitResidentForm() {
  }
 
  const editId = document.getElementById("resEditId").value;
+ // [Claude追加] 退所は「退所の手続き」から（退所日・理由を残すため）。退所の取り消しも専用のボタンから
+ let cpUnitAfterMove;
+ {
+ const stVal = document.getElementById("resStatus").value;
+ const cur = editId ? gState.residents.find(x => x.id === parseInt(editId)) : null;
+ if (cur && cpIsDischarged(cur) && stVal !== "退所") { alert("退所した方を戻すときは、カルテの「退所を取り消す」から行ってください。"); return; }
+ if ((!cur || !cpIsDischarged(cur)) && stVal === "退所") { alert("退所は、カルテの「退所の手続き」から行ってください（退所日と理由を残すため）。"); return; }
+ // 新しく登録する方の部屋に、すでに別の方がいないか
+ if (!cur) {
+ const occ = cpRoomOccupant(roomNo, null);
+ if (occ) { alert(`${roomNo}号室には ${occ.name} 様がいます。別の部屋番号を入れてください。`); return; }
+ } else if (!cpIsDischarged(cur)) {
+ // 部屋・区分が変わるときは、入れ替えを確かめて先に移す
+ const newUnit = (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : (cpUnits().length ? null : (cur.unit_id ?? null));
+ if (String(cur.room_no) !== String(roomNo) || String(cur.unit_id ?? "") !== String(newUnit ?? "")) {
+ if (cpMoveResident(cur, roomNo, newUnit) === null) return;
+ cpUnitAfterMove = cur.unit_id ?? null; // 入れ替えで相手の区分に合わせた場合も、その区分を使う
+ }
+ }
+ }
  const residentData = {
  room_no: roomNo,
  unit_id: (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null,
@@ -13926,6 +13953,7 @@ function submitResidentForm() {
  pulse_max: document.getElementById("resPulseMax").value ? parseInt(document.getElementById("resPulseMax").value, 10) : null,
  pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null
  };
+ if (cpUnitAfterMove !== undefined) residentData.unit_id = cpUnitAfterMove;
 
  let targetId;
  if (editId) {
@@ -13934,9 +13962,7 @@ function submitResidentForm() {
  if (idx !== -1) {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
- if (String(cpOld.unit_id ?? "") !== String(residentData.unit_id ?? "")) {
- cpUnitLog("利用者の区分を移動", `${name} 様：${cpUnitName(cpOld.unit_id) || "区分なし"} → ${cpUnitName(residentData.unit_id) || "区分なし"}`);
- }
+
  cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
@@ -14524,6 +14550,7 @@ function submitOrderApply() {
 
 function updateResidentStatus(resId, status) {
  const r = gState.residents.find(x => x.id === resId);
+ if (r && cpIsDischarged(r)) { alert("退所した方を戻すときは「退所を取り消す」から行ってください。"); renderResidentDetail(); return; }
  if (r) {
  r.status = status;
  db.save();
@@ -14545,7 +14572,7 @@ function renderCareExpiryNotes() {
  area.innerHTML = "";
  const today = new Date();
 
- gState.residents.forEach(r => {
+ cpCurrentResidents().forEach(r => {
  if (r.care_expiry_date) {
  const expiryDate = new Date(r.care_expiry_date);
  const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
@@ -15097,7 +15124,8 @@ function cpUnitName(id) {
  return u ? u.name : "";
 }
 function cpUnitResidents(id) {
- return (gState.residents || db.data.residents || []).filter(r => r && Number(r.unit_id) === Number(id));
+ // 退所した方は数えない（退所した方しかいない区分は消せる）
+ return (gState.residents || db.data.residents || []).filter(r => r && r.status !== "退所" && Number(r.unit_id) === Number(id));
 }
 function cpUnitStaff(id) {
  return (db.data.stamps || []).filter(s => s && typeof s === "object" && Number(s.unit_id) === Number(id));
@@ -15217,7 +15245,7 @@ function renderOfficeUnits() {
  </details>` : ""}
  </div>`;
  }).join("");
- const noUnit = (gState.residents || []).filter(r => !cpUnitName(r.unit_id));
+ const noUnit = cpCurrentResidents().filter(r => !cpUnitName(r.unit_id));
  box.innerHTML = `
  ${rows || `<p class="panel-note">区分はまだありません。区分がないあいだは、利用者一覧の切り替えは出ません。</p>`}
  ${units.length && noUnit.length ? `<div class="unit-card unit-none"><div class="unit-count">区分が決まっていない利用者 ${noUnit.length}名</div>
@@ -15292,15 +15320,15 @@ function moveResidentUnit(residentId, newUnitId) {
  if (!newUnitId) return;
  const r = (gState.residents || []).find(x => Number(x.id) === Number(residentId));
  if (!r) return;
- const from = cpUnitName(r.unit_id) || "区分なし", to = cpUnitName(newUnitId);
- if (!confirm(`${r.name} 様を「${from}」から「${to}」へ移します。よろしいですか？`)) { renderOfficeUnits(); return; }
- const old = JSON.parse(JSON.stringify(r));
- r.unit_id = Number(newUnitId);
- if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, old, ["unit_id"]);
- cpUnitLog("利用者の区分を移動", `${r.name} 様：${from} → ${to}`);
+ const to = cpUnitName(newUnitId);
+ const room = prompt(`${r.name} 様を「${cpUnitName(r.unit_id) || "区分なし"}」から「${to}」へ移します。\n新しい部屋番号を入れてください（変えないときはそのまま「OK」）`, r.room_no || "");
+ if (room === null) { renderOfficeUnits(); return; }
+ const done = cpMoveResident(r, room, Number(newUnitId));
+ if (!done) { renderOfficeUnits(); return; }
  db.data.residents = gState.residents;
  db.save();
  cpAfterUnitChange();
+ if (typeof renderResidentDetail === "function") renderResidentDetail();
 }
 function moveStaffUnit(staffName, newUnitId) {
  if (!cpCanEditUnits()) { renderOfficeUnits(); return; }
@@ -15331,7 +15359,7 @@ function filterResidentsByUnit(unitId) {
  if (shown.length > 0 && !shown.some(r => r.id === gState.selectedResidentId)) selectResident(shown[0].id);
 }
 function cpResidentsInSelectedUnit() {
- const all = gState.residents || [];
+ const all = cpCurrentResidents();
  if (gState.selectedUnit === "all" || !cpUnitName(gState.selectedUnit)) return all;
  return all.filter(r => String(r.unit_id) === String(gState.selectedUnit));
 }
@@ -15341,7 +15369,7 @@ function renderUnitFilterNav() {
  const units = cpUnits();
  if (units.length <= 1) { nav.innerHTML = ""; nav.style.display = "none"; return; }
  if (gState.selectedUnit !== "all" && !cpUnitName(gState.selectedUnit)) gState.selectedUnit = "all";
- const all = gState.residents || [];
+ const all = cpCurrentResidents();
  const btn = (val, label, n) => `<button type="button" class="unit-filter-btn" data-state="${String(gState.selectedUnit) === String(val) ? "on" : "off"}" onclick="filterResidentsByUnit('${val}')">${escapeHtml(label)} <span class="unit-filter-count">${n}名</span></button>`;
  nav.style.display = "flex";
  nav.innerHTML = `<span class="unit-filter-label">区分:</span>` + btn("all", "すべて", all.length) + units.map(u => btn(u.id, u.name, all.filter(r => String(r.unit_id) === String(u.id)).length)).join("");
@@ -15350,13 +15378,34 @@ function renderResidentsStrip() {
  const strip = document.getElementById("residentsStrip");
  if (!strip) return;
  renderUnitFilterNav();
- const all = gState.residents || [];
+ const all = cpCurrentResidents();
  const shown = cpResidentsInSelectedUnit();
  const countLabel = document.getElementById("residentCountLabel");
  if (countLabel) countLabel.textContent = shown.length === all.length ? `登録利用者: ${all.length}名` : `表示中: ${cpUnitName(gState.selectedUnit)} ${shown.length}名（全${all.length}名）`;
  strip.innerHTML = "";
+ const discharged = (gState.residents || []).filter(cpIsDischarged).sort((a, b) => String(b.discharge_date || "").localeCompare(String(a.discharge_date || "")));
+ // 退所した方の一覧（押すと表示・非表示）。記録は残っているので、カルテや過去の記録を見られる
+ const appendDischarged = () => {
+ if (!discharged.length) return;
+ const t = document.createElement("button");
+ t.type = "button";
+ t.className = "discharged-toggle";
+ t.textContent = gState.showDischarged ? `退所した方を閉じる` : `退所した方（${discharged.length}名）`;
+ t.onclick = toggleDischargedList;
+ strip.appendChild(t);
+ if (!gState.showDischarged) return;
+ discharged.forEach(r => {
+ const card = document.createElement("div");
+ card.className = `resident-card inactive discharged ${r.id === gState.selectedResidentId ? "selected" : ""}`;
+ card.onclick = () => selectResident(r.id);
+ card.innerHTML = `<div class="card-top"><span class="room-badge">${escapeHtml(r.room_no)}号室</span><span class="discharge-badge">退所</span></div>
+ <div class="res-name">${escapeHtml(r.name)} 様</div><div class="discharge-date">${escapeHtml(r.discharge_date || "")} ${escapeHtml(r.discharge_reason || "")}</div>`;
+ strip.appendChild(card);
+ });
+ };
  if (!shown.length) {
  strip.innerHTML = '<div class="panel-note">この区分の利用者はいません。</div>';
+ appendDischarged();
  return;
  }
  const showBadge = cpUnits().length > 1;
@@ -15373,7 +15422,135 @@ function renderResidentsStrip() {
  <div class="res-name">${escapeHtml(r.name)} 様</div>`;
  strip.appendChild(card);
  });
+ appendDischarged();
 }
+// ==========================================
+// [Claude追加] 部屋の入れ替え・退所の手続き
+// - 移す先の部屋に別の方がいるときは、部屋（と区分）を入れ替えるか確かめる。入れ替えは2人とも変更履歴に残す
+// - 退所は「退所の手続き」から。退所日・理由（死亡退所など）を必須にする。記録は消さない
+// - 退所した方は、利用者一覧・毎日の表・お知らせ・区分の人数から外す（退所日までの日付の表には出る）
+// - 間違えたときは「退所を取り消す」（理由は必須）。前の退所の内容は discharge_history に残す
+// ==========================================
+const CP_DISCHARGE_REASONS = ["死亡退所", "入院による退所", "他施設へ", "自宅へ", "その他"];
+function cpIsDischarged(r) { return !!r && r.status === "退所"; }
+function cpCurrentResidents() { return (gState.residents || []).filter(r => r && !cpIsDischarged(r)); }
+// その日にホームにいた利用者（退所した方は、退所日まで出す）
+function cpResidentsOn(dateStr) {
+ const d = dateStr || gState.selectedDate || toLocalDateStr(new Date());
+ return (gState.residents || []).filter(r => r && (!cpIsDischarged(r) || (r.discharge_date && d <= r.discharge_date)));
+}
+function cpRoomOccupant(room, exceptId) {
+ const k = String(room || "").trim();
+ if (!k) return null;
+ return cpCurrentResidents().find(r => String(r.room_no || "").trim() === k && Number(r.id) !== Number(exceptId)) || null;
+}
+function cpRoomUnitText(room, unitId) { return `${room}号室${cpUnitName(unitId) ? "・" + cpUnitName(unitId) : ""}`; }
+function cpResidentLog(action, detail) {
+ if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+ db.data.settings_logs.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: toLocalDateTimeStr(new Date()), by: cpLoginStaffName(), kind: "利用者の移動・退所", action: action, detail: detail });
+}
+// 利用者を別の部屋・区分へ移す。戻り値: true=変更した / false=変更なし / null=やめた
+function cpMoveResident(r, newRoom, newUnitId) {
+ const oldRoom = r.room_no, oldUnit = (r.unit_id === undefined ? null : r.unit_id);
+ const room = String(newRoom || "").trim() || oldRoom;
+ const unit = (newUnitId === undefined ? oldUnit : newUnitId);
+ if (String(room) === String(oldRoom) && String(unit ?? "") === String(oldUnit ?? "")) return false;
+ const other = String(room) !== String(oldRoom) ? cpRoomOccupant(room, r.id) : null;
+ let unitAfter = unit;
+ if (other) {
+ if (!confirm(`${room}号室には ${other.name} 様がいます。\n${r.name} 様と部屋を入れ替えますか？\n（${other.name} 様は ${cpRoomUnitText(oldRoom, oldUnit)} へ移ります）`)) return null;
+ // 区分を選び直していないときは、入れ替える相手の区分に合わせる（部屋と区分がずれないように）
+ if (String(unit ?? "") === String(oldUnit ?? "")) unitAfter = (other.unit_id === undefined ? null : other.unit_id);
+ const oOld = JSON.parse(JSON.stringify(other));
+ other.room_no = oldRoom;
+ other.unit_id = oldUnit;
+ cpAppendEditHistory(other, oOld, ["room_no", "unit_id"]);
+ cpResidentLog("部屋の入れ替え", `${other.name} 様：${cpRoomUnitText(oOld.room_no, oOld.unit_id)} → ${cpRoomUnitText(oldRoom, oldUnit)}（${r.name} 様と入れ替え）`);
+ }
+ const rOld = JSON.parse(JSON.stringify(r));
+ r.room_no = room;
+ r.unit_id = unitAfter;
+ cpAppendEditHistory(r, rOld, ["room_no", "unit_id"]);
+ cpResidentLog(other ? "部屋の入れ替え" : "利用者の移動", `${r.name} 様：${cpRoomUnitText(rOld.room_no, rOld.unit_id)} → ${cpRoomUnitText(room, unitAfter)}`);
+ return true;
+}
+
+// 退所の手続き
+let cpDischargeTargetId = null;
+function openDischargeModal(resId) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ if (!r || cpIsDischarged(r)) return;
+ cpDischargeTargetId = r.id;
+ const t = document.getElementById("dischargeTitle");
+ if (t) t.textContent = `${r.room_no}号室 ${r.name} 様の退所の手続き`;
+ const d = document.getElementById("dischargeDate"); if (d) { d.value = ""; d.max = toLocalDateStr(new Date()); }
+ const s = document.getElementById("dischargeReason"); if (s) s.innerHTML = `<option value="">選んでください</option>` + CP_DISCHARGE_REASONS.map(x => `<option value="${x}">${x}</option>`).join("");
+ const n = document.getElementById("dischargeNote"); if (n) n.value = "";
+ openModal("dischargeModal");
+}
+function submitDischarge() {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(cpDischargeTargetId));
+ if (!r) return;
+ const date = (document.getElementById("dischargeDate") || {}).value || "";
+ const reason = (document.getElementById("dischargeReason") || {}).value || "";
+ const note = ((document.getElementById("dischargeNote") || {}).value || "").trim();
+ if (!date) { alert("退所日を入れてください。"); return; }
+ if (date > toLocalDateStr(new Date())) { alert("退所日に、これから先の日付は入れられません。"); return; }
+ if (!reason) { alert("退所の理由を選んでください。"); return; }
+ if (reason === "その他" && !note) { alert("「その他」のときは、内容を書いてください。"); return; }
+ if (!confirm(`${r.name} 様を ${date} 付けで退所（${reason}）にします。\n\n記録は消えません。「退所した方」からいつでも見られます。\n間違えたときは「退所を取り消す」で戻せます。`)) return;
+ const old = JSON.parse(JSON.stringify(r));
+ r.status_before_discharge = r.status;
+ r.status = "退所";
+ r.discharge_date = date;
+ r.discharge_reason = reason;
+ r.discharge_note = note;
+ r.discharged_at = toLocalDateTimeStr(new Date());
+ r.discharged_by = cpLoginStaffName();
+ cpAppendEditHistory(r, old, ["status", "discharge_date", "discharge_reason", "discharge_note"]);
+ cpResidentLog("退所の手続き", `${r.name} 様（${old.room_no}号室）：${date} ${reason}${note ? "（" + note + "）" : ""}`);
+ db.data.residents = gState.residents;
+ db.save();
+ closeModal("dischargeModal");
+ const next = cpCurrentResidents()[0];
+ if (next) selectResident(next.id); else { renderResidentsStrip(); renderResidentDetail(); }
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+function cancelDischarge(resId) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ if (!r || !cpIsDischarged(r)) return;
+ const reason = prompt(`${r.name} 様の退所を取り消して、在所に戻します。\n取り消す理由を入れてください（例: 間違えて退所にした）`, "");
+ if (reason === null) return;
+ if (!reason.trim()) { alert("取り消す理由を入れてください。何も変えていません。"); return; }
+ let room = r.room_no;
+ const other = cpRoomOccupant(room, r.id);
+ if (other) {
+ const nr = prompt(`${room}号室には今 ${other.name} 様がいます。\n戻る部屋番号を入れてください。`, "");
+ if (nr === null) return;
+ if (!nr.trim()) { alert("部屋番号を入れてください。何も変えていません。"); return; }
+ const o2 = cpRoomOccupant(nr.trim(), r.id);
+ if (o2) { alert(`${nr.trim()}号室には ${o2.name} 様がいます。何も変えていません。`); return; }
+ room = nr.trim();
+ }
+ const old = JSON.parse(JSON.stringify(r));
+ if (!Array.isArray(r.discharge_history)) r.discharge_history = [];
+ r.discharge_history.push({ discharge_date: r.discharge_date, discharge_reason: r.discharge_reason, discharge_note: r.discharge_note || "", discharged_at: r.discharged_at, discharged_by: r.discharged_by, canceled_at: toLocalDateTimeStr(new Date()), canceled_by: cpLoginStaffName(), cancel_reason: reason.trim() });
+ r.status = r.status_before_discharge && r.status_before_discharge !== "退所" ? r.status_before_discharge : "在所";
+ r.room_no = room;
+ ["discharge_date", "discharge_reason", "discharge_note", "discharged_at", "discharged_by", "status_before_discharge"].forEach(k => { delete r[k]; });
+ cpAppendEditHistory(r, old, ["status", "room_no", "discharge_date", "discharge_reason", "discharge_note"]);
+ cpResidentLog("退所の取り消し", `${r.name} 様：${old.discharge_date || ""} ${old.discharge_reason || ""} を取り消し（理由: ${reason.trim()}）${room !== old.room_no ? ` ${room}号室へ` : ""}`);
+ db.data.residents = gState.residents;
+ db.save();
+ gState.showDischarged = false;
+ selectResident(r.id);
+ if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+function toggleDischargedList() {
+ gState.showDischarged = !gState.showDischarged;
+ renderResidentsStrip();
+}
+
 window.filterResidentsByUnit = filterResidentsByUnit;
 window.renderResidentsStrip = renderResidentsStrip;
 
@@ -17624,7 +17801,7 @@ function renderOfficeCareRenewal() {
   let inProgressCount = 0;
   let completedCount = 0;
 
-  gState.residents.forEach(r => {
+  cpCurrentResidents().forEach(r => {
     totalCount++;
     r.renewal_steps = r.renewal_steps || {
       application_submitted: false,
