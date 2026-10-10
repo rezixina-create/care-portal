@@ -537,7 +537,7 @@ class LocalDB {
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
  "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications",
- "units", "unit_logs"
+ "units", "unit_logs", "settings_logs"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -5496,6 +5496,9 @@ function cpCollectAuditEntries() {
  out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.dismissed_at, type: "アラートを閉じた", by: l.staff_name, detail: l.alert_detail || "" });
  if (l.restored_at) out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.restored_at, type: "未対応に戻した", by: l.restored_by, detail: "" });
  });
+ (db.data.settings_logs || []).forEach(l => {
+ out.push({ kind: l.kind || "設定", resident: "", residentId: null, summary: l.detail || "", at: l.at, type: l.action || "変更", by: l.by, detail: "" });
+ });
  (db.data.unit_logs || []).forEach(l => {
  out.push({ kind: "区分の設定", resident: "", residentId: null, summary: l.detail || "", at: l.at, type: l.action || "", by: l.by, detail: "" });
  });
@@ -5529,7 +5532,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -11753,7 +11756,7 @@ function loadOfficeData() {
  renderOfficeSuppliers();
  renderOfficeBillingSelect();
  renderOfficeDepositTable();
- renderShiftTable(gState.currentShiftMonth || "2026-10");
+ renderShiftTable(gState.currentShiftMonth || toLocalDateStr(new Date()).slice(0, 7)); // [Claude修正] 開いたときは今月（以前は 2026-10 固定）
  renderOfficeVehicleLogs();
  renderOfficeFireDrills();
  renderOfficeCommittees();
@@ -11799,7 +11802,7 @@ function switchOfficeTab(tab) {
  if (target) {
  target.style.display = "block";
  if (tab === "shift") {
- renderShiftTable(gState.currentShiftMonth || "2026-10");
+ renderShiftTable(gState.currentShiftMonth || toLocalDateStr(new Date()).slice(0, 7)); // [Claude修正] 開いたときは今月（以前は 2026-10 固定）
  } else if (tab === "backup") {
  renderOfficeBackup();
  } else if (tab === "care_renewal") {
@@ -15167,7 +15170,7 @@ function generateMonthlyShiftAction() {
  }
  generateMonthlyShiftData(ym);
  renderShiftTable(ym);
- alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・管理者・計画作成担当者・相談員・事務員：日勤専従（土日祝・年末年始休み）\n・夜勤：区分（ユニット・フロア）ごとに1人ずつを優先\n・公休：全員週休2日配分`);
+ alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・最低人数：早出${cpStaffing().early}・日勤${cpStaffing().day}・遅出${cpStaffing().late}・夜勤${cpStaffing().night}・明け${cpStaffing().night}（同番NG配慮済）\n・管理者・計画作成担当者・相談員・事務員：日勤専従（土日祝・年末年始休み）\n・夜勤：区分（ユニット・フロア）ごとに1人ずつを優先\n・人数が足りない日は、表の下の集計が赤くなります`);
 }
 
 // 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
@@ -15266,10 +15269,71 @@ function cpUnitResidents(id) {
 function cpUnitStaff(id) {
  return (db.data.stamps || []).filter(s => s && typeof s === "object" && Number(s.unit_id) === Number(id));
 }
-// 勤務表の夜勤の人数（区分ごとに1人。区分がないときは2人）
-function cpNightTarget() {
- const n = cpUnits().length;
- return n > 0 ? n : 2;
+// [Claude追加] 勤務の最低人数（介護職）。事務ポータル「勤務表・シフト」の設定で変えられる
+// 夜勤は、設定がなければ区分の数（区分ごとに1人）。区分もなければ2人。明けは夜勤と同じ人数
+const CP_STAFFING_DEFAULT = { early: 2, day: 2, late: 2 };
+function cpStaffing() {
+ const st = (db.data.shift_staffing && typeof db.data.shift_staffing === "object") ? db.data.shift_staffing : {};
+ const num = (v, d) => { const n = Number(v); return Number.isInteger(n) && n >= 0 && n <= 30 ? n : d; };
+ const units = cpUnits().length;
+ return {
+ early: num(st.early, CP_STAFFING_DEFAULT.early),
+ day: num(st.day, CP_STAFFING_DEFAULT.day),
+ late: num(st.late, CP_STAFFING_DEFAULT.late),
+ night: (st.night === null || st.night === undefined || st.night === "") ? (units > 0 ? units : 2) : num(st.night, units > 0 ? units : 2),
+ nightAuto: (st.night === null || st.night === undefined || st.night === "")
+ };
+}
+function cpNightTarget() { return cpStaffing().night; }
+function cpCareStaffCount() { return (db.data.stamps || []).filter(st => getStaffRoleCategory(st.name || st) === "care").length; }
+
+function renderShiftStaffingSettings() {
+ const box = document.getElementById("shiftStaffingBody");
+ if (!box) return;
+ const m = cpStaffing();
+ const units = cpUnits().length;
+ const care = cpCareStaffCount();
+ const need = m.early + m.day + m.late + m.night * 2;
+ const off = care - need;
+ const canEdit = typeof isCurrentStaffAdminOrClerk === "function" ? isCurrentStaffAdminOrClerk() : true;
+ const inp = (id, label, v) => `<label class="staffing-field">${label}<input type="number" min="0" max="30" step="1" inputmode="numeric" id="${id}" class="form-control" value="${v}" ${canEdit ? "" : "disabled"}></label>`;
+ box.innerHTML = `
+ <div class="staffing-grid">
+ ${inp("staffMinEarly", "早出", m.early)}
+ ${inp("staffMinDay", "日勤", m.day)}
+ ${inp("staffMinLate", "遅出", m.late)}
+ <label class="staffing-field">夜勤<input type="number" min="0" max="30" step="1" inputmode="numeric" id="staffMinNight" class="form-control" value="${m.nightAuto ? "" : m.night}" placeholder="区分の数（${units > 0 ? units : 2}名）" ${canEdit ? "" : "disabled"}></label>
+ </div>
+ <p class="panel-note">介護職の1日の最低人数です。自動生成はこの人数を必ず入れ、残りの人を公休にします。多い日（研修・行事など）は、表のマスを押して手で足してください。夜勤を空欄にすると区分の数（区分ごとに1人）になります。明けは夜勤と同じ人数です。</p>
+ <div class="staffing-calc ${off < 0 ? "is-short" : ""}">介護職 ${care}名 − 毎日必要 ${need}名（早出${m.early}・日勤${m.day}・遅出${m.late}・夜勤${m.night}・明け${m.night}）＝ 1日の公休 ${Math.max(0, off)}名${off < 0 ? `　→ ${-off}名足りません。最低人数を満たせない日が出ます` : `（1人あたり月およそ${care > 0 ? Math.round(off * 30 / care) : 0}日）`}</div>
+ ${units > 0 && m.night < units ? `<div class="staffing-calc is-short">夜勤 ${m.night}名は、区分の数（${units}）より少ない設定です。</div>` : ""}
+ ${canEdit ? `<div class="rx-form-actions"><button type="button" class="btn btn-primary" onclick="saveShiftStaffing()">最低人数を保存</button></div>` : `<p class="panel-note">変更は管理者・事務員だけができます。</p>`}`;
+}
+function saveShiftStaffing() {
+ if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) { alert("勤務の最低人数は、管理者と事務員だけが変更できます。"); return; }
+ const val = id => ((document.getElementById(id) || {}).value || "").trim();
+ const next = {};
+ for (const [k, id, label] of [["early", "staffMinEarly", "早出"], ["day", "staffMinDay", "日勤"], ["late", "staffMinLate", "遅出"], ["night", "staffMinNight", "夜勤"]]) {
+ const raw = val(id);
+ if (raw === "") {
+ if (k === "night") { next.night = null; continue; }
+ alert(`${label}の人数を入れてください。`); return;
+ }
+ const n = Number(raw);
+ if (!Number.isInteger(n) || n < 0 || n > 30) { alert(`${label}の人数は0〜30の整数で入れてください。`); return; }
+ next[k] = n;
+ }
+ const before = cpStaffing();
+ db.data.shift_staffing = next;
+ const after = cpStaffing();
+ const fmt = x => `早出${x.early}・日勤${x.day}・遅出${x.late}・夜勤${x.night}${x.nightAuto ? "（区分の数）" : ""}`;
+ if (fmt(before) === fmt(after)) { renderShiftStaffingSettings(); return; }
+ if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+ db.data.settings_logs.push({ id: Date.now(), at: toLocalDateTimeStr(new Date()), by: cpLoginStaffName(), kind: "勤務の最低人数", action: "変更", detail: `${fmt(before)} → ${fmt(after)}` });
+ db.save();
+ renderShiftStaffingSettings();
+ renderShiftTable(gState.currentShiftMonth || getShiftYearMonth());
+ alert("勤務の最低人数を保存しました。すでに作った月の勤務表は変わりません。必要なら「1ヶ月シフト自動生成」で作り直してください。");
 }
 function cpUnitLog(action, detail) {
  if (!Array.isArray(db.data.unit_logs)) db.data.unit_logs = [];
@@ -15690,10 +15754,11 @@ function generateMonthlyShiftData(yearMonth) {
   });
 
   // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
-  // [Claude修正] 夜勤は区分（ユニット・フロア）の数だけ（区分ごとに1人）。区分がないときは2名
-  // 1日の公休の人数 = 介護職の人数 − (早2・遅2・日2 ＋ 夜勤・明けそれぞれ夜勤の人数)。2区分・15名なら5名
-  const NIGHTS = cpNightTarget();
-  const OFF_PER_DAY = Math.max(0, careNames.length - (6 + NIGHTS * 2));
+  // [Claude修正] 人数は「勤務の最低人数」の設定から（夜勤は設定がなければ区分の数）
+  // 1日の公休の人数 = 介護職の人数 − (早出＋日勤＋遅出 ＋ 夜勤×2（明けも同じ人数）)
+  const MIN = cpStaffing();
+  const NIGHTS = MIN.night, EARLY = MIN.early, LATE = MIN.late, DAYMIN = MIN.day;
+  const OFF_PER_DAY = Math.max(0, careNames.length - (EARLY + LATE + DAYMIN + NIGHTS * 2));
   const totalMonthHolidays = daysInMonth * OFF_PER_DAY;
   const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
   const extraHolidays = totalMonthHolidays % careNames.length;
@@ -15830,7 +15895,7 @@ function generateMonthlyShiftData(yearMonth) {
    }
   }
 
-  // Step C: 出勤可能者（毎日ちょうど6名）から「早出2名」「遅出2名」「日勤2名」を割り当て
+  // Step C: 出勤できる人から、早出・遅出を最低人数ずつ、残りを日勤に割り当て
   for (let d = 1; d <= daysInMonth; d++) {
    const avail = careNames.filter(n => !shiftData[n][d]);
 
@@ -15843,7 +15908,7 @@ function generateMonthlyShiftData(yearMonth) {
     if (eDiff !== 0) return eDiff;
     return (careNames.indexOf(a) * 3 + d) % careNames.length - (careNames.indexOf(b) * 3 + d) % careNames.length;
    });
-   const pickedEarly = earlyCandidates.slice(0, 2);
+   const pickedEarly = earlyCandidates.slice(0, EARLY);
    pickedEarly.forEach(n => {
     shiftData[n][d] = "早";
     earlyCount[n]++;
@@ -15855,13 +15920,13 @@ function generateMonthlyShiftData(yearMonth) {
     if (lDiff !== 0) return lDiff;
     return (careNames.indexOf(a) * 5 + d) % careNames.length - (careNames.indexOf(b) * 5 + d) % careNames.length;
    });
-   const pickedLate = lateCandidates.slice(0, 2);
+   const pickedLate = lateCandidates.slice(0, LATE);
    pickedLate.forEach(n => {
     shiftData[n][d] = "遅";
     lateCount[n]++;
    });
 
-   // 残りの介護職員（2名）はすべて「日」（日勤）
+   // 残りの介護職員はすべて「日」（日勤）
    const remainingDay = avail.filter(n => !pickedEarly.includes(n) && !pickedLate.includes(n));
    remainingDay.forEach(n => {
     shiftData[n][d] = "日";
@@ -15869,25 +15934,25 @@ function generateMonthlyShiftData(yearMonth) {
    });
   }
 
-  // Step D: 最終厳格バリデーション ＆ オートリペア (全日「早2・遅2・日2・夜2・明2」を100%完全保証)
+  // Step D: 最低人数に足りない日を直す（日勤から早出・遅出へ、公休から日勤へ）
   // ※ 希望休の職員は絶対に日勤・早番・遅番へ転換しない
   for (let d = 1; d <= daysInMonth; d++) {
    let eCount = careNames.filter(n => shiftData[n][d] === "早").length;
    let lCount = careNames.filter(n => shiftData[n][d] === "遅").length;
    let dCount = careNames.filter(n => shiftData[n][d] === "日").length;
 
-   // 早出を2名に
-   while (eCount < 2) {
+   // 早出を最低人数に
+   while (eCount < EARLY) {
     const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
     if (cand) { shiftData[cand][d] = "早"; eCount++; dCount--; } else break;
    }
-   // 遅出を2名に
-   while (lCount < 2) {
+   // 遅出を最低人数に
+   while (lCount < LATE) {
     const cand = careNames.find(n => shiftData[n][d] === "日" && !isHopeOff(n, d));
     if (cand) { shiftData[cand][d] = "遅"; lCount++; dCount--; } else break;
    }
-   // 日勤を2名に (希望休でない公休職員のみ日勤へ充当)
-   while (dCount < 2) {
+   // 日勤を最低人数に (希望休でない公休職員のみ日勤へ充当)
+   while (dCount < DAYMIN) {
     const cand = careNames.find(n => shiftData[n][d] === "休" && !isHopeOff(n, d));
     if (cand) { shiftData[cand][d] = "日"; dCount++; } else break;
    }
@@ -15904,10 +15969,14 @@ function generateMonthlyShiftData(yearMonth) {
 
 
 function renderShiftTable(yearMonth) {
- // [Claude修正] 夜勤・明けの基準は区分の数、介護公休の基準は「介護職の人数 −（6 ＋ 夜勤の人数×2）」（勤務表の自動生成と同じ考え方）
- const nightTarget = cpNightTarget();
- const careOffTarget = Math.max(0, (db.data.stamps || []).filter(st => getStaffRoleCategory(st.name || st) === "care").length - (6 + nightTarget * 2));
+ // [Claude修正] 早出・日勤・遅出・夜勤（明け）の基準は「勤務の最低人数」の設定、介護公休の基準は残りの人数（勤務表の自動生成と同じ考え方）
+ const cpMin = cpStaffing();
+ const nightTarget = cpMin.night;
+ const careOffTarget = Math.max(0, cpCareStaffCount() - (cpMin.early + cpMin.day + cpMin.late + nightTarget * 2));
+ if (typeof renderShiftStaffingSettings === "function") renderShiftStaffingSettings();
  const ym = yearMonth || getShiftYearMonth();
+ // [Claude修正] 表示している月を、上の月の欄にも出す（勤務表を開いた直後は欄が空のままだった）
+ { const sel = document.getElementById("shiftMonthSelector"); if (sel && sel.value !== ym) sel.value = ym; gState.currentShiftMonth = ym; }
  const [yearStr, monthStr] = ym.split("-");
  const year = parseInt(yearStr, 10);
  const month = parseInt(monthStr, 10);
@@ -16101,18 +16170,18 @@ function renderShiftTable(yearMonth) {
  // 3. フッター集計行 (早出2名・遅出2名・夜勤2名・明け2名・介護日勤2名・全体日勤・介護公休4名)
  let tfootHtml = `
  <tfoot>
- <!-- 早出人数チェック行 (基準: 2名) -->
+ <!-- 早出人数チェック行 （最低人数は設定から） -->
  <tr style="background:#ffedd5; font-weight:bold; border-top:2px solid #ea580c;">
  <td style="position:sticky; left:0; z-index:2; background:#ffedd5; text-align:left; padding:5px 8px; border:1px solid #fed7aa; color:#9a3412;" colspan="2">
- 早出体制 (基準: 2名)
+ 早出体制 (最低: ${cpMin.early}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyEarlyCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 2) {
+ if (cnt >= cpMin.early) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- } else if (cnt < 2) {
+ } else if (cnt < cpMin.early) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16120,21 +16189,21 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #fed7aa; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">毎日2名</td>
+ <td colspan="3" style="border:1px solid #fed7aa; color:#9a3412; font-size:11px;">最低${cpMin.early}名</td>
  </tr>
 
- <!-- 遅出人数チェック行 (基準: 2名) -->
+ <!-- 遅出人数チェック行 （最低人数は設定から） -->
  <tr style="background:#ede9fe; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#ede9fe; text-align:left; padding:5px 8px; border:1px solid #ddd6fe; color:#5b21b6;" colspan="2">
- 遅出体制 (基準: 2名)
+ 遅出体制 (最低: ${cpMin.late}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyLateCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 2) {
+ if (cnt >= cpMin.late) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- } else if (cnt < 2) {
+ } else if (cnt < cpMin.late) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16142,19 +16211,19 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #ddd6fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日2名</td>
+ <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">最低${cpMin.late}名</td>
  </tr>
 
  <!-- 夜勤人数チェック行（基準は区分の数） -->
  <tr style="background:#e0e7ff; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:5px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
- 夜勤体制 (基準: ${nightTarget}名)
+ 夜勤体制 (最低: ${nightTarget}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyNightCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === nightTarget) {
+ if (cnt >= nightTarget) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
  } else if (cnt < nightTarget) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16164,19 +16233,19 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #c7d2fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日${nightTarget}名</td>
+ <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">最低${nightTarget}名</td>
  </tr>
 
  <!-- 明け人数チェック行（基準は区分の数） -->
  <tr style="background:#fef9c3; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#fef9c3; text-align:left; padding:5px 8px; border:1px solid #fef08a; color:#854d0e;" colspan="2">
- 明け体制 (基準: ${nightTarget}名)
+ 明け体制 (最低: ${nightTarget}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyAkeCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === nightTarget) {
+ if (cnt >= nightTarget) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
  } else if (cnt < nightTarget) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16186,21 +16255,21 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #fef08a; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">毎日${nightTarget}名</td>
+ <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">最低${nightTarget}名</td>
  </tr>
 
- <!-- 介護日勤人数行 (基準: 2名) -->
+ <!-- 介護日勤人数行 （最低人数は設定から） -->
  <tr style="background:#e0f2fe; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#e0f2fe; text-align:left; padding:5px 8px; border:1px solid #bae6fd; color:#0369a1;" colspan="2">
-  介護日勤 (基準: 2名)
+  介護日勤 (最低: ${cpMin.day}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyCareDayCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 2) {
+ if (cnt >= cpMin.day) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- } else if (cnt < 2) {
+ } else if (cnt < cpMin.day) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16208,7 +16277,7 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #bae6fd; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #bae6fd; color:#0369a1; font-size:11px;">毎日2名</td>
+ <td colspan="3" style="border:1px solid #bae6fd; color:#0369a1; font-size:11px;">最低${cpMin.day}名</td>
  </tr>
 
  <!-- 全体日勤人数行 -->

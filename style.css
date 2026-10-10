@@ -1679,3 +1679,12 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .unit-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .unit-add .form-control { flex: 1; min-width: 160px; }
 .staff-unit-sel { width: auto; font-size: 13px; padding: 2px 6px; }
+
+/* [Claude追加] 勤務の最低人数の設定 */
+.staffing-settings { border: 1px solid var(--line); border-radius: 8px; padding: 8px 12px; margin-bottom: 12px; background: #ffffff; }
+.staffing-settings > summary { cursor: pointer; font-weight: bold; color: var(--pine); font-size: 14px; }
+.staffing-grid { display: grid; grid-template-columns: repeat(4, minmax(90px, 1fr)); gap: 10px; margin-top: 10px; }
+.staffing-field { display: flex; flex-direction: column; gap: 4px; font-size: 13px; font-weight: bold; color: var(--ink-2); }
+.staffing-calc { margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--pine-tint-2); font-size: 13px; color: var(--ink); }
+.staffing-calc.is-short { background: var(--caution-tint); color: var(--caution); font-weight: bold; }
+@media (max-width: 600px) { .staffing-grid { grid-template-columns: repeat(2, 1fr); } }
