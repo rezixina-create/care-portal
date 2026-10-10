@@ -1657,3 +1657,25 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 
 /* [Claude追加] 職員・保有資格の一覧の数 */
 .qual-badge { background: var(--pine-tint-2); color: var(--ink); border: 1px solid var(--line); padding: 3px 8px; font-size: 13px; font-weight: bold; }
+
+/* [Claude追加] 区分（ユニット・フロア）の切り替えと設定 */
+.unit-filter-nav { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin: 6px 0 10px; }
+.unit-filter-label { font-size: 13px; font-weight: bold; color: var(--ink-2); margin-right: 2px; }
+.unit-filter-btn { font: inherit; font-size: 13px; font-weight: bold; padding: 5px 12px; border-radius: 999px; border: 1px solid var(--line); background: var(--ground); color: var(--ink-2); cursor: pointer; min-height: 34px; }
+.unit-filter-btn[data-state="on"] { background: var(--pine); border-color: var(--pine); color: #ffffff; }
+.unit-filter-count { font-weight: normal; margin-left: 2px; }
+.unit-badge { font-size: 13px; font-weight: bold; padding: 1px 6px; border-radius: 4px; background: var(--pine-tint); color: var(--pine-dark); border: 1px solid var(--line); }
+.resident-card .card-top { display: flex; justify-content: space-between; align-items: center; gap: 4px; }
+.unit-card { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-bottom: 10px; background: #ffffff; }
+.unit-card.unit-none { background: var(--caution-tint); }
+.unit-head { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.unit-name-input { flex: 1; min-width: 140px; font-size: 15px; font-weight: bold; }
+.unit-del { color: var(--alert); }
+.unit-count { font-size: 13px; color: var(--ink-2); margin-top: 6px; }
+.unit-members { margin-top: 6px; font-size: 13px; }
+.unit-members summary { cursor: pointer; color: var(--pine); font-weight: bold; }
+.unit-member { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; justify-content: space-between; padding: 6px 0; border-bottom: 1px solid var(--line-2); }
+.unit-move { width: auto; min-width: 160px; font-size: 13px; }
+.unit-add { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
+.unit-add .form-control { flex: 1; min-width: 160px; }
+.staff-unit-sel { width: auto; font-size: 13px; padding: 2px 6px; }

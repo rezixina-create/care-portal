@@ -536,11 +536,31 @@ class LocalDB {
  "groomings", "weight_records", "visitations", "inventory_logs",
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
- "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications"
+ "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications",
+ "units", "unit_logs"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
  });
+ // [Claude追加] 区分（ユニット・フロア）: 以前の版の「wing」（東棟・西棟の文字）を区分の番号（unit_id）に移す。
+ // どの端末でも同じ番号になるよう、利用者→職員の順に出てきた順で番号を振る
+ {
+ const people = (Array.isArray(d.residents) ? d.residents : []).concat(Array.isArray(d.stamps) ? d.stamps : []).filter(x => x && typeof x === "object");
+ if (!d.units.length) {
+ const names = [];
+ people.forEach(x => { if (x.wing && !names.includes(x.wing)) names.push(x.wing); });
+ d.units = names.map((n, i) => ({ id: i + 1, name: n, order: i + 1 }));
+ }
+ const byName = {};
+ d.units.forEach(u => { if (u && u.name) byName[u.name] = u.id; });
+ people.forEach(x => {
+ if (x.wing !== undefined) {
+ if ((x.unit_id === undefined || x.unit_id === null) && byName[x.wing]) x.unit_id = byName[x.wing];
+ delete x.wing;
+ }
+ });
+ people.forEach(x => { if (typeof x.role === "string" && /^.+ユニットリーダー$/.test(x.role) && x.role !== "ユニットリーダー" && x.unit_id) x.role = "ユニットリーダー"; });
+ }
  // [Claude修正] ログイン用アカウントは、職員マスタ (stamps) から全端末で同じ内容になるよう生成する。
  // 旧実装は各端末がログイン時にばらばらに作成していたため、ある端末でID・パスワードを変更しても、
  // 別の端末の保存で初期値 (aaaa/0000) に戻されることがあった。職員名をIDにして1件ずつ合流できるようにする。
@@ -1122,33 +1142,36 @@ class LocalDB {
 
  const seed = {
  residents: [
- { id: 1, wing: "東棟", name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (移乗・歩行の介助は麻痺側（右）の後方から)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 高血圧, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
- { id: 2, wing: "東棟", name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
- { id: 3, wing: "西棟", name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "やわらか食 (舌でつぶせる・とろみでまとめる)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
- { id: 4, wing: "西棟", name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
+ { id: 1, unit_id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", status: "在所", birth_date: "1940-10-15", policy_stamp: "看取り", sensor_alert: " 離床センサーマット使用中 (ベッド脇)", emergency_contact: "長男: 佐藤 一郎 (090-1111-2222)", family_wishes: "本人が穏やかに過ごせるようにお願いします。", life_history: "元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。", paralysis: "右片麻痺 (移乗・歩行の介助は麻痺側（右）の後方から)", allergies: "卵アレルギー", diet_type: "普通食 (一口大)", oral_state: "上部義歯 (下残歯あり)", diseases: "糖尿病, 高血圧, 脳梗塞後遺症", care_plan_goal: "歩行器での安全な移動。食事時のむせ込み予防。", dr_instructions: "次回採血予定。低血糖症状に留意。", next_clinic_date: "2026-10-14", care_expiry_date: "2026-11-15", deposit_balance: 35000 },
+ { id: 2, unit_id: 1, name: "田中 ハナ", room_no: "102", care_level: "要介護2", status: "在所", birth_date: "1938-11-20", policy_stamp: "緊急搬送", sensor_alert: " ナースコール常時手元配置", emergency_contact: "長女: 田中 美咲 (090-3333-4444)", family_wishes: "足元の冷えを気にするので温かくしてください。", life_history: "元教員。読書と手芸が趣味。几帳面な性格。", paralysis: "麻痺なし (膝痛あり)", allergies: "なし", diet_type: "軟飯・一口刻み", oral_state: "総義歯", diseases: "心不全, 高血圧", care_plan_goal: "下肢の浮腫チェック。水分管理 (1日1200ml程度)。", dr_instructions: "利尿剤の継続。体重増加時は連絡。", next_clinic_date: "2026-10-07", care_expiry_date: "2026-10-25", deposit_balance: 28000 },
+ { id: 3, unit_id: 2, name: "鈴木 一郎", room_no: "103", care_level: "要介護3", status: "在所", birth_date: "1935-02-15", policy_stamp: "看取り", sensor_alert: " 離床・転倒防止センサーマット (ベッド脇・端座位見守り)", emergency_contact: "妻: 鈴木 和子 (090-5555-6666)", family_wishes: "できるだけ居室で静かに休ませてあげてください。", life_history: "元農業。穏やかな性格。家族思い。", paralysis: "左片麻痺 (端座位保持可・移乗軽介助)", allergies: "そばアレルギー", diet_type: "やわらか食 (舌でつぶせる・とろみでまとめる)", oral_state: "残歯のみ", diseases: "パーキンソン病, 嚥下障害, 誤嚥性肺炎既往", care_plan_goal: "ベッド上での安定した端座位保持を活かし、介助による車椅子移乗・離床機会の確保。残存機能の維持と誤嚥予防。", dr_instructions: "抗パーキンソン薬の定時内服厳守。", next_clinic_date: "2026-10-20", care_expiry_date: "2027-04-30", deposit_balance: 42000 },
+ { id: 4, unit_id: 2, name: "高橋 トメ", room_no: "105", care_level: "要介護1", status: "入院中", birth_date: "1942-08-01", policy_stamp: "緊急搬送", sensor_alert: "特記なし", emergency_contact: "長男: 高橋 健 (090-7777-8888)", family_wishes: "退院時期が決まったらすぐ連絡します。", life_history: "元商店経営。明るく社交的。", paralysis: "麻痺なし", allergies: "なし", diet_type: "普通食", oral_state: "総義歯", diseases: "骨粗鬆症", care_plan_goal: "転倒予防の見守り。", dr_instructions: "大腿骨経過観察中。", next_clinic_date: "2026-10-10", care_expiry_date: "2027-01-15", deposit_balance: 15000 }
  ],
- // [Claude修正] 職員22名（2ユニット）。役職・棟・資格はアンチさんのデータに合わせた
+ // [Claude修正] 区分（ユニット・フロア）の見本。名前は事務ポータル「区分の設定」で自由に変えられる
+ units: [{ id: 1, name: "東棟", order: 1 }, { id: 2, name: "西棟", order: 2 }],
+ unit_logs: [],
+ // [Claude修正] 職員22名（2ユニット）。役職・担当の区分・資格はアンチさんのデータに合わせた
  stamps: [
  { name: "木村 健一", role: "管理者", qualifications: "社会福祉主事・介護福祉士・認知症対応型サービス事業管理者研修修了", employment_type: "常勤", duty_type: "日勤専従" },
  { name: "佐々木 浩二", role: "生活相談員", qualifications: "社会福祉士・介護福祉士", employment_type: "常勤", duty_type: "日勤専従" },
  { name: "小林 恵子", role: "計画作成担当者（ケアマネ）", qualifications: "介護支援専門員・介護福祉士・認知症介護実践者研修修了", employment_type: "常勤", duty_type: "日勤専従" },
  { name: "鈴木 美智子", role: "主任看護師", qualifications: "看護師 (正看護師)", employment_type: "常勤", duty_type: "日勤専従" },
  { name: "加藤 由美", role: "看護師", qualifications: "看護師 (正看護師)", employment_type: "常勤", duty_type: "日勤専従" },
- { name: "山田 孝之", role: "東棟ユニットリーダー", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "吉田 誠", role: "西棟ユニットリーダー", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "伊藤 翔太", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "井上 蓮", role: "介護職員", wing: "東棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "高橋 直樹", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "佐藤 健太", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "小林 亮", role: "介護職員", wing: "東棟", qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "松田 健二", role: "介護職員", wing: "東棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "清水 翔平", role: "介護職員", wing: "東棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "斉藤 翼", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "石川 太陽", role: "介護職員", wing: "西棟", qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "中村 大輔", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "渡辺 拓也", role: "介護職員", wing: "西棟", qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "野村 拓海", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
- { name: "三浦 拓也", role: "介護職員", wing: "西棟", qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "山田 孝之", role: "ユニットリーダー", unit_id: 1, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "吉田 誠", role: "ユニットリーダー", unit_id: 2, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "伊藤 翔太", role: "介護職員", unit_id: 1, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "井上 蓮", role: "介護職員", unit_id: 1, qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "高橋 直樹", role: "介護職員", unit_id: 1, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "佐藤 健太", role: "介護職員", unit_id: 1, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "小林 亮", role: "介護職員", unit_id: 1, qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "松田 健二", role: "介護職員", unit_id: 1, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "清水 翔平", role: "介護職員", unit_id: 1, qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "斉藤 翼", role: "介護職員", unit_id: 2, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "石川 太陽", role: "介護職員", unit_id: 2, qualifications: "初任者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "中村 大輔", role: "介護職員", unit_id: 2, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "渡辺 拓也", role: "介護職員", unit_id: 2, qualifications: "実務者研修", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "野村 拓海", role: "介護職員", unit_id: 2, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
+ { name: "三浦 拓也", role: "介護職員", unit_id: 2, qualifications: "介護福祉士", employment_type: "常勤", duty_type: "交替勤務" },
  { name: "松本 陽子", role: "事務員", qualifications: "医療事務・日商簿記", employment_type: "常勤", duty_type: "日勤専従" },
  { name: "田中 慎一", role: "事務員 (パート)", qualifications: "普通自動車免許", employment_type: "非常勤 (パート)", duty_type: "日勤専従" }
  ],
@@ -1261,7 +1284,7 @@ class LocalDB {
         prevention: "1. 就寝時、歩行器は必ずベッド柵の開口部すぐ横（手の届く定位置）に配置し、ブレーキロックを徹底する。\n2. 離床センサーマットの感度・敷設位置を再点検し、端座位になった時点で早期覚知できるようにする。\n3. 日常の声かけとして「夜間トイレの際は必ずナースコールを押してください」「歩行器を使って職員と一緒に行きましょう」と繰り返し穏やかに伝える。",
         supervisor_comment: "離床センサーへの迅速な初動対応により転倒を未然に防止できた良好な対応。歩行自立度が上がっている時期こそ転倒リスクが高まるため、職員間の申し送りで歩行器の定位置管理を徹底し、夜勤帯の巡視タイミングにも留意すること。（管理者：木村 健一）",
         status: "承認済",
-        staff_name: "山田 孝之 (東棟ユニットリーダー)",
+        staff_name: "山田 孝之 (ユニットリーダー)",
         injury_pins: []
       },
       {
@@ -5473,6 +5496,9 @@ function cpCollectAuditEntries() {
  out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.dismissed_at, type: "アラートを閉じた", by: l.staff_name, detail: l.alert_detail || "" });
  if (l.restored_at) out.push({ kind: "アラート対応", resident: "", residentId: null, summary: l.alert_title || "", at: l.restored_at, type: "未対応に戻した", by: l.restored_by, detail: "" });
  });
+ (db.data.unit_logs || []).forEach(l => {
+ out.push({ kind: "区分の設定", resident: "", residentId: null, summary: l.detail || "", at: l.at, type: l.action || "", by: l.by, detail: "" });
+ });
  (db.data.staff_archive || []).forEach(a => {
  out.push({ kind: "職員名簿", resident: "", residentId: null, summary: `${a.staff && a.staff.name ? a.staff.name : ""} (${a.staff && a.staff.role ? a.staff.role : ""})`, at: a.removed_at, type: "職員を名簿から外した", by: a.removed_by, detail: "" });
  });
@@ -5503,7 +5529,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -11738,7 +11764,7 @@ function loadOfficeData() {
 }
 
 function switchOfficeTab(tab) {
- if (tab === "backup" || tab === "staff_auth") {
+ if (tab === "backup" || tab === "staff_auth" || tab === "units") {
  if (!isCurrentStaffAdminOrClerk()) {
  alert("このタブは管理者および事務員のみアクセス可能です。");
  switchOfficeTab("inventory");
@@ -11762,7 +11788,7 @@ function switchOfficeTab(tab) {
  shift: "tabOfficeShift", vehicle: "tabOfficeVehicle", vaccine: "tabOfficeVaccine",
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
- backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth"
+ backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -11780,6 +11806,8 @@ function switchOfficeTab(tab) {
   renderOfficeCareRenewal();
   } else if (tab === "staff_auth") {
  renderOfficeStaffAuth();
+ } else if (tab === "units") {
+ renderOfficeUnits();
  }
  }
 }
@@ -13943,7 +13971,7 @@ function openAddResidentModal() {
  document.getElementById("resModalTitle").textContent = " 新規利用者の登録";
  document.getElementById("resEditId").value = "";
  document.getElementById("resRoomNo").value = "";
-  if (document.getElementById("resWing")) document.getElementById("resWing").value = "";
+  if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml("", cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = "";
  document.getElementById("resCareLevel").value = ""; // [Claude修正] 未選択のまま「要介護3」で登録されないように
  document.getElementById("resStatus").value = "在所";
@@ -13980,7 +14008,7 @@ function openEditResidentModal(id) {
  document.getElementById("resModalTitle").textContent = ` 利用者情報の編集 (${r.name} 様)`;
  document.getElementById("resEditId").value = r.id;
  document.getElementById("resRoomNo").value = r.room_no || "";
-  if (document.getElementById("resWing")) document.getElementById("resWing").value = r.wing || "";
+  if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml(r.unit_id, cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = r.name || "";
  document.getElementById("resCareLevel").value = r.care_level || "要介護3";
  document.getElementById("resStatus").value = r.status || "在所";
@@ -14026,16 +14054,17 @@ function submitResidentForm() {
  alert("基本方針（緊急搬送・看取りなど）を選んでください。");
  return;
  }
- // [Claude修正] 棟は選ばずに登録できないようにする（最初から「東棟」が選ばれていると、確かめずに登録されてしまう）
- if (document.getElementById("resWing") && !document.getElementById("resWing").value) {
- alert("棟（東棟・西棟）を選んでください。");
+ // [Claude修正] 区分（ユニット・フロアなど）があるときは、選ばずに登録できないようにする
+ const cpUnitSel = document.getElementById("resUnit");
+ if (cpUnitSel && cpUnits().length && !cpUnitSel.value) {
+ alert("区分（ユニット・フロアなど）を選んでください。");
  return;
  }
 
  const editId = document.getElementById("resEditId").value;
  const residentData = {
  room_no: roomNo,
-    wing: (document.getElementById("resWing") ? document.getElementById("resWing").value : ""),
+ unit_id: (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null,
  name: name,
  care_level: document.getElementById("resCareLevel").value,
  status: document.getElementById("resStatus").value,
@@ -14070,7 +14099,10 @@ function submitResidentForm() {
  if (idx !== -1) {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
- cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
+ if (String(cpOld.unit_id ?? "") !== String(residentData.unit_id ?? "")) {
+ cpUnitLog("利用者の区分を移動", `${name} 様：${cpUnitName(cpOld.unit_id) || "区分なし"} → ${cpUnitName(residentData.unit_id) || "区分なし"}`);
+ }
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();
@@ -14356,6 +14388,7 @@ function openStaffModal() {
  }
  document.getElementById("newStaffName").value = "";
  document.getElementById("newStaffRole").value = "";
+ if (document.getElementById("newStaffUnit")) document.getElementById("newStaffUnit").innerHTML = cpUnitOptionsHtml("", "担当の区分なし");
  renderStaffModalList();
  document.getElementById("staffModal").style.display = "flex";
 }
@@ -14386,7 +14419,8 @@ function renderStaffModalList() {
  <div style="display:flex; align-items:center; gap:10px; flex:1; min-width:0;">
  <span class="hanko-stamp" style="height:26px; min-width:48px; padding:2px 8px; font-size:12px; letter-spacing:1px;">${escapeHtml(s.name)}</span>
  <strong style="font-size:14px; white-space:nowrap;">${escapeHtml(s.name)}</strong>
- <span style="font-size:12px; padding:2px 8px; border-radius:4px; ${badgeStyle} white-space:nowrap;">${escapeHtml(s.role || '職員')}</span>
+ <span style="font-size:13px; padding:2px 8px; border-radius:4px; ${badgeStyle} white-space:nowrap;">${escapeHtml(s.role || '職員')}</span>
+ ${cpUnits().length ? `<select class="form-control staff-unit-sel" data-staff="${escapeHtml(s.name)}" aria-label="${escapeHtml(s.name)}の担当の区分" onchange="moveStaffUnit(this.dataset.staff, this.value)">${cpUnitOptionsHtml(s.unit_id, "担当の区分なし")}</select>` : ""}
  </div>
  <div style="display:flex; align-items:center; gap:4px;">
  <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" title="上へ移動" onclick="moveStaffOrder(${idx}, -1)" ${idx === 0 ? 'disabled style="opacity:0.4; padding:2px 6px;"' : ''}>▲</button>
@@ -14421,9 +14455,16 @@ function moveStaffOrder(index, direction) {
 
 function submitNewStaffStamp() {
  const name = document.getElementById("newStaffName").value.trim();
- const role = document.getElementById("newStaffRole").value.trim() || "介護職員";
+ const role = document.getElementById("newStaffRole").value.trim();
+ const unitSel = document.getElementById("newStaffUnit");
+ const unitId = unitSel && unitSel.value ? Number(unitSel.value) : null;
  if (!name) {
  alert("職員名を入力してください。");
+ return;
+ }
+ // [Claude修正] 役職を選ばずに追加すると「介護職員」になっていた → 選んでもらう
+ if (!role) {
+ alert("役職を選んでください。");
  return;
  }
 
@@ -14433,7 +14474,9 @@ function submitNewStaffStamp() {
  return;
  }
 
- gState.stamps.push({ name: name, role: role, pin: "0000", is_initial_pin: true });
+ const cpNewStaff = { name: name, role: role, pin: "0000", is_initial_pin: true };
+ if (unitId) cpNewStaff.unit_id = unitId;
+ gState.stamps.push(cpNewStaff);
  // 役職・序列順（偉い人順）に自動整列
  gState.stamps = sortStaffList(gState.stamps);
  db.data.stamps = gState.stamps;
@@ -15124,7 +15167,7 @@ function generateMonthlyShiftAction() {
  }
  generateMonthlyShiftData(ym);
  renderShiftTable(ym);
- alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・管理者・計画作成担当者・相談員・事務員：日勤専従（土日祝・年末年始休み）\n・夜勤：東棟と西棟から1人ずつを優先\n・公休：全員週休2日配分`);
+ alert(` ${y}年${parseInt(m, 10)}月の勤務表シフトを自動生成しました！\n・希望休配慮：全${hopeCount}件を最優先公休「休」として確定配置\n・早出・遅出：毎日必ず各2名体制（配置済）\n・夜勤：毎日2名体制（同番NG配慮済）\n・管理者・計画作成担当者・相談員・事務員：日勤専従（土日祝・年末年始休み）\n・夜勤：区分（ユニット・フロア）ごとに1人ずつを優先\n・公休：全員週休2日配分`);
 }
 
 // 国民の祝日 ＆ 年末年始 (12/29〜1/3) 判定関数
@@ -15199,98 +15242,242 @@ function isHolidayOrYearEnd(year, month, day) {
 
 // 職員の職種カテゴリ判定 (director:施設長, office:事務員, nurse:看護師, care:介護職員)
 // =====================================================================
-// 棟（ユニット）切り替え ＆ 職員・保有資格の一覧 ＆ シフト職種識別マーク
+// 区分（ユニット・フロア）の設定と切り替え ＆ 職員・保有資格の一覧 ＆ シフト職種識別マーク
 // =====================================================================
 
-// 1. 棟（ユニット）フィルター機能
-gState.selectedWing = "all";
-
-function filterResidentsByWing(wing) {
-  gState.selectedWing = wing || "all";
-  
-  // ボタンスタイル更新
-  const btns = document.querySelectorAll(".wing-filter-btn");
-  btns.forEach(btn => {
-    const isTarget = btn.getAttribute("data-wing") === gState.selectedWing || 
-                     (gState.selectedWing === "all" && btn.id === "wingBtnAll") ||
-                     (gState.selectedWing === "東棟" && btn.id === "wingBtnEast") ||
-                     (gState.selectedWing === "西棟" && btn.id === "wingBtnWest");
-    if (isTarget) {
-      btn.style.background = "var(--pine-tint)";
-      btn.style.color = "var(--pine)";
-      btn.style.borderColor = "var(--pine-light)";
-    } else {
-      btn.style.background = "var(--ground)";
-      btn.style.color = "var(--ink-2)";
-      btn.style.borderColor = "var(--line)";
-    }
-  });
-
-  renderResidentsStrip();
-
-  // 現在選択中の利用者が絞り込み後の棟にいない場合、最初の利用者を自動選択
-  const filtered = (gState.residents || []).filter(r => {
-    if (gState.selectedWing === "all") return true;
-    return (r.wing || "東棟") === gState.selectedWing;
-  });
-  if (filtered.length > 0 && !filtered.some(r => r.id === gState.selectedResidentId)) {
-    selectResident(filtered[0].id);
-  }
+// ==========================================
+// [Claude追加] 区分（ユニット・フロア・棟）の設定
+// - 区分の名前は施設が自由に決める（東棟・3階・ひまわりユニットなど）。利用者・職員は区分の番号（unit_id）で紐づける
+// - 区分は運営の設定なので消せる。ただし利用者・職員が1人でもいる区分は消せない（先に別の区分へ移す）
+// - 追加・名前の変更・並べ替え・削除・利用者や職員の移動は unit_logs に残し、操作履歴に出す
+// - 勤務表の自動生成は、夜勤を区分の数だけ（区分ごとに1人ずつ）割り当てる
+// ==========================================
+function cpUnits() {
+ return (db.data.units || []).filter(u => u && u.id !== undefined).slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || Number(a.id) - Number(b.id));
 }
-window.filterResidentsByWing = filterResidentsByWing;
+function cpUnitName(id) {
+ if (id === undefined || id === null || id === "") return "";
+ const u = (db.data.units || []).find(x => Number(x.id) === Number(id));
+ return u ? u.name : "";
+}
+function cpUnitResidents(id) {
+ return (gState.residents || db.data.residents || []).filter(r => r && Number(r.unit_id) === Number(id));
+}
+function cpUnitStaff(id) {
+ return (db.data.stamps || []).filter(s => s && typeof s === "object" && Number(s.unit_id) === Number(id));
+}
+// 勤務表の夜勤の人数（区分ごとに1人。区分がないときは2人）
+function cpNightTarget() {
+ const n = cpUnits().length;
+ return n > 0 ? n : 2;
+}
+function cpUnitLog(action, detail) {
+ if (!Array.isArray(db.data.unit_logs)) db.data.unit_logs = [];
+ db.data.unit_logs.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: toLocalDateTimeStr(new Date()), by: cpLoginStaffName(), action: action, detail: detail });
+}
+function cpUnitOptionsHtml(selectedId, firstLabel) {
+ const sel = selectedId === undefined || selectedId === null ? "" : String(selectedId);
+ return `<option value="">${escapeHtml(firstLabel)}</option>` + cpUnits().map(u => `<option value="${u.id}" ${String(u.id) === sel ? "selected" : ""}>${escapeHtml(u.name)}</option>`).join("");
+}
+function cpCanEditUnits() {
+ if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+ alert("区分の設定は、管理者と事務員だけが変更できます。");
+ return false;
+ }
+ return true;
+}
 
-// 利用者カード一覧の描画（棟フィルタリング対応）
+// 事務ポータル「区分の設定」
+function renderOfficeUnits() {
+ const box = document.getElementById("officeUnitsBody");
+ if (!box) return;
+ const units = cpUnits();
+ const others = id => units.filter(u => Number(u.id) !== Number(id));
+ const memberRow = (label, name, curId, onchange, attrs) => `
+ <div class="unit-member">
+ <span>${escapeHtml(label)}</span>
+ <select class="form-control unit-move" aria-label="${escapeHtml(name)}の区分を移す" onchange="${onchange}" ${attrs || ""}>
+ <option value="">移す先を選ぶ</option>
+ ${others(curId).map(u => `<option value="${u.id}">${escapeHtml(u.name)}へ移す</option>`).join("")}
+ </select>
+ </div>`;
+ const rows = units.map((u, i) => {
+ const res = cpUnitResidents(u.id);
+ const st = cpUnitStaff(u.id);
+ return `
+ <div class="unit-card">
+ <div class="unit-head">
+ <input type="text" class="form-control unit-name-input" id="unitName_${u.id}" maxlength="20" value="${escapeHtml(u.name)}" aria-label="区分の名前">
+ <button type="button" class="btn btn-secondary" onclick="renameUnit(${u.id})">名前を変える</button>
+ <button type="button" class="btn btn-secondary" onclick="moveUnitOrder(${u.id}, -1)" ${i === 0 ? "disabled" : ""} title="上へ">↑</button>
+ <button type="button" class="btn btn-secondary" onclick="moveUnitOrder(${u.id}, 1)" ${i === units.length - 1 ? "disabled" : ""} title="下へ">↓</button>
+ <button type="button" class="btn btn-secondary unit-del" onclick="deleteUnit(${u.id})">削除</button>
+ </div>
+ <div class="unit-count">利用者 ${res.length}名・職員 ${st.length}名</div>
+ ${res.length || st.length ? `<details class="unit-members"><summary>この区分の利用者・職員（別の区分へ移す）</summary>
+ ${res.map(r => memberRow(`${r.room_no || ""}号室 ${r.name} 様`, r.name, u.id, `moveResidentUnit(${r.id}, this.value)`)).join("")}
+ ${st.map(s => memberRow(`${s.name}（${s.role || "職員"}）`, s.name, u.id, "moveStaffUnit(this.dataset.staff, this.value)", `data-staff="${escapeHtml(s.name)}"`)).join("")}
+ </details>` : ""}
+ </div>`;
+ }).join("");
+ const noUnit = (gState.residents || []).filter(r => !cpUnitName(r.unit_id));
+ box.innerHTML = `
+ ${rows || `<p class="panel-note">区分はまだありません。区分がないあいだは、利用者一覧の切り替えは出ません。</p>`}
+ ${units.length && noUnit.length ? `<div class="unit-card unit-none"><div class="unit-count">区分が決まっていない利用者 ${noUnit.length}名</div>
+ ${noUnit.map(r => `<div class="unit-member"><span>${escapeHtml(`${r.room_no || ""}号室 ${r.name} 様`)}</span><select class="form-control unit-move" onchange="moveResidentUnit(${r.id}, this.value)"><option value="">区分を選ぶ</option>${units.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("")}</select></div>`).join("")}</div>` : ""}
+ <div class="unit-add">
+ <input type="text" class="form-control" id="newUnitName" maxlength="20" aria-label="追加する区分の名前">
+ <button type="button" class="btn btn-primary" onclick="addUnit()">区分を追加</button>
+ </div>`;
+}
+
+function cpUnitNameCheck(name, exceptId) {
+ if (!name) { alert("区分の名前を入れてください。"); return false; }
+ if (name.length > 20) { alert("区分の名前は20文字までにしてください。"); return false; }
+ if ((db.data.units || []).some(u => u.name === name && Number(u.id) !== Number(exceptId))) { alert(`「${name}」はすでにあります。`); return false; }
+ return true;
+}
+function addUnit() {
+ if (!cpCanEditUnits()) return;
+ const el = document.getElementById("newUnitName");
+ const name = (el ? el.value : "").trim();
+ if (!cpUnitNameCheck(name, null)) return;
+ if (!Array.isArray(db.data.units)) db.data.units = [];
+ const maxId = db.data.units.reduce((m, u) => Math.max(m, Number(u.id) || 0), 0);
+ const maxOrder = db.data.units.reduce((m, u) => Math.max(m, Number(u.order) || 0), 0);
+ db.data.units.push({ id: maxId + 1, name: name, order: maxOrder + 1 });
+ cpUnitLog("区分を追加", name);
+ db.save();
+ cpAfterUnitChange();
+}
+function renameUnit(id) {
+ if (!cpCanEditUnits()) return;
+ const u = (db.data.units || []).find(x => Number(x.id) === Number(id));
+ const el = document.getElementById(`unitName_${id}`);
+ if (!u || !el) return;
+ const name = el.value.trim();
+ if (name === u.name) return;
+ if (!cpUnitNameCheck(name, id)) { el.value = u.name; return; }
+ cpUnitLog("区分の名前を変更", `${u.name} → ${name}`);
+ u.name = name;
+ db.save();
+ cpAfterUnitChange();
+}
+function moveUnitOrder(id, dir) {
+ if (!cpCanEditUnits()) return;
+ const units = cpUnits();
+ const i = units.findIndex(u => Number(u.id) === Number(id));
+ const j = i + dir;
+ if (i < 0 || j < 0 || j >= units.length) return;
+ const a = units[i], b = units[j];
+ units.forEach((u, k) => { u.order = k + 1; });
+ const t = a.order; a.order = b.order; b.order = t;
+ db.save();
+ cpAfterUnitChange();
+}
+function deleteUnit(id) {
+ if (!cpCanEditUnits()) return;
+ const u = (db.data.units || []).find(x => Number(x.id) === Number(id));
+ if (!u) return;
+ const res = cpUnitResidents(id), st = cpUnitStaff(id);
+ if (res.length || st.length) {
+ alert(`「${u.name}」には利用者${res.length}名・職員${st.length}名がいるので消せません。\n先に別の区分へ移してください。`);
+ return;
+ }
+ if (!confirm(`区分「${u.name}」を消します。よろしいですか？`)) return;
+ db.data.units = (db.data.units || []).filter(x => Number(x.id) !== Number(id));
+ cpUnitLog("区分を削除", u.name);
+ if (String(gState.selectedUnit) === String(id)) gState.selectedUnit = "all";
+ db.save();
+ cpAfterUnitChange();
+}
+function moveResidentUnit(residentId, newUnitId) {
+ if (!newUnitId) return;
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(residentId));
+ if (!r) return;
+ const from = cpUnitName(r.unit_id) || "区分なし", to = cpUnitName(newUnitId);
+ if (!confirm(`${r.name} 様を「${from}」から「${to}」へ移します。よろしいですか？`)) { renderOfficeUnits(); return; }
+ const old = JSON.parse(JSON.stringify(r));
+ r.unit_id = Number(newUnitId);
+ if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, old, ["unit_id"]);
+ cpUnitLog("利用者の区分を移動", `${r.name} 様：${from} → ${to}`);
+ db.data.residents = gState.residents;
+ db.save();
+ cpAfterUnitChange();
+}
+function moveStaffUnit(staffName, newUnitId) {
+ if (!cpCanEditUnits()) { renderOfficeUnits(); return; }
+ const s = (db.data.stamps || []).find(x => x && x.name === staffName);
+ if (!s) return;
+ const from = cpUnitName(s.unit_id) || "区分なし";
+ const to = newUnitId ? cpUnitName(newUnitId) : "区分なし";
+ if (from === to) return;
+ if (!confirm(`${s.name} さんの担当を「${from}」から「${to}」へ変えます。よろしいですか？`)) { cpAfterUnitChange(); return; }
+ if (newUnitId) s.unit_id = Number(newUnitId); else delete s.unit_id;
+ cpUnitLog("職員の担当区分を変更", `${s.name}：${from} → ${to}`);
+ db.save();
+ cpAfterUnitChange();
+}
+function cpAfterUnitChange() {
+ renderOfficeUnits();
+ if (typeof renderResidentsStrip === "function") renderResidentsStrip();
+ if (typeof renderStaffModalList === "function" && document.getElementById("staffModal") && document.getElementById("staffModal").style.display === "flex") renderStaffModalList();
+ if (typeof renderStaffQualificationsTable === "function") renderStaffQualificationsTable();
+}
+
+// 利用者一覧の上の切り替え（区分の数だけボタンを出す。区分が1つ以下なら出さない）
+gState.selectedUnit = "all";
+function filterResidentsByUnit(unitId) {
+ gState.selectedUnit = unitId === undefined || unitId === null || unitId === "" ? "all" : String(unitId);
+ renderResidentsStrip();
+ const shown = cpResidentsInSelectedUnit();
+ if (shown.length > 0 && !shown.some(r => r.id === gState.selectedResidentId)) selectResident(shown[0].id);
+}
+function cpResidentsInSelectedUnit() {
+ const all = gState.residents || [];
+ if (gState.selectedUnit === "all" || !cpUnitName(gState.selectedUnit)) return all;
+ return all.filter(r => String(r.unit_id) === String(gState.selectedUnit));
+}
+function renderUnitFilterNav() {
+ const nav = document.getElementById("unitFilterNav");
+ if (!nav) return;
+ const units = cpUnits();
+ if (units.length <= 1) { nav.innerHTML = ""; nav.style.display = "none"; return; }
+ if (gState.selectedUnit !== "all" && !cpUnitName(gState.selectedUnit)) gState.selectedUnit = "all";
+ const all = gState.residents || [];
+ const btn = (val, label, n) => `<button type="button" class="unit-filter-btn" data-state="${String(gState.selectedUnit) === String(val) ? "on" : "off"}" onclick="filterResidentsByUnit('${val}')">${escapeHtml(label)} <span class="unit-filter-count">${n}名</span></button>`;
+ nav.style.display = "flex";
+ nav.innerHTML = `<span class="unit-filter-label">区分:</span>` + btn("all", "すべて", all.length) + units.map(u => btn(u.id, u.name, all.filter(r => String(r.unit_id) === String(u.id)).length)).join("");
+}
 function renderResidentsStrip() {
-  const strip = document.getElementById("residentsStrip");
-  if (!strip) return;
-  strip.innerHTML = "";
-
-  const allResidents = gState.residents || [];
-  const eastResidents = allResidents.filter(r => (r.wing || "東棟") === "東棟");
-  const westResidents = allResidents.filter(r => (r.wing || "東棟") === "西棟");
-
-  // カウントバッジ更新
-  const elAll = document.getElementById("wingCountAll");
-  if (elAll) elAll.textContent = `${allResidents.length}名`;
-  const elEast = document.getElementById("wingCountEast");
-  if (elEast) elEast.textContent = `${eastResidents.length}名`;
-  const elWest = document.getElementById("wingCountWest");
-  if (elWest) elWest.textContent = `${westResidents.length}名`;
-
-  const countLabel = document.getElementById("residentCountLabel");
-  if (countLabel) {
-    const wingName = gState.selectedWing === "all" ? "全棟" : gState.selectedWing;
-    countLabel.textContent = `表示中: ${wingName} (${(gState.selectedWing === 'all' ? allResidents : (gState.selectedWing === '東棟' ? eastResidents : westResidents)).length}名 / 総計${allResidents.length}名)`;
-  }
-
-  // フィルタリング対象
-  const targetResidents = gState.selectedWing === "all" 
-    ? allResidents 
-    : (gState.selectedWing === "東棟" ? eastResidents : westResidents);
-
-  if (targetResidents.length === 0) {
-    strip.innerHTML = '<div style="padding:12px; font-size:13px; color:var(--ink-3);">この棟に登録されている利用者はいません。</div>';
-    return;
-  }
-
-  targetResidents.forEach(r => {
-    const card = document.createElement("div");
-    card.className = `resident-card ${r.id === gState.selectedResidentId ? "selected" : ""} ${r.status !== "在所" ? "inactive" : ""}`;
-    card.onclick = () => selectResident(r.id);
-
-    const wingLabel = r.wing || "東棟";
-    const wingBadgeColor = wingLabel === "東棟" ? "background:#ffedd5; color:#c2410c; border:1px solid #fed7aa;" : "background:#d1fae5; color:#047857; border:1px solid #a7f3d0;";
-
-    card.innerHTML = `
-      <div class="card-top" style="display:flex; justify-content:space-between; align-items:center;">
-        <span class="room-badge">${escapeHtml(r.room_no)}号室</span>
-        <span style="font-size:13px; font-weight:bold; padding:1px 6px; border-radius:4px; ${wingBadgeColor}">${escapeHtml(wingLabel)}</span>
-      </div>
-      <div class="res-name">${escapeHtml(r.name)} 様</div>
-    `;
-    strip.appendChild(card);
-  });
+ const strip = document.getElementById("residentsStrip");
+ if (!strip) return;
+ renderUnitFilterNav();
+ const all = gState.residents || [];
+ const shown = cpResidentsInSelectedUnit();
+ const countLabel = document.getElementById("residentCountLabel");
+ if (countLabel) countLabel.textContent = shown.length === all.length ? `登録利用者: ${all.length}名` : `表示中: ${cpUnitName(gState.selectedUnit)} ${shown.length}名（全${all.length}名）`;
+ strip.innerHTML = "";
+ if (!shown.length) {
+ strip.innerHTML = '<div class="panel-note">この区分の利用者はいません。</div>';
+ return;
+ }
+ const showBadge = cpUnits().length > 1;
+ shown.forEach(r => {
+ const card = document.createElement("div");
+ card.className = `resident-card ${r.id === gState.selectedResidentId ? "selected" : ""} ${r.status !== "在所" ? "inactive" : ""}`;
+ card.onclick = () => selectResident(r.id);
+ const un = cpUnitName(r.unit_id);
+ card.innerHTML = `
+ <div class="card-top">
+ <span class="room-badge">${escapeHtml(r.room_no)}号室</span>
+ ${showBadge && un ? `<span class="unit-badge">${escapeHtml(un)}</span>` : ""}
+ </div>
+ <div class="res-name">${escapeHtml(r.name)} 様</div>`;
+ strip.appendChild(card);
+ });
 }
+window.filterResidentsByUnit = filterResidentsByUnit;
 window.renderResidentsStrip = renderResidentsStrip;
 
 // 2. 職員の職種識別マークとカテゴリ判定
@@ -15372,7 +15559,7 @@ function renderStaffQualificationsTable() {
 
     const tr = document.createElement("tr");
     const badgeHtml = getStaffRoleBadgeHtml(s.name);
-    const wingText = s.wing ? `<span style="font-size:13px; color:var(--ink-3); margin-left:4px;">(${escapeHtml(s.wing)})</span>` : "";
+    const wingText = cpUnitName(s.unit_id) ? `<span style="font-size:13px; color:var(--ink-3); margin-left:4px;">(${escapeHtml(cpUnitName(s.unit_id))})</span>` : "";
 
     tr.innerHTML = `
       <td style="text-align:center;">${badgeHtml}</td>
@@ -15503,8 +15690,10 @@ function generateMonthlyShiftData(yearMonth) {
   });
 
   // 月間公休目標 (14名体制で毎日4名公休: 31日の場合 31*4=124人日。124/14 = 8日休み2名、9日休み12名)
-  // [Claude修正] 1日の公休の人数 = 介護職の人数 − 10（早2・遅2・日2・夜2・明2）。14名なら4名、15名なら5名
-  const OFF_PER_DAY = Math.max(0, careNames.length - 10);
+  // [Claude修正] 夜勤は区分（ユニット・フロア）の数だけ（区分ごとに1人）。区分がないときは2名
+  // 1日の公休の人数 = 介護職の人数 − (早2・遅2・日2 ＋ 夜勤・明けそれぞれ夜勤の人数)。2区分・15名なら5名
+  const NIGHTS = cpNightTarget();
+  const OFF_PER_DAY = Math.max(0, careNames.length - (6 + NIGHTS * 2));
   const totalMonthHolidays = daysInMonth * OFF_PER_DAY;
   const baseTarget = Math.floor(totalMonthHolidays / careNames.length);
   const extraHolidays = totalMonthHolidays % careNames.length;
@@ -15531,9 +15720,9 @@ function generateMonthlyShiftData(yearMonth) {
 
   // 初日 (1日) の明け2名設定 (前月最終日からの夜勤明け引き継ぎ)
   // ※ 1日に希望休を出している職員は初日明けから除外
-  if (careNames.length >= 2) {
+  if (careNames.length >= NIGHTS) {
    const availForAke1 = careNames.filter(n => !isHopeOff(n, 1));
-   const prevNightStaff = (availForAke1.length >= 2 ? availForAke1 : careNames).slice(-2);
+   const prevNightStaff = (availForAke1.length >= NIGHTS ? availForAke1 : careNames).slice(-NIGHTS);
    prevNightStaff.forEach(pn => {
     shiftData[pn][1] = "明";
    });
@@ -15556,7 +15745,7 @@ function generateMonthlyShiftData(yearMonth) {
    });
 
    // 万一候補が2名未満の場合は翌日希望休ガードのみ緩和
-   if (candidates.length < 2) {
+   if (candidates.length < NIGHTS) {
     candidates = careNames.filter(name => {
      if (isHopeOff(name, d)) return false;
      if (shiftData[name][d] === "休") return false;
@@ -15576,30 +15765,17 @@ function generateMonthlyShiftData(yearMonth) {
     return (careNames.indexOf(a) * 7 + d) % careNames.length - (careNames.indexOf(b) * 7 + d) % careNames.length;
    });
 
-   // 特例配慮(NGペア: 佐藤 健太 高橋 直樹)を回避する2名を選出
-   // [Claude追加] グループホームの夜勤はユニットごとに1人以上 → 東棟と西棟から1人ずつを優先（棟が登録されている職員どうし）
-   const wingOf = n => { const st = staffList.find(x => x.name === n); return st && st.wing ? st.wing : ""; };
-   let selectedPair = null;
-   for (let i = 0; i < candidates.length && !selectedPair; i++) {
-    for (let j = i + 1; j < candidates.length; j++) {
-     const w1 = wingOf(candidates[i]), w2 = wingOf(candidates[j]);
-     if (w1 && w2 && w1 !== w2 && !isNgPair(candidates[i], candidates[j])) { selectedPair = [candidates[i], candidates[j]]; break; }
-    }
-   }
-   for (let i = 0; i < candidates.length && !selectedPair; i++) {
-    for (let j = i + 1; j < candidates.length; j++) {
-     const c1 = candidates[i];
-     const c2 = candidates[j];
-     if (!isNgPair(c1, c2)) {
-      selectedPair = [c1, c2];
-      break;
-     }
-    }
-    if (selectedPair) break;
-   }
-   if (!selectedPair) {
-    selectedPair = [candidates[0], candidates[1] || candidates[0]];
-   }
+   // [Claude修正] 夜勤を区分の数だけ選ぶ。①区分ごとに1人ずつ（同日夜勤NGの組み合わせは避ける）②足りなければNGを避けて補う ③それでも足りなければ補う
+   const unitOfStaff = n => { const st = staffList.find(x => x.name === n); return st && st.unit_id !== undefined && st.unit_id !== null ? String(st.unit_id) : ""; };
+   const selectedPair = [];
+   const okWith = n => !selectedPair.includes(n) && !selectedPair.some(x => isNgPair(x, n));
+   cpUnits().forEach(u => {
+    if (selectedPair.length >= NIGHTS) return;
+    const c = candidates.find(n => unitOfStaff(n) === String(u.id) && okWith(n));
+    if (c) selectedPair.push(c);
+   });
+   for (const n of candidates) { if (selectedPair.length >= NIGHTS) break; if (okWith(n)) selectedPair.push(n); }
+   for (const n of candidates) { if (selectedPair.length >= NIGHTS) break; if (!selectedPair.includes(n)) selectedPair.push(n); }
 
    selectedPair.forEach(n => {
     shiftData[n][d] = "夜";
@@ -15728,8 +15904,9 @@ function generateMonthlyShiftData(yearMonth) {
 
 
 function renderShiftTable(yearMonth) {
- // [Claude修正] 介護公休の基準人数（介護職の人数 − 10。勤務表の自動生成と同じ考え方）
- const careOffTarget = Math.max(0, (db.data.stamps || []).filter(st => getStaffRoleCategory(st.name || st) === "care").length - 10);
+ // [Claude修正] 夜勤・明けの基準は区分の数、介護公休の基準は「介護職の人数 −（6 ＋ 夜勤の人数×2）」（勤務表の自動生成と同じ考え方）
+ const nightTarget = cpNightTarget();
+ const careOffTarget = Math.max(0, (db.data.stamps || []).filter(st => getStaffRoleCategory(st.name || st) === "care").length - (6 + nightTarget * 2));
  const ym = yearMonth || getShiftYearMonth();
  const [yearStr, monthStr] = ym.split("-");
  const year = parseInt(yearStr, 10);
@@ -15968,18 +16145,18 @@ function renderShiftTable(yearMonth) {
  <td colspan="3" style="border:1px solid #ddd6fe; color:#5b21b6; font-size:11px;">毎日2名</td>
  </tr>
 
- <!-- 夜勤人数チェック行 (基準: 2名) -->
+ <!-- 夜勤人数チェック行（基準は区分の数） -->
  <tr style="background:#e0e7ff; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#e0e7ff; text-align:left; padding:5px 8px; border:1px solid #c7d2fe; color:#3730a3;" colspan="2">
- 夜勤体制 (基準: 2名)
+ 夜勤体制 (基準: ${nightTarget}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyNightCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 2) {
+ if (cnt === nightTarget) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- } else if (cnt < 2) {
+ } else if (cnt < nightTarget) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -15987,21 +16164,21 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #c7d2fe; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日2名</td>
+ <td colspan="3" style="border:1px solid #c7d2fe; color:#3730a3; font-size:11px;">毎日${nightTarget}名</td>
  </tr>
 
- <!-- 明け人数チェック行 (基準: 2名) -->
+ <!-- 明け人数チェック行（基準は区分の数） -->
  <tr style="background:#fef9c3; font-weight:bold;">
  <td style="position:sticky; left:0; z-index:2; background:#fef9c3; text-align:left; padding:5px 8px; border:1px solid #fef08a; color:#854d0e;" colspan="2">
- 明け体制 (基準: 2名)
+ 明け体制 (基準: ${nightTarget}名)
  </td>
  `;
  for (let d = 1; d <= daysInMonth; d++) {
  const cnt = dailyAkeCount[d];
  let badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- if (cnt === 2) {
+ if (cnt === nightTarget) {
  badgeStyle = "color:#16a34a; font-weight:bold; font-size:12.5px;";
- } else if (cnt < 2) {
+ } else if (cnt < nightTarget) {
  badgeStyle = "color:#dc2626; font-weight:bold; background:#fee2e2; border-radius:3px; padding:1px 3px; font-size:12.5px;";
  } else {
  badgeStyle = "color:#b45309; font-weight:bold; background:#fef3c7; border-radius:3px; padding:1px 3px; font-size:12.5px;";
@@ -16009,7 +16186,7 @@ function renderShiftTable(yearMonth) {
  tfootHtml += `<td style="border:1px solid #fef08a; padding:3px 2px;"><span style="${badgeStyle}">${cnt}</span></td>`;
  }
  tfootHtml += `
- <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">毎日2名</td>
+ <td colspan="3" style="border:1px solid #fef08a; color:#854d0e; font-size:11px;">毎日${nightTarget}名</td>
  </tr>
 
  <!-- 介護日勤人数行 (基準: 2名) -->
