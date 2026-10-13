@@ -16076,8 +16076,8 @@ function renderShiftTable(yearMonth) {
   theadHtml += `
   </tr>
   <!-- 行事・予定行 -->
-  <tr style="background:#fdf4ff;">
-  <th colspan="2" style="position:sticky; left:0; z-index:4; background:#f5d0fe; color:#86198f; font-size:11px; padding:3px 6px; border:1px solid #f0abfc; text-align:left;">行事・予定</th>
+  <tr class="shift-event-row">
+  <th colspan="2" class="shift-event-head" style="position:sticky; left:0; z-index:4; text-align:left;">行事・予定</th>
   `;
 
   const shiftEvents = (db.data.shift_events && db.data.shift_events[ym]) || {};
@@ -16090,7 +16090,7 @@ function renderShiftTable(yearMonth) {
   }
 
   theadHtml += `
-  <th colspan="3" style="background:#f5d0fe; border:1px solid #f0abfc; font-size:10px; color:#86198f;">行事</th>
+  <th colspan="3" class="shift-event-head">行事</th>
   </tr>
   </thead>
   `;
@@ -16179,7 +16179,8 @@ function renderShiftTable(yearMonth) {
  const safeName = escapeHtml(st.name);
   const customUnitId = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][st.name]) ? db.data.monthly_shift_units[ym][st.name][d] : null;
   let unitTag = "";
-  if (customUnitId !== null && customUnitId !== undefined && customUnitId !== "") {
+  // [Claude修正] 応援の印は早出・日勤・遅出・夜勤の日だけ（公休の日に「休東棟」と出ていた）
+  if (customUnitId !== null && customUnitId !== undefined && customUnitId !== "" && cpIsWorkShift(sym)) {
     const uName = cpUnitName(customUnitId);
     if (uName) {
       unitTag = `<span class="shift-help-unit-tag" title="応援・担当: ${escapeHtml(uName)}">${escapeHtml(uName)}</span>`;
@@ -16413,6 +16414,8 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
   ${(() => {
     const uList = cpUnits();
     if (!uList || uList.length === 0) return '';
+    // [Claude修正] 応援は勤務の日だけ設定できる（公休・明けの日に応援を付けられていた）
+    if (!cpIsWorkShift(currentSymbol)) return `<div class="shift-help-note">応援の区分は、早出・日勤・遅出・夜勤の日だけ設定できます。</div>`;
     const stObj = (db.data.stamps || []).find(x => (x.name || x) === staffName);
     const baseUnitId = (stObj && stObj.unit_id !== undefined && stObj.unit_id !== null) ? stObj.unit_id : null;
     const customUnit = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][staffName]) ? db.data.monthly_shift_units[ym][staffName][day] : undefined;
@@ -16421,19 +16424,17 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
     let uBtns = uList.map(u => {
       const isSelected = String(u.id) === String(activeUnitId);
       const isBase = String(u.id) === String(baseUnitId);
-      const bg = isSelected ? '#0284c7' : '#f0f9ff';
-      const fg = isSelected ? '#ffffff' : '#0369a1';
-      const border = isSelected ? '#0284c7' : '#bae6fd';
       const suffix = isBase ? ' (基本)' : ' (応援)';
-      return `<button type="button" style="font-size:10.5px; padding:3px 6px; border-radius:4px; border:1px solid ${border}; background:${bg}; color:${fg}; font-weight:bold; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
+      // [Claude修正] 色は見た目の決まりの変数、文字13px・高さ36px（style.css の .shift-unit-btn）
+      return `<button type="button" class="shift-unit-btn${isSelected ? ' is-active' : ''}" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
     }).join('');
 
     return `
     <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #cdd6d0;">
-      <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">担当区分・応援切り替え:</div>
+      <div class="shift-unit-label">担当区分・応援切り替え:</div>
       <div style="display:flex; gap:4px; flex-wrap:wrap;">
         ${uBtns}
-        <button type="button" style="font-size:10px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db; background:#f9fafb; color:#4b5563; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
+        <button type="button" class="shift-unit-btn shift-unit-reset" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
       </div>
     </div>
     `;
@@ -16469,6 +16470,8 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
   ${(() => {
     const uList = cpUnits();
     if (!uList || uList.length === 0) return '';
+    // [Claude修正] 応援は勤務の日だけ設定できる（公休・明けの日に応援を付けられていた）
+    if (!cpIsWorkShift(currentSymbol)) return `<div class="shift-help-note">応援の区分は、早出・日勤・遅出・夜勤の日だけ設定できます。</div>`;
     const stObj = (db.data.stamps || []).find(x => (x.name || x) === staffName);
     const baseUnitId = (stObj && stObj.unit_id !== undefined && stObj.unit_id !== null) ? stObj.unit_id : null;
     const customUnit = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][staffName]) ? db.data.monthly_shift_units[ym][staffName][day] : undefined;
@@ -16477,19 +16480,17 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
     let uBtns = uList.map(u => {
       const isSelected = String(u.id) === String(activeUnitId);
       const isBase = String(u.id) === String(baseUnitId);
-      const bg = isSelected ? '#0284c7' : '#f0f9ff';
-      const fg = isSelected ? '#ffffff' : '#0369a1';
-      const border = isSelected ? '#0284c7' : '#bae6fd';
       const suffix = isBase ? ' (基本)' : ' (応援)';
-      return `<button type="button" style="font-size:10.5px; padding:3px 6px; border-radius:4px; border:1px solid ${border}; background:${bg}; color:${fg}; font-weight:bold; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
+      // [Claude修正] 色は見た目の決まりの変数、文字13px・高さ36px（style.css の .shift-unit-btn）
+      return `<button type="button" class="shift-unit-btn${isSelected ? ' is-active' : ''}" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
     }).join('');
 
     return `
     <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #cdd6d0;">
-      <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">担当区分・応援切り替え:</div>
+      <div class="shift-unit-label">担当区分・応援切り替え:</div>
       <div style="display:flex; gap:4px; flex-wrap:wrap;">
         ${uBtns}
-        <button type="button" style="font-size:10px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db; background:#f9fafb; color:#4b5563; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
+        <button type="button" class="shift-unit-btn shift-unit-reset" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
       </div>
     </div>
     `;
@@ -16631,6 +16632,8 @@ function applyShiftCellEdit(symbol) {
  if (!db.data.monthly_shifts[yearMonth][staffName]) db.data.monthly_shifts[yearMonth][staffName] = {};
 
  db.data.monthly_shifts[yearMonth][staffName][day] = symbol;
+ // [Claude修正] 公休・明けなど勤務でない日に変えたら、その日の応援の区分も外す
+ if (!cpIsWorkShift(symbol)) cpClearShiftHelp(yearMonth, staffName, day);
 
  // 介護職で夜勤に手動変更した場合、翌日が当月内であれば「明」にする連動アシスト
  if (roleCategory === "care" && symbol === "夜") {
@@ -16640,6 +16643,7 @@ function applyShiftCellEdit(symbol) {
  const curNext = db.data.monthly_shifts[yearMonth][staffName][day + 1];
  if (!curNext || curNext === "日" || curNext === "早" || curNext === "遅") {
  db.data.monthly_shifts[yearMonth][staffName][day + 1] = "明";
+ cpClearShiftHelp(yearMonth, staffName, day + 1);
  }
  }
  }
@@ -19181,9 +19185,26 @@ function openShiftEventModal(yearMonth, day) {
 }
 window.openShiftEventModal = openShiftEventModal;
 
+// [Claude追加] 応援の区分を付けられる勤務（早出・日勤・遅出・夜勤）
+const CP_SHIFT_WORK_SYMBOLS = ["早", "日", "遅", "夜"];
+function cpIsWorkShift(sym) { return CP_SHIFT_WORK_SYMBOLS.includes(String(sym || "").trim()); }
+// [Claude追加] その日の応援の区分を外す（空になった入れ物も消す）
+function cpClearShiftHelp(ym, staffName, day) {
+  const m = db.data.monthly_shift_units;
+  if (!m || !m[ym] || !m[ym][staffName]) return;
+  delete m[ym][staffName][day];
+  if (Object.keys(m[ym][staffName]).length === 0) delete m[ym][staffName];
+}
+
 // 勤務マスごとの担当区分（応援）変更
 function changeShiftCellUnit(staffName, day, unitId) {
   const ym = getShiftYearMonth();
+  // [Claude修正] 勤務でない日には応援を付けない
+  const curSym = (((db.data.monthly_shifts || {})[ym] || {})[staffName] || {})[day] || "";
+  if (unitId !== null && unitId !== undefined && !cpIsWorkShift(curSym)) {
+    alert("応援の区分は、早出・日勤・遅出・夜勤の日だけ設定できます。");
+    return;
+  }
   if (!db.data.monthly_shift_units) db.data.monthly_shift_units = {};
   if (!db.data.monthly_shift_units[ym]) db.data.monthly_shift_units[ym] = {};
   if (!db.data.monthly_shift_units[ym][staffName]) db.data.monthly_shift_units[ym][staffName] = {};

@@ -1089,33 +1089,67 @@ body {
   color: #b91c1c !important;
 }
 
+/* [Claude修正] 勤務表の応援・行事: 色は :root の変数に（青・紫の直書きをやめる）。
+   表の中の小さな印は、勤務表のほかの文字と同じ 11px（表の幅の都合。押すボタンは 13px・高さ36px） */
 .shift-help-unit-tag {
   display: inline-block;
-  font-size: 9px;
-  background: #0284c7;
+  font-size: 11px;
+  background: var(--pine-dark);
   color: #ffffff;
   padding: 0 3px;
   border-radius: 3px;
-  line-height: 1.2;
+  line-height: 1.3;
   margin-left: 2px;
   vertical-align: middle;
   font-weight: bold;
 }
 
+.shift-event-row { background: var(--pine-tint-2); }
+/* 表の見出し全体の指定（.data-table th）より優先させる */
+.data-table th.shift-event-head,
+.shift-event-head {
+  background: var(--pine-tint);
+  color: var(--pine-dark);
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+}
+.data-table th.shift-event-cell,
 .shift-event-cell {
-  background: #fdf4ff;
-  color: #86198f;
-  font-size: 10px;
+  background: var(--pine-tint-2);
+  color: var(--ink-2);
+  font-size: 11px;
   padding: 2px;
-  border: 1px solid #f0abfc;
+  border: 1px solid var(--line);
   cursor: pointer;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   max-width: 45px;
 }
-.shift-event-cell:hover {
-  background: #fae8ff;
+.data-table th.shift-event-cell:hover,
+.shift-event-cell:hover { background: var(--pine-tint); }
+
+.shift-unit-label { font-size: 13px; font-weight: bold; color: var(--ink-2); margin-bottom: 4px; }
+.shift-unit-btn {
+  font-size: 13px;
+  min-height: 36px;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+  background: var(--surface);
+  color: var(--ink);
+  font-weight: bold;
+  cursor: pointer;
+}
+.shift-unit-btn.is-active { background: var(--pine); border-color: var(--pine); color: #ffffff; }
+.shift-unit-btn.shift-unit-reset { background: var(--ground); color: var(--ink-2); font-weight: normal; }
+.shift-help-note {
+  margin-top: 6px;
+  padding-top: 6px;
+  border-top: 1px dashed var(--line);
+  font-size: 13px;
+  color: var(--ink-3);
 }
 
 /* 現場ケアガイド内 専門用語・病名タップリンク */
