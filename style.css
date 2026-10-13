@@ -1089,6 +1089,35 @@ body {
   color: #b91c1c !important;
 }
 
+.shift-help-unit-tag {
+  display: inline-block;
+  font-size: 9px;
+  background: #0284c7;
+  color: #ffffff;
+  padding: 0 3px;
+  border-radius: 3px;
+  line-height: 1.2;
+  margin-left: 2px;
+  vertical-align: middle;
+  font-weight: bold;
+}
+
+.shift-event-cell {
+  background: #fdf4ff;
+  color: #86198f;
+  font-size: 10px;
+  padding: 2px;
+  border: 1px solid #f0abfc;
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 45px;
+}
+.shift-event-cell:hover {
+  background: #fae8ff;
+}
+
 /* 現場ケアガイド内 専門用語・病名タップリンク */
 .term-link {
   color: #1a4f3d;

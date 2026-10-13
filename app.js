@@ -16073,10 +16073,27 @@ function renderShiftTable(yearMonth) {
  theadHtml += `<th style="background:${bg}; color:${color}; padding:2px; font-size:10.5px; font-weight:bold; border:1px solid #cdd6d0;" ${titleAttr}>${dowLabel}</th>`;
  }
 
- theadHtml += `
- </tr>
- </thead>
- `;
+  theadHtml += `
+  </tr>
+  <!-- 行事・予定行 -->
+  <tr style="background:#fdf4ff;">
+  <th colspan="2" style="position:sticky; left:0; z-index:4; background:#f5d0fe; color:#86198f; font-size:11px; padding:3px 6px; border:1px solid #f0abfc; text-align:left;">行事・予定</th>
+  `;
+
+  const shiftEvents = (db.data.shift_events && db.data.shift_events[ym]) || {};
+  for (let d = 1; d <= daysInMonth; d++) {
+    const hol = isHolidayOrYearEnd(year, month, d);
+    const customEvt = shiftEvents[d] || "";
+    const evtText = customEvt || (hol.isHoliday ? hol.name : "");
+    const titleAttr = evtText ? `title="${escapeHtml(evtText)} (クリックして編集)"` : 'title="クリックして行事・予定を登録"';
+    theadHtml += `<th class="shift-event-cell" ${titleAttr} onclick="openShiftEventModal('${ym}', ${d})">${escapeHtml(evtText)}</th>`;
+  }
+
+  theadHtml += `
+  <th colspan="3" style="background:#f5d0fe; border:1px solid #f0abfc; font-size:10px; color:#86198f;">行事</th>
+  </tr>
+  </thead>
+  `;
 
  // 2. ボディ行（各職員）生成
  let tbodyHtml = "<tbody>";
@@ -16160,11 +16177,19 @@ function renderShiftTable(yearMonth) {
  }
 
  const safeName = escapeHtml(st.name);
- tbodyHtml += `
-   <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
-   ${sym ? `<span class="${badgeClass}">${sym}</span>${hopeTag}` : `<span style="color:#cdd6d0;">-</span>`}
- </td>
- `;
+  const customUnitId = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][st.name]) ? db.data.monthly_shift_units[ym][st.name][d] : null;
+  let unitTag = "";
+  if (customUnitId !== null && customUnitId !== undefined && customUnitId !== "") {
+    const uName = cpUnitName(customUnitId);
+    if (uName) {
+      unitTag = `<span class="shift-help-unit-tag" title="応援・担当: ${escapeHtml(uName)}">${escapeHtml(uName)}</span>`;
+    }
+  }
+  tbodyHtml += `
+    <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
+    ${sym ? `<span class="${badgeClass}">${sym}</span>${unitTag}${hopeTag}` : `<span style="color:#cdd6d0;">-</span>`}
+  </td>
+  `;
  }
 
  tbodyHtml += `
@@ -16384,7 +16409,36 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
-   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
+   <!-- 区分（担当・応援ヘルプ）切り替えボタン -->
+  ${(() => {
+    const uList = cpUnits();
+    if (!uList || uList.length === 0) return '';
+    const stObj = (db.data.stamps || []).find(x => (x.name || x) === staffName);
+    const baseUnitId = (stObj && stObj.unit_id !== undefined && stObj.unit_id !== null) ? stObj.unit_id : null;
+    const customUnit = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][staffName]) ? db.data.monthly_shift_units[ym][staffName][day] : undefined;
+    const activeUnitId = (customUnit !== undefined && customUnit !== null) ? customUnit : baseUnitId;
+
+    let uBtns = uList.map(u => {
+      const isSelected = String(u.id) === String(activeUnitId);
+      const isBase = String(u.id) === String(baseUnitId);
+      const bg = isSelected ? '#0284c7' : '#f0f9ff';
+      const fg = isSelected ? '#ffffff' : '#0369a1';
+      const border = isSelected ? '#0284c7' : '#bae6fd';
+      const suffix = isBase ? ' (基本)' : ' (応援)';
+      return `<button type="button" style="font-size:10.5px; padding:3px 6px; border-radius:4px; border:1px solid ${border}; background:${bg}; color:${fg}; font-weight:bold; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
+    }).join('');
+
+    return `
+    <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #cdd6d0;">
+      <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">担当区分・応援切り替え:</div>
+      <div style="display:flex; gap:4px; flex-wrap:wrap;">
+        ${uBtns}
+        <button type="button" style="font-size:10px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db; background:#f9fafb; color:#4b5563; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
+      </div>
+    </div>
+    `;
+  })()}
+  <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
    <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f6f8f6; color:#4a5852;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
  <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#1e5b47; text-decoration:underline;"> 詳細設定</a>
  </div>
@@ -16411,7 +16465,36 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
  <button class="shift-popover-btn btn-kyu" onclick="executeShiftCellEdit('休')"> 公休</button>
  <button class="shift-popover-btn btn-clear" onclick="executeShiftCellEdit('')" style="grid-column: span 2;"> クリア</button>
  </div>
-   <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
+   <!-- 区分（担当・応援ヘルプ）切り替えボタン -->
+  ${(() => {
+    const uList = cpUnits();
+    if (!uList || uList.length === 0) return '';
+    const stObj = (db.data.stamps || []).find(x => (x.name || x) === staffName);
+    const baseUnitId = (stObj && stObj.unit_id !== undefined && stObj.unit_id !== null) ? stObj.unit_id : null;
+    const customUnit = (db.data.monthly_shift_units && db.data.monthly_shift_units[ym] && db.data.monthly_shift_units[ym][staffName]) ? db.data.monthly_shift_units[ym][staffName][day] : undefined;
+    const activeUnitId = (customUnit !== undefined && customUnit !== null) ? customUnit : baseUnitId;
+
+    let uBtns = uList.map(u => {
+      const isSelected = String(u.id) === String(activeUnitId);
+      const isBase = String(u.id) === String(baseUnitId);
+      const bg = isSelected ? '#0284c7' : '#f0f9ff';
+      const fg = isSelected ? '#ffffff' : '#0369a1';
+      const border = isSelected ? '#0284c7' : '#bae6fd';
+      const suffix = isBase ? ' (基本)' : ' (応援)';
+      return `<button type="button" style="font-size:10.5px; padding:3px 6px; border-radius:4px; border:1px solid ${border}; background:${bg}; color:${fg}; font-weight:bold; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, ${u.id})">${escapeHtml(u.name)}${suffix}</button>`;
+    }).join('');
+
+    return `
+    <div style="margin-top:6px; padding-top:6px; border-top:1px dashed #cdd6d0;">
+      <div style="font-size:11px; font-weight:bold; color:#4a5852; margin-bottom:4px;">担当区分・応援切り替え:</div>
+      <div style="display:flex; gap:4px; flex-wrap:wrap;">
+        ${uBtns}
+        <button type="button" style="font-size:10px; padding:2px 5px; border-radius:4px; border:1px solid #d1d5db; background:#f9fafb; color:#4b5563; cursor:pointer;" onclick="changeShiftCellUnit('${escapeHtml(staffName)}', ${day}, null)">基本に戻す</button>
+      </div>
+    </div>
+    `;
+  })()}
+  <div style="margin-top:8px; padding-top:6px; border-top:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
    <button type="button" class="btn btn-outline" style="font-size:11px; padding:3px 8px; ${isHope ? 'background:#fee2e2; color:#b91c1c; border-color:#fca5a5; font-weight:bold;' : 'background:#f6f8f6; color:#4a5852;'}" onclick="toggleShiftHopeOff('${escapeHtml(staffName)}', ${day})">${isHope ? '希望休の解除' : '＋ この日を希望休に設定'}</button>
  <a href="javascript:void(0)" onclick="closeShiftPopover(); openShiftCellModal('${escapeHtml(staffName)}', ${day})" style="font-size:11px; color:#1e5b47; text-decoration:underline;"> 詳細設定</a>
  </div>
@@ -19069,3 +19152,58 @@ window.deleteDailyNotebookItem = deleteDailyNotebookItem;
 window.syncGlobalTimeToNow = syncGlobalTimeToNow;
 window.onGlobalTimeChange = onGlobalTimeChange;
 window.initGlobalTimeSync = initGlobalTimeSync;
+// 行事・予定の登録モーダル
+function openShiftEventModal(yearMonth, day) {
+  const ym = yearMonth || getShiftYearMonth();
+  const [yearStr, monthStr] = ym.split("-");
+  const year = parseInt(yearStr, 10);
+  const month = parseInt(monthStr, 10);
+  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
+  const dow = new Date(year, month - 1, day).getDay();
+  const hol = isHolidayOrYearEnd(year, month, day);
+  const holName = hol.isHoliday ? ` (${hol.name})` : "";
+
+  if (!db.data.shift_events) db.data.shift_events = {};
+  if (!db.data.shift_events[ym]) db.data.shift_events[ym] = {};
+  const currentEvt = db.data.shift_events[ym][day] || "";
+
+  const val = prompt(`${month}月${day}日(${dowNames[dow]})${holName} の行事・予定を入力してください\n（例: 防災訓練、敬老会、健康診断、秋祭り、全体研修 など）\n※空にしてOKを押すと削除されます`, currentEvt);
+  if (val === null) return;
+
+  const trimmed = val.trim();
+  if (trimmed) {
+    db.data.shift_events[ym][day] = trimmed;
+  } else {
+    delete db.data.shift_events[ym][day];
+  }
+  db.save();
+  renderShiftTable(ym);
+}
+window.openShiftEventModal = openShiftEventModal;
+
+// 勤務マスごとの担当区分（応援）変更
+function changeShiftCellUnit(staffName, day, unitId) {
+  const ym = getShiftYearMonth();
+  if (!db.data.monthly_shift_units) db.data.monthly_shift_units = {};
+  if (!db.data.monthly_shift_units[ym]) db.data.monthly_shift_units[ym] = {};
+  if (!db.data.monthly_shift_units[ym][staffName]) db.data.monthly_shift_units[ym][staffName] = {};
+
+  const stObj = (db.data.stamps || []).find(x => (x.name || x) === staffName);
+  const baseUnitId = (stObj && stObj.unit_id !== undefined && stObj.unit_id !== null) ? stObj.unit_id : null;
+
+  if (unitId === null || unitId === undefined || String(unitId) === String(baseUnitId)) {
+    delete db.data.monthly_shift_units[ym][staffName][day];
+    if (Object.keys(db.data.monthly_shift_units[ym][staffName]).length === 0) {
+      delete db.data.monthly_shift_units[ym][staffName];
+    }
+  } else {
+    db.data.monthly_shift_units[ym][staffName][day] = Number(unitId);
+  }
+
+  db.save();
+  closeShiftPopover();
+  renderShiftTable(ym);
+  if (typeof renderTodayShiftBar === "function") renderTodayShiftBar();
+  if (typeof renderDailyJournal === "function" && gState.activeCareTab === "daily_journal") renderDailyJournal();
+}
+window.changeShiftCellUnit = changeShiftCellUnit;
