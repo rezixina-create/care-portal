@@ -2493,6 +2493,21 @@ MEDICAL_TERMS_DICTIONARY["吸引"] = MEDICAL_TERMS_DICTIONARY["喀痰吸引"];
 MEDICAL_TERMS_DICTIONARY["生活不活発病"] = MEDICAL_TERMS_DICTIONARY["廃用症候群"];
 MEDICAL_TERMS_DICTIONARY["JCS"] = MEDICAL_TERMS_DICTIONARY["JCS（ジャパン・コーマ・スケール）"];
 
+// [Claude修正 2026-10-14] 医療・介護の説明は、互いに独立した2つ以上の資料で一致を確かめ、
+// その資料（URL）を記録したものだけを表示する（ユーザー指示「確定事項だけ。医療の誤情報は命にかかわる」）。
+// この一覧にない語は説明を出さず、文中でも押せる語にしない（名前だけの普通の文字になる）。
+// 資料で確かめて記録したら、ここに足して戻す。根拠の一覧: プロジェクトの claude/byoureki_sources_confirmed_20261014.tsv
+const CP_VERIFIED_TERMS = new Set([
+ "ヒートショック", "低血糖発作", "パーキンソン病", "心筋梗塞",
+ "浮腫", "むくみ", "頻脈", "徐脈", "口すぼめ呼吸", "湿性咳嗽", "悪寒戦慄", "敗血症", "瞳孔不同", "感覚鈍麻",
+ "誤嚥", "むせ", "口腔ケア", "呑酸", "タール便", "ツルゴール", "喀痰吸引", "吸引", "ニトロ", "尿閉", "摘便", "浣腸",
+ "発赤", "水疱", "皮下出血", "背抜き", "見当識障害", "夕暮れ症候群", "徘徊", "心気症", "間欠性跛行",
+ "ACP", "フレイル", "サルコペニア", "廃用症候群", "生活不活発病", "JCS（ジャパン・コーマ・スケール）", "JCS", "誤薬"
+]);
+Object.keys(MEDICAL_TERMS_DICTIONARY).forEach(k => {
+ if (!CP_VERIFIED_TERMS.has(k)) delete MEDICAL_TERMS_DICTIONARY[k];
+});
+
 // 高齢者施設 現場ケア辞書 (主要疾患・症候群)
 const DISEASE_GUIDE = {
  "糖尿病": {
@@ -2713,7 +2728,7 @@ const DISEASE_GUIDE = {
 };
 
 // 病歴・既往歴のスマート解決関数（カスタム設定・完全一致・部分一致・同義語照合）
-function resolveDiseaseGuide(diseaseName) {
+function resolveDiseaseGuideRaw(diseaseName) {
  const name = (diseaseName || "").trim();
  if (!name) return null;
 
@@ -2799,6 +2814,24 @@ function resolveDiseaseGuide(diseaseName) {
  isCustom: false,
  isFallback: true
  };
+}
+
+// [Claude修正 2026-10-14] 病名ガイドも、2つ以上の資料で一致を確かめて記録したものだけを表示する。
+// それ以外（もとの30件と、該当なしのときの標準の文）は「確認中」とだけ出す。施設独自のガイドはそのまま表示。
+// 資料で確かめて記録したら、ここに足して戻す。根拠: claude/medical_check_20261008_evening.md ほか
+const CP_VERIFIED_GUIDES = new Set([
+ "インフルエンザ", "新型コロナウイルス感染症", "ノロウイルス（感染性胃腸炎）", "疥癬", "胃ろう・経管栄養",
+ "脱水症", "熱中症", "転倒・頭部打撲後（慢性硬膜下血腫に注意）", "MRSA（薬剤耐性菌）", "結核",
+ "白癬（水虫・爪白癬）", "低栄養", "おむつかぶれ（失禁関連皮膚炎）"
+]);
+const CP_GUIDE_PENDING_TEXT = "この病気の現場ケアガイドは、根拠となる資料を確認中のため表示していません。体調の変化や判断に迷うときは、看護師・主治医の指示に従ってください。";
+function resolveDiseaseGuide(diseaseName) {
+ const res = resolveDiseaseGuideRaw(diseaseName);
+ if (!res || res.isCustom) return res;
+ if (res.isFallback || !CP_VERIFIED_GUIDES.has(res.matchedName)) {
+ return { guide: { symptoms: "", care_points: "", emergency: "" }, matchedName: res.matchedName, isCustom: false, isFallback: !!res.isFallback, pending: true };
+ }
+ return res;
 }
 
 // [Claude修正] 日付は日本時間 (端末のローカル時刻) で求める。
@@ -4327,11 +4360,9 @@ function openDiseaseGuide(diseaseName) {
  closeTermExplanation();
  const name = (diseaseName || "").trim();
  const res = resolveDiseaseGuide(name);
- const guide = res ? res.guide : {
- emergency: "【即時報告基準】発熱（おおむね38℃以上、または平熱より1℃以上の上昇。施設の基準を優先）、SpO2が普段より3〜4%以上低い・90%未満、血圧が普段より著しく高い・急に下がった（数値は施設・主治医の基準に従う）、激しい痛み・嘔吐・冷汗、意識障害・呼びかけへの反応鈍麻時は、直ちに安静を保ち看護師または医師へ連絡してください。",
- care_points: "【現場介護でしてよい安全な初期対応】①無理に動かさず安楽な姿勢（背上げ・側臥位・クッション除圧）を保持。②衣類・ベルトを緩めて呼吸を楽にする。③室温調整・掛け物での保温またはクーリング。④バイタル（体温・血圧・脈拍・SpO2）を再測定して記録。⑤むせがないか確認し、医師・看護師の指示があるまで不用意な飲食・投薬は行わない。",
- symptoms: "日々のバイタル、顔色・表情・口唇色、呼吸のリズム、食事摂取量・水分の進み具合、歩行時のふらつき、活気・傾眠傾向を観察してください。"
- };
+ // [Claude修正 2026-10-14] 根拠を確かめていない標準の文（数値入り）は使わない
+ const guide = (res && res.guide) ? res.guide : { symptoms: "", care_points: "", emergency: "" };
+ const isPending = !res || !!res.pending;
  const matchedName = res ? res.matchedName : name;
  const isCustom = res ? res.isCustom : false;
  const isFallback = res ? res.isFallback : false;
@@ -4346,11 +4377,24 @@ function openDiseaseGuide(diseaseName) {
  } else if (isFallback) {
  subInfo = `<span style="font-size:12px; background:#eef2ef; color:#4a5852; padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 基本見守り基準</span>`;
  }
+ if (isPending) {
+ subInfo = `<span style="font-size:13px; background:var(--caution-tint); color:var(--caution); padding:2px 8px; border-radius:10px; margin-left:8px; font-weight:normal;"> 資料を確認中</span>`;
+ }
  titleEl.innerHTML = `【${escapeHtml(name)}】 現場ケアガイド ＆ 観察ポイント ${subInfo}`;
  }
 
  const contentEl = document.getElementById("diseaseModalContent");
- if (contentEl) {
+ if (contentEl && isPending) {
+ contentEl.innerHTML = `
+ <div style="background:var(--caution-tint); border:1px solid var(--line); border-left:5px solid var(--caution); border-radius:8px; padding:12px; margin-bottom:12px;">
+ <p style="font-size:14px; color:var(--ink); margin:0; line-height:1.7;">${escapeHtml(CP_GUIDE_PENDING_TEXT)}</p>
+ </div>
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-top:8px;">
+ <button class="btn btn-secondary" style="font-size:13px; padding:6px 10px;" onclick="toggleCustomDiseaseEdit(true)">施設独自の現場ケアを追加</button>
+ <span style="font-size:13px; color:var(--ink-3);">※主治医指示が最優先されます</span>
+ </div>
+ `;
+ } else if (contentEl) {
  contentEl.innerHTML = `
  <!-- 1. すぐに報告する基準 (最優先) -->
  <div style="background:#fef2f2; border:1px solid #fecaca; border-left:5px solid #dc2626; border-radius:8px; padding:12px; margin-bottom:12px;">
