@@ -13551,7 +13551,9 @@ function openVaccineModal(editId = null) {
 		selEl.value = v.resident_id;
 		typeEl.value = v.vaccine_name || "季節性インフルエンザ";
 		doseEl.value = v.dose || "定期接種";
-		conEl.value = v.consent || "同意受領済";
+		// [Claude修正] 同意の欄が空のとき「同意受領済」を選んだ状態で開いていた（誰も確かめていないのに同意済みで保存されるおそれ）。
+		// 空や一覧にない値なら「選んでください」から始める
+		conEl.value = [...conEl.options].some(o => o.value && o.value === v.consent) ? v.consent : "";
 		// [Claude修正] 「2026-10-15予定」のような予定日を今日の日付に書き換えていたため、日付部分を残す
 		const vd = String(v.date || "").match(/\d{4}-\d{2}-\d{2}/);
 		dateEl.value = vd ? vd[0] : "";
@@ -13564,7 +13566,7 @@ function openVaccineModal(editId = null) {
 		typeEl.value = "季節性インフルエンザ";
 		doseEl.value = "定期接種";
 		// [Claude修正] 同意・ロット番号・副反応に例文が入っていたため、確認前の内容が記録される恐れがあった
-		conEl.value = "未返送 (確認中)";
+		conEl.value = ""; // [Claude修正] 新規も「選んでください」から
 		dateEl.value = "";
 		docEl.value = "";
 		lotEl.value = "";
@@ -13586,6 +13588,10 @@ function submitVaccineRecord() {
 
 	if (!resId || !type) {
 		alert("対象利用者とワクチン種別を選択してください。");
+		return;
+	}
+	if (!con) {
+		alert("家族同意状況を選んでください。");
 		return;
 	}
 
