@@ -1806,3 +1806,8 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .contract-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 10px; }
 .contract-types { margin-top: 14px; }
 .contract-types summary { cursor: pointer; font-weight: bold; font-size: 14px; margin-bottom: 8px; }
+/* [Claude修正] 請求の設定: スマホ幅で選択欄がはみ出さないように */
+#officeBillingSettingsContainer select { max-width: 100%; }
+@media (max-width: 760px) {
+  #officeBillingSettingsContainer table { display: block; overflow-x: auto; }
+}

@@ -11707,6 +11707,8 @@ function switchOfficeTab(tab) {
  renderOfficeUnits();
  } else if (tab === "contracts") {
  renderOfficeContracts();
+ } else if (tab === "billing") {
+ renderOfficeBillingSelect(); // [Claude修正] 請求の設定を変えたあとに開いても、古い表示のままにならないように
  }
  }
 }
@@ -11872,7 +11874,8 @@ function renderOfficeBillingSettings() {
   const resOptions = (gState.residents || []).slice()
     .sort((a, b) => String(a.room_no).localeCompare(String(b.room_no), "ja", { numeric: true }))
     .map(r => `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</option>`).join("");
-  const itemOptions = (gState.inventory || []).map(i => `<option value="${i.id}">${escapeHtml(i.name)} (${escapeHtml(i.category || "")})</option>`).join("");
+  // [Claude修正] 例外を選べるのは「利用者に関わる用品」の区分の品物だけ（施設の備品の区分は判定で必ず施設負担になり、例外を付けても効かないため）
+  const itemOptions = (gState.inventory || []).filter(i => settings.personal_categories.includes(i.category)).map(i => `<option value="${i.id}">${escapeHtml(i.name)} (${escapeHtml(i.category || "")})</option>`).join("");
 
   container.innerHTML = `
     <details class="billing-settings-card" open style="background:#ffffff; border:1px solid #dfe5e1; border-radius:8px; padding:14px 16px; margin-bottom:18px;">
@@ -12098,6 +12101,10 @@ function cpSubmitBillingOverride() {
   const res = (gState.residents || []).find(r => Number(r.id) === Number(resId));
   const item = (gState.inventory || []).find(i => Number(i.id) === Number(itemId));
   if (!res || !item) return;
+  if (!cpGetBillingSettings().personal_categories.includes(item.category)) {
+    alert(`「${item.name}」の区分（${item.category || "なし"}）は施設の備品の扱いなので、利用者ごとの例外は付けられません。`);
+    return;
+  }
 
   if (!Array.isArray(db.data.billing_overrides)) db.data.billing_overrides = [];
   const existing = db.data.billing_overrides.find(o => !o.voided && Number(o.resident_id) === Number(resId) && Number(o.item_id) === Number(itemId));
