@@ -537,7 +537,7 @@ class LocalDB {
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
  "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications",
- "units", "unit_logs", "settings_logs", "contract_docs", "contract_doc_types"
+ "units", "unit_logs", "settings_logs", "contract_docs", "contract_doc_types", "billing_overrides"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -1533,11 +1533,11 @@ class LocalDB {
       {"id": 5, "resident_id": 1, "name": "シタグリプチン錠 50mg", "unit": "錠", "status": "服用中", "timings": [{"key": "朝食後", "count": 1}], "purpose": "糖尿病の治療（血糖を下げる）", "source_type": "処方箋", "source_detail": "2026-10-01 の処方箋", "added_at": "2026-10-01 11:00", "added_by": "鈴木 美智子", "edit_history": []},
       {"id": 3, "resident_id": 1, "name": "ランソプラゾールOD錠 15mg", "unit": "錠", "status": "服用中", "timings": [{"key": "朝食後", "count": 1}], "purpose": "食後の胸やけ（胃酸を抑える）", "source_type": "処方箋", "source_detail": "2026-10-08 の処方箋", "added_at": "2026-10-08 14:30", "added_by": "鈴木 美智子", "edit_history": []},
       {"id": 4, "resident_id": 1, "name": "メトプロロール錠 20mg", "unit": "錠", "status": "服用中", "timings": [], "prn": {"count": 1, "when": "動悸があるとき"}, "purpose": "動悸があるときの頓服", "source_type": "処方箋", "source_detail": "2026-10-08 の処方箋", "added_at": "2026-10-08 14:35", "added_by": "鈴木 美智子", "edit_history": []}
-    ]
-
+    ],
+    billing_overrides: []
  };
  this.storeLocalCopy(JSON.stringify(seed));
- return seed;
+ return this.ensureDefaultArrays(seed);
  }
 }
 
@@ -5570,7 +5570,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所", "契約・同意書類の種類"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所", "契約・同意書類の種類", "請求の設定"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -11447,7 +11447,7 @@ function renderQuickConsume() {
  <div style="font-weight:bold; font-size:14px; color:#22302b;">${item.name}</div>
  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
  現在庫: <strong>${item.current_stock}</strong> ${item.unit} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
- ${item.is_personal_billable ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
+ ${cpBillingModeFor(gState.selectedResidentId, item).mode === 'personal' ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
  </div>
  </div>
  <div style="margin-top:10px;">
@@ -11480,11 +11480,12 @@ function consumeItem(itemId, qty) {
  const res = gState.residents.find(r => r.id === gState.selectedResidentId);
  if (!item || !res) return;
 
- gPendingConsume = { itemId, qty, resId: res.id };
+  const billInfo = cpBillingModeFor(res.id, item);
+  gPendingConsume = { itemId, qty, resId: res.id, billingMode: billInfo.mode, billingBasis: billInfo.basis };
 
- const billNote = item.is_personal_billable
- ? `<div style="margin-top:8px; font-size:12px; color:#0284c7; background:#f0f9ff; padding:6px 10px; border-radius:4px;">※ 個人購入として月次請求明細に 1${item.unit} (¥${item.unit_price.toLocaleString()}) 自動計上されます。<br>（預かり金出納帳の残高からは引かれません）</div>`
- : `<div style="margin-top:8px; font-size:12px; color:#15803d; background:#f0fdf4; padding:6px 10px; border-radius:4px;">※ 施設負担備品として在庫から消費されます。</div>`;
+  const billNote = billInfo.mode === "personal"
+    ? `<div style="margin-top:8px; font-size:12px; color:#0284c7; background:#f0f9ff; padding:6px 10px; border-radius:4px;">※ 個人購入（${escapeHtml(billInfo.basis)}）として月次請求明細に 1${item.unit} (¥${item.unit_price.toLocaleString()}) 自動計上されます。<br>（預かり金出納帳の残高からは引かれません）</div>`
+    : `<div style="margin-top:8px; font-size:12px; color:#15803d; background:#f0fdf4; padding:6px 10px; border-radius:4px;">※ 施設負担備品（${escapeHtml(billInfo.basis)}）として在庫から消費されます。</div>`;
 
  const msgEl = document.getElementById("confirmConsumeMsg");
  if (msgEl) {
@@ -11515,35 +11516,42 @@ function executeConsume() {
  if (item) {
  item.current_stock -= qty;
 
- if (item.is_personal_billable === 1) {
- var cpConsId = Date.now();
- db.data.consumptions.unshift({
- id: cpConsId,
- consumed_at: nowStr,
- resident_id: resId,
- item_id: item.id,
- item_name: item.name,
- quantity: qty,
- unit_price: item.unit_price,
- subtotal: item.unit_price * qty,
- staff_name: staff
- });
- }
+    const billInfo = (gPendingConsume && gPendingConsume.billingMode)
+      ? { mode: gPendingConsume.billingMode, basis: gPendingConsume.billingBasis }
+      : cpBillingModeFor(resId, item);
+    const isPersonal = billInfo.mode === "personal";
+    var cpConsId = null;
 
- const logId = Date.now() + 1;
- db.data.inventory_logs.unshift({
- id: logId,
- timestamp: nowStr,
- item_id: item.id,
- item_name: item.name,
- action_type: "消費",
- change_qty: -qty,
- after_qty: item.current_stock,
- resident_id: resId,
- resident_name: res ? res.name : "",
- staff_name: staff,
- reason: "現場ケア時使用",
- consumption_id: (item.is_personal_billable === 1 && typeof cpConsId !== "undefined") ? cpConsId : null // [Claude修正] 取消時にどの請求行かを特定するため
+    if (isPersonal) {
+      cpConsId = Date.now();
+      db.data.consumptions.unshift({
+        id: cpConsId,
+        consumed_at: nowStr,
+        resident_id: resId,
+        item_id: item.id,
+        item_name: item.name,
+        quantity: qty,
+        unit_price: item.unit_price,
+        subtotal: item.unit_price * qty,
+        staff_name: staff,
+        billing_basis: billInfo.basis
+      });
+    }
+
+    const logId = Date.now() + 1;
+    db.data.inventory_logs.unshift({
+      id: logId,
+      timestamp: nowStr,
+      item_id: item.id,
+      item_name: item.name,
+      action_type: "消費",
+      change_qty: -qty,
+      after_qty: item.current_stock,
+      resident_id: resId,
+      resident_name: res ? res.name : "",
+      staff_name: staff,
+      reason: "現場ケア時使用",
+      consumption_id: (isPersonal && cpConsId) ? cpConsId : null
  });
 
  db.save();
@@ -11704,7 +11712,489 @@ function switchOfficeTab(tab) {
 }
 
 // 在庫一覧 ＆ 棚卸し実数合わせ
+// ==========================================
+// [Antigravity追加] 物品の請求設定（施設形態・区分・品物・利用者別）
+// ==========================================
+function cpGetBillingSettings() {
+  const def = {
+    facility_type: "gh",
+    personal_enabled: true,
+    personal_categories: ["オムツ・パッド", "衛生用品", "食事関連"]
+  };
+  const s = db.data.billing_settings;
+  if (!s || typeof s !== "object") return def;
+  return {
+    facility_type: s.facility_type || def.facility_type,
+    personal_enabled: (s.personal_enabled !== undefined) ? !!s.personal_enabled : def.personal_enabled,
+    personal_categories: Array.isArray(s.personal_categories) ? s.personal_categories.slice() : def.personal_categories.slice()
+  };
+}
+
+function cpSaveBillingSettings(newSettings, logDetail) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    return false;
+  }
+  const oldSettings = cpGetBillingSettings();
+  db.data.billing_settings = {
+    facility_type: newSettings.facility_type || oldSettings.facility_type,
+    personal_enabled: (newSettings.personal_enabled !== undefined) ? !!newSettings.personal_enabled : oldSettings.personal_enabled,
+    personal_categories: Array.isArray(newSettings.personal_categories) ? newSettings.personal_categories.slice() : oldSettings.personal_categories.slice()
+  };
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    at: toLocalDateTimeStr(new Date()),
+    by: cpLoginStaffName(),
+    kind: "請求の設定",
+    action: "変更",
+    detail: logDetail || "請求設定を更新"
+  });
+  db.save();
+  return true;
+}
+
+function cpBillingModeFor(resId, item) {
+  if (!item) return { mode: "facility", basis: "品物の設定" };
+  const settings = cpGetBillingSettings();
+  // 1. personal_enabled が false なら、施設負担
+  if (!settings.personal_enabled) {
+    return { mode: "facility", basis: "施設の設定" };
+  }
+  // 2. 品物の区分が personal_categories に入っていなければ、施設負担（掃除用品・消毒などは、いつも施設負担）
+  const cat = item.category || "";
+  if (!settings.personal_categories.includes(cat)) {
+    return { mode: "facility", basis: "区分" };
+  }
+  // 3. その利用者・品物の取消されていない例外があれば、それに従う
+  if (resId !== undefined && resId !== null && resId !== "") {
+    const overrides = Array.isArray(db.data.billing_overrides) ? db.data.billing_overrides : [];
+    const ov = overrides.find(o => !o.voided && Number(o.resident_id) === Number(resId) && Number(o.item_id) === Number(item.id));
+    if (ov && (ov.mode === "personal" || ov.mode === "facility")) {
+      return { mode: ov.mode, basis: "利用者ごとの設定" };
+    }
+  }
+  // 4. なければ、品物の is_personal_billable に従う
+  if (item.is_personal_billable) {
+    return { mode: "personal", basis: "品物の設定" };
+  }
+  return { mode: "facility", basis: "品物の設定" };
+}
+
+function renderOfficeBillingSettings() {
+  const container = document.getElementById("officeBillingSettingsContainer");
+  if (!container) return;
+  const canEdit = isCurrentStaffAdminOrClerk();
+  const settings = cpGetBillingSettings();
+
+  // 1. 施設形態ラベル
+  const typeLabels = {
+    "public": "特養・老健など",
+    "gh": "グループホーム・有料老人ホーム",
+    "day": "デイサービス・デイケア"
+  };
+
+  // 2. 区分一覧
+  const allCategories = [];
+  (gState.inventory || []).forEach(i => {
+    if (i.category && !allCategories.includes(i.category)) allCategories.push(i.category);
+  });
+  ["オムツ・パッド", "衛生用品", "食事関連", "消毒"].forEach(c => {
+    if (!allCategories.includes(c)) allCategories.push(c);
+  });
+
+  const catRows = allCategories.map(cat => {
+    const isPersonalCat = settings.personal_categories.includes(cat);
+    return `
+      <tr>
+        <td style="font-weight:bold;">${escapeHtml(cat)}</td>
+        <td>
+          ${isPersonalCat
+            ? '<span style="color:#0284c7; font-weight:bold;">利用者に関わる用品（個人請求にできる）</span>'
+            : '<span style="color:#16a34a; font-weight:bold;">施設の備品（いつも施設負担）</span>'}
+        </td>
+        <td style="text-align:right;">
+          ${canEdit
+            ? `<button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px;" onclick="cpToggleCategoryBilling('${escapeHtml(cat)}')">${isPersonalCat ? '施設の備品に変更' : '利用者用品に変更'}</button>`
+            : '<span style="font-size:12px; color:#5f6d66;">-</span>'}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // 3. 個人請求にできる区分の品物一覧
+  const targetItems = (gState.inventory || []).filter(i => settings.personal_categories.includes(i.category));
+  const itemRows = targetItems.map(item => {
+    const isPersonal = !!item.is_personal_billable;
+    return `
+      <tr>
+        <td style="font-weight:bold;">${escapeHtml(item.name)}</td>
+        <td>${escapeHtml(item.category || "-")}</td>
+        <td>
+          ${isPersonal
+            ? '<span style="color:#0284c7; font-weight:bold;">個人請求</span>'
+            : '<span style="color:#16a34a; font-weight:bold;">施設負担</span>'}
+        </td>
+        <td style="text-align:right;">
+          ${canEdit
+            ? `<button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px;" onclick="cpToggleItemBilling(${item.id})">${isPersonal ? '施設負担に変更' : '個人請求に変更'}</button>`
+            : '<span style="font-size:12px; color:#5f6d66;">-</span>'}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  // 4. 利用者ごとの例外一覧
+  const activeOverrides = (db.data.billing_overrides || []).filter(o => !o.voided);
+  const overrideRows = activeOverrides.map(o => {
+    const res = (gState.residents || []).find(r => Number(r.id) === Number(o.resident_id));
+    const item = (gState.inventory || []).find(i => Number(i.id) === Number(o.item_id));
+    const isPersonal = o.mode === "personal";
+    return `
+      <tr>
+        <td>${res ? `${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様` : `ID:${o.resident_id}`}</td>
+        <td>${item ? escapeHtml(item.name) : `ID:${o.item_id}`}</td>
+        <td>
+          ${isPersonal
+            ? '<span style="color:#0284c7; font-weight:bold;">この方は個人請求</span>'
+            : '<span style="color:#16a34a; font-weight:bold;">この方は施設負担</span>'}
+        </td>
+        <td style="font-size:12px; color:#5f6d66;">${escapeHtml(o.set_by || "-")} (${escapeHtml(String(o.set_at || "").slice(0, 16))})</td>
+        <td style="text-align:right;">
+          ${canEdit
+            ? `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:#991b1b;" onclick="cpVoidBillingOverride(${o.id})">取消</button>`
+            : '<span style="font-size:12px; color:#5f6d66;">-</span>'}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  const resOptions = (gState.residents || []).slice()
+    .sort((a, b) => String(a.room_no).localeCompare(String(b.room_no), "ja", { numeric: true }))
+    .map(r => `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</option>`).join("");
+  const itemOptions = (gState.inventory || []).map(i => `<option value="${i.id}">${escapeHtml(i.name)} (${escapeHtml(i.category || "")})</option>`).join("");
+
+  container.innerHTML = `
+    <details class="billing-settings-card" open style="background:#ffffff; border:1px solid #dfe5e1; border-radius:8px; padding:14px 16px; margin-bottom:18px;">
+      <summary style="cursor:pointer; font-size:15px; font-weight:bold; color:#173f33; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+        <span>請求の設定（施設・区分・品物・利用者別）</span>
+        <span style="font-size:12px; font-weight:normal; color:${canEdit ? '#15803d' : '#854d0e'}; background:${canEdit ? '#f0fdf4' : '#fefce8'}; padding:2px 8px; border-radius:4px; border:1px solid ${canEdit ? '#bbf7d0' : '#fef08a'};">
+          ${canEdit ? '管理者・事務員：変更可能' : '登録・変更は管理者・事務員のみ'}
+        </span>
+      </summary>
+
+      <div style="margin-top:14px; border-top:1px solid #edf1ee; padding-top:12px;">
+        <!-- 1. 施設形態 & 個人請求の利用 -->
+        <div style="background:#f8faf9; padding:12px 14px; border-radius:6px; border:1px solid #e2e8e4; margin-bottom:16px;">
+          <div style="display:flex; flex-wrap:wrap; gap:20px; align-items:center;">
+            <div>
+              <label style="font-weight:bold; font-size:13px; color:#22302b; margin-right:8px;">施設の形態:</label>
+              <select id="billingFacilityTypeSelect" class="form-control" style="width:auto; display:inline-block; font-size:13px;" ${canEdit ? '' : 'disabled'} onchange="cpOnChangeFacilityType(this.value)">
+                <option value="gh" ${settings.facility_type === "gh" ? "selected" : ""}>グループホーム・有料老人ホーム</option>
+                <option value="public" ${settings.facility_type === "public" ? "selected" : ""}>特養・老健など</option>
+                <option value="day" ${settings.facility_type === "day" ? "selected" : ""}>デイサービス・デイケア</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:inline-flex; align-items:center; gap:6px; font-size:13px; font-weight:bold; cursor:pointer;">
+                <input type="checkbox" id="billingPersonalEnabledCheck" ${settings.personal_enabled ? 'checked' : ''} ${canEdit ? '' : 'disabled'} onchange="cpOnChangePersonalEnabled(this.checked)">
+                利用者の個人請求を使う
+              </label>
+            </div>
+          </div>
+          <p style="margin:6px 0 0; font-size:12px; color:#5f6d66;">
+            ※「利用者の個人請求を使う」がオフの場合、施設全体ですべての品物が施設負担となります。形態を変更すると、その形態の初期値を入れてよいか確認してから反映します。
+          </p>
+        </div>
+
+        <!-- 2. 区分ごとの設定 -->
+        <div style="margin-bottom:16px;">
+          <h4 style="font-size:14px; margin:0 0 8px; color:#22302b;">① 在庫区分ごとの請求設定</h4>
+          <table class="data-table" style="font-size:13px;">
+            <thead>
+              <tr><th style="width:180px;">区分名</th><th>設定</th><th style="width:160px; text-align:right;">操作</th></tr>
+            </thead>
+            <tbody>
+              ${catRows}
+            </tbody>
+          </table>
+        </div>
+
+        <!-- 3. 品物ごとの初期値設定 -->
+        <div style="margin-bottom:16px;">
+          <h4 style="font-size:14px; margin:0 0 8px; color:#22302b;">② 品物ごとの初期値設定（個人請求にできる区分のみ）</h4>
+          ${itemRows ? `
+            <table class="data-table" style="font-size:13px;">
+              <thead>
+                <tr><th style="width:200px;">品名</th><th style="width:140px;">区分</th><th>施設としての扱い</th><th style="width:160px; text-align:right;">操作</th></tr>
+              </thead>
+              <tbody>
+                ${itemRows}
+              </tbody>
+            </table>
+          ` : '<p style="font-size:13px; color:#5f6d66; margin:4px 0;">個人請求対象の区分に設定された品物はありません。</p>'}
+        </div>
+
+        <!-- 4. 利用者ごとの例外設定 -->
+        <div>
+          <h4 style="font-size:14px; margin:0 0 8px; color:#22302b;">③ 利用者ごとの例外設定</h4>
+          <table class="data-table" style="font-size:13px; margin-bottom:10px;">
+            <thead>
+              <tr><th>利用者</th><th>品名</th><th>この方の設定</th><th>登録者 (日時)</th><th style="width:80px; text-align:right;">操作</th></tr>
+            </thead>
+            <tbody>
+              ${overrideRows || '<tr><td colspan="5" style="text-align:center; color:#5f6d66; padding:10px;">登録されている個別例外設定はありません。</td></tr>'}
+            </tbody>
+          </table>
+
+          ${canEdit ? `
+            <div style="background:#f4f6f4; border:1px solid #dfe5e1; border-radius:6px; padding:10px 14px; display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
+              <span style="font-size:13px; font-weight:bold; color:#173f33;">例外の追加:</span>
+              <select id="billingOverrideResidentSelect" class="form-control" style="width:auto; font-size:12px;">
+                <option value="">利用者を選択...</option>
+                ${resOptions}
+              </select>
+              <select id="billingOverrideItemSelect" class="form-control" style="width:auto; font-size:12px;">
+                <option value="">品物を選択...</option>
+                ${itemOptions}
+              </select>
+              <select id="billingOverrideModeSelect" class="form-control" style="width:auto; font-size:12px;">
+                <option value="personal">この方は個人請求</option>
+                <option value="facility">この方は施設負担</option>
+              </select>
+              <button type="button" class="btn btn-primary" style="padding:4px 12px; font-size:12px;" onclick="cpSubmitBillingOverride()">例外設定を保存</button>
+            </div>
+          ` : '<p style="font-size:12px; color:#5f6d66; margin:4px 0;">※利用者ごとの例外の追加・取消は管理者・事務員が行います。</p>'}
+        </div>
+      </div>
+    </details>
+  `;
+}
+
+function cpOnChangeFacilityType(newType) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    renderOfficeBillingSettings();
+    return;
+  }
+  const typeLabels = {
+    "public": "特養・老健など",
+    "gh": "グループホーム・有料老人ホーム",
+    "day": "デイサービス・デイケア"
+  };
+  const typeName = typeLabels[newType] || newType;
+  if (!confirm(`施設の形態を「${typeName}」に変更しますか？\n\nOKを押すと、その形態の推奨初期値が反映されます。\n・特養・老健など：個人請求を使わない（施設負担）\n・グループホーム・有料老人ホーム：個人請求を使う（オムツ・パッド／衛生用品／食事関連）\n・デイサービス・デイケア：個人請求を使う（オムツ・パッド／衛生用品／食事関連）\n※勝手な上書きを防ぐため、確認しています。`)) {
+    renderOfficeBillingSettings();
+    return;
+  }
+  const oldSettings = cpGetBillingSettings();
+  let enabled = oldSettings.personal_enabled;
+  let cats = oldSettings.personal_categories;
+  if (newType === "public") {
+    enabled = false;
+  } else if (newType === "gh" || newType === "day") {
+    enabled = true;
+    cats = ["オムツ・パッド", "衛生用品", "食事関連"];
+  }
+  const oldLabel = typeLabels[oldSettings.facility_type] || oldSettings.facility_type;
+  cpSaveBillingSettings({
+    facility_type: newType,
+    personal_enabled: enabled,
+    personal_categories: cats
+  }, `施設形態を「${oldLabel}」から「${typeName}」に変更（推奨初期値を反映）`);
+  renderOfficeInventory();
+  renderQuickConsume();
+}
+
+function cpOnChangePersonalEnabled(checked) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    renderOfficeBillingSettings();
+    return;
+  }
+  const actionText = checked ? "「利用者の個人請求を使う」を有効" : "「利用者の個人請求を使う」を無効（すべての物品を施設負担）";
+  if (!confirm(`${actionText}に変更しますか？`)) {
+    renderOfficeBillingSettings();
+    return;
+  }
+  const oldSettings = cpGetBillingSettings();
+  cpSaveBillingSettings({
+    personal_enabled: checked
+  }, `利用者の個人請求を「${oldSettings.personal_enabled ? "有効" : "無効"}」から「${checked ? "有効" : "無効"}」に変更`);
+  renderOfficeInventory();
+  renderQuickConsume();
+}
+
+function cpToggleCategoryBilling(catName) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    return;
+  }
+  const settings = cpGetBillingSettings();
+  const inList = settings.personal_categories.includes(catName);
+  const nextInList = !inList;
+  const targetLabel = nextInList ? "利用者に関わる用品（個人請求にできる）" : "施設の備品（いつも施設負担）";
+  if (!confirm(`区分「${catName}」の扱いを【${targetLabel}】に変更しますか？`)) return;
+
+  let newCats = settings.personal_categories.slice();
+  if (nextInList) {
+    if (!newCats.includes(catName)) newCats.push(catName);
+  } else {
+    newCats = newCats.filter(c => c !== catName);
+  }
+  cpSaveBillingSettings({
+    personal_categories: newCats
+  }, `区分「${catName}」を「${inList ? "利用者用品" : "施設備品"}」から「${nextInList ? "利用者用品" : "施設備品"}」に変更`);
+  renderOfficeInventory();
+  renderQuickConsume();
+}
+
+function cpToggleItemBilling(itemId) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    return;
+  }
+  const item = (gState.inventory || []).find(i => Number(i.id) === Number(itemId));
+  if (!item) return;
+  const oldVal = !!item.is_personal_billable;
+  const newVal = !oldVal;
+  const label = newVal ? "個人請求" : "施設負担";
+  if (!confirm(`品物「${item.name}」の施設としての基本設定を【${label}】に変更しますか？`)) return;
+
+  item.is_personal_billable = newVal ? 1 : 0;
+  const dbItem = (db.data.inventory || []).find(i => Number(i.id) === Number(itemId));
+  if (dbItem) dbItem.is_personal_billable = newVal ? 1 : 0;
+
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    at: toLocalDateTimeStr(new Date()),
+    by: cpLoginStaffName(),
+    kind: "請求の設定",
+    action: "変更",
+    detail: `品物「${item.name}」の基本設定を「${oldVal ? "個人請求" : "施設負担"}」から「${label}」に変更`
+  });
+  db.save();
+  renderOfficeInventory();
+  renderQuickConsume();
+}
+
+function cpSubmitBillingOverride() {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    return;
+  }
+  const resSel = document.getElementById("billingOverrideResidentSelect");
+  const itemSel = document.getElementById("billingOverrideItemSelect");
+  const modeSel = document.getElementById("billingOverrideModeSelect");
+  if (!resSel || !itemSel || !modeSel) return;
+  const resId = resSel.value;
+  const itemId = itemSel.value;
+  const mode = modeSel.value;
+  if (!resId || !itemId || !mode) {
+    alert("利用者、品物、設定内容をすべて選択してください。");
+    return;
+  }
+  const res = (gState.residents || []).find(r => Number(r.id) === Number(resId));
+  const item = (gState.inventory || []).find(i => Number(i.id) === Number(itemId));
+  if (!res || !item) return;
+
+  if (!Array.isArray(db.data.billing_overrides)) db.data.billing_overrides = [];
+  const existing = db.data.billing_overrides.find(o => !o.voided && Number(o.resident_id) === Number(resId) && Number(o.item_id) === Number(itemId));
+  const now = toLocalDateTimeStr(new Date());
+  const who = cpLoginStaffName();
+  const modeLabel = mode === "personal" ? "個人請求" : "施設負担";
+
+  if (existing) {
+    if (existing.mode === mode) {
+      alert("既に同じ例外設定が登録されています。");
+      return;
+    }
+    const currentLabel = existing.mode === "personal" ? "個人請求" : "施設負担";
+    if (!confirm(`${res.name} 様の「${item.name}」は現在「${currentLabel}」に設定されています。\n「${modeLabel}」に変更しますか？`)) return;
+    const old = JSON.parse(JSON.stringify(existing));
+    existing.mode = mode;
+    existing.set_by = who;
+    existing.set_at = now;
+    cpAppendEditHistory(existing, old, ["resident_id", "item_id", "mode"]);
+    if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+    db.data.settings_logs.push({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      at: now,
+      by: who,
+      kind: "請求の設定",
+      action: "訂正・変更",
+      detail: `利用者例外設定の変更（${res.name} 様 / ${item.name} → ${modeLabel}）`
+    });
+  } else {
+    const newOv = {
+      id: Date.now(),
+      resident_id: Number(resId),
+      item_id: Number(itemId),
+      mode: mode,
+      set_by: who,
+      set_at: now,
+      edit_history: []
+    };
+    db.data.billing_overrides.push(newOv);
+    if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+    db.data.settings_logs.push({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      at: now,
+      by: who,
+      kind: "請求の設定",
+      action: "登録",
+      detail: `利用者例外設定の追加（${res.name} 様 / ${item.name} → ${modeLabel}）`
+    });
+  }
+  db.save();
+  renderOfficeInventory();
+  renderQuickConsume();
+  alert(`${res.name} 様の「${item.name}」を「${modeLabel}」として保存しました。`);
+}
+
+function cpVoidBillingOverride(id) {
+  if (!isCurrentStaffAdminOrClerk()) {
+    alert("請求設定の変更は、管理者・事務員のみ可能です。");
+    return;
+  }
+  if (!Array.isArray(db.data.billing_overrides)) return;
+  const target = db.data.billing_overrides.find(o => Number(o.id) === Number(id));
+  if (!target || target.voided) return;
+  const res = (gState.residents || []).find(r => Number(r.id) === Number(target.resident_id));
+  const item = (gState.inventory || []).find(i => Number(i.id) === Number(target.item_id));
+
+  const reason = prompt(`利用者「${res ? res.name : ''} 様」の「${item ? item.name : ''}」の例外設定を取り消します。\n取消の理由を入力してください（必須）：\n※取消後も履歴は監査用に残ります。`, "");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("取消の理由を入力してください。取消は行われませんでした。");
+    return;
+  }
+  const now = toLocalDateTimeStr(new Date());
+  const who = cpLoginStaffName();
+  target.voided = true;
+  target.voided_at = now;
+  target.voided_by = who;
+  target.void_reason = reason.trim();
+
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    at: now,
+    by: who,
+    kind: "請求の設定",
+    action: "取消",
+    detail: `利用者例外設定の取消（${res ? res.name : ''} 様 / ${item ? item.name : ''} / 理由: ${reason.trim()}）`
+  });
+  db.save();
+  renderOfficeInventory();
+  renderQuickConsume();
+  alert("例外設定を取り消しました。");
+}
+
+
 function renderOfficeInventory() {
+  renderOfficeBillingSettings();
  const tbody = document.querySelector("#officeInventoryTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
@@ -11717,7 +12207,7 @@ function renderOfficeInventory() {
 
    tr.innerHTML = `
      <td><strong>${i.name}</strong></td>
-     <td>${i.is_personal_billable ? '<span style="color:#0284c7;">個人対象</span>' : '<span style="color:#16a34a;">施設負担</span>'}</td>
+     <td>${cpBillingModeFor(null, i).mode === "personal" ? '<span style="color:#0284c7; font-weight:bold;">個人対象</span>' : '<span style="color:#16a34a; font-weight:bold;">施設負担</span>'}</td>
      <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${i.unit}</td>
      <td>
        <div style="display:inline-flex; align-items:center; gap:4px;">
@@ -12626,6 +13116,10 @@ function cpOpenBillingResident(resId) {
  renderBillingDetail();
 }
 function renderBillingDetail() {
+  const bSettings = cpGetBillingSettings();
+  const facilityNotice = !bSettings.personal_enabled
+    ? `<div style="background:#fef3c7; border:1px solid #f59e0b; color:#92400e; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-weight:bold; font-size:13px;">この施設は利用者の個人請求を使わない設定です</div>`
+    : "";
  const sel = document.getElementById("billingResidentSelect");
  const area = document.getElementById("billingDetailArea");
  if (!sel || !area) return;
@@ -12651,6 +13145,7 @@ function renderBillingDetail() {
   const grand = recs.reduce((s, c) => s + cpBillingAmount(c), 0);
   area.innerHTML = `
    <div class="billing-sheet">
+    ${facilityNotice}
     <h3>${escapeHtml(label)}　物品使用明細（全員の一覧）</h3>
     <table class="data-table billing-table">
      <thead><tr><th>部屋</th><th>利用者</th><th class="num">使用の記録</th><th class="num">合計</th><th class="no-print"></th></tr></thead>
@@ -12681,6 +13176,7 @@ function renderBillingDetail() {
   `<tr><td>${escapeHtml(String(c.consumed_at || "").slice(5, 16).replace("-", "/"))}</td><td>${escapeHtml(c.item_name || "")}</td><td class="num">${Number(c.quantity) || 0}${escapeHtml(cpBillingUnitOf(c))}</td><td class="num">¥${cpBillingAmount(c).toLocaleString()}</td><td>${escapeHtml(c.staff_name || "")}</td></tr>`).join("");
  area.innerHTML = `
   <div class="billing-sheet">
+    ${facilityNotice}
    <h3>${escapeHtml(label)}　${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様　物品使用明細${r.status === "退所" ? "（退所）" : ""}</h3>
    <table class="data-table billing-table">
     <thead><tr><th>品名</th><th class="num">数量</th><th class="num">単価</th><th class="num">小計</th></tr></thead>
@@ -19554,3 +20050,15 @@ function changeShiftCellUnit(staffName, day, unitId) {
   if (typeof renderDailyJournal === "function" && gState.activeCareTab === "daily_journal") renderDailyJournal();
 }
 window.changeShiftCellUnit = changeShiftCellUnit;
+
+// [Antigravity追加] 請求設定関連の外部公開
+window.cpGetBillingSettings = cpGetBillingSettings;
+window.cpSaveBillingSettings = cpSaveBillingSettings;
+window.cpBillingModeFor = cpBillingModeFor;
+window.renderOfficeBillingSettings = renderOfficeBillingSettings;
+window.cpOnChangeFacilityType = cpOnChangeFacilityType;
+window.cpOnChangePersonalEnabled = cpOnChangePersonalEnabled;
+window.cpToggleCategoryBilling = cpToggleCategoryBilling;
+window.cpToggleItemBilling = cpToggleItemBilling;
+window.cpSubmitBillingOverride = cpSubmitBillingOverride;
+window.cpVoidBillingOverride = cpVoidBillingOverride;

@@ -1772,6 +1772,9 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .billing-table tfoot td { background: #eef2ef; font-weight: bold; }
 .billing-empty { text-align: center; color: var(--text-muted, #555); }
 .billing-warn { color: #b45309; font-size: 13px; margin-top: 8px; }
+.billing-settings-card { background: #fff; border: 1px solid #dfe5e1; border-radius: 8px; }
+.billing-settings-card summary { outline: none; }
+.billing-settings-card summary::-webkit-details-marker { color: #173f33; }
 
 /* [Claude修正] 身体図（皮膚シェーマ・事故の受傷部位）: 狭い画面では人体図を上・一覧を下の1列に。
    以前はスマホ幅で右の表に押され、人体図が幅76px まで縮んでピンが重なり、どこに刺しているか分からなかった。
