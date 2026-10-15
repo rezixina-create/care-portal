@@ -537,7 +537,7 @@ class LocalDB {
  "consumptions", "orders", "deposits", "complaints", "incidents", "photos",
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
  "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications",
- "units", "unit_logs", "settings_logs"
+ "units", "unit_logs", "settings_logs", "contract_docs", "contract_doc_types"
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];
@@ -4221,10 +4221,11 @@ function renderResidentDetail() {
  <!-- 5. 同意書 ＆ 写真保管庫 (アコーディオン) -->
  <details class="care-accordion" style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
- <span> 重要書類(同意書) ＆ 写真保管庫 (${resDocs.length + resPhotos.length}件)</span>
+ <span> 契約・同意書類 ＆ 写真保管庫 ${cpContractMissingBadge(r)}</span>
  <span style="font-size:11px; color:#5f6d66;">(タップで開閉)</span>
  </summary>
  <div style="padding:12px;">
+ ${cpContractSectionHtml(r)}
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
  <button class="btn btn-secondary" style="font-size:12px; padding:6px 12px; display:inline-flex; align-items:center; gap:6px;" onclick="openPhotoModal('documents')">
  重要書類(同意書)
@@ -5486,6 +5487,7 @@ const CP_AUDIT_SOURCES = [
  { key: "photos", label: "写真・書類", summary: r => `${r.title || r.file_name || r.name || ""}` },
  { key: "eyedrop_orders", label: "点眼指示", summary: r => `${r.medicine_name || ""} ${r.eye || ""}` },
  { key: "body_schema_pins", label: "身体図（処置）", summary: r => `${r.site_name || ""} ${r.item_name || ""}` },
+ { key: "contract_docs", label: "契約・同意書類", summary: r => `${r.type_name || ""} 交わした日 ${r.signed_date || "-"}${r.renewal_due ? " 次の更新 " + r.renewal_due : ""}` },
  { key: "consumptions", label: "消耗品の請求", summary: r => `${r.consumed_at || ""} ${r.item_name || ""} ×${r.quantity ?? ""}` },
  { key: "residents", label: "利用者情報", summary: r => `${r.room_no || ""}号室 ${r.name || ""}` }
 ];
@@ -5568,7 +5570,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所", "契約・同意書類の種類"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -11674,7 +11676,8 @@ function switchOfficeTab(tab) {
  shift: "tabOfficeShift", vehicle: "tabOfficeVehicle", vaccine: "tabOfficeVaccine",
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
- backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits"
+ backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits",
+ contracts: "tabOfficeContracts"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -11694,6 +11697,8 @@ function switchOfficeTab(tab) {
  renderOfficeStaffAuth();
  } else if (tab === "units") {
  renderOfficeUnits();
+ } else if (tab === "contracts") {
+ renderOfficeContracts();
  }
  }
 }
@@ -12689,6 +12694,232 @@ function renderBillingDetail() {
    </table>` : ""}
   </div>`;
 }
+// ==========================================
+// [Claude追加] 契約・同意書類の管理（2026-10-15 ユーザー「追加だね」2026-10-13）
+// - 書類ごとに「交わした日（契約・説明・同意した日）」「次の更新日（あれば）」を記録する
+// - 書類の種類は施設で決める（事務ポータル「契約・同意書類」で追加・名前の変更・削除）。
+//   最初は 利用契約書・重要事項説明書・個人情報の利用に関する同意書 を例として出す（施設に合わせて変える前提）
+// - 書類そのもの（画像）は、これまでどおり「重要書類（同意書）」に保管する
+// - 記録は消さない: 直すときは理由を入れて訂正（前の内容を履歴に残す）、間違いは取消（理由必須）
+// - 登録・訂正・取消は 管理者・事務員 だけ。見るのは全員
+// ==========================================
+const CP_CONTRACT_DEFAULT_TYPES = [
+ { id: 1, name: "利用契約書", renewal: true, order: 1 },
+ { id: 2, name: "重要事項説明書", renewal: false, order: 2 },
+ { id: 3, name: "個人情報の利用に関する同意書", renewal: false, order: 3 }
+];
+const CP_CONTRACT_SOON_DAYS = 30;
+function cpContractTypes() {
+ const list = Array.isArray(db.data.contract_doc_types) && db.data.contract_doc_types.length ? db.data.contract_doc_types : CP_CONTRACT_DEFAULT_TYPES;
+ return list.filter(t => t && !t.deleted).slice().sort((x, y) => (x.order || 0) - (y.order || 0));
+}
+function cpContractTypesMaterialize() {
+ if (!Array.isArray(db.data.contract_doc_types) || !db.data.contract_doc_types.length) {
+  db.data.contract_doc_types = CP_CONTRACT_DEFAULT_TYPES.map(t => Object.assign({}, t));
+ }
+ return db.data.contract_doc_types;
+}
+function cpCanEditContracts() {
+ return typeof isStaffAdminOrClerk === "function" && isStaffAdminOrClerk(cpLoginStaffName());
+}
+function cpContractRecord(resId, typeId) {
+ return (db.data.contract_docs || []).find(d => d && !d.voided && Number(d.resident_id) === Number(resId) && Number(d.type_id) === Number(typeId)) || null;
+}
+// 状態: none（未登録）/ overdue（更新日を過ぎた）/ soon（30日以内）/ ok
+function cpContractState(rec) {
+ if (!rec) return { key: "none", text: "未登録" };
+ if (rec.renewal_due) {
+  const days = cpDaysUntil(rec.renewal_due);
+  if (days !== null && days < 0) return { key: "overdue", text: "更新日を過ぎています" };
+  if (days !== null && days <= CP_CONTRACT_SOON_DAYS) return { key: "soon", text: `まもなく更新（あと${days}日）` };
+ }
+ return { key: "ok", text: "登録済み" };
+}
+function cpContractProblems(r) {
+ return cpContractTypes().map(t => ({ t: t, rec: cpContractRecord(r.id, t.id) }))
+  .map(x => Object.assign(x, { st: cpContractState(x.rec) }))
+  .filter(x => x.st.key !== "ok");
+}
+function cpContractMissingBadge(r) {
+ const n = cpContractProblems(r).filter(x => x.st.key === "none" || x.st.key === "overdue").length;
+ return n ? `<span class="contract-badge is-alert">確認が必要 ${n}件</span>` : "";
+}
+function cpContractSectionHtml(r) {
+ const can = cpCanEditContracts() && !cpIsDischarged(r);
+ const rows = cpContractTypes().map(t => {
+  const rec = cpContractRecord(r.id, t.id);
+  const st = cpContractState(rec);
+  return `<tr>
+   <td>${escapeHtml(t.name)}</td>
+   <td>${rec ? escapeHtml(rec.signed_date) : "-"}</td>
+   <td>${rec && rec.renewal_due ? escapeHtml(rec.renewal_due) : (t.renewal ? "-" : "（更新なし）")}</td>
+   <td><span class="contract-state is-${st.key}">${escapeHtml(st.text)}</span></td>
+   <td>${can ? `<button type="button" class="tool-link" onclick="openContractDocModal(${Number(r.id)}, ${Number(t.id)})">${rec ? "訂正・更新" : "登録"}</button>${rec ? ` <button type="button" class="tool-link" onclick="voidContractDoc(${Number(rec.id)})">取消</button>` : ""}` : ""}</td>
+  </tr>`;
+ }).join("");
+ return `<div class="contract-box">
+  <div class="contract-head"><strong>契約・同意書類</strong><span>${cpCanEditContracts() ? "登録・訂正は管理者・事務員" : "登録・訂正は管理者・事務員が行います"}</span></div>
+  <div class="contract-scroll"><table class="data-table contract-table">
+   <thead><tr><th>書類</th><th>交わした日</th><th>次の更新日</th><th>状態</th><th></th></tr></thead>
+   <tbody>${rows}</tbody>
+  </table></div>
+  <p class="contract-note">書類の画像は下の「重要書類(同意書)」に保管します。</p>
+ </div>`;
+}
+let cpContractEdit = null;
+function openContractDocModal(resId, typeId) {
+ if (!cpCanEditContracts()) { alert("契約・同意書類の登録・訂正は、管理者・事務員だけができます。"); return; }
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ const t = cpContractTypes().find(x => Number(x.id) === Number(typeId));
+ if (!r || !t) return;
+ const rec = cpContractRecord(resId, typeId);
+ cpContractEdit = { resId: r.id, typeId: t.id, recId: rec ? rec.id : null };
+ const set = (id, v) => { const e = document.getElementById(id); if (e) e.value = v; };
+ document.getElementById("contractDocTitle").textContent = `${r.room_no}号室 ${r.name} 様：${t.name}`;
+ set("contractSignedDate", rec ? rec.signed_date : "");
+ set("contractRenewalDue", rec && rec.renewal_due ? rec.renewal_due : "");
+ set("contractNote", rec && rec.note ? rec.note : "");
+ set("contractEditReason", "");
+ const sd = document.getElementById("contractSignedDate"); if (sd) sd.max = toLocalDateStr(new Date());
+ document.getElementById("contractReasonRow").style.display = rec ? "" : "none";
+ document.getElementById("contractRenewalRow").style.display = (t.renewal || (rec && rec.renewal_due)) ? "" : "none";
+ openModal("contractDocModal");
+}
+function submitContractDoc() {
+ if (!cpContractEdit) return;
+ if (!cpCanEditContracts()) { alert("契約・同意書類の登録・訂正は、管理者・事務員だけができます。"); return; }
+ const val = id => ((document.getElementById(id) || {}).value || "").trim();
+ const signed = val("contractSignedDate"), due = val("contractRenewalDue"), note = val("contractNote"), reason = val("contractEditReason");
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(signed)) { alert("交わした日（契約・説明・同意した日）を入れてください。"); return; }
+ if (signed > toLocalDateStr(new Date())) { alert("交わした日に、これから先の日付は入れられません。"); return; }
+ if (due && due <= signed) { alert("次の更新日は、交わした日より後の日付にしてください。"); return; }
+ const t = cpContractTypes().find(x => Number(x.id) === Number(cpContractEdit.typeId));
+ if (!Array.isArray(db.data.contract_docs)) db.data.contract_docs = [];
+ const now = toLocalDateTimeStr(new Date()), who = cpLoginStaffName();
+ const rec = cpContractEdit.recId ? db.data.contract_docs.find(d => Number(d.id) === Number(cpContractEdit.recId)) : null;
+ if (rec) {
+  if (rec.signed_date === signed && (rec.renewal_due || "") === due && (rec.note || "") === note) { closeModal("contractDocModal"); return; }
+  if (!reason) { alert("訂正・更新の理由を入れてください（例: 契約を更新した、日付の入れ間違い）。"); return; }
+  const old = JSON.parse(JSON.stringify(rec));
+  rec.signed_date = signed; rec.renewal_due = due; rec.note = note;
+  rec.updated_at = now; rec.updated_by = who;
+  cpAppendEditHistory(rec, old, ["signed_date", "renewal_due", "note"]);
+  if (rec.edit_history && rec.edit_history.length) rec.edit_history[rec.edit_history.length - 1].reason = reason;
+ } else {
+  db.data.contract_docs.push({ id: Date.now(), resident_id: Number(cpContractEdit.resId), type_id: Number(cpContractEdit.typeId), type_name: t ? t.name : "",
+   signed_date: signed, renewal_due: due, note: note, recorded_at: now, recorded_by: who });
+ }
+ db.save();
+ closeModal("contractDocModal");
+ cpContractRefresh();
+}
+function voidContractDoc(id) {
+ if (!cpCanEditContracts()) { alert("契約・同意書類の取消は、管理者・事務員だけができます。"); return; }
+ const rec = (db.data.contract_docs || []).find(d => Number(d.id) === Number(id));
+ if (!rec) return;
+ if (!cpVoidRecord(rec, "", `「${rec.type_name}」（交わした日 ${rec.signed_date}）の記録を取消にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入れてください（例: 別の方の書類と間違えた）`)) return;
+ db.save();
+ cpContractRefresh();
+}
+function cpContractRefresh() {
+ if (typeof renderResidentDetail === "function") renderResidentDetail();
+ if (gState.activePortal === "office" && gState.activeOfficeTab === "contracts") renderOfficeContracts();
+}
+// 事務: 誰のどの書類がそろっていないか
+function renderOfficeContracts() {
+ const area = document.getElementById("officeContractsArea");
+ if (!area) return;
+ const onlyMissing = !!(document.getElementById("contractOnlyMissing") || {}).checked;
+ const types = cpContractTypes();
+ const res = cpCurrentResidents().slice().sort((x, y) => String(x.room_no).localeCompare(String(y.room_no), "ja", { numeric: true }));
+ let missingPeople = 0, missingDocs = 0, soonDocs = 0;
+ const rows = res.map(r => {
+  let rowMissing = false;
+  const cells = types.map(t => {
+   const rec = cpContractRecord(r.id, t.id);
+   const st = cpContractState(rec);
+   if (st.key === "none" || st.key === "overdue") { rowMissing = true; missingDocs++; }
+   if (st.key === "soon") soonDocs++;
+   const txt = rec ? `${escapeHtml(rec.signed_date)}${rec.renewal_due ? `<br><small>更新 ${escapeHtml(rec.renewal_due)}</small>` : ""}` : "";
+   return `<td class="contract-cell is-${st.key}">${txt}<div class="contract-state is-${st.key}">${escapeHtml(st.text)}</div></td>`;
+  }).join("");
+  if (rowMissing) missingPeople++;
+  if (onlyMissing && !rowMissing) return "";
+  return `<tr><td>${escapeHtml(r.room_no)}</td><td><button type="button" class="tool-link" onclick="cpOpenResidentFromOffice(${Number(r.id)})">${escapeHtml(r.name)} 様</button></td>${cells}</tr>`;
+ }).join("");
+ const canEdit = cpCanEditContracts();
+ area.innerHTML = `
+  <div class="contract-summary">
+   <span class="${missingPeople ? "is-alert" : ""}">確認が必要な方 <strong>${missingPeople}名</strong>（未登録・更新日を過ぎた書類 ${missingDocs}件）</span>
+   <span>まもなく更新 ${soonDocs}件（${CP_CONTRACT_SOON_DAYS}日以内）</span>
+  </div>
+  <div class="contract-scroll"><table class="data-table contract-table">
+   <thead><tr><th>部屋</th><th>利用者</th>${types.map(t => `<th>${escapeHtml(t.name)}</th>`).join("")}</tr></thead>
+   <tbody>${rows || `<tr><td colspan="${types.length + 2}" class="billing-empty">${onlyMissing ? "確認が必要な方はいません。" : "在所の利用者がいません。"}</td></tr>`}</tbody>
+  </table></div>
+  <p class="contract-note">日付の登録・訂正は、利用者の名前を押してカルテの「契約・同意書類」から行います。退所した方は一覧に出しません。</p>
+  <details class="contract-types"${canEdit ? "" : " hidden"}>
+   <summary>書類の種類を設定する（管理者・事務員）</summary>
+   <table class="data-table contract-table">
+    <thead><tr><th>書類の名前</th><th>更新がある</th><th>記録の件数</th><th></th></tr></thead>
+    <tbody>${types.map(t => {
+     const used = (db.data.contract_docs || []).filter(d => !d.voided && Number(d.type_id) === Number(t.id)).length;
+     return `<tr><td>${escapeHtml(t.name)}</td><td><input type="checkbox" ${t.renewal ? "checked" : ""} onchange="cpContractTypeRenewal(${Number(t.id)}, this.checked)" aria-label="${escapeHtml(t.name)}の更新"></td><td>${used}件</td>
+      <td><button type="button" class="tool-link" onclick="cpContractTypeRename(${Number(t.id)})">名前を変える</button> <button type="button" class="tool-link" onclick="cpContractTypeDelete(${Number(t.id)})">削除</button></td></tr>`;
+    }).join("")}</tbody>
+   </table>
+   <button type="button" class="btn btn-secondary" onclick="cpContractTypeAdd()">書類の種類を追加</button>
+  </details>`;
+}
+function cpOpenResidentFromOffice(resId) {
+ if (typeof enterPortal === "function") enterPortal("care");
+ if (typeof selectResident === "function") selectResident(resId);
+}
+function cpContractTypeLog(action, detail) {
+ if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+ db.data.settings_logs.push({ id: Date.now() + Math.floor(Math.random() * 1000), at: toLocalDateTimeStr(new Date()), by: cpLoginStaffName(), kind: "契約・同意書類の種類", action: action, detail: detail });
+}
+function cpContractTypeAdd() {
+ if (!cpCanEditContracts()) { alert("書類の種類の設定は、管理者・事務員だけができます。"); return; }
+ const name = (prompt("追加する書類の名前を入れてください（例: 看取りに関する指針の同意書）", "") || "").trim();
+ if (!name) return;
+ const list = cpContractTypesMaterialize();
+ if (list.some(t => !t.deleted && t.name === name)) { alert("同じ名前の書類がすでにあります。"); return; }
+ const id = list.reduce((m, t) => Math.max(m, Number(t.id) || 0), 0) + 1;
+ list.push({ id: id, name: name, renewal: false, order: list.reduce((m, t) => Math.max(m, t.order || 0), 0) + 1 });
+ cpContractTypeLog("追加", name);
+ db.save(); renderOfficeContracts();
+}
+function cpContractTypeRename(id) {
+ if (!cpCanEditContracts()) { alert("書類の種類の設定は、管理者・事務員だけができます。"); return; }
+ const list = cpContractTypesMaterialize();
+ const t = list.find(x => Number(x.id) === Number(id)); if (!t) return;
+ const name = (prompt("新しい名前を入れてください", t.name) || "").trim();
+ if (!name || name === t.name) return;
+ if (list.some(x => !x.deleted && x.name === name)) { alert("同じ名前の書類がすでにあります。"); return; }
+ cpContractTypeLog("名前の変更", `${t.name} → ${name}`);
+ t.name = name;
+ (db.data.contract_docs || []).forEach(d => { if (Number(d.type_id) === Number(id)) d.type_name = name; });
+ db.save(); renderOfficeContracts();
+}
+function cpContractTypeRenewal(id, on) {
+ if (!cpCanEditContracts()) { alert("書類の種類の設定は、管理者・事務員だけができます。"); renderOfficeContracts(); return; }
+ const t = cpContractTypesMaterialize().find(x => Number(x.id) === Number(id)); if (!t) return;
+ t.renewal = !!on;
+ cpContractTypeLog("更新の有無", `${t.name}: ${on ? "更新あり" : "更新なし"}`);
+ db.save(); renderOfficeContracts();
+}
+function cpContractTypeDelete(id) {
+ if (!cpCanEditContracts()) { alert("書類の種類の設定は、管理者・事務員だけができます。"); return; }
+ const t = cpContractTypesMaterialize().find(x => Number(x.id) === Number(id)); if (!t) return;
+ const used = (db.data.contract_docs || []).filter(d => !d.voided && Number(d.type_id) === Number(id)).length;
+ if (used) { alert(`「${t.name}」は ${used}件 の記録で使われているため削除できません。\n使わなくなった場合は、名前を変えるか、記録を取消にしてから削除してください。`); return; }
+ if (!confirm(`書類の種類「${t.name}」を削除します。よろしいですか？`)) return;
+ t.deleted = true;
+ cpContractTypeLog("削除", t.name);
+ db.save(); renderOfficeContracts();
+}
+
 // 預かり金出納帳 (利用者切り替え・日付連動・履歴絞り込み)
 let gDepositFilterMode = "resident"; // "resident" (選択中利用者のみ) or "all" (全利用者)
 

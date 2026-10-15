@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261015_a2">
+ <link rel="stylesheet" href="style.css?v=20261015_a3">
 </head>
 <body>
 
@@ -897,6 +897,7 @@
    <div class="care-tab-row">
     <button class="sub-tab-btn" onclick="switchOfficeTab('billing')">月末請求明細</button>
     <button class="sub-tab-btn" onclick="switchOfficeTab('care_renewal')">要介護認定・更新管理</button>
+    <button class="sub-tab-btn" onclick="switchOfficeTab('contracts')">契約・同意書類</button>
     <button class="sub-tab-btn" onclick="switchOfficeTab('shift')">勤務表・シフト</button>
     <button class="sub-tab-btn" onclick="switchOfficeTab('emergency')">非常食・備蓄</button>
     <button class="sub-tab-btn" onclick="switchOfficeTab('suppliers')">取引先マスタ</button>
@@ -1013,6 +1014,13 @@
  <button type="button" class="btn btn-secondary" onclick="printBillingDetail()">表示中の明細を印刷（A4）</button>
  </div>
  <div id="billingDetailArea"></div>
+ </div>
+
+ <!-- [Claude追加] 契約・同意書類（誰のどの書類がそろっていないか） -->
+ <div id="tabOfficeContracts" style="display:none;" class="panel-card">
+ <div class="panel-title"><span>契約・同意書類（そろっていない書類の一覧）</span></div>
+ <label class="contract-filter"><input type="checkbox" id="contractOnlyMissing" onchange="renderOfficeContracts()"> 確認が必要な方だけ表示</label>
+ <div id="officeContractsArea"></div>
  </div>
 
  <!-- 要介護認定 有効期限・更新手続き進捗管理台帳 -->
@@ -3743,7 +3751,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261015_a2"></script>
+ <script src="app.js?v=20261015_a3"></script>
   
 
   <!-- ============================================================ -->
@@ -4254,6 +4262,36 @@
 	</div>
 
 	<!-- E. ワクチン接種記録 登録モーダル -->
+	<!-- [Claude追加] 契約・同意書類の登録・訂正 -->
+	<div class="modal-overlay" id="contractDocModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:520px; width:95%;">
+			<div class="modal-header">
+				<h3 id="contractDocTitle" style="margin:0; font-size:17px;">契約・同意書類</h3>
+				<button class="modal-close-btn" onclick="closeModal('contractDocModal')">&times;</button>
+			</div>
+			<div class="form-group">
+				<label for="contractSignedDate">交わした日（契約・説明・同意した日）</label>
+				<input type="date" id="contractSignedDate" class="form-control">
+			</div>
+			<div class="form-group" id="contractRenewalRow">
+				<label for="contractRenewalDue">次の更新日（ないときは空のまま）</label>
+				<input type="date" id="contractRenewalDue" class="form-control">
+			</div>
+			<div class="form-group">
+				<label for="contractNote">メモ（任意）</label>
+				<input type="text" id="contractNote" class="form-control">
+			</div>
+			<div class="form-group" id="contractReasonRow">
+				<label for="contractEditReason">訂正・更新の理由（必須）</label>
+				<input type="text" id="contractEditReason" class="form-control">
+			</div>
+			<div style="display:flex; gap:8px; justify-content:flex-end;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('contractDocModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitContractDoc()">保存</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="modal-overlay" id="vaccineModal" style="display:none; z-index:9998;">
 		<div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
 			<div class="modal-header" style="border-bottom:2px solid #059669; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">

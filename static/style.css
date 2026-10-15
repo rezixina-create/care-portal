@@ -1781,3 +1781,25 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 @media (max-width: 760px) {
   .schema-layout { grid-template-columns: 1fr !important; }
 }
+
+/* [Claude追加] 契約・同意書類 */
+.contract-box { border: 1px solid #dfe5e1; border-radius: 8px; padding: 10px; margin-bottom: 10px; background: #fff; }
+.contract-head { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 6px; font-size: 13px; margin-bottom: 6px; }
+.contract-head span, .contract-note { font-size: 13px; color: var(--text-muted, #555); }
+.contract-note { margin: 6px 0 0; }
+.contract-scroll { overflow-x: auto; }
+.contract-table td, .contract-table th { font-size: 13px; white-space: nowrap; }
+.contract-state { display: inline-block; font-size: 12px; font-weight: bold; }
+.contract-state.is-none, .contract-state.is-overdue { color: #b91c1c; }
+.contract-state.is-soon { color: #92400e; }
+.contract-state.is-ok { color: #1e5b47; }
+.contract-cell.is-none, .contract-cell.is-overdue { background: #fef2f2; }
+.contract-cell.is-soon { background: #fffbeb; }
+.contract-cell .contract-state { display: block; margin-top: 2px; }
+.contract-badge { font-size: 12px; padding: 1px 8px; border-radius: 10px; margin-left: 6px; }
+.contract-badge.is-alert { background: #b91c1c; color: #fff; }
+.contract-summary { display: flex; flex-wrap: wrap; gap: 16px; font-size: 14px; margin-bottom: 10px; }
+.contract-summary .is-alert { color: #b91c1c; }
+.contract-filter { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; margin-bottom: 10px; }
+.contract-types { margin-top: 14px; }
+.contract-types summary { cursor: pointer; font-weight: bold; font-size: 14px; margin-bottom: 8px; }
