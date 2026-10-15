@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261015_a9">
+ <link rel="stylesheet" href="style.css?v=20261015_b1">
 </head>
 <body>
 
@@ -443,6 +443,18 @@
  <div class="panel-title">
  <span>排泄チェック表 (排便コントロール・量判定ガイド付き)</span>
  </div>
+  <!-- [Antigravity実装 2026-10-15] 排泄チェック表 上部固定 利用者表示・切替ヘッダー -->
+  <div id="excretionStickyHeader" class="excretion-sticky-header">
+    <div style="font-size:14px; font-weight:bold; color:var(--ink);">
+      入力する方：<span id="excretionTargetResidentText" style="color:var(--pine-dark); font-weight:bold;">未選択</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:8px;">
+      <label for="excretionResidentSelect" style="font-size:13px; font-weight:bold; color:var(--text-muted); white-space:nowrap;">利用者を切替:</label>
+      <select id="excretionResidentSelect" class="form-control" style="font-size:13px; padding:4px 8px; min-width:160px; max-width:240px;" onchange="if(this.value) selectResident(Number(this.value))">
+        <option value="">-- 利用者を選択 --</option>
+      </select>
+    </div>
+  </div>
  <div style="background:#f6f8f6; padding:16px; border-radius:8px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
  <div>
  <label style="font-size:13px; font-weight:bold;">時間:</label>
@@ -1167,7 +1179,8 @@
  <span class="shift-badge-legend" style="background:#cffafe; color:#0e7490; border:1px solid #a5f3fc; padding:2px 6px; border-radius:4px; font-weight:bold;">明 明け</span>
  <span class="shift-badge-legend" style="background:#fee2e2; color:#b91c1c; border:1px solid #fecaca; padding:2px 6px; border-radius:4px; font-weight:bold;">休 公休</span>
  <span class="shift-badge-legend" style="background:#fef2f2; color:#b91c1c; border:1.5px solid #dc2626; padding:2px 6px; border-radius:4px; font-weight:bold;">休[希望] 希望休</span>
- </div>
+   <div id="shiftUnitLegendContainer" style="display:none; align-items:center; gap:6px; flex-wrap:wrap;"></div>
+  </div>
  <div style="color:#5f6d66; font-size:13px; font-weight:500;">
  各セルをクリックして手動でシフトを変更・修正できます。
  </div>
@@ -3753,7 +3766,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261015_a9"></script>
+ <script src="app.js?v=20261015_b1"></script>
   
 
   <!-- ============================================================ -->

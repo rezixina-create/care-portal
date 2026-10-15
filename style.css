@@ -1114,18 +1114,35 @@ body {
   padding: 3px 6px;
   border: 1px solid var(--line);
 }
+/* [Antigravity実装 2026-10-15] 勤務表 行事・予定セルの縦書き表示と高さ自動拡張 */
 .data-table th.shift-event-cell,
 .shift-event-cell {
   background: var(--pine-tint-2);
   color: var(--ink-2);
   font-size: 11px;
-  padding: 2px;
+  padding: 6px 2px;
   border: 1px solid var(--line);
   cursor: pointer;
+  writing-mode: vertical-rl;
+  text-orientation: upright;
+  letter-spacing: 1px;
+  vertical-align: top;
+  text-align: left;
   white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  max-width: 45px;
+  min-height: 80px;
+  height: auto;
+  overflow: visible;
+  text-overflow: clip;
+  max-width: none;
+}
+.data-table th.shift-event-head,
+.shift-event-head {
+  background: var(--pine-tint);
+  color: var(--pine-dark);
+  font-size: 11px;
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  vertical-align: middle;
 }
 .data-table th.shift-event-cell:hover,
 .shift-event-cell:hover { background: var(--pine-tint); }
@@ -1811,4 +1828,56 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 #officeBillingSettingsContainer select { max-width: 100%; }
 @media (max-width: 760px) {
   #officeBillingSettingsContainer table { display: block; overflow-x: auto; }
+}
+
+/* [Antigravity実装 2026-10-15] 排泄チェック表 上部固定ヘッダー */
+.excretion-sticky-header {
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: var(--surface, #ffffff);
+  padding: 10px 14px;
+  margin-bottom: 12px;
+  border: 1px solid var(--line, #cdd6d0);
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+/* [Antigravity実装 2026-10-15] 勤務表 職員名欄の基本区分印 */
+.shift-staff-unit-badge {
+  display: inline-block;
+  font-size: 10px;
+  font-weight: bold;
+  padding: 1px 5px;
+  border-radius: 4px;
+  line-height: 1.3;
+  margin-left: 4px;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
+/* [Antigravity実装 2026-10-15] スマホ幅（390px）ではみ出し防止 */
+@media (max-width: 480px) {
+  .panel-card {
+    padding: 12px !important;
+    overflow-x: auto;
+    max-width: 100%;
+    box-sizing: border-box;
+  }
+  .excretion-sticky-header {
+    padding: 8px 10px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .excretion-sticky-header select {
+    max-width: 100% !important;
+    width: 100% !important;
+  }
 }

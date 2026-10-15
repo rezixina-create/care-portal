@@ -3932,6 +3932,8 @@ function selectResident(id) {
 	
  renderResidentDetail();
  updateRecordTargetBanner();
+  // [Antigravity実装 2026-10-15] 排泄チェック表の固定ヘッダー連動更新
+  if (typeof updateExcretionStickyHeader === "function") updateExcretionStickyHeader();
  renderSelectedDateRecords();
  if (gState.activeCareTab === "consume") renderQuickConsume();
  if (gState.activeCareTab === "linen") renderLinenTable();
@@ -4522,7 +4524,9 @@ function updateRecordTargetBanner() {
  } else {
  if (bannerText) bannerText.textContent = " 対象利用者: 未選択 (上部一覧から選択してください)";
  if (fsBadge) fsBadge.textContent = "対象: 未選択";
- }
+  }
+  // [Antigravity実装 2026-10-15] 排泄チェック表の固定ヘッダーも連動更新
+  if (typeof updateExcretionStickyHeader === "function") updateExcretionStickyHeader();
 }
 
 // リアルタイム文字数カウンター
@@ -7199,9 +7203,12 @@ function renderPersonalDailySummary(res, dateStr) {
  食事 ＆ 水分摂取
  </div>
  <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
- <div>朝: ${breakfast ? `${breakfast.main_dish_ratio}/${breakfast.side_dish_ratio}割 (${breakfast.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
- <div>昼: ${lunch ? `${lunch.main_dish_ratio}/${lunch.side_dish_ratio}割 (${lunch.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
- <div>夕: ${dinner ? `${dinner.main_dish_ratio}/${dinner.side_dish_ratio}割 (${dinner.water_ml || 0}ml)` : '<span style="color:#94a19a;">-</span>'}</div>
+  // [Antigravity実装 2026-10-15] 食事摂取量表示（nullを「ー」表示）
+  <div>朝: ${cpFormatMealRatio(breakfast)}</div>
+  <div>昼: ${cpFormatMealRatio(lunch)}</div>
+  <div>夕: ${cpFormatMealRatio(dinner)}</div>
+  ${dayMeals.find(m => m.meal_type === "おやつ") ? `<div>おやつ: ${cpFormatMealRatio(dayMeals.find(m => m.meal_type === "おやつ"))}</div>` : ""}
+  ${dayMeals.find(m => m.meal_type === "その他") ? `<div>その他: ${cpFormatMealRatio(dayMeals.find(m => m.meal_type === "その他"))}</div>` : ""}
  <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px; color:#1e5b47; font-weight:bold;">
  1日合計水分: ${totalWater} ml
  </div>
@@ -7813,7 +7820,8 @@ function renderDailyJournal() {
  // 本日の食事 (朝・昼)
  const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
  const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
- const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+  const cpBriefMeal = m => (!m ? "-" : ((m.main_dish_ratio === null && m.side_dish_ratio === null) ? "ー" : (m.main_dish_ratio === null ? `副:${m.side_dish_ratio}割` : `${m.main_dish_ratio}割`)));
+  const mealStr = `朝:${cpBriefMeal(morningMeal)} / 昼:${cpBriefMeal(noonMeal)}`; // [Antigravity実装 2026-10-15]
 
  // 本日の排泄
  const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
@@ -7913,7 +7921,8 @@ function printDailyJournal() {
  const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
  const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
  const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
- const mealStr = `朝:${morningMeal ? morningMeal.main_dish_ratio + '割' : '-'} / 昼:${noonMeal ? noonMeal.main_dish_ratio + '割' : '-'}`;
+  const cpBriefMeal = m => (!m ? "-" : ((m.main_dish_ratio === null && m.side_dish_ratio === null) ? "ー" : (m.main_dish_ratio === null ? `副:${m.side_dish_ratio}割` : `${m.main_dish_ratio}割`)));
+  const mealStr = `朝:${cpBriefMeal(morningMeal)} / 昼:${cpBriefMeal(noonMeal)}`; // [Antigravity実装 2026-10-15]
  const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
  const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
  const excStr = excs.length > 0 ? `尿:${excs.length}回 便:${stoolCount}回` : "記録なし";
@@ -8520,7 +8529,33 @@ function saveVital(resId) {
  loadDateRecords(gState.selectedDate);
  alert(`${res ? res.name : '利用者'}様のバイタルを登録しました！`);
 }
+// [Antigravity実装 2026-10-15] 排泄チェック表の固定ヘッダー（対象者表示・選択肢）を更新
+function updateExcretionStickyHeader() {
+  const textEl = document.getElementById("excretionTargetResidentText");
+  const selectEl = document.getElementById("excretionResidentSelect");
+  if (!textEl && !selectEl) return;
+  const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  if (textEl) {
+    textEl.textContent = res ? `${res.name} 様（${res.room_no}号室）` : "未選択";
+  }
+  if (selectEl) {
+    if (selectEl.options.length <= 1) {
+      selectEl.innerHTML = '<option value="">-- 利用者を選択 --</option>';
+      const activeResidents = (gState.residents || []).filter(r => r.status !== "退所");
+      activeResidents.forEach(r => {
+        const opt = document.createElement("option");
+        opt.value = r.id;
+        opt.textContent = `${r.room_no}号室 ${r.name} 様`;
+        selectEl.appendChild(opt);
+      });
+    }
+    selectEl.value = res ? String(res.id) : "";
+  }
+}
+
 function renderExcretionTable() {
+  // [Antigravity実装 2026-10-15] 固定ヘッダーの同期
+  updateExcretionStickyHeader();
  const tbody = document.querySelector("#excretionHistoryTable tbody");
  tbody.innerHTML = "";
  // [Claude修正] 保存した順ではなく、記録の時刻順に並べる (後から早い時刻を記録しても正しい位置に入る)
@@ -8544,6 +8579,12 @@ function renderExcretionTable() {
 }
 
 function submitExcretion() {
+  // [Antigravity実装 2026-10-15] 利用者が選ばれていないときは保存できないようにする
+  const targetRes = gState.residents.find(r => r.id === gState.selectedResidentId);
+  if (!targetRes) {
+    alert("利用者が選択されていません。上部の選択欄から入力する方を選んでください。");
+    return;
+  }
  const tm = document.getElementById("exTime").value || new Date().toTimeString().slice(0, 5);
  const urine = parseInt(document.getElementById("exUrine").value, 10) || 0;
  const amount = document.getElementById("exStoolAmount").value;
@@ -8570,6 +8611,55 @@ function submitExcretion() {
 }
 
 // 3. 食事 ＆ 水分表 (1日累計自動計算)
+// [Antigravity実装 2026-10-15] 食事摂取量の表示フォーマット（nullを「ー」と表示し0割やundefinedを防止）
+function cpFormatMealRatio(m) {
+  if (!m) return '<span style="color:#94a19a;">-</span>';
+  const mainVal = (m.main_dish_ratio === null || m.main_dish_ratio === undefined) ? "ー" : `${m.main_dish_ratio}割`;
+  const sideVal = (m.side_dish_ratio === null || m.side_dish_ratio === undefined) ? "ー" : `${m.side_dish_ratio}割`;
+  let ratioStr = "";
+  if (m.main_dish_ratio === null && m.side_dish_ratio === null) {
+    ratioStr = "ー";
+  } else if (m.side_dish_ratio === null) {
+    ratioStr = mainVal;
+  } else if (m.main_dish_ratio === null) {
+    ratioStr = `副:${sideVal}`;
+  } else {
+    ratioStr = `${m.main_dish_ratio}/${m.side_dish_ratio}割`;
+  }
+  return `${ratioStr} (${m.water_ml || 0}ml)`;
+}
+
+// [Antigravity実装 2026-10-15] 食事区分の切り替え即時ハンドラ
+function cpOnMealTypeChange(resId) {
+  const typeEl = document.getElementById(`mType_${resId}`);
+  const mainEl = document.getElementById(`mMain_${resId}`);
+  const sideEl = document.getElementById(`mSide_${resId}`);
+  if (!typeEl || !mainEl || !sideEl) return;
+  const type = typeEl.value;
+  if (type === "その他") {
+    mainEl.type = "text"; mainEl.value = "ー"; mainEl.disabled = true;
+    mainEl.style.background = "#f1f5f9"; mainEl.style.color = "#64748b";
+    sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
+    sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
+  } else if (type === "おやつ") {
+    mainEl.disabled = false; mainEl.type = "number";
+    if (mainEl.value === "ー" || isNaN(parseInt(mainEl.value, 10))) mainEl.value = 10;
+    mainEl.min = "0"; mainEl.max = "10";
+    mainEl.style.background = ""; mainEl.style.color = "";
+    sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
+    sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
+  } else {
+    mainEl.disabled = false; mainEl.type = "number";
+    if (mainEl.value === "ー" || isNaN(parseInt(mainEl.value, 10))) mainEl.value = 10;
+    mainEl.min = "0"; mainEl.max = "10";
+    mainEl.style.background = ""; mainEl.style.color = "";
+    sideEl.disabled = false; sideEl.type = "number";
+    if (sideEl.value === "ー" || isNaN(parseInt(sideEl.value, 10))) sideEl.value = 10;
+    sideEl.min = "0"; sideEl.max = "10";
+    sideEl.style.background = ""; sideEl.style.color = "";
+  }
+}
+
 function renderMealsTable() {
  const tbody = document.querySelector("#mealsTable tbody");
  tbody.innerHTML = "";
@@ -8586,7 +8676,7 @@ function renderMealsTable() {
  <td><strong>${r.name} 様</strong></td>
  <td style="font-size:12px;">${escapeHtml(r.diet_type || '未登録')} / <span style="color:#dc2626;">${escapeHtml(r.allergies || '未登録')}</span></td>
  <td>
- <select id="mType_${r.id}" class="form-control" style="width:95px;">
+ <select id="mType_${r.id}" class="form-control" style="width:95px;" onchange="cpOnMealTypeChange(${r.id})">
   <option value="朝食">朝食</option>
   <option value="昼食">昼食</option>
   <option value="夕食">夕食</option>
@@ -8605,15 +8695,28 @@ function renderMealsTable() {
 }
 
 function saveMeal(resId) {
- const type = document.getElementById(`mType_${resId}`).value;
- const mainVal = parseInt(document.getElementById(`mMain_${resId}`).value, 10);
- const sideVal = parseInt(document.getElementById(`mSide_${resId}`).value, 10);
- const waterVal = parseInt(document.getElementById(`mWater_${resId}`).value, 10);
- const main = isNaN(mainVal) ? 10 : mainVal;
- const side = isNaN(sideVal) ? 10 : sideVal;
- const water = isNaN(waterVal) ? 200 : waterVal;
- const staff = document.getElementById("currentStaff").value;
-
+  const type = document.getElementById(`mType_${resId}`).value;
+  const mainEl = document.getElementById(`mMain_${resId}`);
+  const sideEl = document.getElementById(`mSide_${resId}`);
+  let main = null;
+  let side = null;
+  // [Antigravity実装 2026-10-15] おやつ・その他区分に応じた null 保存処理
+  if (type === "その他") {
+    main = null;
+    side = null;
+  } else if (type === "おやつ") {
+    const mainVal = parseInt(mainEl.value, 10);
+    main = isNaN(mainVal) ? 10 : mainVal;
+    side = null;
+  } else {
+    const mainVal = parseInt(mainEl.value, 10);
+    const sideVal = parseInt(sideEl.value, 10);
+    main = isNaN(mainVal) ? 10 : mainVal;
+    side = isNaN(sideVal) ? 10 : sideVal;
+  }
+  const waterVal = parseInt(document.getElementById(`mWater_${resId}`).value, 10);
+  const water = isNaN(waterVal) ? 200 : waterVal;
+  const staff = document.getElementById("currentStaff").value;
  db.data.meals.push({
  id: Date.now(),
  date: gState.selectedDate,
@@ -10100,9 +10203,12 @@ function initNightTurnDrafts(force) {
  }
  gState.nightTurnDate = gState.selectedDate;
  gState.nightTurnDrafts = {};
+  // [Antigravity実装 2026-10-15] 夜勤体位変換の様子・特変メモの初期化
+  gState.nightTurnNotes = {};
  const turns = (db.data.turns || []).filter(t => !t.voided && t.date === gState.selectedDate);
  turns.forEach(t => {
  gState.nightTurnDrafts[`${t.resident_id}_${t.time}`] = t.action;
+    if (t.note) gState.nightTurnNotes[`${t.resident_id}_${t.time}`] = t.note;
  });
 }
 
@@ -10117,7 +10223,7 @@ function cpVoidTurns(list, reason) {
  list.forEach(t => {
  t.voided = true; t.voided_at = now; t.voided_by = by; t.void_reason = reason;
  (db.data.care_records || []).forEach(rec => {
- if (!rec.voided && rec.category === "巡視" && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
+ if (!rec.voided && (rec.category === "巡視" || rec.category === "特変") && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
  rec.voided = true; rec.voided_at = now; rec.voided_by = by; rec.void_reason = `巡視チェックの解除: ${reason}`;
  }
  });
@@ -10129,6 +10235,14 @@ function cpAskTurnVoidReason(count) {
  if (reason === null) return null;
  if (!reason.trim()) { alert("解除の理由を入力してください。解除は行っていません。"); return null; }
  return reason.trim();
+}
+
+// [Antigravity実装 2026-10-15] 夜勤体位変換の様子・特変メモを保持
+function cpSetNightTurnNote(resId, time, note) {
+  if (!gState.nightTurnNotes) gState.nightTurnNotes = {};
+  gState.nightTurnNotes[`${resId}_${time}`] = note;
+  const el = document.getElementById(`night_note_${resId}_${time}`);
+  if (el && el.value !== note) el.value = note;
 }
 
 function setNightTurnAction(resId, time, action) {
@@ -10174,6 +10288,14 @@ function clearAllNightTurnsForDate() {
 // [Claude修正] まとめて保存: 前の保存分は消さない。新しく付けたチェックだけ記録し、外した・変えたチェックは理由を書いて取消にする。
 // 以前は保存のたびに日付分を全部消して作り直していたため、前の記録者名・時刻が保存した人に書き換わっていた
 function submitNightTurnsBatch() {
+  // [Antigravity実装 2026-10-15] 入力欄から最新の様子・特変メモを収集
+  if (!gState.nightTurnNotes) gState.nightTurnNotes = {};
+  document.querySelectorAll('input[id^="night_note_"]').forEach(inp => {
+    const k = inp.id.replace("night_note_", "");
+    if (inp.value) {
+      gState.nightTurnNotes[k] = inp.value;
+    }
+  });
  const staff = document.getElementById("currentStaff").value;
  const date = gState.selectedDate;
  if (!Array.isArray(db.data.turns)) db.data.turns = [];
@@ -10201,9 +10323,11 @@ function submitNightTurnsBatch() {
  time: time,
  resident_id: resId,
  action: action,
+      note: (gState.nightTurnNotes && gState.nightTurnNotes[key]) ? gState.nightTurnNotes[key].trim() : "", // [Antigravity実装 2026-10-15]
  staff_name: staff
  });
- added.push({ resId: resId, time: time, action: action });
+    const curNote = (gState.nightTurnNotes && gState.nightTurnNotes[key]) ? gState.nightTurnNotes[key].trim() : "";
+    added.push({ resId: resId, time: time, action: action, note: curNote }); // [Antigravity実装 2026-10-15]
  });
 
  const tpls = getNightTurnTemplates();
@@ -10212,7 +10336,11 @@ function submitNightTurnsBatch() {
  const r = gState.residents.find(x => x.id === item.resId);
  if (!r || r.status !== "在所") return; // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から除外
  const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。`;
- const contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
+    let contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
+    // [Antigravity実装 2026-10-15] 書いたときは自動定型文の後ろに「【様子】（書いた内容）」を付与
+    if (item.note) {
+      contentText += ` 【様子】${item.note}`;
+    }
  db.data.care_records.unshift({
  id: Date.now() + Math.floor(Math.random() * 100000) + index,
  recorded_at: `${date} ${item.time}`,
@@ -10223,6 +10351,18 @@ function submitNightTurnsBatch() {
  auto_night_turn: true
  });
  totalRecordsCreated++;
+    // [Antigravity実装 2026-10-15] 同じ時刻・同じ内容で category:"特変" の記録も1件作成し特変一覧に表示
+    if (item.note) {
+      db.data.care_records.unshift({
+        id: Date.now() + Math.floor(Math.random() * 100000) + index + 50000,
+        recorded_at: `${date} ${item.time}`,
+        resident_id: item.resId,
+        category: "特変",
+        content: contentText,
+        staff_name: staff,
+        auto_night_turn: true
+      });
+    }
  });
 
  db.save();
@@ -10241,6 +10381,14 @@ function submitNightTurnsBatch() {
 function renderNightTable() {
  const tbody = document.querySelector("#nightTable tbody");
  if (!tbody) return;
+  // [Antigravity実装 2026-10-15] 再描画前に入力中のメモを保持
+  if (!gState.nightTurnNotes) gState.nightTurnNotes = {};
+  document.querySelectorAll('input[id^="night_note_"]').forEach(inp => {
+    const k = inp.id.replace("night_note_", "");
+    if (inp.value) {
+      gState.nightTurnNotes[k] = inp.value;
+    }
+  });
  tbody.innerHTML = "";
  if (gState.nightTurnDate !== gState.selectedDate || gState.nightTurnDrafts === null) {
  initNightTurnDrafts();
@@ -10265,31 +10413,36 @@ function renderNightTable() {
  return;
  }
 
- const cells = times.map(tm => {
- const key = `${r.id}_${tm}`;
- const curAction = gState.nightTurnDrafts[key];
- if (curAction) {
- return `
- <td style="text-align:center;">
- <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで解除">
- ${curAction} 
- </button>
- </td>
- `;
- }
- return `
- <td>
- <select class="form-control" style="font-size:11px; padding:2px;" onchange="setNightTurnAction(${r.id}, '${tm}', this.value)">
- <option value="">選択</option>
- <option value="安眠中">安眠中</option>
- <option value="左側臥位">左側臥位</option>
- <option value="右側臥位">右側臥位</option>
- <option value="仰臥位">仰臥位</option>
- <option value="おむつ交換">おむつ交換</option>
- </select>
- </td>
- `;
- }).join("");
+    const cells = times.map(tm => {
+      const key = `${r.id}_${tm}`;
+      const curAction = gState.nightTurnDrafts[key];
+      const curNote = (gState.nightTurnNotes && gState.nightTurnNotes[key]) || "";
+      // [Antigravity実装 2026-10-15] 各利用者・各時刻のチェックに任意で「様子・特変」を書ける欄を配置
+      const noteInpHtml = `<input type="text" id="night_note_${r.id}_${tm}" class="form-control" placeholder="様子・特変" value="${escapeHtml(curNote)}" style="font-size:10.5px; padding:2px 4px; margin-top:3px; width:100%; min-width:85px; max-width:130px; box-sizing:border-box;" oninput="cpSetNightTurnNote(${r.id}, '${tm}', this.value)">`;
+      if (curAction) {
+        return `
+        <td style="text-align:center; vertical-align:top; padding:4px 3px;">
+          <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px; width:100%; max-width:130px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで解除">
+            ${curAction} 
+          </button>
+          ${noteInpHtml}
+        </td>
+        `;
+      }
+      return `
+      <td style="vertical-align:top; padding:4px 3px;">
+        <select class="form-control" style="font-size:11px; padding:2px; width:100%; max-width:130px;" onchange="setNightTurnAction(${r.id}, '${tm}', this.value)">
+          <option value="">選択</option>
+          <option value="安眠中">安眠中</option>
+          <option value="左側臥位">左側臥位</option>
+          <option value="右側臥位">右側臥位</option>
+          <option value="仰臥位">仰臥位</option>
+          <option value="おむつ交換">おむつ交換</option>
+        </select>
+        ${noteInpHtml}
+      </td>
+      `;
+    }).join("");
 
  tr.innerHTML = `
  <td>${r.room_no}</td>
@@ -15999,6 +16152,23 @@ function isHolidayOrYearEnd(year, month, day) {
 // - 追加・名前の変更・並べ替え・削除・利用者や職員の移動は unit_logs に残し、操作履歴に出す
 // - 勤務表の自動生成は、夜勤を区分の数だけ（区分ごとに1人ずつ）割り当てる
 // ==========================================
+// [Antigravity実装 2026-10-15] 区分（ユニット）ごとの色定義（応援印と見分けがつく淡色背景＋濃色文字＋枠線）
+const CP_UNIT_PALETTE = [
+  { bg: "#e0f2fe", text: "#0369a1", border: "#7dd3fc" }, // 水色
+  { bg: "#fef3c7", text: "#92400e", border: "#fcd34d" }, // 琥珀色
+  { bg: "#fce7f3", text: "#be185d", border: "#f472b6" }, // ローズ
+  { bg: "#ede9fe", text: "#6d28d9", border: "#c4b5fd" }, // 紫
+  { bg: "#dcfce7", text: "#15803d", border: "#86efac" }, // 薄緑
+  { bg: "#ffedd5", text: "#c2410c", border: "#fdba74" }  // 橙
+];
+
+function cpGetUnitColor(unitId) {
+  const units = cpUnits();
+  const idx = units.findIndex(u => Number(u.id) === Number(unitId));
+  if (idx >= 0) return CP_UNIT_PALETTE[idx % CP_UNIT_PALETTE.length];
+  return { bg: "#f1f5f9", text: "#475569", border: "#cbd5e1" };
+}
+
 function cpUnits() {
  return (db.data.units || []).filter(u => u && u.id !== undefined).slice().sort((a, b) => (Number(a.order) || 0) - (Number(b.order) || 0) || Number(a.id) - Number(b.id));
 }
@@ -16908,6 +17078,23 @@ function renderShiftTable(yearMonth) {
  const table = document.getElementById("shiftMatrixTable");
  if (!table) return;
 
+ // [Antigravity実装 2026-10-15] 区分が複数ある施設で表の上に色見本を表示（1つしかない施設では出さない）
+ const cpFacilityUnits = cpUnits();
+ const unitLegendEl = document.getElementById("shiftUnitLegendContainer");
+ if (unitLegendEl) {
+   if (cpFacilityUnits.length > 1) {
+     const badges = cpFacilityUnits.map(u => {
+       const col = cpGetUnitColor(u.id);
+       return `<span class="shift-staff-unit-badge" style="background:${col.bg}; color:${col.text}; border:1px solid ${col.border}; font-size:11px; padding:2px 6px;">${escapeHtml(u.name)}</span>`;
+     }).join(" ");
+     unitLegendEl.innerHTML = `<span style="font-size:12px; font-weight:bold; color:var(--text-muted); margin-left:8px;">所属区分:</span> ${badges}`;
+     unitLegendEl.style.display = "inline-flex";
+   } else {
+     unitLegendEl.innerHTML = "";
+     unitLegendEl.style.display = "none";
+   }
+ }
+
  const dowNames = ["日", "月", "火", "水", "木", "金", "土"];
 
  // 日別統計用 (介護職: 早出2名・遅出2名・夜勤2名・明け2名・日勤2名・公休4名)
@@ -16970,7 +17157,7 @@ function renderShiftTable(yearMonth) {
     const customEvt = shiftEvents[d] || "";
     const evtText = customEvt || (hol.isHoliday ? hol.name : "");
     const titleAttr = evtText ? `title="${escapeHtml(evtText)} (クリックして編集)"` : 'title="クリックして行事・予定を登録"';
-    theadHtml += `<th class="shift-event-cell" ${titleAttr} onclick="openShiftEventModal('${ym}', ${d})">${escapeHtml(evtText)}</th>`;
+    theadHtml += `<th class="shift-event-cell" ${titleAttr} onclick="openShiftEventModal('${ym}', ${d})">${escapeHtml(evtText)}</th>`; // [Antigravity実装 2026-10-15]
   }
 
   theadHtml += `
@@ -17006,10 +17193,20 @@ function renderShiftTable(yearMonth) {
  roleColor = "#6d28d9"; roleBg = "#ede9fe";
  }
 
+ // [Antigravity実装 2026-10-15] 職員名の欄に基本区分印を表示（区分が1つの施設では出さない。応援印と見分けがつくデザイン）
+ let staffUnitBadge = "";
+ if (cpUnits().length > 1 && st.unit_id !== undefined && st.unit_id !== null && st.unit_id !== "") {
+   const uName = cpUnitName(st.unit_id);
+   if (uName) {
+     const col = cpGetUnitColor(st.unit_id);
+     staffUnitBadge = `<span class="shift-staff-unit-badge" style="background:${col.bg}; color:${col.text}; border:1px solid ${col.border};" title="所属区分: ${escapeHtml(uName)}">${escapeHtml(uName)}</span>`;
+   }
+ }
+
  tbodyHtml += `
  <tr>
  <td style="position:sticky; left:0; z-index:2; background:#ffffff; font-weight:bold; color:#22302b; text-align:left; padding:6px 8px; border:1px solid #cdd6d0; white-space:nowrap; box-shadow: 2px 0 4px rgba(0,0,0,0.04);">
- ${getStaffRoleBadgeHtml(st.name)} ${escapeHtml(st.name)}
+ ${getStaffRoleBadgeHtml(st.name)} ${escapeHtml(st.name)}${staffUnitBadge}
  </td>
  <td style="border:1px solid #cdd6d0; padding:4px 2px; white-space:nowrap;">
  <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
