@@ -10223,7 +10223,8 @@ function cpVoidTurns(list, reason) {
  list.forEach(t => {
  t.voided = true; t.voided_at = now; t.voided_by = by; t.void_reason = reason;
  (db.data.care_records || []).forEach(rec => {
- if (!rec.voided && (rec.category === "巡視" || rec.category === "特変") && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
+ // [Claude修正 2026-10-15] 特変は、このチェックから自動で作った記録（auto_night_turn）だけを取消す。同じ時刻に職員が手で書いた特変は取消さない
+ if (!rec.voided && (rec.category === "巡視" || (rec.category === "特変" && rec.auto_night_turn)) && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
  rec.voided = true; rec.voided_at = now; rec.voided_by = by; rec.void_reason = `巡視チェックの解除: ${reason}`;
  }
  });
@@ -10292,9 +10293,7 @@ function submitNightTurnsBatch() {
   if (!gState.nightTurnNotes) gState.nightTurnNotes = {};
   document.querySelectorAll('input[id^="night_note_"]').forEach(inp => {
     const k = inp.id.replace("night_note_", "");
-    if (inp.value) {
-      gState.nightTurnNotes[k] = inp.value;
-    }
+    gState.nightTurnNotes[k] = inp.value; // [Claude修正 2026-10-15] 空にしたときも反映する（前の文が残らないように）
   });
  const staff = document.getElementById("currentStaff").value;
  const date = gState.selectedDate;
@@ -10310,13 +10309,24 @@ function submitNightTurnsBatch() {
  }
 
  const added = [];
+ const lateNotes = []; // [Claude修正 2026-10-15] 保存済みのチェックにあとから書いた様子
  Object.keys(drafts).forEach(key => {
  const action = drafts[key];
  if (!action) return;
  const parts = key.split("_");
  const resId = parseInt(parts[0], 10);
  const time = parts[1];
- if (cpActiveTurnsForDate(date).some(t => t.resident_id === resId && t.time === time && t.action === action)) return; // 保存済みはそのまま
+ const savedSame = cpActiveTurnsForDate(date).find(t => t.resident_id === resId && t.time === time && t.action === action);
+ if (savedSame) {
+  // [Claude修正 2026-10-15] 保存済みのチェックに、あとから「様子・特変」を書き足したときは、その分だけ特変として残す
+  // （以前は「新しく保存するチェックはありませんでした」となり、書いた様子が保存されなかった）
+  const lateNote = (gState.nightTurnNotes && gState.nightTurnNotes[key]) ? gState.nightTurnNotes[key].trim() : "";
+  if (lateNote && lateNote !== (savedSame.note || "")) {
+   savedSame.note = lateNote;
+   lateNotes.push({ resId: resId, time: time, action: action, note: lateNote });
+  }
+  return; // チェック自体は保存済みのまま
+ }
  db.data.turns.push({
  id: Date.now() + Math.floor(Math.random() * 1000),
  date: date,
@@ -10365,12 +10375,28 @@ function submitNightTurnsBatch() {
     }
  });
 
+ // [Claude修正 2026-10-15] あとから書いた様子は、特変として1件ずつ残す（巡視の記録は書き換えない）
+ lateNotes.forEach((item, index) => {
+  const r = gState.residents.find(x => x.id === item.resId);
+  if (!r || r.status !== "在所") return;
+  db.data.care_records.unshift({
+   id: Date.now() + Math.floor(Math.random() * 100000) + index + 70000,
+   recorded_at: `${date} ${item.time}`,
+   resident_id: item.resId,
+   category: "特変",
+   content: `【${item.time} 定時巡視・${item.action}】【様子】${item.note}`,
+   staff_name: staff,
+   auto_night_turn: true
+  });
+  totalRecordsCreated++;
+ });
+
  db.save();
  initNightTurnDrafts(true);
  renderNightTable();
  loadDateRecords(date);
  if (totalRecordsCreated > 0) {
- alert(`体位変換・夜間巡視のチェック（新しく付けた${totalRecordsCreated}回分）を保存・カルテへ転記しました！`);
+ alert(lateNotes.length ? `保存しました（新しいチェック ${added.length}回分、あとから書いた様子 ${lateNotes.length}件を特変として記録）。` : `体位変換・夜間巡視のチェック（新しく付けた${totalRecordsCreated}回分）を保存・カルテへ転記しました！`); // [Claude修正 2026-10-15]
  } else if (toVoid.length > 0) {
  alert("外したチェックを取消として保存しました。");
  } else {
@@ -10385,9 +10411,7 @@ function renderNightTable() {
   if (!gState.nightTurnNotes) gState.nightTurnNotes = {};
   document.querySelectorAll('input[id^="night_note_"]').forEach(inp => {
     const k = inp.id.replace("night_note_", "");
-    if (inp.value) {
-      gState.nightTurnNotes[k] = inp.value;
-    }
+    gState.nightTurnNotes[k] = inp.value; // [Claude修正 2026-10-15] 空にしたときも反映する（前の文が残らないように）
   });
  tbody.innerHTML = "";
  if (gState.nightTurnDate !== gState.selectedDate || gState.nightTurnDrafts === null) {
