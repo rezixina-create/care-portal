@@ -5746,30 +5746,23 @@ function printShiftTable() {
 
 // 利用者別 月末請求明細 (A4縦・1枚) の印刷
 function printBillingDetail() {
- const sel = document.getElementById("billingResidentSelect");
+ // [Claude修正] 表示中の明細（全員の一覧、または選んだ利用者）を、対象の月を入れて印刷する
  const area = document.getElementById("billingDetailArea");
- const resId = sel ? parseInt(sel.value) : NaN;
- const r = (gState.residents || []).find(x => x.id === resId);
- if (!r || !area || !area.innerHTML.trim()) {
- alert("請求明細を印刷する利用者を選択してください。");
- return;
+ if (!area || !area.innerHTML.trim()) {
+  renderBillingDetail();
  }
+ if (!area || !area.innerHTML.trim()) { alert("印刷する明細がありません。"); return; }
  const facility = getFacilityName();
+ const body = area.innerHTML.replace(/<td class="no-print">[\s\S]*?<\/td>/g, "").replace(/<th class="no-print"><\/th>/g, "");
  const html = `
- <div style="font-family:'Hiragino Kaku Gothic ProN', 'Meiryo', sans-serif; color:#000;">
- <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:14px;">
- <div>
- <h1 style="font-size:20px; margin:0;">月末消耗品 請求明細書</h1>
- <p style="font-size:13px; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</strong></p>
- </div>
- <div style="text-align:right; font-size:12px;">
- <div>${escapeHtml(facility)}</div>
- <div>印刷日時: ${new Date().toLocaleString("ja-JP")}</div>
- </div>
- </div>
- ${area.innerHTML}
+ <div style="font-family:'BIZ UDPGothic','Meiryo',sans-serif; color:#000;">
+  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #000; padding-bottom:8px; margin-bottom:14px;">
+   <h1 style="font-size:20px; margin:0;">物品使用明細</h1>
+   <div style="text-align:right; font-size:12px;"><div>${escapeHtml(facility)}</div><div>印刷日時: ${new Date().toLocaleString("ja-JP")}</div></div>
+  </div>
+  ${body}
  </div>`;
- runPrintJob(html, { page: "A4 portrait", fitOnePage: true });
+ runPrintJob(html, { page: "A4 portrait", fitOnePage: false });
 }
 
 function printCareSummary() {
@@ -12581,76 +12574,121 @@ function deleteSupplierItem(suppId, itemId) {
 }
 
 // 月末請求明細
+// [Claude修正] 月末の物品使用明細
+// - 対象の月で区切る（以前は「今月」と表示しながら全期間を合計していた）
+// - 「全員の一覧」で誰がいくらかを一覧、利用者を選ぶと品目ごとの合計と使用日の内訳
+// - 同じ品名でも単価が違えば別の行にする（以前は最初の単価で計算していた）
+// - 退所した方も、その月に使用記録があれば対象にする（精算があるため）
+const CP_BILLING_ALL = "__all__";
+function cpBillingMonth() {
+ const el = document.getElementById("billingMonth");
+ if (el && !el.value) el.value = toLocalDateStr(new Date()).slice(0, 7);
+ return el ? el.value : toLocalDateStr(new Date()).slice(0, 7);
+}
+function cpBillingMonthLabel(ym) {
+ const m = String(ym || "").match(/^(\d{4})-(\d{2})$/);
+ return m ? `${m[1]}年${Number(m[2])}月` : String(ym || "");
+}
+function cpBillingRecords(ym, resId) {
+ return (db.data.consumptions || []).filter(c => c && !c.voided
+  && String(c.consumed_at || "").slice(0, 7) === ym
+  && (resId === undefined || Number(c.resident_id) === Number(resId)))
+  .sort((x, y) => String(x.consumed_at || "").localeCompare(String(y.consumed_at || "")));
+}
+function cpBillingAmount(c) {
+ const unitPrice = Number(c.unit_price) || 0;
+ const qty = Number(c.quantity) || 0;
+ return (typeof c.subtotal === "number") ? c.subtotal : unitPrice * qty;
+}
+function cpBillingUnitOf(c) {
+ const item = (db.data.inventory || []).find(i => Number(i.id) === Number(c.item_id));
+ return item && item.unit ? item.unit : "";
+}
 function renderOfficeBillingSelect() {
  const sel = document.getElementById("billingResidentSelect");
- sel.innerHTML = "";
- gState.residents.forEach(r => {
- const opt = document.createElement("option");
- opt.value = r.id;
- opt.textContent = `${r.room_no}号室 ${r.name} 様`;
- sel.appendChild(opt);
- });
+ if (!sel) return;
+ const keep = sel.value;
+ const list = (gState.residents || []).slice().sort((x, y) => String(x.room_no).localeCompare(String(y.room_no), "ja", { numeric: true }));
+ sel.innerHTML = `<option value="${CP_BILLING_ALL}">全員の一覧</option>` + list.map(r =>
+  `<option value="${r.id}">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様${r.status === "退所" ? "（退所）" : ""}</option>`).join("");
+ if (keep && [...sel.options].some(o => o.value === keep)) sel.value = keep;
+ cpBillingMonth();
  renderBillingDetail();
 }
-
-function renderBillingDetail() {
- const resId = parseInt(document.getElementById("billingResidentSelect").value);
- const r = gState.residents.find(x => x.id === resId);
- const consumptions = (db.data.consumptions || []).filter(c => !c.voided && c.resident_id === resId); // [Claude修正] 取消済みは請求に含めない
- const area = document.getElementById("billingDetailArea");
-
- if (!r) return;
-
- const summary = {};
- consumptions.forEach(c => {
- const itemName = c.item_name || "消耗品";
- const unitPrice = typeof c.unit_price === 'number' ? c.unit_price : 0;
- const qty = typeof c.quantity === 'number' ? c.quantity : 1;
- const subtotal = typeof c.subtotal === 'number' ? c.subtotal : (unitPrice * qty);
-
- if (!summary[itemName]) {
- summary[itemName] = { count: 0, unit_price: unitPrice, subtotal: 0 };
- }
- summary[itemName].count += qty;
- summary[itemName].subtotal += subtotal;
- });
-
- let totalAmount = 0;
- let rowsHtml = "";
- Object.keys(summary).forEach(itemName => {
- const item = summary[itemName];
- totalAmount += item.subtotal;
- rowsHtml += `
- <tr>
- <td>${itemName}</td>
- <td>${item.count}</td>
- <td>¥${item.unit_price.toLocaleString()}</td>
- <td><strong>¥${item.subtotal.toLocaleString()}</strong></td>
- </tr>
- `;
- });
-
- area.innerHTML = `
- <div style="background:#f6f8f6; border:1px solid #cdd6d0; border-radius:8px; padding:16px;">
- <h3 style="font-size:16px; margin-bottom:8px;">${r.room_no}号室 ${r.name} 様　消耗品ご請求明細書</h3>
- <table class="data-table" style="background:white;">
- <thead>
- <tr><th>品名</th><th>消費個数</th><th>単価</th><th>小計</th></tr>
- </thead>
- <tbody>
- ${rowsHtml || '<tr><td colspan="4" style="text-align:center; color:var(--text-muted);">今月の個人請求対象の消費記録はありません。</td></tr>'}
- </tbody>
- <tfoot>
- <tr style="background:#eef2ef; font-weight:bold; font-size:16px;">
- <td colspan="3" style="text-align:right;">総合計金額:</td>
- <td style="color:#dc2626;">¥${totalAmount.toLocaleString()}</td>
- </tr>
- </tfoot>
- </table>
- </div>
- `;
+function cpOpenBillingResident(resId) {
+ const sel = document.getElementById("billingResidentSelect");
+ if (sel) sel.value = String(resId);
+ renderBillingDetail();
 }
-
+function renderBillingDetail() {
+ const sel = document.getElementById("billingResidentSelect");
+ const area = document.getElementById("billingDetailArea");
+ if (!sel || !area) return;
+ const ym = cpBillingMonth();
+ const label = cpBillingMonthLabel(ym);
+ if (!sel.value || sel.value === CP_BILLING_ALL) {
+  const recs = cpBillingRecords(ym);
+  const by = {};
+  recs.forEach(c => {
+   const k = String(c.resident_id);
+   if (!by[k]) by[k] = { count: 0, total: 0 };
+   by[k].count += 1;
+   by[k].total += cpBillingAmount(c);
+  });
+  const rows = (gState.residents || []).filter(r => by[String(r.id)])
+   .sort((x, y) => String(x.room_no).localeCompare(String(y.room_no), "ja", { numeric: true }))
+   .map(r => {
+    const v = by[String(r.id)];
+    return `<tr><td>${escapeHtml(r.room_no)}</td><td>${escapeHtml(r.name)} 様${r.status === "退所" ? "（退所）" : ""}</td><td class="num">${v.count}件</td><td class="num"><strong>¥${v.total.toLocaleString()}</strong></td>
+     <td class="no-print"><button type="button" class="tool-link" onclick="cpOpenBillingResident(${Number(r.id)})">内訳を見る</button></td></tr>`;
+   });
+  const unknown = recs.filter(c => !(gState.residents || []).some(r => Number(r.id) === Number(c.resident_id)));
+  const grand = recs.reduce((s, c) => s + cpBillingAmount(c), 0);
+  area.innerHTML = `
+   <div class="billing-sheet">
+    <h3>${escapeHtml(label)}　物品使用明細（全員の一覧）</h3>
+    <table class="data-table billing-table">
+     <thead><tr><th>部屋</th><th>利用者</th><th class="num">使用の記録</th><th class="num">合計</th><th class="no-print"></th></tr></thead>
+     <tbody>${rows.join("") || `<tr><td colspan="5" class="billing-empty">${escapeHtml(label)}の、個人に請求する品物の使用記録はありません。</td></tr>`}</tbody>
+     <tfoot><tr><td colspan="3" class="num">全員の合計</td><td class="num"><strong>¥${grand.toLocaleString()}</strong></td><td class="no-print"></td></tr></tfoot>
+    </table>
+    ${unknown.length ? `<p class="billing-warn">利用者の登録がない使用記録が ${unknown.length}件 あります（全員の合計には含めています）。</p>` : ""}
+   </div>`;
+  return;
+ }
+ const resId = Number(sel.value);
+ const r = (gState.residents || []).find(x => Number(x.id) === resId);
+ if (!r) { area.innerHTML = ""; return; }
+ const recs = cpBillingRecords(ym, resId);
+ const summary = {};
+ recs.forEach(c => {
+  const name = c.item_name || "品名なし";
+  const price = Number(c.unit_price) || 0;
+  const k = name + "|" + price;
+  if (!summary[k]) summary[k] = { name: name, unit: cpBillingUnitOf(c), price: price, qty: 0, total: 0 };
+  summary[k].qty += Number(c.quantity) || 0;
+  summary[k].total += cpBillingAmount(c);
+ });
+ const total = recs.reduce((s, c) => s + cpBillingAmount(c), 0);
+ const sumRows = Object.values(summary).map(v =>
+  `<tr><td>${escapeHtml(v.name)}</td><td class="num">${v.qty}${escapeHtml(v.unit)}</td><td class="num">¥${v.price.toLocaleString()}</td><td class="num"><strong>¥${v.total.toLocaleString()}</strong></td></tr>`).join("");
+ const detRows = recs.map(c =>
+  `<tr><td>${escapeHtml(String(c.consumed_at || "").slice(5, 16).replace("-", "/"))}</td><td>${escapeHtml(c.item_name || "")}</td><td class="num">${Number(c.quantity) || 0}${escapeHtml(cpBillingUnitOf(c))}</td><td class="num">¥${cpBillingAmount(c).toLocaleString()}</td><td>${escapeHtml(c.staff_name || "")}</td></tr>`).join("");
+ area.innerHTML = `
+  <div class="billing-sheet">
+   <h3>${escapeHtml(label)}　${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様　物品使用明細${r.status === "退所" ? "（退所）" : ""}</h3>
+   <table class="data-table billing-table">
+    <thead><tr><th>品名</th><th class="num">数量</th><th class="num">単価</th><th class="num">小計</th></tr></thead>
+    <tbody>${sumRows || `<tr><td colspan="4" class="billing-empty">${escapeHtml(label)}の、個人に請求する品物の使用記録はありません。</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="3" class="num">合計</td><td class="num"><strong>¥${total.toLocaleString()}</strong></td></tr></tfoot>
+   </table>
+   ${recs.length ? `<h4>使用日の内訳</h4>
+   <table class="data-table billing-table">
+    <thead><tr><th>日時</th><th>品名</th><th class="num">数量</th><th class="num">金額</th><th>記録した職員</th></tr></thead>
+    <tbody>${detRows}</tbody>
+   </table>` : ""}
+  </div>`;
+}
 // 預かり金出納帳 (利用者切り替え・日付連動・履歴絞り込み)
 let gDepositFilterMode = "resident"; // "resident" (選択中利用者のみ) or "all" (全利用者)
 

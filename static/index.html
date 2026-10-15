@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261013_b1">
+ <link rel="stylesheet" href="style.css?v=20261015_a1">
 </head>
 <body>
 
@@ -1000,20 +1000,21 @@
    <table id="suppliersTable" style="display:none;"><tbody></tbody></table>
  </div>
 
- <!-- 5. 利用者別 月末請求明細 (事務員目視チェック＆修正対応) -->
+ <!-- 5. 利用者別 月末請求明細 [Claude修正] 月で区切る・全員の一覧・使用日の内訳・印刷。
+      以前は「今月」と書きながら全期間を合計していた。物品消費で「個人に請求する品物」を使った記録だけを集計する -->
  <div id="tabOfficeBilling" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 利用者別 月末消耗品請求明細 (個人請求品目のみ集計・総合計)</span>
+ <span>利用者別 月末の物品使用明細（個人に請求する品物だけ）</span>
  </div>
- <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
- <label style="font-weight:bold;">利用者を選択:</label>
- <select id="billingResidentSelect" class="form-control" style="width:200px;" onchange="renderBillingDetail()"></select>
- <button class="btn btn-secondary" onclick="printBillingDetail()"> 請求明細書を印刷 (A4)</button>
+ <p class="billing-note">介護の「物品消費」で記録した、個人に請求する品物の使用を月ごとにまとめます。請求書は請求ソフト等で作成し、この明細はその元として使います。取消にした記録は入りません。</p>
+ <div class="billing-controls">
+ <label>対象の月 <input type="month" id="billingMonth" class="form-control" onchange="renderBillingDetail()"></label>
+ <label>表示 <select id="billingResidentSelect" class="form-control" onchange="renderBillingDetail()"></select></label>
+ <button type="button" class="btn btn-secondary" onclick="printBillingDetail()">表示中の明細を印刷（A4）</button>
  </div>
  <div id="billingDetailArea"></div>
  </div>
 
- 
  <!-- 要介護認定 有効期限・更新手続き進捗管理台帳 -->
  <div id="tabOfficeCareRenewal" style="display:none;" class="panel-card">
   <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
@@ -3742,7 +3743,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261014_a2"></script>
+ <script src="app.js?v=20261015_a1"></script>
   
 
   <!-- ============================================================ -->

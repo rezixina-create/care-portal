@@ -1759,3 +1759,16 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .discharge-date { font-size: 13px; color: var(--ink-3); }
 .discharge-banner { margin-top: 6px; padding: 6px 10px; border-radius: 6px; background: var(--ground); border: 1px solid var(--line); font-size: 13px; font-weight: bold; color: var(--ink); text-align: left; }
 .discharge-by { font-weight: normal; color: var(--ink-3); }
+
+/* [Claude修正] 月末の物品使用明細 */
+.billing-note { font-size: 13px; color: var(--text-muted, #555); margin: 0 0 10px; }
+.billing-controls { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 16px; }
+.billing-controls label { display: flex; flex-direction: column; gap: 4px; font-weight: bold; font-size: 13px; }
+.billing-controls .form-control { min-width: 200px; }
+.billing-sheet { background: #fff; border: 1px solid #cdd6d0; border-radius: 8px; padding: 16px; overflow-x: auto; }
+.billing-sheet h3 { font-size: 16px; margin: 0 0 10px; }
+.billing-sheet h4 { font-size: 14px; margin: 18px 0 8px; }
+.billing-table td.num, .billing-table th.num { text-align: right; white-space: nowrap; }
+.billing-table tfoot td { background: #eef2ef; font-weight: bold; }
+.billing-empty { text-align: center; color: var(--text-muted, #555); }
+.billing-warn { color: #b45309; font-size: 13px; margin-top: 8px; }
