@@ -1699,6 +1699,7 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .drug-head-label { font-size: 14px; font-weight: bold; color: var(--ink-3); }
 .drug-title { margin: 4px 0 2px; font-size: 20px; color: var(--pine); }
 .drug-kind { margin: 0 0 12px; font-size: 13px; color: var(--ink-3); }
+.drug-basis { margin: -4px 0 12px; padding: 8px 10px; font-size: 12.5px; line-height: 1.6; color: var(--ink-2); background: var(--surface-2, #f5f5f2); border-radius: 6px; }
 #drugInfoBody section { margin-bottom: 12px; }
 #drugInfoBody h4 { font-size: 15px; margin: 0 0 4px; }
 #drugInfoBody ul { margin: 0; padding-left: 1.3em; line-height: 1.8; }

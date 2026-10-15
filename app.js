@@ -9672,21 +9672,21 @@ const CP_DRUG_GUIDE = [
  what: "便秘の薬（腸を刺激して便を出す種類＝刺激性下剤）。",
  watch: ["お腹の痛み", "尿の色が黄褐色〜赤色になることがある（薬によるもの）"],
  how: ["長く続けて使うと効きにくくなることがある"],
- sources: [["PMDA 医療用医薬品の添付文書（センノシド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/581120_2354003F2464_1_04"], ["MSDマニュアル家庭版「便秘の予防や治療に用いられる薬」", "https://www.msdmanuals.com/ja-jp/home/multimedia/table/便秘の予防や治療に用いられる薬"], ["旭川赤十字病院 クロス・レター 第41号（2021年1月）", "https://www.asahikawa.jrc.or.jp/app/wp-content/uploads/2021/08/CrossLetter-041.pdf"], ["さがみ野中央病院 薬剤科だより 2025年2・3月号", "https://www.fureai-g.or.jp/sagamino/download/hospital/pharmacy-mail/pharmacy_202502.pdf"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（センノシド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/581120_2354003F2464_1_04"], ["旭川赤十字病院 クロス・レター 第41号（2021年1月）", "https://www.asahikawa.jrc.or.jp/app/wp-content/uploads/2021/08/CrossLetter-041.pdf"], ["さがみ野中央病院 薬剤科だより 2025年2・3月号", "https://www.fureai-g.or.jp/sagamino/download/hospital/pharmacy-mail/pharmacy_202502.pdf"]] },
  { name: "アムロジピン", aliases: ["アムロジピン", "アムロジン", "ノルバスク"], kind: "飲み薬",
  what: "血圧を下げる薬（カルシウム拮抗薬）。",
  watch: ["めまい・ふらつき", "足のむくみ", "顔のほてり", "歯ぐきの腫れ", "脈が速い・動悸"],
- how: [],
- sources: [["PMDA 医療用医薬品の添付文書（アムロジピン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/830001_2171022F3110_1_20"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"]] },
+ how: ["グレープフルーツジュースと一緒に飲まない（薬が効きすぎて血圧が下がりすぎるおそれ）"],
+ sources: [["PMDA 医療用医薬品の添付文書（アムロジピン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/830001_2171022F3110_1_20"]] },
  { name: "カンデサルタン", aliases: ["カンデサルタン", "ブロプレス"], kind: "飲み薬",
  what: "血圧を下げる薬（アンジオテンシンⅡ受容体拮抗薬）。",
- watch: ["めまい・ふらつき", "唇や顔が急に腫れる（すぐ看護師へ）", "血液のカリウムが増えることがある"],
+ watch: ["めまい・ふらつき", "唇や顔が急に腫れる（すぐ看護師へ）", "血液のカリウムが増えることがある（体のしびれ・力が入らない・吐き気・吐く・下痢・お腹が張るなど）"],
  how: [],
- sources: [["患者向医薬品ガイド（カンデサルタン錠、2023年5月）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/400278_2149040F2138_2_01G.pdf"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"]] },
+ sources: [["患者向医薬品ガイド（カンデサルタン錠、2023年5月）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/400278_2149040F2138_2_01G.pdf"]] },
  { name: "アスピリン（血をかたまりにくくする少量のもの）", aliases: ["バイアスピリン", "アスピリン腸溶", "アスピリン"], kind: "飲み薬",
  what: "血液をかたまりにくくして、血のかたまり（血栓）ができるのを防ぐ薬。",
- watch: ["鼻血・歯ぐきからの出血", "あざができる", "黒い便・血が混じった便", "尿に血が混じる"],
- how: [],
+ watch: ["鼻血・歯ぐきからの出血", "あざができる", "黒い便・血が混じった便", "尿に血が混じる", "胃の不快感・胸やけ・吐き気"],
+ how: ["割ったり砕いたりせず、かまずにそのまま飲む（腸で溶ける錠剤のため）", "空腹時に飲むのは避ける"],
  sources: [["PMDA 医療用医薬品の添付文書（バイアスピリン錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/630004_3399007H1021_1_21"], ["厚生労働省 重篤副作用疾患別対応マニュアル（血液疾患に関するマニュアル）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1f11.pdf"]] },
  { name: "ワルファリン", aliases: ["ワルファリン", "ワーファリン"], kind: "飲み薬",
  what: "血液をかたまりにくくする薬（血栓ができるのを防ぐ）。",
@@ -9695,19 +9695,19 @@ const CP_DRUG_GUIDE = [
  sources: [["患者向医薬品ガイド（ワルファリンK錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/581120_3332001F1130_1_56G.pdf"], ["名古屋大学医学部附属病院 薬剤部 ワルファリンの説明書", "https://www.med.nagoya-u.ac.jp/pharmacy/pdf/warfarin_text_1.pdf"], ["厚生労働省 重篤副作用疾患別対応マニュアル（血液疾患に関するマニュアル）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1f11.pdf"]] },
  { name: "アピキサバン", aliases: ["アピキサバン", "エリキュース"], kind: "飲み薬",
  what: "血液をかたまりにくくして、脳梗塞などを防ぐ薬。",
- watch: ["出血しやすくなる（出血に気づいたら看護師へ）"],
+ watch: ["鼻血・歯ぐきからの出血", "あざができる", "尿に血が混じる", "便に血が混じる・黒い便", "血を吐く（どれか気づいたら看護師へ）"],
  how: [],
  sources: [["患者向医薬品ガイド（エリキュース錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/670605_3339004F1029_1_00G.pdf"], ["PMDA アピキサバンの使用上の注意の改訂について（2013年10月）", "https://www.pmda.go.jp/files/000146113.pdf"], ["病院薬剤科 DI室「直接経口抗凝固薬（DOAC）一覧」（2020年12月）", "https://www.tmhp.jp/tama/shared/files/010678/att_0000019.pdf"]] },
  { name: "ランソプラゾール", aliases: ["ランソプラゾール", "タケプロン"], kind: "飲み薬",
  what: "胃酸の分泌を抑える胃の薬（胃潰瘍・逆流性食道炎など）。",
  watch: ["下痢・便秘（下痢が続くときは看護師へ）"],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（ランソプラゾール）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/400042_2329023F1047_3_09"], ["MSDマニュアル家庭版「胃酸の治療に用いられる薬剤」", "https://www.msdmanuals.com/ja-jp/home/03-消化器系の病気/胃炎と消化性潰瘍/胃酸の治療に用いられる薬剤"], ["上尾中央総合病院 PPI&P-CAB フォーミュラリー", "https://ach.or.jp/partnership/doc/ppi-and-p-cab-formulary.pdf"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（ランソプラゾール）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/400042_2329023F1047_3_09"], ["上尾中央総合病院 PPI&P-CAB フォーミュラリー", "https://ach.or.jp/partnership/doc/ppi-and-p-cab-formulary.pdf"]] },
  { name: "ファモチジン", aliases: ["ファモチジン", "ガスター"], kind: "飲み薬",
  what: "胃酸を減らす胃の薬（H2受容体拮抗薬）。",
  watch: ["意識がぼんやりする・混乱する（せん妄）。高齢の方や腎臓が悪い方で起きやすい"],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（ファモチジン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380087_2325003F1393_1_04"], ["MSDマニュアル家庭版「胃酸の治療に用いられる薬剤」", "https://www.msdmanuals.com/ja-jp/home/03-消化器系の病気/胃炎と消化性潰瘍/胃酸の治療に用いられる薬剤"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"], ["一宮市立市民病院 DIニュース（2020年3月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2020.3.pdf"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（ファモチジン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380087_2325003F1393_1_04"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"], ["一宮市立市民病院 DIニュース（2020年3月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2020.3.pdf"]] },
  { name: "ドネペジル", aliases: ["ドネペジル", "アリセプト"], kind: "飲み薬",
  what: "認知症の症状の進行を遅らせる薬。",
  watch: ["吐き気・吐く", "食欲が落ちる", "下痢", "脈が遅い・めまい・気を失う"],
@@ -9715,7 +9715,7 @@ const CP_DRUG_GUIDE = [
  sources: [["患者向医薬品ガイド（ドネペジル塩酸塩錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/460028_1190012F1107_1_00G.pdf"], ["厚生労働省 検討会資料「スイッチOTC医薬品の候補となる成分の成分情報等」", "https://www.mhlw.go.jp/content/11121000/000429048.pdf"], ["長寿科学振興財団「ケアの立場からみた薬物療法の選択」（中村祐）", "https://www.tyojyu.or.jp/kankoubutsu/gyoseki/pdf/h30-5-2.pdf"]] },
  { name: "メマンチン", aliases: ["メマンチン", "メマリー"], kind: "飲み薬",
  what: "認知症の症状の進行を抑える薬。",
- watch: ["めまい・ふらつき・眠気（転びやすくなる）", "けいれん", "興奮する・落ち着かない"],
+ watch: ["めまい・ふらつき・眠気（転びやすくなる）", "けいれん", "興奮する・落ち着かない", "便秘"],
  how: [],
  sources: [["患者向医薬品ガイド（メマンチン塩酸塩OD錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/830001_1190018F4081_1_77G.pdf"], ["厚生労働省 検討会資料「スイッチOTC医薬品の候補となる成分の成分情報等」", "https://www.mhlw.go.jp/content/11121000/000429048.pdf"], ["長寿科学振興財団「ケアの立場からみた薬物療法の選択」（中村祐）", "https://www.tyojyu.or.jp/kankoubutsu/gyoseki/pdf/h30-5-2.pdf"]] },
  { name: "ゾルピデム", aliases: ["ゾルピデム", "マイスリー"], kind: "飲み薬",
@@ -9727,17 +9727,17 @@ const CP_DRUG_GUIDE = [
  what: "漢方薬。神経がたかぶるときや眠れないときなどに使う。",
  watch: ["むくみ", "力が抜ける（偽アルドステロン症という副作用の様子）"],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（ツムラ抑肝散エキス顆粒）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/460026_5200139D1037_1_19"], ["厚生労働省 重篤副作用疾患別対応マニュアル（偽アルドステロン症）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1d01.pdf"], ["ラジオNIKKEI 漢方トゥデイ（2020年10月1日、今村友裕）", "https://www.radionikkei.jp/kampotoday/docs/kampo-201001.pdf"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（ツムラ抑肝散エキス顆粒）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/460026_5200139D1037_1_19"], ["厚生労働省 重篤副作用疾患別対応マニュアル（偽アルドステロン症）", "https://www.mhlw.go.jp/topics/2006/11/dl/tp1122-1d01.pdf"]] },
  { name: "フロセミド", aliases: ["フロセミド", "ラシックス"], kind: "飲み薬",
  what: "尿を増やして、むくみをとったり血圧を下げたりする薬（利尿薬）。",
- watch: ["立ちくらみ・ふらつき（転びやすい）", "尿の回数・量が増える", "血液のカリウムが減ることがある"],
+ watch: ["立ちくらみ・ふらつき（転びやすい）", "尿の回数・量が増える", "血液のカリウムが減ることがある", "のどが渇く"],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（フロセミド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/340409_2139005F1095_1_08"], ["MSDマニュアル家庭版「高血圧の薬物治療」", "https://www.msdmanuals.com/ja-jp/home/06-心臓と血管の病気/高血圧/高血圧の薬物治療"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（フロセミド錠）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/340409_2139005F1095_1_08"], ["日本老年医学会「高齢者の処方適正化スクリーニングツール」（厚生労働省 検討会資料）", "https://www.mhlw.go.jp/content/11125000/0000162475.pdf"]] },
  { name: "アレンドロン酸", aliases: ["アレンドロン酸", "フォサマック", "ボナロン"], kind: "飲み薬",
  what: "骨粗しょう症の薬。",
  watch: ["歯の治療の予定があるときは看護師へ（あごの骨の副作用があるため）"],
- how: ["起床時に飲む", "飲んだあと30分は横にならない", "飲む前後は飲食を避ける（処方の指示に従う）"],
- sources: [["アレンドロン酸錠35mgの添付文書（今日の臨床サポート掲載）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=59850"], ["健康長寿ネット「骨粗鬆症の治療」", "https://www.tyojyu.or.jp/net/byouki/kotsu-soshoushou/care.html"], ["小川赤十字病院 薬剤部 資料", "https://www.ogawa.jrc.or.jp/bumon/yakuzai/kotu.pdf"]] },
+ how: ["起床時に、水約180mLと一緒に飲む", "飲んだあと少なくとも30分は横にならない", "飲んだあと30分は、水以外の飲食とほかの飲み薬を避ける（処方の指示に従う）"],
+ sources: [["PMDA 医療用医薬品の添付文書（アレンドロン酸錠35mg）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/581120_3999018F2192_1_04"], ["健康長寿ネット「骨粗鬆症の治療」", "https://www.tyojyu.or.jp/net/byouki/kotsu-soshoushou/care.html"], ["小川赤十字病院 薬剤部 資料", "https://www.ogawa.jrc.or.jp/bumon/yakuzai/kotu.pdf"]] },
  { name: "エルデカルシトール", aliases: ["エルデカルシトール", "エディロール"], kind: "飲み薬",
  what: "骨粗しょう症の薬。",
  watch: ["のどが渇く", "意識がぼんやりする（上の2つは、血液のカルシウムが増えすぎたときの様子）"],
@@ -9751,11 +9751,11 @@ const CP_DRUG_GUIDE = [
  { name: "タムスロシン", aliases: ["タムスロシン", "ハルナール"], kind: "飲み薬",
  what: "前立腺肥大症で、尿を出しやすくする薬。",
  watch: ["めまい・ふらつき・立ちくらみ（血圧が下がることがある）"],
- how: [],
+ how: ["かみ砕かずに飲む", "OD錠（口の中で溶ける錠剤）でも、寝たままの姿勢で水なしでは飲ませない"],
  sources: [["PMDA 医療用医薬品の添付文書（タムスロシン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/780009_2590008F1093_1_07"], ["健康長寿ネット「前立腺肥大症の治療」", "https://www.tyojyu.or.jp/net/byouki/zenritsusenhidaishou/chiryo.html"]] },
  { name: "メトホルミン", aliases: ["メトホルミン", "メトグルコ"], kind: "飲み薬",
  what: "糖尿病の薬。",
- watch: [],
+ watch: ["お腹の不調（吐き気・下痢など）・だるい・筋肉が痛い・呼吸が荒い（乳酸アシドーシスという副作用の初めの様子のことがある。看護師へ）"],
  how: ["熱がある・下痢・吐く・食事がとれないとき（シックデイ）は、飲ませる前に看護師へ（いったん中止して医師に相談することになっている）"],
  sources: [["PMDA 医療用医薬品の添付文書（メトホルミン）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/340409_3962002F1110_2_10"], ["ビグアナイド薬の適正使用に関する委員会「メトホルミンの適正使用に関するRecommendation」（2020年3月改訂）", "https://www.nittokyo.or.jp/uploads/files/recommendation_metformin_200318.pdf"]] },
  { name: "シタグリプチン", aliases: ["シタグリプチン", "ジャヌビア", "グラクティブ"], kind: "飲み薬",
@@ -9765,8 +9765,8 @@ const CP_DRUG_GUIDE = [
  sources: [["くすりのしおり（シタグリプチン錠）", "https://medical.nihon-generic.co.jp/uploadfiles/newproduct/SITAG10_SHIORI_2608.pdf"], ["厚生労働省 医薬品・医療機器等安全性情報 No.275（2010年12月）", "https://www.mhlw.go.jp/www1/kinkyu/iyaku_j/iyaku_j/anzenseijyouhou/275.pdf"], ["低血糖の様子: 健康長寿ネット「低血糖」", "https://www.tyojyu.or.jp/net/byouki/tounyoubyou/tei-kettou.html"], ["低血糖の様子: 国立病院機構 三重病院のたより", "https://mie.hosp.go.jp/common/letter/nl_1306_03.pdf"]] },
  { name: "ヘパリン類似物質（塗り薬）", aliases: ["ヘパリン類似物質", "ヒルドイド"], kind: "塗り薬",
  what: "保湿の塗り薬。水分を保つ成分を皮膚に補って、乾燥をやわらげる。",
- watch: [],
- how: [],
+ watch: ["塗った所が赤くなる・かゆい・発疹"],
+ how: ["ただれた所・傷（潰瘍）に直接塗らない", "血が止まりにくい病気（血友病・血小板減少症など）の方には使わない薬（看護師・主治医の指示に従う）"],
  sources: [["PMDA 医療用医薬品の添付文書（ヒルドイド）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/730155_3339950M1137_1_13"], ["東京都立北療育医療センター 薬剤検査科「保湿剤の使い方」（2017年2月）", "https://www.fukushi.metro.tokyo.lg.jp/documents/d/fukushi/hositu"]] },
  { name: "白色ワセリン（塗り薬）", aliases: ["白色ワセリン", "プロペト", "ワセリン"], kind: "塗り薬",
  what: "皮膚の表面を膜で覆って水分が逃げるのを防ぐ、保護・保湿の塗り薬。",
@@ -9780,10 +9780,25 @@ const CP_DRUG_GUIDE = [
  sources: [["PMDA 医療用医薬品の添付文書（モーラステープL40mg）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/650034_2649729S3084_1_20"], ["PMDA ケトプロフェン（テープ剤）使用上の注意の改訂", "https://www.pmda.go.jp/safety/info-services/drugs/calling-attention/revision-of-precautions/0052.html"], ["久光製薬「使用上のご注意」（ケトプロフェン外用剤、2020年9月）", "https://www.hisamitsu.co.jp/medical/data/hisamitsu-no41.pdf"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] },
  { name: "ロキソプロフェン（湿布）", aliases: ["ロキソプロフェン", "ロキソニンテープ", "ロキソニンパップ"], kind: "湿布",
  what: "痛みや炎症をやわらげる湿布。",
- watch: [],
- how: [],
+ watch: ["貼った所のかゆみ・赤み・かぶれ・発疹"],
+ how: ["傷のある所・湿疹や発疹のある所には貼らない"],
  sources: [["PMDA 医療用医薬品の添付文書（ロキソニンパップ）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/850028_2649735S1028_1_16"], ["一宮市立市民病院 DIニュース（2021年8月）", "https://municipal-hospital.ichinomiya.aichi.jp/data/media/ichinomiya-hp/page/medical/druginformation/dinews2021.8.pdf"]] },
- // ---- 目薬（介護でよく使われるもの。2つ以上の資料で一致した内容だけ） ----
+ { name: "レバミピド", aliases: ["レバミピド", "ムコスタ"], kind: "飲み薬",
+ what: "胃の粘膜を守り、胃潰瘍や胃炎のただれ・出血などを治す薬。",
+ watch: ["発疹・かゆみ", "便秘・下痢・お腹が張る"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（レバミピド錠100mg）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/530372_2329021F1137_1_03"]] },
+ { name: "アズノール軟膏（ジメチルイソプロピルアズレン）", aliases: ["アズノール", "ジメチルイソプロピルアズレン"], kind: "塗り薬",
+ what: "湿疹や、ただれ・潰瘍・やけどに使う塗り薬。",
+ watch: ["塗った所がかぶれる・ヒリヒリする（このときは看護師へ）"],
+ how: [],
+ sources: [["PMDA 医療用医薬品の添付文書（0.033%アズノール軟膏）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/ResultDataSetPDF/530263_2649716M1042_1_03"]] },
+ { name: "亜鉛華単軟膏", aliases: ["亜鉛華単軟膏", "亜鉛華軟膏", "サトウザルベ"], kind: "塗り薬",
+ what: "皮膚を保護し、炎症をやわらげる塗り薬（湿疹・皮膚炎・ただれなど）。",
+ watch: ["発疹・ヒリヒリする（このときは看護師へ）"],
+ how: ["ひどい・広い範囲のやけどには使わない"],
+ sources: [["PMDA 医療用医薬品の添付文書（亜鉛華(10%)単軟膏）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/530090_2649710M2050_1_05"]] },
+ // ---- 目薬（介護でよく使われるもの。メーカーの正式な資料＝添付文書・患者向医薬品ガイド・くすりのしおりで確かめた内容） ----
  { name: "ラタノプロスト（目薬）", aliases: ["ラタノプロスト", "キサラタン"], kind: "目薬",
  what: "緑内障・高眼圧症で、目の中の圧（眼圧）を下げる目薬。",
  watch: ["黒目（虹彩）の色が濃くなる", "まぶた・目のまわりが黒っぽくなる", "まつ毛が長く・太く・濃くなる"],
@@ -9802,24 +9817,61 @@ const CP_DRUG_GUIDE = [
  { name: "シアノコバラミン（目薬）", aliases: ["シアノコバラミン点眼", "サンコバ"], eyeAliases: ["シアノコバラミン"], kind: "目薬",
  what: "目の疲れ（ピントを合わせる働きの疲れ）をやわらげる目薬。",
  watch: ["アレルギーのような症状（過敏症状）"],
- how: [],
- sources: [["PMDA 医療用医薬品の添付文書（サンコバ点眼液0.02%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319710Q2078_1_06"], ["今日の臨床サポート（シアノコバラミン点眼液0.02%「センジュ」）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=69035"]] },
+ how: ["液が赤い色（薬の色で、異常ではない）"],
+ sources: [["PMDA 医療用医薬品の添付文書（サンコバ点眼液0.02%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319710Q2078_1_06"]] },
  { name: "ピレノキシン（目薬）", aliases: ["ピレノキシン", "カタリン"], kind: "目薬",
  what: "初期の老人性白内障に使う目薬。",
  watch: ["目の充血・かゆみ・しみる", "かすんで見える・目やに・涙が出る"],
  how: ["錠剤（顆粒）を付いている液に溶かしてから使う", "溶かした後は冷所・遮光で保存し、3週間以内に使う", "冷やしていた液は続けて落ちることがあるので、手で少し温めてからさす"],
- sources: [["PMDA 医療用医薬品の添付文書（カタリン点眼用0.005%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380086_1319706Q2039_1_08"], ["今日の臨床サポート（カタリンK点眼用0.005%）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=53899"]] },
+ sources: [["PMDA 医療用医薬品の添付文書（カタリン点眼用0.005%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/380086_1319706Q2039_1_08"]] },
  { name: "レボフロキサシン（目薬）", aliases: ["クラビット点眼", "レボフロキサシン点眼"], eyeAliases: ["クラビット", "レボフロキサシン"], kind: "目薬",
  what: "細菌による目の感染症（結膜炎・まぶたの炎症・ものもらいなど）を治す目薬。効かない菌を増やさないため、使う期間は必要な間だけ（期間は主治医の指示に従う）。",
  watch: [],
  how: [],
- sources: [["PMDA 医療用医薬品の添付文書（クラビット点眼液1.5%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319742Q2027_1_11"], ["今日の臨床サポート（レボフロキサシン点眼液1.5%「FFP」）", "https://clinicalsup.jp/jpoc/drugdetails.aspx?code=61548"]] }
+ sources: [["PMDA 医療用医薬品の添付文書（クラビット点眼液1.5%）", "https://www.pmda.go.jp/PmdaSearch/iyakuDetail/300237_1319742Q2027_1_11"]] }
 ];
 const CP_EYEDROP_COMMON = {
  how: ["さす前に手を洗う", "容器の先が目・まつ毛・まぶたに触れないようにする", "さした後は目を閉じ、目頭を軽く押さえる", "あふれた液はガーゼやティッシュでふき取る", "2種類以上の目薬をさすときは、5分以上あける"],
  sources: [["さいたま市民医療センター「目薬の正しいさし方」", "https://www.saimiya.com/images/stories/content/miyanowa/miyanowa48/4803.pdf"], ["わかもと製薬「目薬の正しいさし方」", "https://www.wakamoto-pharm.co.jp/upd/pdf/0000000759_1.pdf"]]
 };
-const CP_DRUG_GUIDE_CHECKED = "2026-10-09";
+// 薬の説明のもとにした製品と製造販売元（2026-10-15 添付文書等で確認。同じ成分でも会社によって説明が違うことがあるため表示）
+const CP_DRUG_BASIS = {
+ "酸化マグネシウム": "特定の製品ではなく、酸化マグネシウム製剤に共通の注意（PMDA掲載の患者さん向け資料・厚生労働省の安全性情報）",
+ "ピコスルファートナトリウム": "ピコスルファートナトリウム内用液0.75%「JG」（長生堂製薬株式会社）の添付文書",
+ "センノシド": "センノシド錠12mg「NIG」（日医工岐阜工場株式会社）の添付文書",
+ "アムロジピン": "アムロジピンOD錠「YD」（陽進堂ホールディングス株式会社）の添付文書",
+ "カンデサルタン": "カンデサルタン錠「TCK」（辰巳化学株式会社）の患者向医薬品ガイド",
+ "アスピリン（血をかたまりにくくする少量のもの）": "バイアスピリン錠100mg（バイエル薬品株式会社）の添付文書",
+ "ワルファリン": "ワルファリンK錠「NIG」（日医工岐阜工場株式会社）の患者向医薬品ガイド",
+ "アピキサバン": "エリキュース錠（ブリストル・マイヤーズ スクイブ株式会社）の患者向医薬品ガイド",
+ "ランソプラゾール": "ランソプラゾールOD錠15mg「DK」（大興製薬株式会社）の添付文書",
+ "ファモチジン": "ファモチジン錠「ZE」（全星薬品工業株式会社）の添付文書",
+ "ドネペジル": "ドネペジル塩酸塩錠「TSU」（鶴原製薬株式会社）の患者向医薬品ガイド",
+ "メマンチン": "メマンチン塩酸塩OD錠「YD」（株式会社陽進堂）の患者向医薬品ガイド",
+ "ゾルピデム": "ゾルピデム酒石酸塩錠「KMP」（共創未来ファーマ株式会社）の患者向医薬品ガイド",
+ "抑肝散": "ツムラ抑肝散エキス顆粒（医療用）（株式会社ツムラ）の添付文書",
+ "フロセミド": "フロセミド錠「SN」（シオノケミカル株式会社）の添付文書",
+ "アレンドロン酸": "アレンドロン酸錠35mg「NIG」（日医工岐阜工場株式会社）の添付文書",
+ "エルデカルシトール": "エディロール錠（中外製薬株式会社）の患者向医薬品ガイド",
+ "アセトアミノフェン": "カロナール細粒（あゆみ製薬株式会社）の添付文書",
+ "タムスロシン": "タムスロシン塩酸塩OD錠「明治」（Meiji Seika ファルマ株式会社）の添付文書",
+ "メトホルミン": "メトホルミン塩酸塩錠250mg「SN」（シオノケミカル株式会社）の添付文書",
+ "シタグリプチン": "シタグリプチン錠100mg「JG」（日本ジェネリック株式会社）のくすりのしおり",
+ "ヘパリン類似物質（塗り薬）": "ヒルドイド（マルホ株式会社）の添付文書",
+ "白色ワセリン（塗り薬）": "白色ワセリン（東洋製薬化成株式会社）の添付文書",
+ "ケトプロフェン（湿布）": "モーラステープL40mg（久光製薬株式会社）の添付文書・使用上のご注意",
+ "ロキソプロフェン（湿布）": "ロキソニンパップ100mg（リードケミカル株式会社）の添付文書",
+ "レバミピド": "レバミピド錠100mg「NPI」（日本薬品工業株式会社）の添付文書",
+ "アズノール軟膏（ジメチルイソプロピルアズレン）": "0.033%アズノール軟膏（日本新薬株式会社）の添付文書",
+ "亜鉛華単軟膏": "亜鉛華(10%)単軟膏「ニッコー」（日興製薬株式会社）の添付文書",
+ "ラタノプロスト（目薬）": "キサラタン点眼液0.005%（ヴィアトリス製薬合同会社）の患者向医薬品ガイド・添付文書",
+ "チモロール（目薬）": "チモロール点眼液「日新」（日新製薬株式会社）の添付文書と、チモロール点眼液0.25%「わかもと」（わかもと製薬株式会社）のくすりのしおり",
+ "ヒアルロン酸ナトリウム（目薬）": "ヒアルロン酸Na点眼液（わかもと製薬株式会社）のくすりのしおりと、ヒアルロン酸ナトリウム点眼液「日点」（ロートニッテン株式会社）の添付文書",
+ "シアノコバラミン（目薬）": "サンコバ点眼液0.02%（参天製薬株式会社）の添付文書",
+ "ピレノキシン（目薬）": "カタリン点眼用0.005%（千寿製薬株式会社）の添付文書",
+ "レボフロキサシン（目薬）": "クラビット点眼液1.5%（参天製薬株式会社）の添付文書"
+};
+const CP_DRUG_GUIDE_CHECKED = "2026-10-09（追記 2026-10-15）";
 
 function cpNormDrugName(s) {
  return String(s || "").replace(/[\s　]/g, "").replace(/[（(][^）)]*[）)]/g, "").toLowerCase();
@@ -9859,6 +9911,7 @@ function cpShowDrugGuide(g, shownName) {
  body.innerHTML = `
  <h3 class="drug-title">${escapeHtml(shownName || g.name)}</h3>
  <p class="drug-kind">${escapeHtml(g.kind)}・${escapeHtml(g.name)}</p>
+ ${CP_DRUG_BASIS[g.name] ? `<p class="drug-basis">この説明のもと：${escapeHtml(CP_DRUG_BASIS[g.name])}<br>同じ成分の薬でも、製品（会社）によって説明が少し違うことがあります。手元の薬の説明書もあわせて確認してください。</p>` : ""}
  <section><h4>どんな薬か</h4><p>${escapeHtml(g.what)}</p></section>
  <section><h4>気をつけたい様子（見つけたら看護師へ）</h4>${list(g.watch)}</section>
  ${g.how && g.how.length ? `<section><h4>${g.kind === "飲み薬" ? "飲ませ方" : (g.kind === "目薬" ? "さし方" : "使い方")}の注意</h4>${list(g.how)}</section>` : ""}
@@ -9869,12 +9922,12 @@ function cpShowDrugGuide(g, shownName) {
  </div>
  <details class="drug-sources"><summary>この説明の資料（${CP_DRUG_GUIDE_CHECKED} に確認）</summary>
  <ul>${srcs.map(s => `<li><a href="${escapeHtml(s[1])}" target="_blank" rel="noopener">${escapeHtml(s[0])}</a></li>`).join("")}</ul>
- <p class="panel-note">2つ以上の資料で内容が一致したものだけを載せています。</p>
+ <p class="panel-note">薬を作っている会社の正式な資料（添付文書・患者向医薬品ガイド・くすりのしおり）と、国・病院の資料で確かめた内容だけを載せています。</p>
  </details>`;
  modal.style.display = "flex";
 }
 
-// 薬の説明（2つ以上の資料で一致した内容だけ。CP_DRUG_GUIDE に登録がない薬は看護師に確認してもらう）
+// 薬の説明（メーカーの正式な資料＝添付文書・患者向医薬品ガイド・くすりのしおり、または国・病院の資料で確かめた内容だけ。2026-10-15 ユーザーと決定。CP_DRUG_GUIDE に登録がない薬は看護師に確認してもらう）
 function openDrugInfo(name, kindHint) {
  const g = (typeof cpFindDrugGuide === "function") ? cpFindDrugGuide(name, kindHint) : null;
  if (!g) {
