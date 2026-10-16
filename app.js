@@ -441,7 +441,13 @@ function cpMergeIdArray(local, base, server) {
  return;
  }
  const localChanged = !B.has(k) || !cpSame(lv, B.get(k));
+ // [Claude修正 2026-10-16] 同じ記録を両方の端末で直したときは、項目ごとに合流する
+ // （以前は記録ごとこの端末の内容を使い、ほかの端末が直した別の項目が消えていた。同じ項目はこの端末の内容）
+ if (localChanged && B.has(k) && !cpSame(sv, B.get(k)) && cpIsPlainObject(lv) && cpIsPlainObject(sv)) {
+ result.push(cpMergeValue(lv, B.get(k), sv));
+ } else {
  result.push(localChanged ? lv : sv);
+ }
  used.add(k);
  } else if (B.has(k)) {
  // この端末で削除済み。サーバー側で編集されていれば残す
@@ -486,6 +492,81 @@ function cpMergeValue(local, base, server) {
  return local;
 }
 
+// ======================================================================
+// [Claude追加 2026-10-16] 差分保存（作り変え ②）
+// 前回サーバーと同期した時点（base）と今のデータ（cur）を比べ、変わった記録だけを取り出す。
+// ・ID付きの記録の配列は1件ずつ: 追加・変更は {t:"up", v:新しい中身, b:前の中身}、削除は {t:"rm", b:前の中身}
+//   新しい記録は、すぐ後ろにある既存の記録のID（before）を付け、サーバーでも同じ並びに入れる
+// ・それ以外（設定のオブジェクトなど）は項目ごとまとめて {t:"set", v, b}
+// サーバーは「前の中身」と今のサーバーの中身を比べ、ほかの端末が先に変えていたら 409 を返す
+// ======================================================================
+function cpUniqueIdKeys(arr) {
+ if (!Array.isArray(arr)) return null;
+ const keys = [];
+ const seen = new Set();
+ for (const it of arr) {
+  if (!it || typeof it !== "object" || Array.isArray(it) || it.id === undefined || it.id === null || it.id === "") return null;
+  const k = String(it.id);
+  if (seen.has(k)) return null; // 同じIDが2つある配列は、項目ごとまとめて送る
+  seen.add(k);
+  keys.push(k);
+ }
+ return keys;
+}
+
+function cpComputeDiff(base, cur) {
+ const ops = [];
+ base = base || {};
+ const has = (o, k) => Object.prototype.hasOwnProperty.call(o, k) && o[k] !== undefined;
+ new Set([...Object.keys(cur), ...Object.keys(base)]).forEach(k => {
+  if (k === "_rev") return;
+  const hasC = has(cur, k), hasB = has(base, k);
+  const c = cur[k], b = base[k];
+  if (hasC && hasB && Array.isArray(c) && Array.isArray(b)) {
+   const ck = cpUniqueIdKeys(c), bk = cpUniqueIdKeys(b);
+   if (ck && bk) {
+    const B = new Map();
+    bk.forEach((id, i) => B.set(id, b[i]));
+    const C = new Set(ck);
+    ck.forEach((id, i) => {
+     const v = c[i];
+     if (!B.has(id)) {
+      let before = null;
+      for (let j = i + 1; j < ck.length; j++) { if (B.has(ck[j])) { before = ck[j]; break; } }
+      ops.push({ k: k, t: "up", id: id, v: v, b: null, before: before });
+     } else if (JSON.stringify(v) !== JSON.stringify(B.get(id))) {
+      ops.push({ k: k, t: "up", id: id, v: v, b: B.get(id) });
+     }
+    });
+    bk.forEach((id, i) => { if (!C.has(id)) ops.push({ k: k, t: "rm", id: id, b: b[i] }); });
+    return;
+   }
+  }
+  const sc = hasC ? JSON.stringify(c) : undefined;
+  const sb = hasB ? JSON.stringify(b) : undefined;
+  if (sc === sb) return;
+  const op = { k: k, t: "set", had: hasB };
+  if (hasB) op.b = b;
+  if (hasC) op.v = c; else op.del = true;
+  ops.push(op);
+ });
+ return ops;
+}
+
+// [Claude追加 2026-10-16] 受け取りも差分: サーバーから届いた変更（1件分）を当てはめる（サーバーの当てはめ方と同じ）
+function cpApplyOp(d, op) {
+ const k = op.k;
+ if (op.t === "set") { if (op.del) delete d[k]; else d[k] = op.v; return; }
+ if (!Array.isArray(d[k])) d[k] = [];
+ const arr = d[k];
+ const idx = arr.findIndex(x => x && typeof x === "object" && String(x.id) === String(op.id));
+ if (op.t === "rm") { if (idx >= 0) arr.splice(idx, 1); return; }
+ if (op.t !== "up") return;
+ if (idx >= 0) { arr[idx] = op.v; return; }
+ const at = (op.before !== undefined && op.before !== null) ? arr.findIndex(x => x && typeof x === "object" && String(x.id) === String(op.before)) : -1;
+ if (at >= 0) arr.splice(at, 0, op.v); else arr.push(op.v);
+}
+
 // データベース管理クラス (ハイブリッド: サーバー同期 ＋ ローカル保存)
 class LocalDB {
  constructor() {
@@ -506,7 +587,7 @@ class LocalDB {
  this.serverPort = window.location.port || 8888;
  this.hasSyncedWithServer = !this.isServerMode;
  this.lastSavedJson = JSON.stringify(this.data);
- this.baseJson = this.lastSavedJson;
+ this.setBase(this.lastSavedJson);
 
  // [Claude修正] サーバーのデータはログイン後に取得する (ログイン前はサーバーが渡さないため)
  if (this.isServerMode && cpGetToken()) {
@@ -814,7 +895,125 @@ class LocalDB {
  return this._saveChain;
  }
 
+ // [Claude追加 2026-10-16] 前回サーバーと同期した時点の中身（base）と版番号をそろえて持つ
+ setBase(json, obj) {
+ this.baseJson = json;
+ if (obj) this.baseObj = obj;
+ else { try { this.baseObj = JSON.parse(json || "{}"); } catch (e) { this.baseObj = {}; } }
+ this.baseRev = Number(this.baseObj && this.baseObj._rev) || 0;
+ }
+
+ // [Claude修正 2026-10-16] ② 差分保存。以前は保存のたびに全データを取得・合流し、全データを送っていた
+ // （データが増えると保存に十数秒かかり、端末が多いと保存できない記録が出ていた）。
+ // 今は変わった記録だけを送る。ほかの端末が同じ記録を先に変えていたら（409）、最新を取得して合流し、やり直す。
+ // 差分保存に対応していないサーバーや、5回やり直しても保存できないときは、以前の全体の保存を使う。
  async _syncAndSave() {
+ if (this._diffUnsupported) return this._fullSyncAndSave();
+ this._saving = true;
+ this._syncEpoch = (this._syncEpoch || 0) + 1;
+ this._remoteMergedDuringSave = false;
+ let fallback = false;
+ try {
+ for (let attempt = 1; attempt <= 5; attempt++) {
+ const snapshotJson = JSON.stringify(this.data);
+ const snapshot = JSON.parse(snapshotJson);
+ const ops = cpComputeDiff(this.baseObj || {}, snapshot);
+ if (ops.length === 0) {
+ this.lastSavedJson = snapshotJson;
+ this.updateSyncBadge(true);
+ if (this._remoteMergedDuringSave) this.refreshViewAfterRemoteMerge();
+ return true;
+ }
+ const res = await cpApiFetch('/api/save-diff', {
+ method: 'POST',
+ headers: { 'Content-Type': 'application/json' },
+ body: JSON.stringify({ base_rev: this.baseRev, ops: ops })
+ });
+ if (res.status === 404) { this._diffUnsupported = true; fallback = true; break; }
+ if (res.status === 409) {
+ // ほかの端末が同じ記録を先に変えていた（またはサーバーにデータがない）。最新を取得して合流してからやり直す
+ const pulled = await this._pullForSave();
+ if (!pulled) { fallback = true; break; }
+ await new Promise(r => setTimeout(r, 100 * attempt));
+ continue;
+ }
+ if (!res.ok) { fallback = true; break; }
+ const resp = await res.json();
+ snapshot._rev = resp.rev;
+ this.data._rev = resp.rev;
+ const savedJson = JSON.stringify(snapshot);
+ const othersSavedBetween = Number(resp.prev_rev) !== Number(this.baseRev);
+ const revBeforeSave = this.baseRev;
+ this.setBase(savedJson, snapshot);
+ // ほかの端末の保存が間にあったときは、前の版から後の変更を受け取り直す（自分の変更は同じ中身なので重ねても変わらない）
+ if (othersSavedBetween) this.baseRev = revBeforeSave;
+ this.lastSavedJson = savedJson;
+ this.storeLocalCopy(savedJson);
+ this.updateSyncBadge(true);
+ this.updateBackupBadge(resp.saved_at || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+ if (othersSavedBetween) {
+ // 送るまでの間にほかの端末も保存していた。自分の保存分を前提に、最新と合流する
+ this._forcePull = true;
+ const pulled = await this._pullForSave();
+ if (pulled) this._forcePull = false;
+ }
+ if (this._remoteMergedDuringSave) this.refreshViewAfterRemoteMerge();
+ // 送っている間に画面で変更された分があれば、続けて送る
+ if (JSON.stringify(this.data) !== this.lastSavedJson && attempt < 5) continue;
+ return true;
+ }
+ if (!fallback) fallback = true;
+ } catch (err) {
+ console.warn("Server diff save error:", err);
+ fallback = true;
+ } finally {
+ this._saving = false;
+ }
+ if (fallback) return this._fullSyncAndSave();
+ return false;
+ }
+
+ // [Claude追加 2026-10-16] 受け取りも差分: 前回同期した版から後に変わった記録だけをサーバーから受け取り、
+ // 前回の中身（base）に当てはめて「今のサーバーの中身」を作る。サーバーが変更を覚えていないときなどは null（全データを取る）
+ async _fetchChanges() {
+ const res = await cpApiFetch('/api/changes?since=' + encodeURIComponent(this.baseRev), { cache: 'no-store' });
+ if (!res.ok) return null;
+ const j = await res.json();
+ if (!j || j.full || !Array.isArray(j.changes)) return null;
+ const server = JSON.parse(this.baseJson || "{}");
+ j.changes.forEach(ch => (ch.ops || []).forEach(op => cpApplyOp(server, op)));
+ server._rev = j.rev;
+ return this.ensureDefaultArrays(server);
+ }
+
+ // 最新を取得し（変わった記録だけ、できなければ全データ）、この端末の変更と合流する（保存中の競合のときに使う）
+ async _pullForSave() {
+ try {
+ let serverData = null;
+ try { serverData = await this._fetchChanges(); } catch (e) { serverData = null; }
+ if (!serverData) {
+ const res = await cpApiFetch('/api/data', { cache: 'no-store' });
+ if (!res.ok) return false;
+ const text = await res.text();
+ if (!text || text.trim() === "" || text.trim() === "{}") return false;
+ serverData = this.ensureDefaultArrays(JSON.parse(text));
+ }
+ const serverJson = JSON.stringify(serverData);
+ if (serverJson !== this.baseJson) {
+ this.mergeRemoteData(serverData);
+ this._remoteMergedDuringSave = true;
+ }
+ this.setBase(serverJson);
+ this.lastSavedJson = serverJson;
+ this.storeLocalCopy(JSON.stringify(this.data));
+ return true;
+ } catch (e) {
+ return false;
+ }
+ }
+
+ // 以前の全体の保存（差分保存に対応していないサーバー用・差分保存がうまくいかないときの予備）
+ async _fullSyncAndSave() {
  this._saving = true;
  this._syncEpoch = (this._syncEpoch || 0) + 1;
  try {
@@ -847,7 +1046,7 @@ class LocalDB {
  continue;
  }
  if (res.ok) {
- this.baseJson = payload;
+ this.setBase(payload);
  this.lastSavedJson = payload;
  this.storeLocalCopy(payload);
  this.updateSyncBadge(true);
@@ -878,7 +1077,7 @@ class LocalDB {
  // 他端末の変更を、このページが持つ配列・オブジェクトを置き換えずに (参照を保ったまま) 取り込む
  mergeRemoteData(serverData) {
  let base = {};
- try { base = JSON.parse(this.baseJson || "{}"); } catch (e) { base = {}; }
+ base = this.baseObj || {}; // [Claude修正 2026-10-16] 毎回 JSON を読み直さない
  const keys = new Set([...Object.keys(this.data), ...Object.keys(serverData)]);
  keys.forEach(k => {
  if (k === "_rev") return;
@@ -944,7 +1143,7 @@ class LocalDB {
  if (serverData && typeof serverData === "object" && !Array.isArray(serverData)) {
  this.data = this.ensureDefaultArrays(serverData);
  this.lastSavedJson = JSON.stringify(this.data);
- this.baseJson = this.lastSavedJson;
+ this.setBase(this.lastSavedJson);
  this.storeLocalCopy(this.lastSavedJson);
  // 画面を再初期化して最新データを表示
  setTimeout(() => {
@@ -1019,22 +1218,45 @@ class LocalDB {
 
  try {
  const epochAtFetch = this._syncEpoch;
+ // [Claude修正 2026-10-16] ① まず版番号だけを聞き、変わっていなければ全データは取らない
+ // （以前は5秒ごとに全データを受け取っていて、データが増えると重かった）
+ const rr = await cpApiFetch('/api/rev', { cache: 'no-store' });
+ if (rr.ok) {
+ const rj = await rr.json();
+ if (Number(rj.rev) === Number(this.baseRev) && !this._forcePull) { this.updateSyncBadge(true); return; }
+ } else if (rr.status !== 404) {
+ return;
+ }
+ if (this._saving || this._syncEpoch !== epochAtFetch) return;
+ // [Claude追加 2026-10-16] 受け取りも差分: 変わった記録だけを受け取る。できないとき・続けて60回使ったあとは全データ（念のための照合）
+ let serverData = null;
+ this._changesStreak = this._changesStreak || 0;
+ if (this._changesStreak < 60) {
+ try { serverData = await this._fetchChanges(); } catch (e) { serverData = null; }
+ }
+ if (serverData) {
+ this._changesStreak++;
+ } else {
+ this._changesStreak = 0;
  const res = await cpApiFetch('/api/data', { cache: 'no-store' });
  if (!res.ok) return;
  const text = await res.text();
  if (!text || text.trim() === "" || text === "{}") return;
+ if (this._saving || this._syncEpoch !== epochAtFetch) return;
+ const parsed = JSON.parse(text);
+ if (!parsed || !parsed.residents) return;
+ serverData = this.ensureDefaultArrays(parsed);
+ }
 
  // [Claude修正] 保存中、または取得中に保存が行われた場合は取り込まない
  // (取得した内容が保存より古いと、削除した記録が復活するなどの不整合が起きるため)
  if (this._saving || this._syncEpoch !== epochAtFetch) return;
- const parsed = JSON.parse(text);
- if (!parsed || !parsed.residents) return;
- const serverData = this.ensureDefaultArrays(parsed);
  let baseRev = 0;
- try { baseRev = Number(JSON.parse(this.baseJson || "{}")._rev) || 0; } catch (e) {}
+ baseRev = Number(this.baseRev) || 0;
  if ((Number(serverData._rev) || 0) < baseRev) return; // 古い版は無視
  const normalizedJson = JSON.stringify(serverData);
  if (normalizedJson === this.baseJson) {
+ this._forcePull = false;
  this.updateSyncBadge(true);
  return;
  }
@@ -1044,7 +1266,8 @@ class LocalDB {
  // 配列の参照を保ったまま、他端末の変更だけを合流する。
  const localJsonBefore = JSON.stringify(this.data);
  this.mergeRemoteData(serverData);
- this.baseJson = normalizedJson;
+ this.setBase(normalizedJson);
+ this._forcePull = false;
  this.lastSavedJson = normalizedJson;
  this.storeLocalCopy(JSON.stringify(this.data));
  this.updateSyncBadge(true);

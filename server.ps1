@@ -1369,6 +1369,335 @@ namespace CarePortal
         }
 
 
+        // ======================================================================
+        // [Claude追加 2026-10-16] 差分保存（作り変え ①②）
+        // ① /api/rev: 版番号だけを返す。端末は5秒ごとにこれだけを聞き、変わったときだけ全データを取る
+        // ② /api/save-diff: 変わった記録だけを「前の中身」と一緒に受け取り、記録ごとに当てはめる。
+        //    同じ記録を別の端末が先に変えていたら 409（競合）を返し、端末に最新と合流させてやり直させる。
+        //    違う記録なら、同時に保存しても両方残る。
+        // 控えファイル: 24時間分は全部残し、それより前は1日1つ（その日の最後）を30日分だけ残す
+        // ======================================================================
+        private long _revCacheVal = -1;
+        private DateTime _revCacheTime;
+        private long _revCacheLen = -1;
+        private JObj _dbCache;
+        private DateTime _dbCacheTime;
+        private long _dbCacheLen = -1;
+        private DateTime _lastBackupCleanup = DateTime.MinValue;
+        private string _maskedCache;
+        private DateTime _maskedCacheTime;
+        private long _maskedCacheLen = -1;
+        // 受け取りも差分: 差分保存で当てはめた変更を覚えておき、端末には「この版から後に変わった記録だけ」を渡す
+        private readonly List<KeyValuePair<long, string>> _changeLog = new List<KeyValuePair<long, string>>();
+        private long _changeLogBaseRev = -1; // この版から後の変更を、途切れずに持っている
+        private long _changeLogLastRev = -1;
+        private const int ChangeLogMax = 500;
+
+        // _fileLock の中で呼ぶ。describable=false（パスワードなどサーバーが補った保存）のときは途切れたことにする
+        private void RecordChange(long prevRev, long newRev, List<object> ops, bool describable)
+        {
+            if (!describable || prevRev != _changeLogLastRev)
+            {
+                _changeLog.Clear();
+                _changeLogBaseRev = describable ? prevRev : newRev;
+            }
+            if (describable)
+            {
+                StringBuilder sb = new StringBuilder("[");
+                bool first = true;
+                foreach (object o in ops)
+                {
+                    JObj op = (JObj)o;
+                    JObj c = new JObj();
+                    foreach (string key in new string[] { "k", "t", "id", "v", "before", "del" })
+                    {
+                        if (op.Map.ContainsKey(key)) c.Set(key, op.Get(key));
+                    }
+                    if (!first) sb.Append(',');
+                    first = false;
+                    sb.Append(MiniJson.Serialize(c));
+                }
+                sb.Append(']');
+                _changeLog.Add(new KeyValuePair<long, string>(newRev, MaskPasswords(sb.ToString())));
+                while (_changeLog.Count > ChangeLogMax)
+                {
+                    _changeLog.RemoveAt(0);
+                    _changeLogBaseRev = _changeLog[0].Key - 1;
+                }
+            }
+            _changeLogLastRev = newRev;
+        }
+
+        private void HandleChanges(NetworkStream stream, string rawUrl)
+        {
+            long since = -1;
+            var m = System.Text.RegularExpressions.Regex.Match(rawUrl, "[?&]since=(\\d+)");
+            if (m.Success) long.TryParse(m.Groups[1].Value, out since);
+            string resp;
+            lock (_fileLock)
+            {
+                long cur = GetCurrentRev();
+                if (since < 0 || cur < 0 || cur != _changeLogLastRev || since < _changeLogBaseRev || since > cur)
+                {
+                    resp = "{\"full\":true,\"rev\":" + cur + "}";
+                }
+                else
+                {
+                    StringBuilder sb = new StringBuilder("{\"rev\":" + cur + ",\"changes\":[");
+                    bool first = true;
+                    foreach (var kv in _changeLog)
+                    {
+                        if (kv.Key <= since) continue;
+                        if (!first) sb.Append(',');
+                        first = false;
+                        sb.Append("{\"rev\":" + kv.Key + ",\"ops\":" + kv.Value + "}");
+                    }
+                    sb.Append("]}");
+                    resp = sb.ToString();
+                }
+            }
+            SendJsonResponse(stream, 200, resp);
+        }
+        // パスワード・暗証番号など、サーバーが持つ値が入る項目。変わったときは今までの全体の手順で補う
+        private static readonly string[] DiffSlowKeys = new string[] { "staff_accounts", "stamps", "facility_name", "external_backup" };
+
+        // _fileLock の中で呼ぶ
+        private long GetCurrentRev()
+        {
+            if (!File.Exists(_dbFile)) return -1;
+            FileInfo fi = new FileInfo(_dbFile);
+            if (_revCacheVal >= 0 && fi.LastWriteTimeUtc == _revCacheTime && fi.Length == _revCacheLen) return _revCacheVal;
+            string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+            var m = System.Text.RegularExpressions.Regex.Match(txt, "\"_rev\":(\\d+)");
+            _revCacheVal = m.Success ? long.Parse(m.Groups[1].Value) : 0;
+            _revCacheTime = fi.LastWriteTimeUtc;
+            _revCacheLen = fi.Length;
+            return _revCacheVal;
+        }
+
+        // _fileLock の中で呼ぶ。ファイルが変わっていなければ、読み込み済みのデータを使う
+        private JObj GetDbCached()
+        {
+            if (!File.Exists(_dbFile)) return null;
+            FileInfo fi = new FileInfo(_dbFile);
+            if (_dbCache != null && fi.LastWriteTimeUtc == _dbCacheTime && fi.Length == _dbCacheLen) return _dbCache;
+            string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+            _dbCache = string.IsNullOrEmpty(txt) ? null : (MiniJson.Parse(txt) as JObj);
+            _dbCacheTime = fi.LastWriteTimeUtc;
+            _dbCacheLen = fi.Length;
+            return _dbCache;
+        }
+
+        private static string DiffMasked(object v)
+        {
+            return MaskPasswords(MiniJson.Serialize(v));
+        }
+
+        private static int DiffFindIndex(List<object> list, string id)
+        {
+            if (list == null || id == null) return -1;
+            for (int i = 0; i < list.Count; i++)
+            {
+                JObj j = list[i] as JObj;
+                if (j != null && j.GetStr("id") == id) return i;
+            }
+            return -1;
+        }
+
+        private static bool DiffFlag(JObj o, string key)
+        {
+            object v = o.Get(key);
+            return v is bool && (bool)v;
+        }
+
+        private void HandleSaveDiff(NetworkStream stream, string body)
+        {
+            JObj req = null;
+            try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
+            List<object> ops = req != null ? (req.Get("ops") as List<object>) : null;
+            if (ops == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_diff\"}"); return; }
+            int status = 200;
+            string resp = null;
+            string sessionsJson = null;
+            lock (_fileLock)
+            {
+                try
+                {
+                    JObj db = GetDbCached();
+                    if (db == null)
+                    {
+                        status = 409; resp = "{\"error\":\"no_data\"}";
+                    }
+                    else
+                    {
+                        // 1. 先に全部の記録を確かめる（途中で競合が見つかったら、何も変えない）
+                        string conflictKey = null;
+                        bool slow = false;
+                        foreach (object o in ops)
+                        {
+                            JObj op = o as JObj;
+                            if (op == null) { conflictKey = "?"; break; }
+                            string k = op.GetStr("k");
+                            string t = op.GetStr("t");
+                            if (string.IsNullOrEmpty(k) || k == "_rev") { conflictKey = "?"; break; }
+                            if (Array.IndexOf(DiffSlowKeys, k) >= 0) slow = true;
+                            if (t == "up" || t == "rm")
+                            {
+                                List<object> list = db.Get(k) as List<object>;
+                                if (db.Get(k) != null && list == null) { conflictKey = k; break; }
+                                int idx = DiffFindIndex(list, op.GetStr("id"));
+                                object cur = idx >= 0 ? list[idx] : null;
+                                object b = op.Get("b");
+                                bool ok;
+                                if (t == "up")
+                                {
+                                    object v = op.Get("v");
+                                    if (cur == null) ok = (b == null);
+                                    else ok = (b != null && DiffMasked(cur) == DiffMasked(b)) || DiffMasked(cur) == DiffMasked(v);
+                                }
+                                else
+                                {
+                                    ok = (cur == null) || (b != null && DiffMasked(cur) == DiffMasked(b));
+                                }
+                                if (!ok) { conflictKey = k; break; }
+                            }
+                            else if (t == "set")
+                            {
+                                bool curHas = db.Map.ContainsKey(k);
+                                bool had = DiffFlag(op, "had");
+                                bool del = DiffFlag(op, "del");
+                                string curM = curHas ? DiffMasked(db.Get(k)) : "<none>";
+                                string baseM = had ? DiffMasked(op.Get("b")) : "<none>";
+                                string newM = del ? "<none>" : DiffMasked(op.Get("v"));
+                                if (curM != baseM && curM != newM) { conflictKey = k; break; }
+                            }
+                            else { conflictKey = "?"; break; }
+                        }
+                        if (conflictKey != null)
+                        {
+                            status = 409; resp = "{\"error\":\"conflict\",\"key\":" + MiniJson.Quote(conflictKey) + "}";
+                        }
+                        else
+                        {
+                            string beforeJson = slow ? File.ReadAllText(_dbFile, Encoding.UTF8) : null;
+                            // 2. 当てはめる
+                            foreach (object o in ops)
+                            {
+                                JObj op = (JObj)o;
+                                string k = op.GetStr("k");
+                                string t = op.GetStr("t");
+                                if (t == "set")
+                                {
+                                    if (DiffFlag(op, "del")) { if (db.Map.ContainsKey(k)) { db.Map.Remove(k); db.Keys.Remove(k); } }
+                                    else db.Set(k, op.Get("v"));
+                                    continue;
+                                }
+                                List<object> list = db.Get(k) as List<object>;
+                                if (list == null) { list = new List<object>(); db.Set(k, list); }
+                                int idx = DiffFindIndex(list, op.GetStr("id"));
+                                if (t == "rm")
+                                {
+                                    if (idx >= 0) list.RemoveAt(idx);
+                                    continue;
+                                }
+                                JObj nv = op.Get("v") as JObj;
+                                if (nv == null) continue;
+                                if (idx >= 0)
+                                {
+                                    // 伏せ字（空）で届いたパスワード・暗証番号は、サーバーの値を残す
+                                    JObj old = list[idx] as JObj;
+                                    if (old != null)
+                                    {
+                                        foreach (string sk in new string[] { "password", "pin" })
+                                        {
+                                            if (nv.Get(sk) is string && (string)nv.Get(sk) == "" && old.Get(sk) is string && (string)old.Get(sk) != "") nv.Set(sk, old.Get(sk));
+                                        }
+                                    }
+                                    list[idx] = nv;
+                                }
+                                else
+                                {
+                                    int at = DiffFindIndex(list, op.GetStr("before"));
+                                    if (at >= 0) list.Insert(at, nv); else list.Add(nv);
+                                }
+                            }
+                            // 3. 版番号を進めて書き込む
+                            long prevRev = 0;
+                            JNum rn = db.Get("_rev") as JNum;
+                            if (rn != null) long.TryParse(rn.Raw, out prevRev);
+                            long newRev = prevRev + 1;
+                            db.Set("_rev", new JNum(newRev.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                            string outJson = MiniJson.Serialize(db);
+                            if (slow)
+                            {
+                                outJson = MergeAccountSecrets(outJson, beforeJson);
+                                _dbCache = MiniJson.Parse(outJson) as JObj;
+                                sessionsJson = outJson;
+                            }
+                            File.WriteAllText(_dbFile, outJson, Encoding.UTF8);
+                            RecordChange(prevRev, newRev, ops, !slow);
+                            FileInfo fi = new FileInfo(_dbFile);
+                            _dbCacheTime = fi.LastWriteTimeUtc; _dbCacheLen = fi.Length;
+                            _revCacheVal = newRev; _revCacheTime = fi.LastWriteTimeUtc; _revCacheLen = fi.Length;
+                            WriteMinuteBackup(outJson);
+                            resp = "{\"success\":true,\"rev\":" + newRev + ",\"prev_rev\":" + prevRev + ",\"saved_at\":\"" + DateTime.Now.ToString("HH:mm") + "\"}";
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _dbCache = null; // 途中で失敗したときは、次はファイルから読み直す
+                    status = 500; resp = "{\"error\":" + MiniJson.Quote(ex.Message) + "}";
+                }
+            }
+            if (sessionsJson != null) { try { DropSuspendedSessions(sessionsJson); } catch { } }
+            SendJsonResponse(stream, status, resp);
+        }
+
+        // 分ごとの控え: その分の最初の保存で1つ作る。最新の控え（backup_latest.json）は毎回書く。古い控えは整理する
+        private void WriteMinuteBackup(string json)
+        {
+            try
+            {
+                string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+                string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
+                if (!File.Exists(backupPath)) File.WriteAllText(backupPath, json, Encoding.UTF8);
+                File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), json, Encoding.UTF8);
+            }
+            catch { }
+            CleanupMinuteBackups();
+        }
+
+        private void CleanupMinuteBackups()
+        {
+            if ((DateTime.Now - _lastBackupCleanup).TotalMinutes < 10) return;
+            _lastBackupCleanup = DateTime.Now;
+            try
+            {
+                var rx = new System.Text.RegularExpressions.Regex("^backup_(\\d{8})_(\\d{4})\\.json$");
+                DateTime now = DateTime.Now;
+                var byDay = new Dictionary<string, List<string>>();
+                foreach (string f in Directory.GetFiles(_backupDir, "backup_*.json"))
+                {
+                    var m = rx.Match(Path.GetFileName(f));
+                    if (!m.Success) continue; // backup_latest.json など、この形でない名前は触らない
+                    DateTime t;
+                    if (!DateTime.TryParseExact(m.Groups[1].Value + m.Groups[2].Value, "yyyyMMddHHmm", System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.None, out t)) continue;
+                    if ((now - t).TotalHours <= 24) continue;               // 24時間分は全部残す
+                    if ((now - t).TotalDays > 30) { try { File.Delete(f); } catch { } continue; } // 30日より前は消す
+                    string day = m.Groups[1].Value;
+                    if (!byDay.ContainsKey(day)) byDay[day] = new List<string>();
+                    byDay[day].Add(f);
+                }
+                foreach (var kv in byDay)
+                {
+                    kv.Value.Sort(StringComparer.Ordinal);
+                    for (int i = 0; i < kv.Value.Count - 1; i++) { try { File.Delete(kv.Value[i]); } catch { } } // その日の最後の1つだけ残す
+                }
+            }
+            catch { }
+        }
+
         public SimpleServer(string baseDir, int port)
         {
             _baseDir = baseDir;
@@ -1385,6 +1714,8 @@ namespace CarePortal
         {
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
+            // [Claude追加 2026-10-16] 端末が多いときに、要求を待たせないよう同時に動ける作業の下限を上げる
+            try { int w, io; ThreadPool.GetMinThreads(out w, out io); ThreadPool.SetMinThreads(Math.Max(w, 64), Math.Max(io, 64)); } catch { }
 
             // [Antigravity追加] 外部への自動二重バックアップ
             // 起動5秒後に初回の外部バックアップ確認を行い、以降30分ごとに定期確認 (1日1回自動保存)
@@ -1629,7 +1960,22 @@ namespace CarePortal
                         {
                             if (File.Exists(_dbFile))
                             {
-                                dataJson = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                // [Claude修正 2026-10-16] 伏せ字にした全データを覚えておき、ファイルが変わるまで使い回す
+                                // （以前は端末が取りに来るたびに読み込み・伏せ字の処理をし、その間ほかの要求を待たせていた）
+                                FileInfo fi = new FileInfo(_dbFile);
+                                if (_maskedCache != null && fi.LastWriteTimeUtc == _maskedCacheTime && fi.Length == _maskedCacheLen)
+                                {
+                                    dataJson = _maskedCache;
+                                }
+                                else
+                                {
+                                    string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                    // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
+                                    dataJson = string.IsNullOrEmpty(txt) ? "" : MaskPasswords(txt);
+                                    _maskedCache = dataJson;
+                                    _maskedCacheTime = fi.LastWriteTimeUtc;
+                                    _maskedCacheLen = fi.Length;
+                                }
                             }
                         }
                         if (string.IsNullOrEmpty(dataJson))
@@ -1638,9 +1984,27 @@ namespace CarePortal
                         }
                         else
                         {
-                            // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
-                            SendJsonResponse(stream, 200, MaskPasswords(dataJson));
+                            SendJsonResponse(stream, 200, dataJson);
                         }
+                        return;
+                    }
+
+                    // [Claude追加 2026-10-16] ① 版番号だけを返す ② 差分保存
+                    if (urlPath == "/api/rev")
+                    {
+                        long rv;
+                        lock (_fileLock) { rv = GetCurrentRev(); }
+                        SendJsonResponse(stream, 200, "{\"rev\":" + rv + "}");
+                        return;
+                    }
+                    if (urlPath == "/api/changes")
+                    {
+                        HandleChanges(stream, rawUrl);
+                        return;
+                    }
+                    if (urlPath == "/api/save-diff" && method == "POST")
+                    {
+                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes));
                         return;
                     }
 
@@ -1673,15 +2037,8 @@ namespace CarePortal
                                 try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
                                 File.WriteAllText(_dbFile, postData, Encoding.UTF8);
                                 try { DropSuspendedSessions(postData); } catch { }
-                                try
-                                {
-                                    string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
-                                    string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
-                                    File.WriteAllText(backupPath, postData, Encoding.UTF8);
-                                    string latestPath = Path.Combine(_backupDir, "backup_latest.json");
-                                    File.WriteAllText(latestPath, postData, Encoding.UTF8);
-                                }
-                                catch { }
+                                // [Claude修正 2026-10-16] 控えは差分保存と同じ手順（分ごとに1つ・古いものは整理）
+                                WriteMinuteBackup(postData);
                                 }
                             }
                             if (revConflict)
