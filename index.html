@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261016_d4">
+ <link rel="stylesheet" href="style.css?v=20261016_d5">
 </head>
 <body>
 
@@ -138,7 +138,7 @@
         </details>
         <div class="alert-tools">
           <button type="button" class="tool-link" onclick="openAlertLogModal()">閉じたお知らせの記録・戻す</button>
-          <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴（監査用）</button>
+          <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴</button>
           <button type="button" class="tool-link" onclick="openPeriodPrintModal()">記録の期間印刷</button>
         </div>
       </div>
@@ -233,8 +233,16 @@
  <div id="careTabContent">
 
  <!-- 1. 見る画面：個別記録 ＆ 文字検索 ＆ カルテ [Antigravity実装 2026-10-16] -->
- <div id="tabCareRecord" class="layout-grid">
- <div>
+ <!-- [Claude修正 2026-10-16] 個別記録：2列の並び（右のカルテが細く縦長になっていた）をやめ、切り替えタブで「カルテ」「記録を見る・検索」を画面いっぱいの幅で出す -->
+ <div id="tabCareRecord">
+ <div id="recordPaneTabs" class="cp-record-pane-tabs" role="tablist" aria-label="個別記録の表示切り替え">
+  <button type="button" class="cp-record-pane-btn active" data-pane="karte" role="tab" aria-selected="true" onclick="cpSwitchRecordPane('karte')">カルテ（どんな方か）</button>
+  <button type="button" class="cp-record-pane-btn" data-pane="log" role="tab" aria-selected="false" onclick="cpSwitchRecordPane('log')">記録を見る・検索</button>
+ </div>
+ <div id="recordPaneKarte">
+ <div class="panel-card" id="residentDetailCard" style="border-left:5px solid #1e5b47;"></div>
+ </div>
+ <div id="recordPaneLog" style="display:none;">
  <!-- 文字検索ボックス (何月何日何時の記録か一発検索) -->
  <div class="panel-card" style="border-top:4px solid var(--primary-color);">
  <div class="panel-title">
@@ -277,11 +285,6 @@
  <!-- C. 当日の統合記録タイムライン（または全期間アーカイブ） -->
  <div id="selectedDateRecordsList"></div>
  </div>
- </div>
-
- <!-- 右側: 選択中の利用者カルテ (フェイスシート・介護サマリー・病歴ガイド・看取りスタンプ・見守り注意・私物・備品・写真保管) -->
- <div>
- <div class="panel-card" id="residentDetailCard" style="border-left:5px solid #1e5b47;"></div>
  </div>
  </div>
 
@@ -576,7 +579,7 @@
  <!-- 8. 夜勤体位変換 -->
  <div id="tabCareNight" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 夜勤・体位変換チェック表 (入力すると巡視した全時刻ごとに個人記録へ自動個別転記・監査対応)</span>
+ <span> 夜勤・体位変換チェック表 (入力すると巡視した時刻ごとに個人記録へ自動で書き写します)</span>
  </div>
  <table class="data-table" id="nightTable">
  <thead>
@@ -816,7 +819,7 @@
         </details>
         <div class="alert-tools">
           <button type="button" class="tool-link" onclick="openAlertLogModal()">閉じたお知らせの記録・戻す</button>
-          <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴（監査用）</button>
+          <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴</button>
           <button type="button" class="tool-link" onclick="openPeriodPrintModal()">記録の期間印刷</button>
         </div>
       </div>
@@ -1212,7 +1215,7 @@
  <!-- 12. 苦情・ご要望受付簿 -->
  <div id="tabOfficeComplaint" style="display:none;" class="panel-card">
  <div class="panel-title">
- <span> 苦情・ご要望 受付簿 (家族手書き対応・監査必須義務項目)</span>
+ <span> 苦情・ご要望 受付簿</span>
  <button class="btn btn-primary" onclick="openComplaintModal()">＋ 苦情・要望を登録</button>
  </div>
  <table class="data-table" id="complaintsTable">
@@ -3695,7 +3698,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261016_d4"></script>
+ <script src="app.js?v=20261016_d5"></script>
   
 
   <!-- ============================================================ -->
@@ -4303,7 +4306,7 @@
 	<div class="modal-overlay" id="auditLogModal" style="display:none;">
 		<div class="modal-card" style="max-width:1100px; width:96vw;">
 			<div class="modal-header">
-				<h3>監査用：記録の取消・訂正・確認の履歴</h3>
+				<h3>記録の取消・訂正・確認の履歴</h3>
 				<button type="button" class="modal-close-btn" onclick="closeModal('auditLogModal')">&times;</button>
 			</div>
 			<p style="font-size:13px; color:#4a5852; margin:6px 0 10px 0;">記録は削除されず、取消・訂正・確認の操作が「いつ・誰が・何を・なぜ」の形で残っています。条件で絞り込んで確認・印刷できます。</p>

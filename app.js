@@ -3948,13 +3948,14 @@ function switchCareTab(tab) {
  });
  const target = document.getElementById(tabMap[tab]);
  if (target) {
- // .layout-grid（#tabCareRecord）の display:grid が display:block で潰れないように空文字でCSSクラスに従わせる
+ // [Claude修正 2026-10-16] 個別記録は2列の並びをやめ、中の切り替えタブで「カルテ」「記録を見る・検索」を出し分ける
  target.style.display = (tab === "record") ? "" : "block";
  }
 
  if (tab === "record") {
  renderSelectedDateRecords();
  renderResidentDetail();
+ cpSwitchRecordPane(gState.recordPane || "karte"); // [Claude修正 2026-10-16]
  }
  if (tab === "write_single" && typeof renderSingleWriteScreen === "function") renderSingleWriteScreen();
  if (tab === "daily_journal") renderDailyJournal();
@@ -4520,7 +4521,30 @@ function renderResidentDetail() {
  </details>
 
  `;
+ // [Claude修正 2026-10-16] カルテを画面いっぱいの幅で見せるとき、開閉できる枠を広い画面では2列に並べる
+ const accs = container.querySelectorAll(":scope > details.care-accordion");
+ if (accs.length) {
+  const cols = document.createElement("div");
+  cols.className = "cp-karte-cols";
+  accs[0].before(cols);
+  accs.forEach(a => cols.appendChild(a));
+ }
 }
+
+// [Claude修正 2026-10-16] 個別記録の中の切り替え（カルテ／記録を見る・検索）。どんな人かを知ってから日々の記録を見る流れにするため、最初はカルテ
+function cpSwitchRecordPane(pane) {
+ gState.recordPane = (pane === "log") ? "log" : "karte";
+ const k = document.getElementById("recordPaneKarte");
+ const l = document.getElementById("recordPaneLog");
+ if (k) k.style.display = gState.recordPane === "karte" ? "" : "none";
+ if (l) l.style.display = gState.recordPane === "log" ? "" : "none";
+ document.querySelectorAll("#recordPaneTabs button[data-pane]").forEach(b => {
+  const on = b.getAttribute("data-pane") === gState.recordPane;
+  b.classList.toggle("active", on);
+  b.setAttribute("aria-selected", on ? "true" : "false");
+ });
+}
+window.cpSwitchRecordPane = cpSwitchRecordPane;
 
 // ======================================================================
 // 現場介護向け 医療・症状・病名専門用語 アノテーション ＆ やさしい解説表示
@@ -7063,19 +7087,23 @@ function toggleRecordScope() {
 const gOpenMonthAccordions = new Set();
 let gSelectedHistoryMonth = "all";
 
+// [Claude修正 2026-10-16] 開くのは一度に1か月だけ（別の月を開くと前の月は閉じる）。
+// 以前は「開いている月がなくなったら一番新しい月を開く」処理が閉じた直後にも働き、一番新しい月が閉じられなかった
+let gMonthAccordionInited = false;
 function toggleMonthAccordion(ym) {
- if (gOpenMonthAccordions.has(ym)) {
- gOpenMonthAccordions.delete(ym);
- } else {
- gOpenMonthAccordions.add(ym);
- }
+ const wasOpen = gOpenMonthAccordions.has(ym);
+ gOpenMonthAccordions.clear();
+ if (!wasOpen) gOpenMonthAccordions.add(ym);
+ gMonthAccordionInited = true;
  renderSelectedDateRecords();
 }
 
 function filterHistoryMonth(ym) {
  gSelectedHistoryMonth = ym;
  if (ym !== "all") {
+ gOpenMonthAccordions.clear(); // [Claude修正 2026-10-16] 1か月だけ開く
  gOpenMonthAccordions.add(ym);
+ gMonthAccordionInited = true;
  }
  renderSelectedDateRecords();
 }
@@ -8040,8 +8068,9 @@ function renderSelectedDateRecords() {
 
   const ymList = Object.keys(monthGroups).sort().reverse(); // 新しい月順
 
-  if (gOpenMonthAccordions.size === 0 && ymList.length > 0) {
+  if (!gMonthAccordionInited && ymList.length > 0) {
    gOpenMonthAccordions.add(ymList[0]);
+   gMonthAccordionInited = true;
   }
 
   const filterBar = document.createElement("div");
@@ -8855,6 +8884,8 @@ function submitDailyJournalRecordModal() {
 function doSearch() {
  const q = document.getElementById("searchInput").value.trim().toLowerCase();
  if (!q) return;
+ // [Claude修正 2026-10-16] 検索結果は「記録を見る・検索」側に出るので切り替える（カルテの病名ガイドから検索したときなど）
+ if (typeof cpSwitchRecordPane === "function") cpSwitchRecordPane("log");
 
  const results = (db.data.care_records || []).filter(r => {
  const res = gState.residents.find(x => x.id === r.resident_id);
@@ -8916,6 +8947,7 @@ function jumpToDateRecord(dateStr) {
  gState.currentMonth = targetDate.slice(0, 7);
  selectDate(targetDate);
  switchCareTab('record');
+ cpSwitchRecordPane("log"); // [Claude修正 2026-10-16]
  window.scrollTo({ top: 300, behavior: 'smooth' });
 }
 

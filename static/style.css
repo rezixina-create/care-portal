@@ -1997,3 +1997,44 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   justify-content: flex-end;
   margin-top: 8px;
 }
+
+/* [Claude修正 2026-10-16] 個別記録の切り替えタブ（カルテ／記録を見る・検索）とカルテの2列表示 */
+.cp-record-pane-tabs {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  margin: 0 0 12px 0;
+  padding: 6px;
+  background: #eef2ef;
+  border-radius: 10px;
+  border: 1px solid #dfe5e1;
+}
+.cp-record-pane-btn {
+  flex: 1 1 160px;
+  padding: 9px 12px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #1a4f3d;
+  background: #ffffff;
+  border: 1px solid #c9e0d5;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.cp-record-pane-btn.active {
+  background: #1e5b47;
+  color: #ffffff;
+  border-color: #1e5b47;
+}
+.cp-karte-cols {
+  column-count: 2;
+  column-gap: 14px;
+}
+.cp-karte-cols > details.care-accordion {
+  break-inside: avoid;
+  display: block;
+}
+@media (max-width: 900px) {
+  .cp-karte-cols {
+    column-count: 1;
+  }
+}
