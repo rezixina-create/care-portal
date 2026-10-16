@@ -1489,8 +1489,9 @@ button, input, select, textarea { font-family: inherit; }
   background: var(--surface); border-bottom: 1px solid var(--line); padding: 8px 20px; font-size: 14px;
 }
 .shift-bar-title {
-  background: none; border: none; padding: 4px 0; cursor: pointer; white-space: nowrap;
-  color: var(--pine); font-size: 14px; font-weight: bold; text-decoration: underline; text-underline-offset: 3px; text-decoration-color: var(--sun);
+  /* [Claude修正 2026-10-16] 押せる見た目（下線・指のカーソル）をやめ、ただの見出しに */
+  background: none; border: none; padding: 4px 0; cursor: default; white-space: nowrap;
+  color: var(--pine); font-size: 14px; font-weight: bold;
 }
 .shift-bar-muted { color: var(--ink-3); }
 .shift-bar-list { display: flex; flex-wrap: wrap; align-items: center; gap: 4px 14px; min-width: 0; }
@@ -2037,4 +2038,32 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   .cp-karte-cols {
     column-count: 1;
   }
+}
+
+/* [Claude修正 2026-10-16] ID・パスワード欄：日本語入力の知らせ、ログインIDの表示ボタン */
+.cp-ime-warn {
+  margin-top: 4px;
+  font-size: 12.5px;
+  font-weight: bold;
+  color: #b3261e;
+}
+.cp-pw-wrap {
+  display: flex;
+  gap: 6px;
+  align-items: stretch;
+}
+.cp-pw-wrap .form-control {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+.cp-pw-toggle {
+  flex: 0 0 auto;
+  padding: 0 12px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #1a4f3d;
+  background: #f1f6f3;
+  border: 1px solid #c9e0d5;
+  border-radius: 6px;
+  cursor: pointer;
 }

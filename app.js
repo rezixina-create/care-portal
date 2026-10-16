@@ -3924,6 +3924,7 @@ function switchPortal(portal) {
 function switchCareTab(tab) {
  if (gState.activeCareTab === "med" && tab !== "med" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
  gState.activeCareTab = tab;
+ if (typeof cpNavRecord === "function") cpNavRecord(); // [Claude修正 2026-10-16] 戻るボタン用の履歴
  const tabs = document.querySelectorAll("#portalCareSection .sub-tab-btn");
  tabs.forEach(btn => {
  btn.classList.remove("active");
@@ -12799,6 +12800,7 @@ function switchOfficeTab(tab) {
  }
 
  gState.activeOfficeTab = tab;
+ if (typeof cpNavRecord === "function") cpNavRecord(); // [Claude修正 2026-10-16] 戻るボタン用の履歴
  const tabs = document.querySelectorAll("#portalOfficeSection .sub-tab-btn");
  tabs.forEach(btn => {
  btn.classList.remove("active");
@@ -19066,7 +19068,7 @@ function renderTodayShiftBar(targetDateStr) {
  // 「勤務表を開く」が switchOfficeTab('shifts') になっていて何も開かなかった → 'shift'
  const chip = (cls, label, text) => `<span class="shift-item"><span class="shift-chip shift-chip-${cls}">${label}</span>${escapeHtml(text)}</span>`;
  bar.innerHTML = `
-  <button type="button" class="shift-bar-title" onclick="enterPortal('office'); switchOfficeTab('shift');" title="勤務表を開く">${escapeHtml(dateLabel)}の勤務</button>
+  <span class="shift-bar-title">${escapeHtml(dateLabel)}の勤務</span><!-- [Claude修正 2026-10-16] 押すと事務ポータルの勤務表へ移り、元の画面に戻れなかったため、ただの見出しにした（変更は勤務表から） -->
   <div class="shift-bar-list">
    <span class="shift-item"><span class="shift-role">管理者</span>${escapeHtml(directorText)}</span>
    ${roster.planner.length ? `<span class="shift-item"><span class="shift-role">計画・相談</span>${escapeHtml(roster.planner.map(p => p.shortName).join("・"))}</span>` : ""}
@@ -20230,7 +20232,74 @@ function onLoginStaffSelectChange(staffName) {
 
 // [Claude修正] サーバー稼働時は、ID・パスワードをサーバーで照合する
 // (旧実装は端末内のデータで照合していたため、画面を通さずにデータを取得できた)
+// [Claude修正 2026-10-16] ID・パスワード・暗証番号の欄：全角で打った英数字をその場で半角に直し、かな（日本語入力）になっていたら知らせる。
+// パソコンの日本語入力をページ側から強制的に半角にすることはブラウザの決まりでできないため
+const CP_HALFWIDTH_IDS = ["loginStaffIdInput", "loginPasswordInput", "staffAuthApprover1Pin", "staffAuthApprover2Pin",
+  "initialPinCurrent", "initialPinNew", "initialPinConfirm", "accSetNewId", "accSetNewPw1", "accSetNewPw2",
+  "resetAdminPin", "resetOfficePin", "facAdminPin", "facOfficePin"];
+function cpToHalfWidth(str) {
+  return String(str || "").replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
+}
+function cpIsHalfwidthField(el) {
+  return !!el && el.tagName === "INPUT" && (CP_HALFWIDTH_IDS.includes(el.id) || el.type === "password" || el.hasAttribute("data-cp-halfwidth"));
+}
+function cpImeWarn(el, show) {
+  const box = (el.closest(".cp-pw-wrap") || el).parentNode;
+  let w = box ? box.querySelector(`.cp-ime-warn[data-for="${el.id}"]`) : null;
+  if (show && !w && box) {
+    w = document.createElement("div");
+    w.className = "cp-ime-warn";
+    w.setAttribute("data-for", el.id);
+    w.setAttribute("role", "alert");
+    w.textContent = "日本語入力（全角・かな）になっています。キーボードの「半角/全角」キーで切り替えてください。";
+    const after = el.closest(".cp-pw-wrap") || el;
+    after.insertAdjacentElement("afterend", w);
+  }
+  if (w) w.style.display = show ? "" : "none";
+}
+function cpFixHalfwidth(el) {
+  if (!cpIsHalfwidthField(el)) return;
+  const v = el.value;
+  const nv = cpToHalfWidth(v);
+  if (nv !== v) {
+    const pos = el.selectionStart;
+    el.value = nv;
+    try { if (pos !== null && el.type !== "password") el.setSelectionRange(pos, pos); } catch (e) {}
+  }
+  cpImeWarn(el, /[\u3040-\u30FF\u4E00-\u9FFF\uFF66-\uFF9F]/.test(el.value));
+}
+document.addEventListener("input", (e) => {
+  if (e.isComposing) return;
+  cpFixHalfwidth(e.target);
+}, true);
+document.addEventListener("compositionstart", (e) => {
+  if (cpIsHalfwidthField(e.target)) cpImeWarn(e.target, true);
+}, true);
+document.addEventListener("compositionend", (e) => {
+  if (cpIsHalfwidthField(e.target)) setTimeout(() => cpFixHalfwidth(e.target), 0);
+}, true);
+function cpHalfwidthAll() {
+  CP_HALFWIDTH_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el && el.value) el.value = cpToHalfWidth(el.value);
+  });
+}
+// ログインIDの「表示／隠す」
+function cpToggleLoginIdVisible(btn) {
+  const el = document.getElementById("loginStaffIdInput");
+  if (!el) return;
+  const show = el.type === "password";
+  el.type = show ? "text" : "password";
+  if (btn) {
+    btn.textContent = show ? "隠す" : "表示";
+    btn.setAttribute("aria-pressed", show ? "true" : "false");
+  }
+  el.focus();
+}
+window.cpToggleLoginIdVisible = cpToggleLoginIdVisible;
+
 async function handleLoginSubmit() {
+  cpHalfwidthAll();
   if (!db || !db.isServerMode) return handleLoginSubmitLocal();
   const staffName = document.getElementById("loginStaffSelect").value;
   const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
@@ -20308,6 +20377,7 @@ function finishLoginUi(staffName, staffId, isCustom) {
 
 // ログイン実行 (サーバーを使わない単体動作時)
 function handleLoginSubmitLocal() {
+  cpHalfwidthAll(); // [Claude修正 2026-10-16]
   const staffName = document.getElementById("loginStaffSelect").value;
   const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
   const password = (document.getElementById("loginPasswordInput").value || "").trim();
@@ -20489,6 +20559,73 @@ function cpShowLogoutNoticeOnLoad() {
 }
 
 // ホーム画面への遷移
+// [Claude修正 2026-10-16] ブラウザ・タブレットの「戻る」でアプリの外へ出てしまい、書きかけも消えていた。
+// 画面を移るたびに履歴を残し、「戻る」でアプリの中の1つ前の画面（ホーム・ポータル・タブ）へ戻す。
+// ホームでさらに「戻る」を押したときは「アプリを閉じますか？」と確認する。ログアウト中は画面を戻さない
+let cpNavInited = false;
+let cpNavRestoring = false;
+let cpNavTimer = null;
+function cpNavSnapshot() {
+  const homeSec = document.getElementById("portalHomeSection");
+  const atHome = homeSec && homeSec.style.display !== "none" && homeSec.offsetParent !== null;
+  return atHome ? { p: "home" } : { p: gState.activePortal || "home", c: gState.activeCareTab || "", o: gState.activeOfficeTab || "" };
+}
+function cpNavSame(a, b) {
+  return !!a && !!b && a.p === b.p && (a.p === "home" || a.p === "guard" || (a.p === "care" ? a.c === b.c : a.o === b.o));
+}
+function cpNavInit() {
+  if (cpNavInited || !gState.session || !window.history || !history.pushState) return;
+  cpNavInited = true;
+  history.replaceState({ cp: { p: "guard" } }, "");
+  history.pushState({ cp: cpNavSnapshot() }, "");
+}
+function cpNavRecord() {
+  if (!cpNavInited || cpNavRestoring) return;
+  clearTimeout(cpNavTimer);
+  // 1回の操作で複数の切り替えが続くことがあるので、落ち着いてから1つだけ残す
+  cpNavTimer = setTimeout(() => {
+    if (cpNavRestoring || !gState.session) return;
+    const snap = cpNavSnapshot();
+    const cur = history.state && history.state.cp;
+    if (cpNavSame(cur, snap)) return;
+    history.pushState({ cp: snap }, "");
+  }, 0);
+}
+window.addEventListener("popstate", (e) => {
+  const st = e.state && e.state.cp;
+  if (!st || !cpNavInited) return;
+  if (!gState.session) return; // ログアウト中は画面を戻さない
+  // 開いている画面（入力の小窓）があるときは、閉じずにそのまま（入力が消えないように）
+  const openModal = [...document.querySelectorAll(".modal-overlay")].some(m => m.style.display && m.style.display !== "none");
+  if (openModal) {
+    history.pushState({ cp: cpNavSnapshot() }, "");
+    return;
+  }
+  if (st.p === "guard") {
+    if (confirm("アプリを閉じますか？\n（書きかけの内容は保存されません）")) {
+      cpNavInited = false;
+      history.back();
+    } else {
+      history.pushState({ cp: cpNavSnapshot() }, "");
+    }
+    return;
+  }
+  cpNavRestoring = true;
+  try {
+    if (st.p === "home") {
+      goToHome();
+    } else if (st.p === "care") {
+      enterPortal("care");
+      if (st.c && gState.activeCareTab !== st.c) switchCareTab(st.c);
+    } else if (st.p === "office") {
+      enterPortal("office");
+      if (st.o && gState.activeOfficeTab !== st.o) switchOfficeTab(st.o);
+    }
+  } finally {
+    setTimeout(() => { cpNavRestoring = false; }, 0);
+  }
+});
+
 function goToHome() {
   if (typeof cpMedPendingGuard === "function") cpMedPendingGuard();
   const homeSec = document.getElementById("portalHomeSection");
@@ -20514,11 +20651,15 @@ function goToHome() {
   if (homeStaff && gState.session) {
     homeStaff.textContent = `${gState.session.staffName} 様`;
   }
+  // [Claude修正 2026-10-16] 戻るボタン用の履歴（ホームを表示してから記録する）
+  cpNavInit();
+  cpNavRecord();
 }
 
 // ポータルへ入る
 function enterPortal(portalType) {
   if (portalType !== "care" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
+  cpNavRecord(); // [Claude修正 2026-10-16] 戻るボタン用の履歴
   const homeSec = document.getElementById("portalHomeSection");
   const careSec = document.getElementById("portalCareSection");
   const officeSec = document.getElementById("portalOfficeSection");

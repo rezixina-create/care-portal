@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261016_d5">
+ <link rel="stylesheet" href="style.css?v=20261016_d6">
 </head>
 <body>
 
@@ -44,7 +44,11 @@
 
       <div style="margin-bottom:16px;">
         <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">職員ID (半角英字4文字以上) <span style="color:#dc2626;">*</span>:</label>
-        <input type="text" id="loginStaffIdInput" class="form-control" placeholder="例: aaaa または 登録ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false">
+        <!-- [Claude修正 2026-10-16] 伏せ字の欄にすると Chrome・Edge では自動で半角入力になる。「表示」で打った文字を確かめられる -->
+        <div class="cp-pw-wrap">
+          <input type="password" id="loginStaffIdInput" class="form-control" placeholder="例: aaaa または 登録ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+          <button type="button" class="cp-pw-toggle" aria-pressed="false" aria-label="職員IDを表示" onclick="cpToggleLoginIdVisible(this)">表示</button>
+        </div>
       </div>
 
       <div style="margin-bottom:20px;">
@@ -3698,7 +3702,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261016_d5"></script>
+ <script src="app.js?v=20261016_d6"></script>
   
 
   <!-- ============================================================ -->
