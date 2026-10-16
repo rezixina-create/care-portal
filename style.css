@@ -1880,4 +1880,23 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
     max-width: 100% !important;
     width: 100% !important;
   }
+  /* [Antigravity実装 2026-10-16] 日課・業務スケジュール追加モーダル・一覧のスマホ幅（390px）はみ出し防止 */
+  .daily-schedule-modal-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  #dailyScheduleTimeline,
+  .daily-schedule-demo-box,
+  .daily-schedule-item {
+    max-width: 100%;
+    box-sizing: border-box;
+  }
 }
+
+/* [Antigravity実装 2026-10-16] 日課・業務スケジュールの見本枠は印刷しない */
+@media print {
+  .daily-schedule-demo-box {
+    display: none !important;
+  }
+}
+

@@ -1565,7 +1565,8 @@ let gState = {
  activeCareTab: "record",
  activeOfficeTab: "inventory",
  currentShiftMonth: toLocalDateStr(new Date()).slice(0, 7),
- recordScope: "today"
+ recordScope: "today",
+ showDailyScheduleDemo: false // [Antigravity実装 2026-10-16]
 };
 
 // ======================================================================
@@ -3754,6 +3755,7 @@ function renderCalendar() {
  (db.data.excretions || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
  (db.data.meals || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
  (db.data.notebooks || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
+ (db.data.daily_schedules || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); }); // [Antigravity実装 2026-10-16]
 
  const daysRow = document.getElementById("calDaysRow");
  if (!daysRow) return;
@@ -5481,6 +5483,7 @@ const CP_AUDIT_SOURCES = [
  { key: "turns", label: "夜間巡視・体位変換", summary: r => `${r.date || ""} ${r.time || ""} ${r.action || ""}` },
  { key: "linens", label: "シーツ交換", summary: r => `${r.date || ""} ${r.exchange_type || ""} ${r.notes || ""}` },
  { key: "notebooks", label: "申し送り", summary: r => `${r.date || ""} ${r.content || r.title || ""}` },
+ { key: "daily_schedules", label: "日課・業務スケジュール", summary: r => `${r.date || ""} ${r.time || ""} ${r.title || ""} ${r.content || ""}` }, // [Antigravity実装 2026-10-16]
  { key: "monthly_notices", label: "業務連絡（月間）", summary: r => `${r.month || ""} ${r.title || ""} ${r.content || ""}` },
  { key: "notebook_stamps", label: "業務日誌の確認印", summary: r => `${r.date || ""} ${r.staff_name || ""}` },
  { key: "committees", label: "委員会・研修", summary: r => `${r.date || ""} ${r.committee_name || r.name || ""}` },
@@ -7996,7 +7999,7 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </tbody>
  </table>
 
- <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) -->
+ <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) [Antigravity実装 2026-10-16] -->
  <h3 style="font-size:14px; margin:16px 0 6px 0; color:#173f33;">2. フロア一日の日課・業務スケジュール実施記録</h3>
  <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
  <thead>
@@ -8008,9 +8011,9 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </tr>
  </thead>
  <tbody>
- ${(db.data.daily_schedules || []).slice().sort((a,b) => (a.time||'').localeCompare(b.time||'')).map(s => `
+ ${(db.data.daily_schedules || []).filter(s => !s.voided && s.date === gState.selectedDate).slice().sort((a,b) => (a.time||'').localeCompare(b.time||'')).map(s => `
  <tr>
- <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold; text-align:center;">${s.time}</td>
+ <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold; text-align:center;">${escapeHtml(s.time || '')}</td>
  <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold;">${escapeHtml(s.title)}</td>
  <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(s.content || '-')}</td>
  <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(s.staff_name || '-')}</td>
@@ -8034,36 +8037,99 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true, minScale: 0.75 });
 }
 
-// 施設・フロア 一日の日課・業務スケジュール
+// [Antigravity実装 2026-10-16] 施設・フロア 一日の日課・業務スケジュール（デモ見本表示の切り替え）
+function toggleDailyScheduleDemo() {
+ gState.showDailyScheduleDemo = !gState.showDailyScheduleDemo;
+ renderDailyScheduleTimeline();
+}
+
+// 施設・フロア 一日の日課・業務スケジュール [Antigravity実装 2026-10-16]
 function renderDailyScheduleTimeline() {
  const container = document.getElementById("dailyScheduleTimeline");
  if (!container) return;
- const list = (db.data.daily_schedules || []).slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
- 
- if (list.length === 0) {
- container.innerHTML = '<p style="font-size:13px; color:var(--text-muted); margin:0;">登録された日課・行事スケジュールはありません。「＋ 日課・業務を追加」から追加できます。</p>';
- return;
+ const targetDate = gState.selectedDate;
+ const demoBtn = document.getElementById("btnToggleDailyScheduleDemo");
+ if (demoBtn) {
+  demoBtn.textContent = gState.showDailyScheduleDemo ? "デモを閉じる" : "デモ";
+  demoBtn.setAttribute("aria-pressed", gState.showDailyScheduleDemo ? "true" : "false");
+  if (gState.showDailyScheduleDemo) {
+   demoBtn.style.background = "#fef3c7";
+   demoBtn.style.color = "#92400e";
+   demoBtn.style.borderColor = "#f59e0b";
+  } else {
+   demoBtn.style.background = "#fffbeb";
+   demoBtn.style.color = "#b45309";
+   demoBtn.style.borderColor = "#fcd34d";
+  }
  }
 
- let html = '<div style="display:flex; flex-direction:column; gap:8px;">';
- list.forEach(s => {
- html += `
- <div style="display:flex; justify-content:space-between; align-items:flex-start; padding:8px 12px; background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; font-size:13px;">
- <div style="display:flex; gap:12px; align-items:flex-start;">
- <span style="background:#1e5b47; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap;">
- ${s.time}
- </span>
- <div>
- <strong style="color:#1c2622; font-size:14px;">${escapeHtml(s.title)}</strong>
- ${s.content ? `<div style="font-size:12.5px; color:#4a5852; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
- ${s.staff_name ? `<div style="font-size:11px; color:#5f6d66; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
- </div>
- </div>
- <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailySchedule(${s.id})">削除</button>
- </div>
- `;
- });
- html += '</div>';
+ // 選んでいる日（gState.selectedDate）の取消していない記録だけを表示（日付のない見本データは記録としては表示しない）
+ const list = (db.data.daily_schedules || [])
+  .filter(s => !s.voided && s.date === targetDate)
+  .slice()
+  .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+
+ let html = "";
+ if (list.length === 0) {
+  html += `<p style="font-size:13px; color:var(--text-muted); margin:0;">【${escapeHtml(targetDate)}】に登録された日課・業務スケジュールはありません。「＋ 日課・業務を追加」から追加できます。</p>`;
+ } else {
+  html += '<div style="display:flex; flex-direction:column; gap:8px;">';
+  list.forEach(s => {
+   html += `
+   <div class="daily-schedule-item" style="display:flex; justify-content:space-between; align-items:flex-start; gap:8px; padding:8px 12px; background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; font-size:13px;">
+    <div style="display:flex; gap:10px; align-items:flex-start; min-width:0; flex:1;">
+     <span style="background:#1e5b47; color:#ffffff; font-weight:bold; font-size:12px; padding:2px 8px; border-radius:4px; white-space:nowrap; flex-shrink:0;">
+      ${escapeHtml(s.time || "")}
+     </span>
+     <div style="min-width:0; flex:1; word-break:break-word;">
+      <strong style="color:#1c2622; font-size:14px;">${escapeHtml(s.title)}</strong>
+      ${s.content ? `<div style="font-size:12.5px; color:#4a5852; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
+      ${s.staff_name ? `<div style="font-size:11px; color:#5f6d66; margin-top:2px;">担当: ${escapeHtml(s.staff_name)}</div>` : ''}
+     </div>
+    </div>
+    <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#991b1b; border-color:#fca5a5; flex-shrink:0;" onclick="deleteDailySchedule(${Number(s.id)})">取消</button>
+   </div>
+   `;
+  });
+  html += '</div>';
+ }
+
+ // [Antigravity実装 2026-10-16] デモボタン押下時は、日付のない見本12件を記録とは別の枠（色を変え「見本」と表示）に出す
+ if (gState.showDailyScheduleDemo) {
+  const sampleList = (db.data.daily_schedules || [])
+   .filter(s => !s.date && !s.voided)
+   .slice()
+   .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  html += `
+  <div id="dailyScheduleDemoBox" class="daily-schedule-demo-box no-print" style="margin-top:12px; padding:12px; background:#fffbeb; border:2px dashed #f59e0b; border-radius:8px;">
+   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+     <span style="background:#d97706; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 8px; border-radius:4px;">見本</span>
+     <strong style="font-size:13px; color:#92400e;">こんな感じで記録できます（一日の日課・業務スケジュールの記入例 ${sampleList.length}件）</strong>
+    </div>
+    <span style="font-size:11.5px; color:#b45309;">※この見本は保存・印刷されず、記録の件数にも数えません</span>
+   </div>
+   <div style="display:flex; flex-direction:column; gap:6px;">
+    ${sampleList.map(s => `
+    <div style="display:flex; gap:10px; align-items:flex-start; padding:6px 10px; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; font-size:12.5px;">
+     <span style="background:#b45309; color:#ffffff; font-weight:bold; font-size:11.5px; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0;">
+      ${escapeHtml(s.time || "")}
+     </span>
+     <div style="min-width:0; flex:1; word-break:break-word;">
+      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+       <span style="font-size:10.5px; background:#fde68a; color:#92400e; padding:1px 5px; border-radius:3px; font-weight:bold;">見本</span>
+       <strong style="color:#78350f; font-size:13px;">${escapeHtml(s.title)}</strong>
+      </div>
+      ${s.content ? `<div style="font-size:12px; color:#92400e; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
+      ${s.staff_name ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">担当例: ${escapeHtml(s.staff_name)}</div>` : ''}
+     </div>
+    </div>
+    `).join("")}
+   </div>
+  </div>
+  `;
+ }
+
  container.innerHTML = html;
 }
 
@@ -8074,6 +8140,9 @@ function openDailyScheduleModal() {
  document.getElementById("schedContent").value = "";
  const staff = document.getElementById("currentStaff").value || "";
  document.getElementById("schedStaff").value = staff;
+ // [Antigravity実装 2026-10-16] 追加モーダルに対象日（選んでいる日付）を表示
+ const dateLabel = document.getElementById("schedTargetDateLabel");
+ if (dateLabel) dateLabel.textContent = gState.selectedDate;
  document.getElementById("dailyScheduleModal").style.display = "flex";
 }
 
@@ -8088,9 +8157,11 @@ function submitDailySchedule() {
  return;
  }
 
+ // [Antigravity実装 2026-10-16] その時に選んでいる日付（gState.selectedDate）で保存する
  if (!Array.isArray(db.data.daily_schedules)) db.data.daily_schedules = [];
  db.data.daily_schedules.push({
  id: Date.now(),
+ date: gState.selectedDate,
  time: tm,
  title: title,
  content: content,
@@ -8100,14 +8171,28 @@ function submitDailySchedule() {
  db.save();
  closeModal("dailyScheduleModal");
  renderDailyScheduleTimeline();
- alert(`日課スケジュール「${title}」を追加しました！`);
+ renderCalendar();
+ alert(`【${gState.selectedDate}】の日課スケジュール「${title}」を追加しました！`);
 }
 
+// [Antigravity実装 2026-10-16] 削除はやめて「取消」にし、理由・取消者・取消日時をデータに残す
 function deleteDailySchedule(id) {
- if (!confirm("この日課スケジュールを削除してもよろしいですか？")) return;
- db.data.daily_schedules = (db.data.daily_schedules || []).filter(s => s.id !== id);
+ const rec = (db.data.daily_schedules || []).find(s => Number(s.id) === Number(id));
+ if (!rec || rec.voided) return;
+ const reason = prompt(`日課・業務スケジュール「${rec.title || ""}」を「取消」にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入力してください (例: 入力間違い、予定変更)`, "");
+ if (reason === null) return;
+ if (!reason.trim()) {
+  alert("取消の理由を入力してください。取消は行っていません。");
+  return;
+ }
+ rec.voided = true;
+ rec.void_reason = reason.trim();
+ rec.voided_by = cpLedgerStaff();
+ rec.voided_at = toLocalDateTimeStr(new Date());
  db.save();
  renderDailyScheduleTimeline();
+ renderCalendar();
+ alert(`日課スケジュール「${rec.title || ""}」を取消にしました。`);
 }
 
 // 業務日誌 特変・申送り・連絡追加 モーダル

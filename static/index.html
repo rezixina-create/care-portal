@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261015_b2">
+ <link rel="stylesheet" href="style.css?v=20261016_a1">
 </head>
 <body>
 
@@ -383,13 +383,16 @@
  <!-- 勤務体制 ＆ フロア状況サマリーカード -->
  <div id="dailyJournalSummaryBar" style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px 16px; margin:14px 0; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:12px;"></div>
 
- <!-- 施設・フロア 一日の日課・行事スケジュール記録 -->
+ <!-- 施設・フロア 一日の日課・行事スケジュール記録 [Antigravity実装 2026-10-16] -->
  <div style="margin-top:16px;">
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
  <h4 style="font-size:15px; color:#173f33; margin:0; display:flex; align-items:center; gap:6px;">
  <span> 一日の日課・業務スケジュール実施記録 (施設共通・レク・口腔体操・食事など)</span>
  </h4>
- <button class="btn btn-secondary" style="font-size:13px; padding:4px 10px;" onclick="openDailyScheduleModal()">＋ 日課・業務を追加</button>
+ <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+ <button type="button" id="btnToggleDailyScheduleDemo" class="btn btn-secondary" style="font-size:12.5px; padding:4px 10px; background:#fffbeb; color:#b45309; border:1px solid #fcd34d; font-weight:bold;" onclick="toggleDailyScheduleDemo()">デモ</button>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:4px 10px;" onclick="openDailyScheduleModal()">＋ 日課・業務を追加</button>
+ </div>
  </div>
  <div id="dailyScheduleTimeline" style="background:#ffffff; border:1px solid #dfe5e1; border-radius:8px; padding:12px; margin-bottom:16px;"></div>
  </div>
@@ -2521,14 +2524,17 @@
  </div>
  </div>
 
- <!-- 11. 業務日誌 日課・業務スケジュール追加 モーダル -->
+ <!-- 11. 業務日誌 日課・業務スケジュール追加 モーダル [Antigravity実装 2026-10-16] -->
  <div class="modal-overlay" id="dailyScheduleModal" style="display:none;">
  <div class="modal-card" style="max-width:500px;">
  <div class="modal-header">
  <h3> 日課・業務スケジュールの追加</h3>
  <button class="modal-close-btn" onclick="closeModal('dailyScheduleModal')">&times;</button>
  </div>
- <div style="display:grid; grid-template-columns:120px 1fr; gap:12px;">
+ <div style="font-size:12.5px; color:#1e5b47; background:#f1f6f3; border:1px solid #c6ddd4; border-radius:6px; padding:6px 10px; margin-bottom:10px; font-weight:bold;">
+ 記録する日付: <span id="schedTargetDateLabel">-</span>
+ </div>
+ <div class="daily-schedule-modal-grid" style="display:grid; grid-template-columns:120px 1fr; gap:12px;">
  <div class="form-group">
  <label>時間 <span style="color:#dc2626;">*</span>:</label>
  <input type="time" id="schedTime" class="form-control">
@@ -3766,7 +3772,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261015_b2"></script>
+ <script src="app.js?v=20261016_a1"></script>
   
 
   <!-- ============================================================ -->
