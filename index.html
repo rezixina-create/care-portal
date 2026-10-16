@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261016_c3">
+ <link rel="stylesheet" href="style.css?v=20261016_d1">
 </head>
 <body>
 
@@ -190,7 +190,8 @@
   <div class="care-tab-group">
    <span class="care-tab-label">毎日</span>
    <div class="care-tab-row">
-    <button class="sub-tab-btn active" onclick="switchCareTab('record')">個別介護記録</button>
+    <button class="sub-tab-btn active" onclick="switchCareTab('record')">個別記録（見る）</button>
+    <button class="sub-tab-btn" onclick="switchCareTab('write_single')">1人分まとめて書く</button>
     <button class="sub-tab-btn" onclick="switchCareTab('vitals')">バイタル</button>
     <button class="sub-tab-btn" onclick="switchCareTab('meal')">食事・水分</button>
     <button class="sub-tab-btn" onclick="switchCareTab('excretion')">排泄</button>
@@ -231,7 +232,7 @@
  <!-- 介護タブ内コンテンツ -->
  <div id="careTabContent">
 
- <!-- 1. 介護記録 ＆ 文字検索 ＆ カルテ -->
+ <!-- 1. 見る画面：個別記録 ＆ 文字検索 ＆ カルテ [Antigravity実装 2026-10-16] -->
  <div id="tabCareRecord" class="layout-grid">
  <div>
  <!-- 文字検索ボックス (何月何日何時の記録か一発検索) -->
@@ -239,114 +240,27 @@
  <div class="panel-title">
  <span> 全文文字検索 (発熱、転倒、血圧、ふらつき等)</span>
  </div>
- <div style="display:flex; gap:8px;">
- <input type="text" id="searchInput" class="form-control" placeholder="検索キーワードを入力（例: 熱、転倒、佐藤、ふらつき）" onkeypress="if(event.key==='Enter') doSearch()">
+ <div style="display:flex; gap:8px; flex-wrap:wrap;">
+ <input type="text" id="searchInput" class="form-control" style="flex:1; min-width:180px;" placeholder="検索キーワードを入力（例: 熱、転倒、佐藤、ふらつき）" onkeypress="if(event.key==='Enter') doSearch()">
  <button class="btn btn-primary" onclick="doSearch()">検索</button>
  <button class="btn btn-secondary" onclick="clearSearch()">クリア</button>
  </div>
  <div id="searchResults" style="margin-top:12px; display:none;"></div>
  </div>
 
- <!-- 新規介護記録入力フォーム -->
- <div class="panel-card">
- <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
- <span id="recordFormTitle"> 介護記録の書き込み</span>
- <span id="recordTimePreview" style="font-size:13px; font-weight:normal; color:var(--text-muted);"></span>
- </div>
-
- <!-- 対象利用者バナー -->
- <div id="recordTargetResidentBanner" style="background:#f1f6f3; border-left:4px solid #1e5b47; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-weight:bold; color:#1e5b47; font-size:14px; display:flex; justify-content:space-between; align-items:center;">
- <span id="recordTargetResidentText"> 対象利用者: 選択中</span>
- <span style="font-size:13px; font-weight:normal; color:#3d8a6e;">※利用者カルテから自動連動</span>
- </div>
-
- <!-- 日報雛形挿入＆全画面執筆ボタンバー -->
- <div style="display:flex; gap:8px; margin-bottom:12px; flex-wrap:wrap; align-items:center;">
- <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="insertB5Template()"> 日報雛形を挿入</button>
- <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5; font-weight:bold;" onclick="openFullscreenRecord()"> 全画面拡大入力</button>
- </div>
-
- <!-- 定型文ボタン -->
- <div>
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
- <label style="font-size:13px; color:var(--text-muted); font-weight:bold;">よく使う定型文 (タップで文章追加):</label>
- <button type="button" class="btn btn-secondary" id="btnManageTemplates" style="font-size:13px; padding:2px 8px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
- </div>
- <div class="templates-list" id="quickTemplatesList"></div>
- </div>
-
- <div class="form-group" style="margin-top:12px;">
- <label style="font-weight:bold; font-size:13px; color:#22302b; display:flex; align-items:center; justify-content:space-between;">
- <span> 記録区分（ワンタップ選択 または ドロップダウン）:</span>
- <span style="font-size:13px; color:#5f6d66; font-weight:normal;">日誌・カルテに色別タグで表示されます</span>
- </label>
- <!-- ワンタップ区分ボタンバー -->
- <div style="display:flex; gap:6px; flex-wrap:wrap; margin-top:5px; margin-bottom:8px;" id="categoryQuickButtons">
- <button type="button" class="btn btn-category active" data-cat="介護" onclick="selectRecordCategory('介護')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #c9e0d5; background:#1e5b47; color:#ffffff; font-weight:bold;">［介護］日常ケア・日報</button>
- <button type="button" class="btn btn-category" data-cat="特変" onclick="selectRecordCategory('特変')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #fca5a5; background:#fff; color:#991b1b; font-weight:bold;">［特変］体調不良・受傷</button>
- <button type="button" class="btn btn-category" data-cat="連絡" onclick="selectRecordCategory('連絡')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #fde047; background:#fff; color:#854d0e; font-weight:bold;">［連絡］病院・家族・申送り</button>
- <button type="button" class="btn btn-category" data-cat="看護" onclick="selectRecordCategory('看護')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #bbf7d0; background:#fff; color:#166534; font-weight:bold;">［看護］処置・観察</button>
- <button type="button" class="btn btn-category" data-cat="リハビリ" onclick="selectRecordCategory('リハビリ')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #ddd6fe; background:#fff; color:#6b21a8; font-weight:bold;">［リハビリ］起立・歩行</button>
- <button type="button" class="btn btn-category" data-cat="家族" onclick="selectRecordCategory('家族')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #fed7aa; background:#fff; color:#c2410c; font-weight:bold;">［家族］面会・要望</button>
- <button type="button" class="btn btn-category" data-cat="巡視" onclick="selectRecordCategory('巡視')" style="font-size:13px; padding:3px 10px; border-radius:14px; border:1px solid #cdd6d0; background:#fff; color:#4a5852;">［巡視］夜間安眠</button>
- </div>
-
- <div style="display:flex; gap:12px;">
- <div style="flex:1;">
- <select id="recordCategory" class="form-control" onchange="syncCategoryButtons()">
- <option value="介護">介護 (日常ケア・様子・日報)</option>
- <option value="特変"> 特変 (いつもと違う・体調不良・受傷)</option>
- <option value="連絡"> 連絡 (病院連絡・家族連絡・申送り)</option>
- <option value="看護">看護 (医療処置・病状観察)</option>
- <option value="リハビリ"> リハビリ (起立・歩行・機能訓練)</option>
- <option value="家族"> 家族 (面会・電話・相談)</option>
- <option value="巡視"> 巡視 (夜間巡回・安眠確認)</option>
- <option value="バイタル">バイタル</option>
- <option value="食事">食事・水分</option>
- <option value="排泄">排泄</option>
- <option value="入浴・処置">入浴・処置</option>
- <option value="頓服服用">頓服服用</option>
- </select>
- </div>
- <div style="flex:1;">
- <input type="datetime-local" id="recordCustomTime" class="form-control">
- </div>
- </div>
- </div>
-
- <div class="form-group">
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
- <label style="font-weight:bold;">記録内容:</label>
- <span style="font-size:13px; color:var(--text-muted);">
- 文字数: <strong id="recordCharCount" style="color:#1e5b47; font-size:14px;">0</strong> 字
- <span id="recordB5Badge" style="display:none;"></span>
- </span>
- </div>
- <textarea id="recordContent" class="form-control" rows="14" style="min-height:280px; font-size:14.5px; line-height:1.75; padding:12px; resize:vertical;" placeholder="利用者のご様子、日中の活動、バイタル、食事・排泄、処置、申し送り事項などを詳細に記入..." oninput="updateRecordCharCount()"></textarea>
- </div>
-
- <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
- <div style="display:flex; gap:8px;">
- <button class="btn btn-primary" style="padding:10px 20px; font-size:15px; font-weight:bold;" onclick="submitCareRecord()"> 保存して記録を追加</button>
- <button class="btn btn-secondary" style="font-size:13px;" onclick="clearRecordForm()">クリア</button>
- </div>
- <button class="btn btn-secondary" style="font-size:13px;" onclick="openIncidentFromRecord()"> ヒヤリハット・事故報告書を作成</button>
- </div>
- </div>
-
- <!-- 選択された利用者の個別介護記録（個人カルテ統合シート） -->
+ <!-- 選択された利用者の個別介護記録（見る画面：全種類の記録を日付・時間順・記録者名つきで1本に並べる） -->
  <div class="panel-card" id="personalCareCard">
  <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
  <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
- <span id="selectedDateRecordsTitle" style="font-size:16px; font-weight:bold; color:#173f33;"> 【選択中の利用者】の個人カルテ統合シート</span>
+ <span id="selectedDateRecordsTitle" style="font-size:16px; font-weight:bold; color:#173f33;"> 【選択中の利用者】の個別記録（見る画面）</span>
  <span id="personalSelectedDateBadge" style="font-size:13px; background:#f1f6f3; color:#1a4f3d; padding:3px 10px; border-radius:12px; font-weight:bold; border:1px solid #c9e0d5;"></span>
  </div>
  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
- <button type="button" class="btn btn-primary" style="font-size:13px; padding:4px 10px; background:#1e5b47; color:#fff;" onclick="openPersonalVitalModal()">
- ＋バイタル・体重を記録/編集
+ <button type="button" class="btn btn-primary" style="font-size:13px; padding:4px 10px; background:#1e5b47; color:#fff;" onclick="switchCareTab('write_single')">
+ 1人分まとめて書く画面へ
  </button>
  <button type="button" class="btn btn-secondary" id="btnToggleRecordScope" style="font-size:13px; padding:4px 10px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="toggleRecordScope()">
- 年月別過去アーカイブ
+ すべての過去履歴を表示
  </button>
  <button class="btn btn-secondary" style="font-size:13px; background:#f6f8f6; border:1px solid #cdd6d0; display:flex; align-items:center; gap:4px;" onclick="printSelectedDateRecords()">
   この日のカルテを印刷
@@ -360,15 +274,73 @@
  <!-- B. 当日の個人データ集約サマリーカード（血圧、体温、脈拍、SpO2、体重、食事、排泄、入浴、服薬） -->
  <div id="personalDailySummaryArea" style="margin-bottom:14px;"></div>
 
- <!-- C. 当日の個別介護経過記録（または全期間アーカイブ） -->
+ <!-- C. 当日の統合記録タイムライン（または全期間アーカイブ） -->
  <div id="selectedDateRecordsList"></div>
  </div>
  </div>
 
- <!-- 右側: 選択中の利用者カルテ (フェイスシート・病歴ガイド・看取りスタンプ・見守り注意・私物行追加・備品・写真保管) -->
+ <!-- 右側: 選択中の利用者カルテ (フェイスシート・介護サマリー・病歴ガイド・看取りスタンプ・見守り注意・私物・備品・写真保管) -->
  <div>
  <div class="panel-card" id="residentDetailCard" style="border-left:5px solid #1e5b47;"></div>
  </div>
+ </div>
+
+ <!-- 1.2 書く画面A：1人分をまとめて書く画面（看護師・介護職共通） [Antigravity実装 2026-10-16] -->
+ <div id="tabCareWriteSingle" style="display:none;" class="panel-card">
+  <div id="singleWriteContainer"></div>
+  <!-- 既存の個別介護記録・定型文・全画面執筆との互換領域（折りたたみ補助） -->
+  <details style="margin-top:18px; border-top:1px dashed #cdd6d0; padding-top:12px;">
+   <summary style="cursor:pointer; font-size:13px; font-weight:bold; color:#4a5852;">定型文・日報雛形を使った長文記録の書き込み（補助）</summary>
+   <div style="margin-top:10px;">
+    <div id="recordTargetResidentBanner" style="background:#f1f6f3; border-left:4px solid #1e5b47; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#1e5b47; font-size:13px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+     <span id="recordTargetResidentText"> 対象利用者: 選択中</span>
+     <span id="recordTimePreview" style="font-size:12px; font-weight:normal; color:var(--text-muted);"></span>
+    </div>
+    <div style="display:flex; gap:8px; margin-bottom:10px; flex-wrap:wrap; align-items:center;">
+     <button type="button" class="btn btn-secondary" style="font-size:12.5px; background:#f0fdf4; color:#166534; border:1px solid #bbf7d0; font-weight:bold;" onclick="insertB5Template()"> 日報雛形を挿入</button>
+     <button type="button" class="btn btn-secondary" style="font-size:12.5px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5; font-weight:bold;" onclick="openFullscreenRecord()"> 全画面拡大入力</button>
+     <button type="button" class="btn btn-secondary" id="btnManageTemplates" style="font-size:12.5px; padding:2px 8px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
+    </div>
+    <div class="templates-list" id="quickTemplatesList" style="margin-bottom:10px;"></div>
+    <div style="display:flex; gap:6px; flex-wrap:wrap; margin-bottom:8px;" id="categoryQuickButtons">
+     <button type="button" class="btn btn-category active" data-cat="介護" onclick="selectRecordCategory('介護')" style="font-size:12px; padding:2px 8px; border-radius:14px; border:1px solid #c9e0d5; background:#1e5b47; color:#ffffff; font-weight:bold;">［介護］日常ケア</button>
+     <button type="button" class="btn btn-category" data-cat="特変" onclick="selectRecordCategory('特変')" style="font-size:12px; padding:2px 8px; border-radius:14px; border:1px solid #fca5a5; background:#fff; color:#991b1b; font-weight:bold;">［特変］体調不良・受傷</button>
+     <button type="button" class="btn btn-category" data-cat="連絡" onclick="selectRecordCategory('連絡')" style="font-size:12px; padding:2px 8px; border-radius:14px; border:1px solid #fde047; background:#fff; color:#854d0e; font-weight:bold;">［連絡］申送り</button>
+     <button type="button" class="btn btn-category" data-cat="看護" onclick="selectRecordCategory('看護')" style="font-size:12px; padding:2px 8px; border-radius:14px; border:1px solid #bbf7d0; background:#fff; color:#166534; font-weight:bold;">［看護］処置・観察</button>
+    </div>
+    <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:8px;">
+     <select id="recordCategory" class="form-control" style="flex:1; min-width:160px;" onchange="syncCategoryButtons()">
+      <option value="介護">介護 (日常ケア・様子・日報)</option>
+      <option value="特変"> 特変 (いつもと違う・体調不良・受傷)</option>
+      <option value="連絡"> 連絡 (病院連絡・家族連絡・申送り)</option>
+      <option value="看護">看護 (医療処置・病状観察)</option>
+      <option value="リハビリ"> リハビリ (起立・歩行・機能訓練)</option>
+      <option value="家族"> 家族 (面会・電話・相談)</option>
+      <option value="巡視"> 巡視 (夜間巡回・安眠確認)</option>
+      <option value="バイタル">バイタル</option>
+      <option value="食事">食事・水分</option>
+      <option value="排泄">排泄</option>
+      <option value="入浴・処置">入浴・処置</option>
+      <option value="頓服服用">頓服服用</option>
+     </select>
+     <input type="datetime-local" id="recordCustomTime" class="form-control" style="flex:1; min-width:180px;">
+    </div>
+    <div class="form-group">
+     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
+      <label style="font-weight:bold; font-size:13px;">記録内容 (<span id="recordFormTitle">介護記録の書き込み</span>):</label>
+      <span style="font-size:12px; color:var(--text-muted);">文字数: <strong id="recordCharCount" style="color:#1e5b47;">0</strong> 字 <span id="recordB5Badge" style="display:none;"></span></span>
+     </div>
+     <textarea id="recordContent" class="form-control" rows="6" placeholder="定型文・日報雛形を使った記録..." oninput="updateRecordCharCount()"></textarea>
+    </div>
+    <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+     <div style="display:flex; gap:8px;">
+      <button class="btn btn-primary" onclick="submitCareRecord()">保存して記録を追加</button>
+      <button class="btn btn-secondary" onclick="clearRecordForm()">クリア</button>
+     </div>
+     <button class="btn btn-secondary" style="font-size:12.5px;" onclick="openIncidentFromRecord()">ヒヤリハット・事故報告書を作成</button>
+    </div>
+   </div>
+  </details>
  </div>
 
  <!-- 1.5 業務日誌 (一日の記録・フロア全体日報) -->
@@ -461,11 +433,12 @@
  <div style="background:#f6f8f6; padding:16px; border-radius:8px; margin-bottom:14px; display:flex; gap:12px; flex-wrap:wrap; align-items:flex-end;">
  <div>
  <label style="font-size:13px; font-weight:bold;">時間:</label>
- <input type="time" id="exTime" class="form-control" style="width:120px;">
+ <input type="time" id="exTime" class="form-control" style="width:120px;" value="">
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold;">排尿:</label>
- <select id="exUrine" class="form-control" style="width:110px;">
+ <select id="exUrine" class="form-control" style="width:125px;">
+ <option value="">選んでください</option>
  <option value="1">あり (＋)</option>
  <option value="0">なし (ー)</option>
  <option value="2">バルーン</option>
@@ -473,7 +446,8 @@
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold;">便の量:</label>
- <select id="exStoolAmount" class="form-control" style="width:110px;">
+ <select id="exStoolAmount" class="form-control" style="width:125px;">
+ <option value="">選んでください</option>
  <option value="なし">なし</option>
  <option value="付着">付着</option>
  <option value="微量">微量</option>
@@ -484,7 +458,9 @@
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold;">便の性状:</label>
- <select id="exStoolCond" class="form-control" style="width:120px;">
+ <select id="exStoolCond" class="form-control" style="width:125px;">
+ <option value="">選んでください</option>
+ <option value="なし">なし</option>
  <option value="普通便">普通便</option>
  <option value="軟便">軟便</option>
  <option value="水様便">水様便</option>
@@ -528,7 +504,8 @@
  <th>便の量</th>
  <th>性状</th>
  <th>備考</th>
- <th>担当</th>
+ <th>担当・状態</th>
+ <th>操作</th>
  </tr>
  </thead>
  <tbody></tbody>
@@ -3772,7 +3749,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261016_c3"></script>
+ <script src="app.js?v=20261016_d1"></script>
   
 
   <!-- ============================================================ -->

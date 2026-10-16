@@ -3307,6 +3307,10 @@ function updateStaffRoleUI() {
  if (adminRow) {
  adminRow.style.display = isAdminOrClerk ? "flex" : "none";
  }
+ // [Antigravity実装 2026-10-16] 職種切り替え時に「1人分まとめて書く」画面の表示項目も即時更新
+ if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") {
+  renderSingleWriteScreen();
+ }
 }
 
 // 管理者権限チェック (施設長または管理者ロール)
@@ -3929,8 +3933,9 @@ function switchCareTab(tab) {
  }
  });
 
+ // [Antigravity実装 2026-10-16] 見る画面（#tabCareRecord）と書く画面A（#tabCareWriteSingle）の切り替え・レイアウト維持
  const tabMap = {
- record: "tabCareRecord", daily_journal: "tabCareDailyJournal", vitals: "tabCareVitals", excretion: "tabCareExcretion",
+ record: "tabCareRecord", write_single: "tabCareWriteSingle", daily_journal: "tabCareDailyJournal", vitals: "tabCareVitals", excretion: "tabCareExcretion",
  meal: "tabCareMeal", bath: "tabCareBath", oral: "tabCareOral", med: "tabCareMed",
  night: "tabCareNight", weight: "tabCareWeight", linen: "tabCareLinen",
  grooming: "tabCareGrooming", visit: "tabCareVisit", recreation: "tabCareRecreation",
@@ -3942,9 +3947,16 @@ function switchCareTab(tab) {
  if (el) el.style.display = "none";
  });
  const target = document.getElementById(tabMap[tab]);
- if (target) target.style.display = "block";
+ if (target) {
+ // .layout-grid（#tabCareRecord）の display:grid が display:block で潰れないように空文字でCSSクラスに従わせる
+ target.style.display = (tab === "record") ? "" : "block";
+ }
 
- if (tab === "record") renderSelectedDateRecords();
+ if (tab === "record") {
+ renderSelectedDateRecords();
+ renderResidentDetail();
+ }
+ if (tab === "write_single" && typeof renderSingleWriteScreen === "function") renderSingleWriteScreen();
  if (tab === "daily_journal") renderDailyJournal();
  if (tab === "vitals") renderVitalsTable();
  if (tab === "excretion") renderExcretionTable();
@@ -3974,9 +3986,9 @@ function renderCalendar() {
  const d = r.recorded_at || r.record_time;
  if (d && typeof d === 'string') recordedDates.add(d.slice(0, 10));
  });
- (db.data.vitals || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
- (db.data.excretions || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
- (db.data.meals || []).forEach(r => { if (r.date) recordedDates.add(r.date); });
+ (db.data.vitals || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
+ (db.data.excretions || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
+ (db.data.meals || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
  (db.data.notebooks || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); });
  (db.data.daily_schedules || []).forEach(r => { if (r.date && !r.voided) recordedDates.add(r.date); }); // [Antigravity実装 2026-10-16]
 
@@ -4029,6 +4041,7 @@ function loadDateRecords(dt) {
  syncGlobalDatePicker(dt);
  if (typeof renderTodayShiftBar === "function") renderTodayShiftBar(dt);
  renderSelectedDateRecords();
+ if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") renderSingleWriteScreen();
  renderNotebook();
  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
  if (gState.activeCareTab === "vitals") renderVitalsTable();
@@ -4068,9 +4081,9 @@ function syncGlobalDatePicker(dt) {
    const d = (r.recorded_at || r.record_time || "").slice(0, 10);
    if (d === dt) recCount++;
  });
- (db.data.vitals || []).forEach(r => { if (r.date === dt) recCount++; });
- (db.data.meals || []).forEach(r => { if (r.date === dt) recCount++; });
- (db.data.excretions || []).forEach(r => { if (r.date === dt) recCount++; });
+ (db.data.vitals || []).forEach(r => { if (r.date === dt && !r.voided) recCount++; });
+ (db.data.meals || []).forEach(r => { if (r.date === dt && !r.voided) recCount++; });
+ (db.data.excretions || []).forEach(r => { if (r.date === dt && !r.voided) recCount++; });
 
  if (countBadge) {
    countBadge.textContent = `記録: 計 ${recCount} 件`;
@@ -4160,6 +4173,7 @@ function selectResident(id) {
   // [Antigravity実装 2026-10-15] 排泄チェック表の固定ヘッダー連動更新
   if (typeof updateExcretionStickyHeader === "function") updateExcretionStickyHeader();
  renderSelectedDateRecords();
+ if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") renderSingleWriteScreen();
  if (gState.activeCareTab === "consume") renderQuickConsume();
  if (gState.activeCareTab === "linen") renderLinenTable();
  renderOfficeDepositTable();
@@ -7289,11 +7303,20 @@ function jumpPersonalCalendarToday() {
 function selectPersonalCalendarDate(dateStr) {
  gState.selectedDate = dateStr;
 	updateRecordFormCustomTime();
- gState.recordScope = "daily";
+ // [Antigravity実装 2026-10-16] recordScopeの値を "today" に統一し、ボタン表示も同期
+ gState.recordScope = "today";
+ const scopeBtn = document.getElementById("btnToggleRecordScope");
+ if (scopeBtn) {
+  scopeBtn.textContent = " すべての過去履歴を表示";
+  scopeBtn.style.background = "#f0fdf4";
+  scopeBtn.style.color = "#166534";
+  scopeBtn.style.border = "1px solid #bbf7d0";
+ }
  gState.personalCalendarYearMonth = dateStr.slice(0, 7);
 
  renderCalendar(); // 全体上部カレンダー同期
  renderSelectedDateRecords(); // 個人記録再描画
+ if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") renderSingleWriteScreen();
  if (gState.activeCareTab === "daily_journal") renderDailyJournal();
  if (gState.activeCareTab === "vitals") renderVitalsTable();
  if (gState.activeCareTab === "meal") renderMealsTable();
@@ -7526,11 +7549,11 @@ function cpIsUnusualVital(res, v) {
  return 0;
 }
 
-// 個人バイタル・体重編集モーダルの保存（全体連動）
+// 個人バイタル・体重編集モーダルの保存（全体連動） [Antigravity実装 2026-10-16]
 function submitPersonalVitalModal() {
  const resId = parseInt(document.getElementById("personalVitalResidentId").value, 10);
  const dt = document.getElementById("personalVitalDate").value;
- const staff = document.getElementById("currentStaff").value || "木村 健一";
+ const staff = cpLedgerStaff();
 
  const tempVal = normalizeTempValue(document.getElementById("pvmTemp").value);
  const pulseVal = document.getElementById("pvmPulse").value;
@@ -7540,6 +7563,40 @@ function submitPersonalVitalModal() {
  const weightVal = document.getElementById("pvmWeight").value;
  const notesVal = document.getElementById("pvmNotes").value.trim();
 
+ if (!tempVal && !bpHighVal && !bpLowVal && !pulseVal && !spo2Val && !weightVal && !notesVal) {
+  alert("バイタルまたは体重のいずれかを入力してください。");
+  return;
+ }
+
+ if (!Array.isArray(db.data.vitals)) db.data.vitals = [];
+ if (!Array.isArray(db.data.weight_records)) db.data.weight_records = [];
+
+ const existingVital = db.data.vitals.find(v => !v.voided && v.resident_id === resId && v.date === dt);
+ const existingWeight = db.data.weight_records.find(w => !w.voided && w.resident_id === resId && w.date === dt);
+
+ const newTemp = tempVal ? parseFloat(tempVal) : null;
+ const newBpH = bpHighVal ? parseInt(bpHighVal, 10) : null;
+ const newBpL = bpLowVal ? parseInt(bpLowVal, 10) : null;
+ const newPulse = pulseVal ? parseInt(pulseVal, 10) : null;
+ const newSpo2 = spo2Val ? parseInt(spo2Val, 10) : null;
+ const newWeight = weightVal ? parseFloat(weightVal) : null;
+
+ const vitalChanged = existingVital && (
+  (existingVital.temperature ?? null) !== newTemp ||
+  (existingVital.bp_high ?? null) !== newBpH ||
+  (existingVital.bp_low ?? null) !== newBpL ||
+  (existingVital.pulse ?? null) !== newPulse ||
+  (existingVital.spo2 ?? null) !== newSpo2 ||
+  (existingVital.notes || "") !== notesVal
+ );
+ const weightChanged = existingWeight && newWeight !== null && (existingWeight.weight ?? null) !== newWeight;
+
+ let editReason = null;
+ if (vitalChanged || weightChanged) {
+  editReason = cpPromptEditReason("バイタル・体重記録", existingVital ? cpFormatVitalBrief(existingVital) : `体重 ${existingWeight ? existingWeight.weight + 'kg' : ''}`);
+  if (editReason === null) return;
+ }
+
  // [Claude修正] バイタルに空欄の項目があれば、保存してよいか確認する
  const blankLabels = [];
  if (!tempVal) blankLabels.push("体温");
@@ -7547,110 +7604,389 @@ function submitPersonalVitalModal() {
  if (!bpLowVal) blankLabels.push("最低血圧");
  if (!pulseVal) blankLabels.push("脈拍");
  if (!spo2Val) blankLabels.push("SpO2");
- if (blankLabels.length > 0 && !confirm(`次の項目が空欄です。\n${blankLabels.join("、")}\n\nこのまま保存しますか？`)) return;
+ if ((tempVal || bpHighVal || bpLowVal || pulseVal || spo2Val) && blankLabels.length > 0 && !confirm(`次の項目が空欄です。\n${blankLabels.join("、")}\n\nこのまま保存しますか？`)) return;
 
- if (!Array.isArray(db.data.vitals)) db.data.vitals = [];
- if (!Array.isArray(db.data.weight_records)) db.data.weight_records = [];
- if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
-
- // バイタル更新または追加
- const existingVitalIndex = db.data.vitals.findIndex(v => v.resident_id === resId && v.date === dt);
  const nowTime = new Date().toTimeString().slice(0, 5);
-
- const vitalObj = {
- id: existingVitalIndex >= 0 ? db.data.vitals[existingVitalIndex].id : Date.now(),
- date: dt,
- time: existingVitalIndex >= 0 ? (db.data.vitals[existingVitalIndex].time || nowTime) : nowTime,
- resident_id: resId,
- temperature: tempVal ? parseFloat(tempVal) : null,
- bp_high: bpHighVal ? parseInt(bpHighVal, 10) : null,
- bp_low: bpLowVal ? parseInt(bpLowVal, 10) : null,
- pulse: pulseVal ? parseInt(pulseVal, 10) : null,
- spo2: spo2Val ? parseInt(spo2Val, 10) : null,
- is_unusual: 0,
- staff_name: staff,
- notes: notesVal
- };
- // [Claude修正] 「いつもと違う」の判定: 個別注意基準値が設定されている項目はそれを使い、ない項目は共通の値を使う。空欄の項目は判定しない
  const pvmRes = ((gState && gState.residents) || (db.data.residents || [])).find(x => x.id === resId);
- vitalObj.is_unusual = cpIsUnusualVital(pvmRes, vitalObj);
 
- if (existingVitalIndex >= 0) {
- cpAppendEditHistory(vitalObj, db.data.vitals[existingVitalIndex], ["temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual", "notes"]);
- db.data.vitals[existingVitalIndex] = vitalObj;
- } else if (tempVal || bpHighVal || pulseVal || spo2Val) {
- db.data.vitals.push(vitalObj);
+ // バイタル更新または追加（既存のidを保ったまま書き換える）
+ if (existingVital && vitalChanged) {
+  const oldCopy = JSON.parse(JSON.stringify(existingVital));
+  existingVital.time = nowTime;
+  existingVital.temperature = newTemp;
+  existingVital.bp_high = newBpH;
+  existingVital.bp_low = newBpL;
+  existingVital.pulse = newPulse;
+  existingVital.spo2 = newSpo2;
+  existingVital.notes = notesVal;
+  existingVital.is_unusual = cpIsUnusualVital(pvmRes, existingVital);
+  existingVital.staff_name = staff;
+  cpAppendEditHistory(existingVital, oldCopy, ["time", "temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual", "notes"], editReason);
+ } else if (!existingVital && (tempVal || bpHighVal || bpLowVal || pulseVal || spo2Val || notesVal)) {
+  const vitalObj = {
+   id: Date.now(),
+   date: dt,
+   time: nowTime,
+   resident_id: resId,
+   temperature: newTemp,
+   bp_high: newBpH,
+   bp_low: newBpL,
+   pulse: newPulse,
+   spo2: newSpo2,
+   is_unusual: 0,
+   staff_name: staff,
+   notes: notesVal
+  };
+  vitalObj.is_unusual = cpIsUnusualVital(pvmRes, vitalObj);
+  db.data.vitals.push(vitalObj);
  }
 
- // 体重更新または追加
- if (weightVal) {
- const wNum = parseFloat(weightVal);
- const existingWeightIndex = db.data.weight_records.findIndex(w => w.resident_id === resId && w.date === dt);
- const prevWeightObj = db.data.weight_records
- .filter(w => w.resident_id === resId && w.date < dt)
- .sort((a, b) => b.date.localeCompare(a.date))[0];
+ // 体重更新または追加（既存のidを保ったまま書き換える）
+ if (newWeight !== null) {
+  const prevWeightObj = db.data.weight_records
+   .filter(w => !w.voided && w.resident_id === resId && w.date < dt)
+   .sort((a, b) => b.date.localeCompare(a.date))[0];
 
- let diffStr = "±0.0kg";
- if (prevWeightObj && prevWeightObj.weight) {
- const d = (wNum - prevWeightObj.weight).toFixed(1);
- diffStr = d >= 0 ? `+${d}kg` : `${d}kg`;
+  let diffStr = "±0.0kg";
+  if (prevWeightObj && prevWeightObj.weight) {
+   const d = (newWeight - prevWeightObj.weight).toFixed(1);
+   diffStr = d >= 0 ? `+${d}kg` : `${d}kg`;
+  }
+
+  if (existingWeight && weightChanged) {
+   const oldW = JSON.parse(JSON.stringify(existingWeight));
+   existingWeight.weight = newWeight;
+   existingWeight.diff_prev = diffStr;
+   existingWeight.staff_name = staff;
+   cpAppendEditHistory(existingWeight, oldW, ["weight", "diff_prev"], editReason);
+  } else if (!existingWeight) {
+   db.data.weight_records.push({
+    id: Date.now() + 5,
+    date: dt,
+    month: dt.slice(0, 7),
+    resident_id: resId,
+    weight: newWeight,
+    diff_prev: diffStr,
+    staff_name: staff
+   });
+  }
  }
-
- const weightObj = {
- id: existingWeightIndex >= 0 ? db.data.weight_records[existingWeightIndex].id : (Date.now() + 5),
- date: dt,
- month: dt.slice(0, 7),
- resident_id: resId,
- weight: wNum,
- diff_prev: diffStr,
- staff_name: staff
- };
-
- if (existingWeightIndex >= 0) {
- cpAppendEditHistory(weightObj, db.data.weight_records[existingWeightIndex], ["weight", "diff_prev"]);
- db.data.weight_records[existingWeightIndex] = weightObj;
- } else {
- db.data.weight_records.push(weightObj);
- }
- }
-
- // 介護経過記録へも連動追加
- const vitalSummaryText = `【バイタル＆身体測定】体温:${tempVal || '-'}℃, 血圧:${bpHighVal || '-'}/${bpLowVal || '-'}mmHg, 脈拍:${pulseVal || '-'}bpm, SpO2:${spo2Val || '-'}%${weightVal ? `, 体重:${weightVal}kg` : ''}${notesVal ? ` (${notesVal})` : ''}`;
-
- db.data.care_records.unshift({
- id: Date.now() + 10,
- recorded_at: `${dt} ${nowTime}`,
- resident_id: resId,
- category: "バイタル",
- content: vitalSummaryText,
- staff_name: staff
- });
 
  db.save();
  closeModal("personalVitalModal");
 
- // 全体連動再描画！
  loadDateRecords(dt);
  if (typeof renderWeightTable === "function") renderWeightTable();
  if (typeof renderWeightChart === "function") renderWeightChart();
 
- alert("バイタル＆身体測定を保存しました！個人記録と全体タブの両方に連動反映されました。");
+ alert("バイタル・身体測定を保存しました！各画面に連動反映されました。");
 }
 
-// 区分に応じたバッジ装飾スタイル（日誌・個別カルテ共通）
+// 区分に応じたバッジ装飾スタイル（日誌・個別カルテ共通） [Antigravity実装 2026-10-16]
 function getCategoryBadgeStyle(cat) {
  if (cat === "特変") return "background:#fee2e2; color:#991b1b; font-weight:bold; border:1px solid #fca5a5;";
  if (cat === "連絡") return "background:#fef9c3; color:#854d0e; font-weight:bold; border:1px solid #fde047;";
  if (cat === "看護") return "background:#dcfce7; color:#166534; font-weight:bold; border:1px solid #bbf7d0;";
  if (cat === "リハビリ") return "background:#ede9fe; color:#6b21a8; font-weight:bold; border:1px solid #ddd6fe;";
  if (cat === "家族") return "background:#ffedd5; color:#c2410c; font-weight:bold; border:1px solid #fed7aa;";
- if (cat === "巡視") return "background:#eef2ef; color:#4a5852; border:1px solid #cdd6d0;";
+ if (cat === "巡視" || cat === "体位変換") return "background:#eef2ef; color:#4a5852; border:1px solid #cdd6d0;";
  if (cat === "バイタル") return "background:#fef3c7; color:#92400e; border:1px solid #fde68a;";
- if (cat === "頓服服用") return "background:#f3e8ff; color:#6b21a8; border:1px solid #e9d5ff;";
+ if (cat === "食事・水分") return "background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;";
+ if (cat === "排泄") return "background:#fefce8; color:#854d0e; border:1px solid #fef08a;";
+ if (cat === "入浴") return "background:#ecfeff; color:#0e7490; border:1px solid #a5f3fc;";
+ if (cat === "服薬" || cat === "頓服服用") return "background:#f3e8ff; color:#6b21a8; border:1px solid #e9d5ff;";
  return "background:#e0f2fe; color:#0369a1; border:1px solid #c9e0d5;"; // 介護・デフォルト
 }
 
-// 選択中利用者の個別介護記録一覧表示 (個別カルテ・長文対応・年月別アコーディオン)
+// [Antigravity実装 2026-10-16] その人の記録（食事・水分・排泄・バイタル・体位変換・入浴・様子など）を日付と時間の順に1本に並べる共通関数
+function cpDefaultMealTime(mealType) {
+ if (mealType === "朝食") return "08:00";
+ if (mealType === "昼食") return "12:00";
+ if (mealType === "おやつ") return "15:00";
+ if (mealType === "夕食") return "18:00";
+ return "10:00";
+}
+
+function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
+ if (!resId) return [];
+ const items = [];
+ const matchDate = (d) => isAllScope ? Boolean(d) : (d === targetDate);
+
+ // 1. 様子・経過記録 (care_records)
+ (db.data.care_records || []).forEach(r => {
+  if (r.resident_id !== resId) return;
+  // 体位変換から自動生成された「巡視」は turns 側と重複するため除外（ただし手動記録や特変は残す）
+  if (r.auto_night_turn && r.category === "巡視") return;
+  const dtStr = r.recorded_at || r.record_time || "";
+  const dPart = dtStr.slice(0, 10);
+  if (!matchDate(dPart)) return;
+  items.push({
+   uid: `care_${r.id}`,
+   raw_id: r.id,
+   source_type: "care_records",
+   recorded_at: dtStr.length === 10 ? `${dtStr} 00:00` : dtStr,
+   date: dPart,
+   category: r.category || "介護",
+   content: r.content || "",
+   staff_name: r.staff_name || "未記録",
+   voided: Boolean(r.voided),
+   voided_at: r.voided_at,
+   voided_by: r.voided_by,
+   void_reason: r.void_reason,
+   edit_history: r.edit_history,
+   void_history: r.void_history,
+   raw: r
+  });
+ });
+
+ // 2. バイタル (vitals)
+ (db.data.vitals || []).forEach(v => {
+  if (v.resident_id !== resId || v.voided) return;
+  if (!matchDate(v.date)) return;
+  const tm = v.time || "09:00";
+  items.push({
+   uid: `vital_${v.id}`,
+   raw_id: v.id,
+   source_type: "vitals",
+   recorded_at: `${v.date} ${tm}`,
+   date: v.date,
+   category: "バイタル",
+   content: cpFormatVitalBrief(v) + (v.notes ? ` （${v.notes}）` : ""),
+   staff_name: v.staff_name || "未記録",
+   edit_history: v.edit_history,
+   raw: v
+  });
+ });
+
+ // 3. 食事・水分 (meals)
+ (db.data.meals || []).forEach(m => {
+  if (m.resident_id !== resId || m.voided) return;
+  if (!matchDate(m.date)) return;
+  const tm = m.time || cpDefaultMealTime(m.meal_type);
+  items.push({
+   uid: `meal_${m.id}`,
+   raw_id: m.id,
+   source_type: "meals",
+   recorded_at: `${m.date} ${tm}`,
+   date: m.date,
+   category: "食事・水分",
+   content: cpFormatMealDetail(m),
+   staff_name: m.staff_name || "未記録",
+   edit_history: m.edit_history,
+   raw: m
+  });
+ });
+
+ // 4. 排泄 (excretions)
+ (db.data.excretions || []).forEach(e => {
+  if (e.resident_id !== resId || e.voided) return;
+  if (!matchDate(e.date)) return;
+  const tm = e.time || "10:00";
+  items.push({
+   uid: `exc_${e.id}`,
+   raw_id: e.id,
+   source_type: "excretions",
+   recorded_at: `${e.date} ${tm}`,
+   date: e.date,
+   category: "排泄",
+   content: cpFormatExcretionDetail(e),
+   staff_name: e.staff_name || "未記録",
+   edit_history: e.edit_history,
+   raw: e
+  });
+ });
+
+ // 5. 入浴 (baths)
+ (db.data.baths || []).forEach(b => {
+  if (b.resident_id !== resId || b.voided) return;
+  if (!matchDate(b.date)) return;
+  const tm = b.time || "14:00";
+  items.push({
+   uid: `bath_${b.id}`,
+   raw_id: b.id,
+   source_type: "baths",
+   recorded_at: `${b.date} ${tm}`,
+   date: b.date,
+   category: "入浴",
+   content: cpFormatBathDetail(b),
+   staff_name: b.staff_name || "未記録",
+   edit_history: b.edit_history,
+   raw: b
+  });
+ });
+
+ // 6. 体位変換・夜間巡視 (turns)
+ (db.data.turns || []).forEach(t => {
+  if (t.resident_id !== resId || t.voided) return;
+  if (!matchDate(t.date)) return;
+  const tm = t.time || "00:00";
+  items.push({
+   uid: `turn_${t.id}`,
+   raw_id: t.id,
+   source_type: "turns",
+   recorded_at: `${t.date} ${tm}`,
+   date: t.date,
+   category: "体位変換",
+   content: `【${tm} 体位変換・巡視】${t.action || ""}${t.note ? " 【様子】" + t.note : ""}`,
+   staff_name: t.staff_name || "未記録",
+   edit_history: t.edit_history,
+   raw: t
+  });
+ });
+
+ // 7. 服薬 (meds)
+ (db.data.meds || []).forEach(m => {
+  if (m.resident_id !== resId || m.voided) return;
+  if (!matchDate(m.date)) return;
+  const label = m.timing_key || m.slot || "服薬";
+  const tm = m.actual_time || m.recorded_time || (typeof cpRxSlotTime === "function" ? cpRxSlotTime(label) : "08:00");
+  items.push({
+   uid: `med_${m.id}`,
+   raw_id: m.id,
+   source_type: "meds",
+   recorded_at: `${m.date} ${tm}`,
+   date: m.date,
+   category: "服薬",
+   content: `【${label}】${m.status || "済"}${m.medicine_name ? " (" + m.medicine_name + ")" : ""}${m.note ? " " + m.note : ""}`,
+   staff_name: m.staff_name || "未記録",
+   edit_history: m.edit_history,
+   raw: m
+  });
+ });
+
+ // 8. 口腔ケア (oral_cares)
+ (db.data.oral_cares || []).forEach(o => {
+  if (o.resident_id !== resId || o.voided) return;
+  if (!matchDate(o.date)) return;
+  const tm = o.time || "08:30";
+  const slots = [];
+  if (o.morning) slots.push("朝");
+  if (o.noon) slots.push("昼");
+  if (o.evening) slots.push("夕");
+  if (o.bedtime) slots.push("眠前");
+  const detail = slots.length ? `実施 (${slots.join("・")})` : (o.status || "実施済");
+  items.push({
+   uid: `oral_${o.id}`,
+   raw_id: o.id,
+   source_type: "oral_cares",
+   recorded_at: `${o.date} ${tm}`,
+   date: o.date,
+   category: "口腔ケア",
+   content: `口腔ケア ${detail}${o.denture_cleaned ? "・義歯洗浄済" : ""}${o.mucosa_status ? " (" + o.mucosa_status + ")" : ""}${o.notes ? " " + o.notes : ""}`,
+   staff_name: o.staff_name || "未記録",
+   edit_history: o.edit_history,
+   raw: o
+  });
+ });
+
+ // 日付と時間の順（新しい順）に1本に並べる
+ items.sort((a, b) => (b.recorded_at || "").localeCompare(a.recorded_at || ""));
+ return items;
+}
+
+// [Antigravity実装 2026-10-16] 統合タイムライン上の各記録カードに対する操作ボタン（訂正・履歴表示）
+function cpUnifiedRecordActions(item) {
+ if (item.source_type === "care_records") {
+  return cpCareRecordActions(item.raw);
+ }
+ const histCount = (item.edit_history && item.edit_history.length) ? item.edit_history.length : 0;
+ const histBtn = histCount > 0
+  ? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="cpShowGenericEditHistory('${item.source_type}', ${Number(item.raw_id)})">履歴(訂正${histCount})</button>`
+  : "";
+ let editBtn = "";
+ if (item.source_type === "vitals") {
+  editBtn = `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="openPersonalVitalModal()">訂正</button>`;
+ } else if (item.source_type === "meals") {
+  editBtn = `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="cpQuickEditMealRecord(${Number(item.raw_id)})">訂正</button>`;
+ } else if (item.source_type === "excretions") {
+  editBtn = `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="editExcretionRecord(${Number(item.raw_id)})">訂正</button>`;
+ } else if (item.source_type === "baths") {
+  editBtn = `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="cpQuickEditBathRecord(${Number(item.raw_id)})">訂正</button>`;
+ } else if (item.source_type === "turns") {
+  editBtn = `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; border:1px solid #cdd6d0;" onclick="editSavedNightTurn(${Number(item.raw_id)})">訂正</button>`;
+ }
+ return `${editBtn}${histBtn}`;
+}
+
+function cpShowGenericEditHistory(sourceType, rawId) {
+ const arr = db.data[sourceType] || [];
+ const rec = arr.find(x => Number(x.id) === Number(rawId));
+ if (!rec || !rec.edit_history || !rec.edit_history.length) {
+  alert("訂正の履歴はありません。");
+  return;
+ }
+ const lines = rec.edit_history.map((h, i) => {
+  const beforeStr = h.before ? Object.entries(h.before).map(([k, v]) => `${k}: ${v ?? "空"}`).join(", ") : "";
+  return `■ 訂正${i + 1}: ${h.edited_at || ""} (${h.edited_by || "未記録"})\n理由: ${h.reason || "記載なし"}\n変更前: ${beforeStr}`;
+ });
+ alert(`【訂正の履歴】\n\n${lines.join("\n\n")}`);
+}
+
+function cpQuickEditMealRecord(mealId) {
+ const m = (db.data.meals || []).find(x => Number(x.id) === Number(mealId));
+ if (!m || m.voided) return;
+ const res = gState.residents.find(r => r.id === m.resident_id);
+ const type = m.meal_type || "朝食";
+ let newMain = m.main_dish_ratio;
+ let newSide = m.side_dish_ratio;
+ if (type !== "その他") {
+  const mainIn = prompt(`【${res ? res.name + " 様" : ""} ${type}】主食の量(0〜10割)を入力してください:`, m.main_dish_ratio ?? "");
+  if (mainIn === null) return;
+  newMain = mainIn.trim() !== "" && !isNaN(parseInt(mainIn, 10)) ? parseInt(mainIn, 10) : null;
+ }
+ if (type !== "おやつ" && type !== "その他") {
+  const sideIn = prompt(`【${res ? res.name + " 様" : ""} ${type}】副食の量(0〜10割)を入力してください:`, m.side_dish_ratio ?? "");
+  if (sideIn === null) return;
+  newSide = sideIn.trim() !== "" && !isNaN(parseInt(sideIn, 10)) ? parseInt(sideIn, 10) : null;
+ }
+ const waterIn = prompt(`【${res ? res.name + " 様" : ""} ${type}】水分量(ml)を入力してください:`, m.water_ml ?? 0);
+ if (waterIn === null) return;
+ const newWater = waterIn.trim() !== "" && !isNaN(parseInt(waterIn, 10)) ? parseInt(waterIn, 10) : 0;
+
+ if ((m.main_dish_ratio ?? null) === newMain && (m.side_dish_ratio ?? null) === newSide && (m.water_ml ?? 0) === newWater) {
+  alert("変更された内容がありません。");
+  return;
+ }
+ const reason = cpPromptEditReason(`${type}の記録`, cpFormatMealDetail(m));
+ if (reason === null) return;
+ const oldCopy = JSON.parse(JSON.stringify(m));
+ m.main_dish_ratio = newMain;
+ m.side_dish_ratio = newSide;
+ m.water_ml = newWater;
+ m.time = new Date().toTimeString().slice(0, 5);
+ m.staff_name = cpLedgerStaff();
+ cpAppendEditHistory(m, oldCopy, ["main_dish_ratio", "side_dish_ratio", "water_ml", "time"], reason);
+ db.save();
+ loadDateRecords(gState.selectedDate);
+ alert(`${type}の記録を訂正しました。`);
+}
+
+function cpQuickEditBathRecord(bathId) {
+ const b = (db.data.baths || []).find(x => Number(x.id) === Number(bathId));
+ if (!b || b.voided) return;
+ const res = gState.residents.find(r => r.id === b.resident_id);
+ const newType = prompt(`【${res ? res.name + " 様" : ""}】入浴方法を変更してください (一般浴 / 特浴 / 清拭 / 見合わせ):`, b.bath_type || "");
+ if (newType === null || !newType.trim()) return;
+ const newNotes = prompt(`処置・軟膏・様子を入力してください:`, b.ointment_notes || "");
+ if (newNotes === null) return;
+ if (newType.trim() === (b.bath_type || "") && newNotes.trim() === (b.ointment_notes || "")) {
+  alert("変更された内容がありません。");
+  return;
+ }
+ const reason = cpPromptEditReason("入浴記録", cpFormatBathDetail(b));
+ if (reason === null) return;
+ const oldCopy = JSON.parse(JSON.stringify(b));
+ b.bath_type = newType.trim();
+ b.ointment_notes = newNotes.trim();
+ b.time = new Date().toTimeString().slice(0, 5);
+ b.staff_name = cpLedgerStaff();
+ cpAppendEditHistory(b, oldCopy, ["bath_type", "ointment_notes", "time"], reason);
+ db.save();
+ loadDateRecords(gState.selectedDate);
+ alert("入浴記録を訂正しました。");
+}
+
+// 選択中利用者の個別介護記録一覧表示 (見る画面：すべての種類の記録を日付と時間の順に1本に並べる) [Antigravity実装 2026-10-16]
 function renderSelectedDateRecords() {
  const list = document.getElementById("selectedDateRecordsList");
  if (!list) return;
@@ -7660,237 +7996,216 @@ function renderSelectedDateRecords() {
 
  const dateBadge = document.getElementById("personalSelectedDateBadge");
  if (dateBadge) {
- dateBadge.textContent = `${gState.selectedDate} (${getWeekDayJp(gState.selectedDate)})`;
+  dateBadge.textContent = `${gState.selectedDate} (${getWeekDayJp(gState.selectedDate)})`;
  }
 
  const isAllScope = gState.recordScope === "all";
  if (titleEl) {
- titleEl.textContent = isAllScope
- ? ` 【${resName}】の個別カルテ履歴 (年月別アーカイブ)`
- : ` 【${resName}】の個人カルテ統合シート`;
+  titleEl.textContent = isAllScope
+   ? ` 【${resName}】の個別記録（見る） (年月別アーカイブ)`
+   : ` 【${resName}】の個別記録（見る）`;
  }
 
  // 1. 個人記録カレンダーを描画
  renderPersonalCalendar();
 
- // 2. 当日の個人データ集約サマリーカードを描画（血圧、体温、脈拍、SpO2、体重、食事、排泄、入浴、服薬）
+ // 2. 当日の個人データ集約サマリーカードを描画
  if (!isAllScope) {
- renderPersonalDailySummary(res, gState.selectedDate);
+  renderPersonalDailySummary(res, gState.selectedDate);
  } else {
- const summaryArea = document.getElementById("personalDailySummaryArea");
- if (summaryArea) summaryArea.innerHTML = "";
+  const summaryArea = document.getElementById("personalDailySummaryArea");
+  if (summaryArea) summaryArea.innerHTML = "";
  }
 
  list.innerHTML = "";
 
- // 選択中利用者の記録のみに厳密絞り込み
- const allUserRecords = (db.data.care_records || [])
- .filter(r => r.resident_id === gState.selectedResidentId)
- .sort((a, b) => {
- const ta = a.recorded_at || a.record_time || "";
- const tb = b.recorded_at || b.record_time || "";
- return tb.localeCompare(ta); // 新しい順
- });
-
+ // 選択中利用者の全種類の記録を日付と時間の順に統合
+ const allUserRecords = cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, true);
  const records = isAllScope
- ? allUserRecords
- : allUserRecords.filter(r => {
- const timeStr = r.recorded_at || r.record_time || "";
- return timeStr.startsWith(gState.selectedDate);
- });
+  ? allUserRecords
+  : cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, false);
 
  if (records.length === 0) {
- if (!isAllScope && allUserRecords.length > 0) {
- list.innerHTML = `
- <div style="padding:20px; text-align:center; background:#f6f8f6; border-radius:6px; border:1px dashed #cdd6d0;">
- <p style="font-size:14px; color:#5f6d66; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の個別記録はまだ登録されていません。</p>
- <p style="font-size:13px; color:#1e5b47; margin-bottom:12px;">（※この利用者様には過去のカルテ記録が計 ${allUserRecords.length} 件あります）</p>
- <button type="button" class="btn btn-secondary" style="font-size:12px; background:#f1f6f3; color:#1a4f3d; border:1px solid #a9cfbf;" onclick="toggleRecordScope()">
- すべての過去履歴を表示する
- </button>
- </div>
- `;
- } else {
- list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:20px; text-align:center;">この利用者様の介護記録はありません。</p>';
- }
- return;
+  if (!isAllScope && allUserRecords.length > 0) {
+   list.innerHTML = `
+   <div style="padding:20px; text-align:center; background:#f6f8f6; border-radius:6px; border:1px dashed #cdd6d0;">
+   <p style="font-size:14px; color:#5f6d66; margin-bottom:8px;">【${escapeHtml(gState.selectedDate)}】の記録はまだ登録されていません。</p>
+   <p style="font-size:13px; color:#1e5b47; margin-bottom:12px;">（※この利用者様には過去の記録が計 ${allUserRecords.length} 件あります）</p>
+   <div style="display:flex; gap:8px; justify-content:center; flex-wrap:wrap;">
+    <button type="button" class="btn btn-secondary" style="font-size:12px; background:#f1f6f3; color:#1a4f3d; border:1px solid #a9cfbf;" onclick="toggleRecordScope()">
+     すべての過去履歴を表示する
+    </button>
+    <button type="button" class="btn btn-primary" style="font-size:12px;" onclick="switchCareTab('write_single')">
+     1人分まとめて書く画面へ
+    </button>
+   </div>
+   </div>
+   `;
+  } else {
+   list.innerHTML = '<p style="font-size:14px; color:var(--text-muted); padding:20px; text-align:center;">この利用者様の記録はありません。</p>';
+  }
+  return;
  }
 
  // レコード単体の描画ヘルパー関数
  const createRecordItem = (r) => {
- const item = document.createElement("div");
- item.className = "care-record-card";
+  const item = document.createElement("div");
+  item.className = "care-record-card";
 
- const catBadgeStyle = getCategoryBadgeStyle(r.category);
+  const catBadgeStyle = getCategoryBadgeStyle(r.category);
 
- const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
- const rawContent = r.content || "";
- const charLen = rawContent.length;
- const isLong = charLen > 400;
- const isExpanded = gExpandedRecordIds.has(r.id);
+  const timeDisplay = r.recorded_at || "時間未記録";
+  const rawContent = r.content || "";
+  const charLen = rawContent.length;
+  const isLong = charLen > 400;
+  const expandKey = r.uid || r.id;
+  const isExpanded = gExpandedRecordIds.has(expandKey);
 
- let displayContent = rawContent;
- let toggleBtnHtml = "";
- if (isLong && !isExpanded) {
- displayContent = rawContent.slice(0, 300) + "……";
- toggleBtnHtml = `<button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 10px; margin-top:6px; align-self:flex-start;" onclick="toggleRecordExpand(${r.id})"> 全文を表示 (${charLen}文字)</button>`;
- } else if (isLong && isExpanded) {
- toggleBtnHtml = `<button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 10px; margin-top:6px; align-self:flex-start;" onclick="toggleRecordExpand(${r.id})">▲ 一部を折りたたむ</button>`;
- }
+  let displayContent = rawContent;
+  let toggleBtnHtml = "";
+  if (isLong && !isExpanded) {
+   displayContent = rawContent.slice(0, 300) + "……";
+   toggleBtnHtml = `<button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 10px; margin-top:6px; align-self:flex-start;" onclick="toggleRecordExpand('${expandKey}')"> 全文を表示 (${charLen}文字)</button>`;
+  } else if (isLong && isExpanded) {
+   toggleBtnHtml = `<button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 10px; margin-top:6px; align-self:flex-start;" onclick="toggleRecordExpand('${expandKey}')">▲ 一部を折りたたむ</button>`;
+  }
 
- item.innerHTML = `
- <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <div style="display:flex; align-items:center; gap:8px;">
- <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
- <strong style="font-size:14px; color:#22302b;">${escapeHtml(resName)}</strong>
- ${isLong ? `<span style="font-size:11px; background:#eef2ef; color:#4a5852; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
- </div>
- <div style="display:flex; align-items:center; gap:6px;">
- <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
- ${cpCareRecordActions(r)}
- </div>
- </div>
- <div class="care-record-body" style="${r.voided ? 'text-decoration:line-through; color:#94a19a;' : ''}">${escapeHtml(displayContent)}</div>
- ${toggleBtnHtml}
- `;
- return item;
+  item.innerHTML = `
+  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+  <div style="display:flex; align-items:center; gap:8px;">
+  <span style="font-size:12px; padding:3px 8px; border-radius:4px; ${catBadgeStyle}">［${escapeHtml(r.category || '介護記録')}］</span>
+  <strong style="font-size:14px; color:#22302b;">${escapeHtml(resName)}</strong>
+  ${isLong ? `<span style="font-size:11px; background:#eef2ef; color:#4a5852; padding:2px 6px; border-radius:10px;">(${charLen}字)</span>` : ''}
+  </div>
+  <div style="display:flex; align-items:center; gap:6px;">
+  <span style="font-size:12px; color:var(--text-muted);">${escapeHtml(timeDisplay)} (記録者: ${escapeHtml(r.staff_name || '未記録')})</span>
+  ${cpUnifiedRecordActions(r)}
+  </div>
+  </div>
+  <div class="care-record-body" style="${r.voided ? 'text-decoration:line-through; color:#94a19a;' : ''}">${escapeHtml(displayContent)}</div>
+  ${toggleBtnHtml}
+  `;
+  return item;
  };
 
- // 全履歴表示（isAllScope）の場合は年月別アコーディオンでグループ化！
+ // 全履歴表示（isAllScope）の場合は年月別アコーディオンでグループ化
  if (isAllScope) {
- const monthGroups = {};
- allUserRecords.forEach(r => {
- const timeStr = r.recorded_at || r.record_time || "";
- const ym = timeStr.slice(0, 7) || "その他";
- if (!monthGroups[ym]) monthGroups[ym] = [];
- monthGroups[ym].push(r);
- });
+  const monthGroups = {};
+  allUserRecords.forEach(r => {
+   const timeStr = r.recorded_at || "";
+   const ym = timeStr.slice(0, 7) || "その他";
+   if (!monthGroups[ym]) monthGroups[ym] = [];
+   monthGroups[ym].push(r);
+  });
 
- const ymList = Object.keys(monthGroups).sort().reverse(); // 新しい月順
+  const ymList = Object.keys(monthGroups).sort().reverse(); // 新しい月順
 
- // デフォルトで最新の月を展開状態にしておく
- if (gOpenMonthAccordions.size === 0 && ymList.length > 0) {
- gOpenMonthAccordions.add(ymList[0]);
- }
+  if (gOpenMonthAccordions.size === 0 && ymList.length > 0) {
+   gOpenMonthAccordions.add(ymList[0]);
+  }
 
- // 月別クイック絞り込みバー
- const filterBar = document.createElement("div");
- filterBar.style.cssText = "display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center;";
- filterBar.innerHTML = `
- <span style="font-size:12px; font-weight:bold; color:#4a5852; margin-right:4px;">月別表示:</span>
- <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
- ${ymList.map(ym => {
- const parts = ym.split("-");
- const label = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月 (${monthGroups[ym].length}件)` : ym;
- const active = gSelectedHistoryMonth === ym;
- return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
- }).join("")}
- `;
- list.appendChild(filterBar);
+  const filterBar = document.createElement("div");
+  filterBar.style.cssText = "display:flex; gap:6px; margin-bottom:12px; flex-wrap:wrap; align-items:center;";
+  filterBar.innerHTML = `
+  <span style="font-size:12px; font-weight:bold; color:#4a5852; margin-right:4px;">月別表示:</span>
+  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${gSelectedHistoryMonth === 'all' ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('all')">すべて (計${allUserRecords.length}件)</button>
+  ${ymList.map(ym => {
+   const parts = ym.split("-");
+   const label = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月 (${monthGroups[ym].length}件)` : ym;
+   const active = gSelectedHistoryMonth === ym;
+   return `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:3px 9px; ${active ? 'background:#1a4f3d; color:#fff; font-weight:bold;' : ''}" onclick="filterHistoryMonth('${ym}')">${label}</button>`;
+  }).join("")}
+  `;
+  list.appendChild(filterBar);
 
- // 各月の描画
- ymList.forEach(ym => {
- if (gSelectedHistoryMonth !== "all" && gSelectedHistoryMonth !== ym) return;
+  ymList.forEach(ym => {
+   if (gSelectedHistoryMonth !== "all" && gSelectedHistoryMonth !== ym) return;
 
- const parts = ym.split("-");
- const ymTitle = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月` : ym;
- const mRecs = monthGroups[ym];
- const isOpen = gOpenMonthAccordions.has(ym);
+   const parts = ym.split("-");
+   const ymTitle = parts.length === 2 ? `${parts[0]}年${parseInt(parts[1])}月` : ym;
+   const mRecs = monthGroups[ym];
+   const isOpen = gOpenMonthAccordions.has(ym);
 
- const accordionContainer = document.createElement("div");
- accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #dfe5e1; border-radius:6px; overflow:hidden; background:#fff;";
+   const accordionContainer = document.createElement("div");
+   accordionContainer.style.cssText = "margin-bottom:12px; border:1px solid #dfe5e1; border-radius:6px; overflow:hidden; background:#fff;";
 
- // アコーディオンヘッダー
- const header = document.createElement("div");
- header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f6f8f6; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3d8a6e; transition:background 0.2s;";
- header.onmouseover = () => header.style.background = "#eef2ef";
- header.onmouseout = () => header.style.background = "#f6f8f6";
- header.onclick = () => toggleMonthAccordion(ym);
+   const header = document.createElement("div");
+   header.style.cssText = "display:flex; justify-content:space-between; align-items:center; background:#f6f8f6; padding:10px 14px; cursor:pointer; user-select:none; border-left:4px solid #3d8a6e; transition:background 0.2s;";
+   header.onmouseover = () => header.style.background = "#eef2ef";
+   header.onmouseout = () => header.style.background = "#f6f8f6";
+   header.onclick = () => toggleMonthAccordion(ym);
 
- header.innerHTML = `
- <div style="display:flex; align-items:center; gap:8px;">
- <span style="font-size:14px; font-weight:bold; color:#173f33;"> ${ymTitle}</span>
- <span style="font-size:11px; background:#f1f6f3; color:#1a4f3d; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
- </div>
- <span style="font-size:12px; color:#5f6d66; font-weight:bold;">
- ${isOpen ? '▲ 折りたたむ' : '▼ 展開して表示'}
- </span>
- `;
- accordionContainer.appendChild(header);
+   header.innerHTML = `
+   <div style="display:flex; align-items:center; gap:8px;">
+   <span style="font-size:14px; font-weight:bold; color:#173f33;"> ${ymTitle}</span>
+   <span style="font-size:11px; background:#f1f6f3; color:#1a4f3d; padding:2px 8px; border-radius:10px; font-weight:bold;">${mRecs.length} 件</span>
+   </div>
+   <span style="font-size:12px; color:#5f6d66; font-weight:bold;">
+   ${isOpen ? '▲ 折りたたむ' : '▼ 展開して表示'}
+   </span>
+   `;
+   accordionContainer.appendChild(header);
 
- // アコーディオン中身（展開時のみ表示）
- if (isOpen) {
- const body = document.createElement("div");
- body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #dfe5e1;";
- mRecs.forEach(r => {
- body.appendChild(createRecordItem(r));
- });
- accordionContainer.appendChild(body);
- }
+   if (isOpen) {
+    const body = document.createElement("div");
+    body.style.cssText = "padding:10px; background:#ffffff; border-top:1px solid #dfe5e1;";
+    mRecs.forEach(r => {
+     body.appendChild(createRecordItem(r));
+    });
+    accordionContainer.appendChild(body);
+   }
 
- list.appendChild(accordionContainer);
- });
+   list.appendChild(accordionContainer);
+  });
 
  } else {
- // 指定日モードの場合はそのまま表示
- records.forEach(r => {
- list.appendChild(createRecordItem(r));
- });
+  records.forEach(r => {
+   list.appendChild(createRecordItem(r));
+  });
  }
 }
 
-// 選択中利用者の個別カルテ記録を印刷
+// 選択中利用者の個別カルテ記録を印刷 [Antigravity実装 2026-10-16]
 function printSelectedDateRecords() {
  const res = gState.residents.find(x => x.id === gState.selectedResidentId);
  const resName = res ? `${res.room_no}号室 ${res.name} 様` : "利用者未指定";
 
  const isAllScope = gState.recordScope === "all";
- const records = (db.data.care_records || [])
- .filter(r => {
- if (r.resident_id !== gState.selectedResidentId) return false;
- if (isAllScope) return true;
- const timeStr = r.recorded_at || r.record_time || "";
- return timeStr.startsWith(gState.selectedDate);
- })
- .sort((a, b) => {
- const ta = a.recorded_at || a.record_time || "";
- const tb = b.recorded_at || b.record_time || "";
- return tb.localeCompare(ta);
- });
+ const records = cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, isAllScope);
 
  if (records.length === 0) {
- alert(`【${resName}】の対象記録はありません。印刷するデータがありません。`);
- return;
+  alert(`【${resName}】の対象記録はありません。印刷するデータがありません。`);
+  return;
  }
 
  const printArea = document.getElementById("printArea");
  if (!printArea) {
- alert("印刷コンテナが見つかりません。");
- return;
+  alert("印刷コンテナが見つかりません。");
+  return;
  }
 
  const staffName = document.getElementById("currentStaff").value || "未記録";
  const nowStr = new Date().toLocaleString("ja-JP");
 
  let recordsHtml = records.map((r, idx) => {
- const timeDisplay = r.recorded_at || r.record_time || "時間未記録";
- return `
- <div style="margin-bottom:18px; border:1px solid #cdd6d0; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
- <div style="display:flex; justify-content:space-between; border-bottom:1px solid #dfe5e1; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
- <div>
- <span style="font-weight:bold; background:#dfe5e1; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
- <strong style="font-size:15px; margin-left:8px;">${escapeHtml(resName)}</strong>
- </div>
- <div style="color:#5f6d66;">
- <span>日時: ${escapeHtml(timeDisplay)}</span>
- <span style="margin-left:12px;">記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
- </div>
- </div>
- <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#22302b; padding:4px 2px;">
+  const timeDisplay = r.recorded_at || "時間未記録";
+  return `
+  <div style="margin-bottom:18px; border:1px solid #cdd6d0; border-radius:6px; padding:12px; page-break-inside:avoid; background:#fff;">
+  <div style="display:flex; justify-content:space-between; border-bottom:1px solid #dfe5e1; padding-bottom:6px; margin-bottom:8px; font-size:13px;">
+  <div>
+  <span style="font-weight:bold; background:#dfe5e1; padding:2px 6px; border-radius:3px;">#${idx + 1} ［${escapeHtml(r.category || '介護記録')}］</span>
+  <strong style="font-size:15px; margin-left:8px;">${escapeHtml(resName)}</strong>
+  </div>
+  <div style="color:#5f6d66;">
+  <span>日時: ${escapeHtml(timeDisplay)}</span>
+  <span style="margin-left:12px;">記録者: ${escapeHtml(r.staff_name || '未記録')}</span>
+  </div>
+  </div>
+  <div style="white-space:pre-wrap; font-size:13.5px; line-height:1.7; color:#22302b; padding:4px 2px;">
 ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
- </div>
- </div>
- `;
+  </div>
+  </div>
+  `;
  }).join("");
 
  printArea.innerHTML = `
@@ -8690,31 +9005,105 @@ function normalizeTempValue(val) {
  return s;
 }
 
-// 1. バイタル表
+// [Antigravity実装 2026-10-16] 記入済み表示用の共通バッジ・訂正理由入力ヘルパー
+function cpFilledBadgeHtml(summaryText, staffName, timeText, editHistory) {
+ const st = staffName ? `記録者: ${escapeHtml(staffName)}` : "記録者: 未記録";
+ const tm = timeText ? `（${escapeHtml(timeText)}）` : "";
+ const editTag = (Array.isArray(editHistory) && editHistory.length > 0)
+  ? `<span style="color:#b45309; font-weight:bold; font-size:10.5px; margin-left:4px;">[訂正${editHistory.length}回]</span>`
+  : "";
+ return `<div class="cp-filled-info-box" style="background:#f0fdf4; border:1px solid #86efac; border-radius:6px; padding:4px 8px; margin-bottom:4px; font-size:11.5px; color:#14532d; line-height:1.4;">
+  <span style="display:inline-block; background:#16a34a; color:#fff; font-weight:bold; font-size:10.5px; padding:1px 6px; border-radius:4px; margin-right:4px;">記入済み</span>
+  <strong>${escapeHtml(summaryText)}</strong>
+  <span style="color:#166534; font-size:11px; margin-left:4px;">${st}${tm}</span>${editTag}
+ </div>`;
+}
+
+function cpPromptEditReason(label, beforeSummary) {
+ const msg = `${label}（記入済み: ${beforeSummary}）を訂正します。\n直す前の内容・直した人・日時・理由は訂正履歴（edit_history）に残ります。\n\n訂正の理由を入力してください (必須):`;
+ const reason = prompt(msg, "");
+ if (reason === null) return null;
+ if (!reason.trim()) {
+  alert("訂正の理由を入力してください。理由がない場合は変更できません。");
+  return null;
+ }
+ return reason.trim();
+}
+
+function cpFormatVitalBrief(v) {
+ if (!v) return "";
+ const p = [];
+ if (v.temperature !== null && v.temperature !== undefined && v.temperature !== "") p.push(`体温${v.temperature}℃`);
+ if ((v.bp_high !== null && v.bp_high !== undefined && v.bp_high !== "") || (v.bp_low !== null && v.bp_low !== undefined && v.bp_low !== "")) p.push(`血圧${v.bp_high ?? "-"}/${v.bp_low ?? "-"}`);
+ if (v.pulse !== null && v.pulse !== undefined && v.pulse !== "") p.push(`脈拍${v.pulse}`);
+ if (v.spo2 !== null && v.spo2 !== undefined && v.spo2 !== "") p.push(`SpO2 ${v.spo2}%`);
+ if (v.is_unusual) p.push("特変あり");
+ if (v.notes) p.push(`(${v.notes})`);
+ return p.join("・") || "記録あり";
+}
+
+function cpFormatMealDetail(m) {
+ if (!m) return "";
+ const type = m.meal_type || "食事";
+ const mainHas = m.main_dish_ratio !== null && m.main_dish_ratio !== undefined && m.main_dish_ratio !== "";
+ const sideHas = m.side_dish_ratio !== null && m.side_dish_ratio !== undefined && m.side_dish_ratio !== "";
+ const parts = [];
+ if (type === "おやつ") {
+  if (mainHas) parts.push(`主食(おやつ量)${m.main_dish_ratio}割`);
+  parts.push(`副食ー`);
+ } else if (type === "その他") {
+  parts.push(`主食ー・副食ー`);
+ } else {
+  parts.push(`主食${mainHas ? m.main_dish_ratio + "割" : "ー"}`);
+  parts.push(`副食${sideHas ? m.side_dish_ratio + "割" : "ー"}`);
+ }
+ if (m.water_ml !== null && m.water_ml !== undefined && m.water_ml !== "") {
+  parts.push(`水分${m.water_ml}ml`);
+ }
+ return `${type} ${parts.join("・")}`;
+}
+
+function cpFormatExcretionDetail(e) {
+ if (!e) return "";
+ const u = e.urine_flag === 1 ? "排尿あり(＋)" : (e.urine_flag === 2 ? "バルーン" : "排尿なし(ー)");
+ const s = (e.stool_amount && e.stool_amount !== "なし") ? `排便:${e.stool_amount}(${e.stool_condition || "-"})` : "排便なし";
+ return `${u}・${s}${e.notes ? " (" + e.notes + ")" : ""}`;
+}
+
+function cpFormatBathDetail(b) {
+ if (!b) return "";
+ return `${b.bath_type || "入浴"}${b.ointment_notes ? "（" + b.ointment_notes + "）" : ""}`;
+}
+
+// 1. バイタル表 [Antigravity実装 2026-10-16]
 function renderVitalsTable() {
  const tbody = document.querySelector("#vitalsTable tbody");
  if (!tbody) return;
  tbody.innerHTML = "";
- const vitals = (db.data.vitals || []).filter(v => v.date === gState.selectedDate);
+ const vitals = (db.data.vitals || []).filter(v => !v.voided && v.date === gState.selectedDate);
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
    const v = vitals.find(x => x.resident_id === r.id);
    const tr = document.createElement("tr");
    if (r.status !== "在所") tr.style.opacity = "0.5";
+   const filledHtml = v ? cpFilledBadgeHtml(cpFormatVitalBrief(v), v.staff_name, v.time || "", v.edit_history) : "";
 
    tr.innerHTML = `
      <td>${r.room_no}</td>
-     <td><strong>${r.name} 様</strong> ${r.status !== '在所' ? `(${r.status})` : ''}</td>
-     <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v ? v.temperature || '' : ''}" placeholder="36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)"></td>
-     <td style="display:flex; gap:4px; align-items:center;">
-       <input type="number" class="form-control" style="width:70px;" id="vBpHigh_${r.id}" value="${v ? v.bp_high || '' : ''}" placeholder="120">
-       /
-       <input type="number" class="form-control" style="width:70px;" id="vBpLow_${r.id}" value="${v ? v.bp_low || '' : ''}" placeholder="70">
+     <td>
+       <strong>${r.name} 様</strong> ${r.status !== '在所' ? `(${r.status})` : ''}
+       ${filledHtml}
      </td>
-     <td><input type="number" class="form-control" style="width:75px;" id="vPulse_${r.id}" value="${v ? v.pulse || '' : ''}" placeholder="72"></td>
-     <td><input type="number" class="form-control" style="width:75px;" id="vSpo2_${r.id}" value="${v ? v.spo2 || '' : ''}" placeholder="98"></td>
+     <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v && v.temperature !== null && v.temperature !== undefined ? v.temperature : ''}" placeholder="体温" onblur="formatTempInput(this)" oninput="formatTempInput(this)"></td>
+     <td style="display:flex; gap:4px; align-items:center;">
+       <input type="number" class="form-control" style="width:70px;" id="vBpHigh_${r.id}" value="${v && v.bp_high !== null && v.bp_high !== undefined ? v.bp_high : ''}" placeholder="上">
+       /
+       <input type="number" class="form-control" style="width:70px;" id="vBpLow_${r.id}" value="${v && v.bp_low !== null && v.bp_low !== undefined ? v.bp_low : ''}" placeholder="下">
+     </td>
+     <td><input type="number" class="form-control" style="width:75px;" id="vPulse_${r.id}" value="${v && v.pulse !== null && v.pulse !== undefined ? v.pulse : ''}" placeholder="脈拍"></td>
+     <td><input type="number" class="form-control" style="width:75px;" id="vSpo2_${r.id}" value="${v && v.spo2 !== null && v.spo2 !== undefined ? v.spo2 : ''}" placeholder="SpO2"></td>
      <td><label><input type="checkbox" id="vUnusual_${r.id}" ${v && v.is_unusual ? 'checked' : ''}> 特変</label></td>
-     <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveVital(${r.id})">登録</button></td>
+     <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveVital(${r.id})">${v ? '訂正して保存' : '登録'}</button></td>
    `;
    tbody.appendChild(tr);
  });
@@ -8733,6 +9122,28 @@ function saveVital(resId) {
  if (!temp && !bpHigh && !bpLow && !pulse && !spo2) {
    alert("体温・血圧・脈拍・SpO2のいずれかを入力してください。");
    return;
+ }
+
+ const existingVital = (db.data.vitals || []).find(x => !x.voided && x.resident_id === resId && x.date === gState.selectedDate);
+ let editReason = null;
+ if (existingVital) {
+   const newTemp = temp ? parseFloat(temp) : null;
+   const newBpH = bpHigh ? parseInt(bpHigh, 10) : null;
+   const newBpL = bpLow ? parseInt(bpLow, 10) : null;
+   const newPulse = pulse ? parseInt(pulse, 10) : null;
+   const newSpo2 = spo2 ? parseInt(spo2, 10) : null;
+   const isSame = (existingVital.temperature ?? null) === newTemp &&
+     (existingVital.bp_high ?? null) === newBpH &&
+     (existingVital.bp_low ?? null) === newBpL &&
+     (existingVital.pulse ?? null) === newPulse &&
+     (existingVital.spo2 ?? null) === newSpo2 &&
+     Boolean(existingVital.is_unusual) === Boolean(isUnusual);
+   if (isSame) {
+     alert("変更された内容がありません。");
+     return;
+   }
+   editReason = cpPromptEditReason("バイタル記録", cpFormatVitalBrief(existingVital));
+   if (editReason === null) return;
  }
 
  // [Claude修正] 一部の項目が空欄なら、保存してよいか確認する（個人バイタル編集画面と同じ）
@@ -8782,43 +9193,44 @@ function saveVital(resId) {
    }
  }
 
- const staff = document.getElementById("currentStaff").value;
+ const staff = cpLedgerStaff();
  const now = new Date();
  const timeStr = now.toTimeString().slice(0, 5);
 
- const cpOldVital = db.data.vitals.find(x => x.resident_id === resId && x.date === gState.selectedDate);
- db.data.vitals = db.data.vitals.filter(x => !(x.resident_id === resId && x.date === gState.selectedDate));
- db.data.vitals.push({
-   id: cpOldVital ? cpOldVital.id : Date.now(),
-   resident_id: resId,
-   date: gState.selectedDate,
-   time: timeStr,
-   temperature: temp ? parseFloat(temp) : null,
-   bp_high: bpHigh ? parseInt(bpHigh, 10) : null,
-   bp_low: bpLow ? parseInt(bpLow, 10) : null,
-   pulse: pulse ? parseInt(pulse, 10) : null,
-   spo2: spo2 ? parseInt(spo2, 10) : null,
-   is_unusual: isUnusual,
-   staff_name: staff
- });
- if (cpOldVital) cpAppendEditHistory(db.data.vitals[db.data.vitals.length - 1], cpOldVital, ["time", "temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual"]);
+ // [Antigravity実装 2026-10-16] 既存の記録オブジェクトを直接書き換え（idは変えない）、訂正履歴に理由を残す
+ if (existingVital) {
+   const oldCopy = JSON.parse(JSON.stringify(existingVital));
+   existingVital.time = timeStr;
+   existingVital.temperature = temp ? parseFloat(temp) : null;
+   existingVital.bp_high = bpHigh ? parseInt(bpHigh, 10) : null;
+   existingVital.bp_low = bpLow ? parseInt(bpLow, 10) : null;
+   existingVital.pulse = pulse ? parseInt(pulse, 10) : null;
+   existingVital.spo2 = spo2 ? parseInt(spo2, 10) : null;
+   existingVital.is_unusual = isUnusual ? 1 : 0;
+   existingVital.staff_name = staff;
+   cpAppendEditHistory(existingVital, oldCopy, ["time", "temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual"], editReason);
+ } else {
+   db.data.vitals.push({
+     id: Date.now(),
+     resident_id: resId,
+     date: gState.selectedDate,
+     time: timeStr,
+     temperature: temp ? parseFloat(temp) : null,
+     bp_high: bpHigh ? parseInt(bpHigh, 10) : null,
+     bp_low: bpLow ? parseInt(bpLow, 10) : null,
+     pulse: pulse ? parseInt(pulse, 10) : null,
+     spo2: spo2 ? parseInt(spo2, 10) : null,
+     is_unusual: isUnusual ? 1 : 0,
+     staff_name: staff
+   });
+ }
 
- // 個人記録へ自動転記
  const parts = [];
  if (temp) parts.push(`体温 ${temp}℃`);
  if (bpHigh || bpLow) parts.push(`血圧 ${bpHigh || '-'}/${bpLow || '-'}`);
  if (pulse) parts.push(`脈拍 ${pulse}bpm`);
  if (spo2) parts.push(`SpO2 ${spo2}%`);
  if (isUnusual) parts.push(`【特変あり】`);
-
- db.data.care_records.unshift({
-   id: Date.now() + 1,
-   recorded_at: `${gState.selectedDate} ${timeStr}`,
-   resident_id: resId,
-   category: "バイタル",
-   content: parts.join(", "),
-   staff_name: staff
- });
 
  // 特変の場合は連絡帳・申し送りへも自動転記
  if (isUnusual) {
@@ -8835,7 +9247,7 @@ function saveVital(resId) {
 
  db.save();
  loadDateRecords(gState.selectedDate);
- alert(`${res ? res.name : '利用者'}様のバイタルを登録しました！`);
+ alert(`${res ? res.name : '利用者'}様のバイタルを${existingVital ? '訂正' : '登録'}しました！`);
 }
 // [Antigravity実装 2026-10-15] 排泄チェック表の固定ヘッダー（対象者表示・選択肢）を更新
 function updateExcretionStickyHeader() {
@@ -8865,25 +9277,76 @@ function renderExcretionTable() {
   // [Antigravity実装 2026-10-15] 固定ヘッダーの同期
   updateExcretionStickyHeader();
  const tbody = document.querySelector("#excretionHistoryTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
  // [Claude修正] 保存した順ではなく、記録の時刻順に並べる (後から早い時刻を記録しても正しい位置に入る)
- const excretions = (db.data.excretions || []).filter(e => e.date === gState.selectedDate)
+ const excretions = (db.data.excretions || []).filter(e => !e.voided && e.date === gState.selectedDate)
  .slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
 
  excretions.forEach(e => {
  const res = gState.residents.find(r => r.id === e.resident_id);
  const tr = document.createElement("tr");
+ const editCount = (e.edit_history && e.edit_history.length) ? `<div style="font-size:10.5px; color:#b45309;">訂正${e.edit_history.length}回</div>` : "";
  tr.innerHTML = `
- <td><strong>${e.time}</strong></td>
- <td>${res ? res.name + ' 様' : '-'}</td>
+ <td><strong>${escapeHtml(e.time || "")}</strong></td>
+ <td>${res ? escapeHtml(res.name) + ' 様' : '-'}</td>
  <td>${e.urine_flag === 1 ? 'あり (＋)' : (e.urine_flag === 2 ? 'バルーン' : 'なし')}</td>
- <td><span style="font-weight:bold; color:#b45309;">${e.stool_amount}</span></td>
- <td>${e.stool_condition}</td>
- <td>${e.notes || '-'}</td>
- <td>${e.staff_name}</td>
+ <td><span style="font-weight:bold; color:#b45309;">${escapeHtml(e.stool_amount || "-")}</span></td>
+ <td>${escapeHtml(e.stool_condition || "-")}</td>
+ <td>${escapeHtml(e.notes || '-')}</td>
+ <td>
+  <span style="display:inline-block; background:#dcfce7; color:#15803d; font-size:10.5px; font-weight:bold; padding:1px 5px; border-radius:4px; margin-right:4px;">記入済み</span>
+  ${escapeHtml(e.staff_name || "未記録")}
+  ${editCount}
+ </td>
+ <td style="white-space:nowrap;">
+  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="editExcretionRecord(${Number(e.id)})">訂正</button>
+ </td>
  `;
  tbody.appendChild(tr);
  });
+}
+
+// [Antigravity実装 2026-10-16] 排泄記録の訂正（理由必須・edit_history保存・同じidの中身を書き換え）
+function editExcretionRecord(excId) {
+ const rec = (db.data.excretions || []).find(e => Number(e.id) === Number(excId));
+ if (!rec || rec.voided) return;
+ const res = gState.residents.find(r => r.id === rec.resident_id);
+ const newTime = prompt(`【${res ? res.name + " 様" : ""}】排泄記録の時間を入力してください (HH:MM):`, rec.time || "");
+ if (newTime === null) return;
+ const newUrineStr = prompt(`排尿を入力してください (1=あり, 0=なし, 2=バルーン):`, String(rec.urine_flag ?? 1));
+ if (newUrineStr === null) return;
+ const newAmount = prompt(`便の量を入力してください (なし / 付着 / 微量 / 少量 / 中量 / 多量):`, rec.stool_amount || "なし");
+ if (newAmount === null) return;
+ const newCond = prompt(`便の性状を入力してください (なし / 普通便 / 軟便 / 水様便 / 泥状便 / 硬便):`, rec.stool_condition || "なし");
+ if (newCond === null) return;
+ const newNotes = prompt(`備考を入力してください:`, rec.notes || "");
+ if (newNotes === null) return;
+
+ const parsedUrine = [0, 1, 2].includes(parseInt(newUrineStr, 10)) ? parseInt(newUrineStr, 10) : rec.urine_flag;
+ const isSame = (rec.time || "") === newTime.trim() &&
+   rec.urine_flag === parsedUrine &&
+   (rec.stool_amount || "") === newAmount.trim() &&
+   (rec.stool_condition || "") === newCond.trim() &&
+   (rec.notes || "") === newNotes.trim();
+ if (isSame) {
+   alert("変更された内容がありません。");
+   return;
+ }
+ const reason = cpPromptEditReason("排泄記録", `${rec.time || ""} ${cpFormatExcretionDetail(rec)}`);
+ if (reason === null) return;
+
+ const oldCopy = JSON.parse(JSON.stringify(rec));
+ rec.time = newTime.trim() || rec.time;
+ rec.urine_flag = parsedUrine;
+ rec.stool_amount = newAmount.trim() || "なし";
+ rec.stool_condition = newCond.trim() || "なし";
+ rec.notes = newNotes.trim();
+ rec.staff_name = cpLedgerStaff();
+ cpAppendEditHistory(rec, oldCopy, ["time", "urine_flag", "stool_amount", "stool_condition", "notes"], reason);
+ db.save();
+ loadDateRecords(gState.selectedDate);
+ alert("排泄記録を訂正しました。");
 }
 
 function submitExcretion() {
@@ -8893,12 +9356,26 @@ function submitExcretion() {
     alert("利用者が選択されていません。上部の選択欄から入力する方を選んでください。");
     return;
   }
- const tm = document.getElementById("exTime").value || new Date().toTimeString().slice(0, 5);
- const urine = parseInt(document.getElementById("exUrine").value, 10) || 0;
- const amount = document.getElementById("exStoolAmount").value;
- const cond = document.getElementById("exStoolCond").value;
- const notes = document.getElementById("exNotes").value;
- const staff = document.getElementById("currentStaff").value;
+ const tmEl = document.getElementById("exTime");
+ const urineEl = document.getElementById("exUrine");
+ const amountEl = document.getElementById("exStoolAmount");
+ const condEl = document.getElementById("exStoolCond");
+ const notesEl = document.getElementById("exNotes");
+
+ const tm = (tmEl ? tmEl.value : "") || new Date().toTimeString().slice(0, 5);
+ const urineVal = urineEl ? urineEl.value : "";
+ const amountVal = amountEl ? amountEl.value : "";
+ const condVal = condEl ? condEl.value : "";
+ const notes = notesEl ? notesEl.value.trim() : "";
+
+ if (urineVal === "" && amountVal === "" && condVal === "" && !notes) {
+   alert("排尿・便の量・性状・備考のいずれかを入力してください。");
+   return;
+ }
+ const urine = urineVal !== "" ? parseInt(urineVal, 10) : 0;
+ const amount = amountVal || "なし";
+ const cond = condVal || (amount === "なし" ? "なし" : "普通便");
+ const staff = cpLedgerStaff();
 
  db.data.excretions.unshift({
  id: Date.now(),
@@ -8913,7 +9390,11 @@ function submitExcretion() {
  });
  db.save();
 
- document.getElementById("exNotes").value = "";
+ if (tmEl) tmEl.value = "";
+ if (urineEl) urineEl.value = "";
+ if (amountEl) amountEl.value = "";
+ if (condEl) condEl.value = "";
+ if (notesEl) notesEl.value = "";
  loadDateRecords(gState.selectedDate);
  alert("排泄記録を保存しました！");
 }
@@ -8937,13 +9418,25 @@ function cpFormatMealRatio(m) {
   return `${ratioStr} (${m.water_ml || 0}ml)`;
 }
 
-// [Antigravity実装 2026-10-15] 食事区分の切り替え即時ハンドラ
+// [Antigravity実装 2026-10-16] 食事区分の切り替え即時ハンドラ（既存記録があれば記入済み表示＆値を反映、なければ空欄から始める）
 function cpOnMealTypeChange(resId) {
   const typeEl = document.getElementById(`mType_${resId}`);
   const mainEl = document.getElementById(`mMain_${resId}`);
   const sideEl = document.getElementById(`mSide_${resId}`);
+  const waterEl = document.getElementById(`mWater_${resId}`);
+  const statusEl = document.getElementById(`mStatus_${resId}`);
+  const btnEl = document.getElementById(`mSaveBtn_${resId}`);
   if (!typeEl || !mainEl || !sideEl) return;
   const type = typeEl.value;
+  const existing = (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type);
+
+  if (statusEl) {
+    statusEl.innerHTML = existing ? cpFilledBadgeHtml(cpFormatMealDetail(existing), existing.staff_name, existing.time || "", existing.edit_history) : "";
+  }
+  if (btnEl) {
+    btnEl.textContent = existing ? "訂正して保存" : "記録";
+  }
+
   if (type === "その他") {
     mainEl.type = "text"; mainEl.value = "ー"; mainEl.disabled = true;
     mainEl.style.background = "#f1f5f9"; mainEl.style.color = "#64748b";
@@ -8951,27 +9444,31 @@ function cpOnMealTypeChange(resId) {
     sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
   } else if (type === "おやつ") {
     mainEl.disabled = false; mainEl.type = "number";
-    if (mainEl.value === "ー" || isNaN(parseInt(mainEl.value, 10))) mainEl.value = 10;
     mainEl.min = "0"; mainEl.max = "10";
     mainEl.style.background = ""; mainEl.style.color = "";
+    mainEl.value = (existing && existing.main_dish_ratio !== null && existing.main_dish_ratio !== undefined) ? existing.main_dish_ratio : "";
     sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
     sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
   } else {
     mainEl.disabled = false; mainEl.type = "number";
-    if (mainEl.value === "ー" || isNaN(parseInt(mainEl.value, 10))) mainEl.value = 10;
     mainEl.min = "0"; mainEl.max = "10";
     mainEl.style.background = ""; mainEl.style.color = "";
+    mainEl.value = (existing && existing.main_dish_ratio !== null && existing.main_dish_ratio !== undefined) ? existing.main_dish_ratio : "";
     sideEl.disabled = false; sideEl.type = "number";
-    if (sideEl.value === "ー" || isNaN(parseInt(sideEl.value, 10))) sideEl.value = 10;
     sideEl.min = "0"; sideEl.max = "10";
     sideEl.style.background = ""; sideEl.style.color = "";
+    sideEl.value = (existing && existing.side_dish_ratio !== null && existing.side_dish_ratio !== undefined) ? existing.side_dish_ratio : "";
+  }
+  if (waterEl) {
+    waterEl.value = (existing && existing.water_ml !== null && existing.water_ml !== undefined) ? existing.water_ml : "";
   }
 }
 
 function renderMealsTable() {
  const tbody = document.querySelector("#mealsTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
- const meals = (db.data.meals || []).filter(m => m.date === gState.selectedDate);
+ const meals = (db.data.meals || []).filter(m => !m.voided && m.date === gState.selectedDate);
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
  const userMeals = meals.filter(m => m.resident_id === r.id);
@@ -8979,9 +9476,18 @@ function renderMealsTable() {
  const tr = document.createElement("tr");
  if (r.status !== "在所") tr.style.opacity = "0.5";
 
+ // 既に記録されている時間帯の一覧表示
+ const allMealsSummaryHtml = userMeals.length > 0
+   ? `<div style="margin-top:4px; display:flex; flex-direction:column; gap:3px;">${userMeals.map(m => cpFilledBadgeHtml(cpFormatMealDetail(m), m.staff_name, m.time || "", m.edit_history)).join("")}</div>`
+   : "";
+
  tr.innerHTML = `
  <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>
+   <strong>${r.name} 様</strong>
+   ${allMealsSummaryHtml}
+   <div id="mStatus_${r.id}"></div>
+ </td>
  <td style="font-size:12px;">${escapeHtml(r.diet_type || '未登録')} / <span style="color:#dc2626;">${escapeHtml(r.allergies || '未登録')}</span></td>
  <td>
  <select id="mType_${r.id}" class="form-control" style="width:95px;" onchange="cpOnMealTypeChange(${r.id})">
@@ -8992,13 +9498,14 @@ function renderMealsTable() {
   <option value="その他">その他</option>
 </select>
  </td>
- <td><input type="number" id="mMain_${r.id}" class="form-control" style="width:70px;" value="10" min="0" max="10"></td>
- <td><input type="number" id="mSide_${r.id}" class="form-control" style="width:70px;" value="10" min="0" max="10"></td>
- <td><input type="number" id="mWater_${r.id}" class="form-control" style="width:85px;" value="200" step="50"></td>
+ <td><input type="number" id="mMain_${r.id}" class="form-control" style="width:70px;" value="" min="0" max="10" placeholder="0-10"></td>
+ <td><input type="number" id="mSide_${r.id}" class="form-control" style="width:70px;" value="" min="0" max="10" placeholder="0-10"></td>
+ <td><input type="number" id="mWater_${r.id}" class="form-control" style="width:85px;" value="" step="50" placeholder="ml"></td>
  <td><strong style="color:#0284c7; font-size:15px;">${totalWater} ml</strong></td>
- <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveMeal(${r.id})">記録</button></td>
+ <td><button id="mSaveBtn_${r.id}" class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveMeal(${r.id})">記録</button></td>
  `;
  tbody.appendChild(tr);
+ cpOnMealTypeChange(r.id);
  });
 }
 
@@ -9006,48 +9513,83 @@ function saveMeal(resId) {
   const type = document.getElementById(`mType_${resId}`).value;
   const mainEl = document.getElementById(`mMain_${resId}`);
   const sideEl = document.getElementById(`mSide_${resId}`);
+  const waterEl = document.getElementById(`mWater_${resId}`);
+  const mainRaw = mainEl ? String(mainEl.value).trim() : "";
+  const sideRaw = sideEl ? String(sideEl.value).trim() : "";
+  const waterRaw = waterEl ? String(waterEl.value).trim() : "";
+
   let main = null;
   let side = null;
-  // [Antigravity実装 2026-10-15] おやつ・その他区分に応じた null 保存処理
+  // [Antigravity実装 2026-10-16] 入力欄は空欄から始め、入れていないときは保存しない
   if (type === "その他") {
+    if (waterRaw === "" || isNaN(parseInt(waterRaw, 10))) {
+      alert("「その他」の水分量(ml)を入力してください。");
+      return;
+    }
     main = null;
     side = null;
   } else if (type === "おやつ") {
-    const mainVal = parseInt(mainEl.value, 10);
-    main = isNaN(mainVal) ? 10 : mainVal;
+    if ((mainRaw === "" || mainRaw === "ー") && waterRaw === "") {
+      alert("おやつの量（主食欄）または水分量を入力してください。");
+      return;
+    }
+    main = (mainRaw !== "" && mainRaw !== "ー" && !isNaN(parseInt(mainRaw, 10))) ? parseInt(mainRaw, 10) : null;
     side = null;
   } else {
-    const mainVal = parseInt(mainEl.value, 10);
-    const sideVal = parseInt(sideEl.value, 10);
-    main = isNaN(mainVal) ? 10 : mainVal;
-    side = isNaN(sideVal) ? 10 : sideVal;
+    if ((mainRaw === "" || mainRaw === "ー") && (sideRaw === "" || sideRaw === "ー") && waterRaw === "") {
+      alert(`${type}の主食・副食・水分のいずれかを入力してください。`);
+      return;
+    }
+    main = (mainRaw !== "" && mainRaw !== "ー" && !isNaN(parseInt(mainRaw, 10))) ? parseInt(mainRaw, 10) : null;
+    side = (sideRaw !== "" && sideRaw !== "ー" && !isNaN(parseInt(sideRaw, 10))) ? parseInt(sideRaw, 10) : null;
   }
-  const waterVal = parseInt(document.getElementById(`mWater_${resId}`).value, 10);
-  const water = isNaN(waterVal) ? 200 : waterVal;
-  const staff = document.getElementById("currentStaff").value;
- db.data.meals.push({
- id: Date.now(),
- date: gState.selectedDate,
- meal_type: type,
- resident_id: resId,
- main_dish_ratio: main,
- side_dish_ratio: side,
- water_ml: water,
- staff_name: staff
- });
- db.save();
+  const water = (waterRaw !== "" && !isNaN(parseInt(waterRaw, 10))) ? parseInt(waterRaw, 10) : 0;
+  const staff = cpLedgerStaff();
+  const nowTime = new Date().toTimeString().slice(0, 5);
 
- loadDateRecords(gState.selectedDate);
- alert("食事・水分摂取量を記録しました！");
+  const existing = (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type);
+  if (existing) {
+    const isSame = (existing.main_dish_ratio ?? null) === main &&
+      (existing.side_dish_ratio ?? null) === side &&
+      (existing.water_ml ?? 0) === water;
+    if (isSame) {
+      alert("変更された内容がありません。");
+      return;
+    }
+    const reason = cpPromptEditReason(`${type}の記録`, cpFormatMealDetail(existing));
+    if (reason === null) return;
+    const oldCopy = JSON.parse(JSON.stringify(existing));
+    existing.main_dish_ratio = main;
+    existing.side_dish_ratio = side;
+    existing.water_ml = water;
+    existing.time = nowTime;
+    existing.staff_name = staff;
+    cpAppendEditHistory(existing, oldCopy, ["main_dish_ratio", "side_dish_ratio", "water_ml", "time"], reason);
+  } else {
+    db.data.meals.push({
+      id: Date.now(),
+      date: gState.selectedDate,
+      time: nowTime,
+      meal_type: type,
+      resident_id: resId,
+      main_dish_ratio: main,
+      side_dish_ratio: side,
+      water_ml: water,
+      staff_name: staff
+    });
+  }
+  db.save();
+
+  loadDateRecords(gState.selectedDate);
+  alert(`${type}の食事・水分摂取量を${existing ? '訂正' : '記録'}しました！`);
 }
 
-// 4. 入浴 ＆ 塗布薬
+// 4. 入浴 ＆ 塗布薬 [Antigravity実装 2026-10-16]
 function renderBathTable() {
  const tbody = document.querySelector("#bathTable tbody");
+ if (!tbody) return;
  tbody.innerHTML = "";
- const baths = (db.data.baths || []).filter(b => b.date === gState.selectedDate);
- // [Claude修正] 入浴区分は「選んでください」から始める（以前は最初の「一般浴」が選ばれた状態で、メモだけ保存しても一般浴で入浴した記録になっていた）。
- // 一覧にない区分（見本データの「機械浴」など）で保存された記録は、その区分のまま表示する（以前は一般浴に置き換わって表示され、保存すると上書きされた）
+ const baths = (db.data.baths || []).filter(b => !b.voided && b.date === gState.selectedDate);
  const bathTypes = [["一般浴", "一般浴"], ["特浴", "特浴(機械浴)"], ["清拭", "清拭"], ["見合わせ", "見合わせ"]];
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
@@ -9057,15 +9599,19 @@ function renderBathTable() {
  opts += bathTypes.map(([v, label]) => `<option value="${v}" ${cur === v ? "selected" : ""}>${label}</option>`).join("");
  if (cur && !bathTypes.some(([v]) => v === cur)) opts += `<option value="${escapeHtml(cur)}" selected>${escapeHtml(cur)}</option>`;
  const tr = document.createElement("tr");
+ const filledHtml = b ? cpFilledBadgeHtml(cpFormatBathDetail(b), b.staff_name, b.time || "") : "";
 
  tr.innerHTML = `
  <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>
+   <strong>${r.name} 様</strong>
+   ${filledHtml}
+ </td>
  <td>
  <select id="bathType_${r.id}" class="form-control" style="width:130px;">${opts}</select>
  </td>
  <td><input type="text" id="bathNotes_${r.id}" class="form-control" value="${escapeHtml(b ? (b.ointment_notes || "") : "")}" placeholder="入浴時の皮膚の様子など"></td>
- <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveBath(${r.id})">保存</button></td>
+ <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveBath(${r.id})">${b ? '訂正して保存' : '保存'}</button></td>
  `;
  tbody.appendChild(tr);
  });
@@ -9073,24 +9619,34 @@ function renderBathTable() {
 
 function saveBath(resId) {
  const type = document.getElementById(`bathType_${resId}`).value;
- const notes = document.getElementById(`bathNotes_${resId}`).value;
- const staff = document.getElementById("currentStaff").value;
+ const notes = document.getElementById(`bathNotes_${resId}`).value.trim();
+ const staff = cpLedgerStaff();
+ const nowTime = new Date().toTimeString().slice(0, 5);
  if (!type) {
  alert("入浴区分（一般浴・特浴・清拭・見合わせ）を選んでから保存してください。\n塗り薬・湿布は「塗布薬・湿布」のタブで記録します。");
  return;
  }
 
- let existing = (db.data.baths || []).find(b => b.date === gState.selectedDate && b.resident_id === resId);
+ let existing = (db.data.baths || []).find(b => !b.voided && b.date === gState.selectedDate && b.resident_id === resId);
  if (existing) {
- const cpOldBath = Object.assign({}, existing);
+ const isSame = (existing.bath_type || "") === type && (existing.ointment_notes || "") === notes;
+ if (isSame) {
+   alert("変更された内容がありません。");
+   return;
+ }
+ const reason = cpPromptEditReason("入浴記録", cpFormatBathDetail(existing));
+ if (reason === null) return;
+ const cpOldBath = JSON.parse(JSON.stringify(existing));
  existing.bath_type = type;
  existing.ointment_notes = notes;
+ existing.time = nowTime;
  existing.staff_name = staff;
- cpAppendEditHistory(existing, cpOldBath, ["bath_type", "ointment_notes"]);
+ cpAppendEditHistory(existing, cpOldBath, ["bath_type", "ointment_notes", "time"], reason);
  } else {
  db.data.baths.push({
  id: Date.now(),
  date: gState.selectedDate,
+ time: nowTime,
  resident_id: resId,
  bath_type: type,
  ointment_notes: notes,
@@ -9100,7 +9656,7 @@ function saveBath(resId) {
  db.save();
 
  loadDateRecords(gState.selectedDate);
- alert("入浴記録を保存しました。");
+ alert(`入浴記録を${existing ? '訂正' : '保存'}しました。`);
 }
 
 // [Claude追加] 塗布薬・湿布（入浴から分けた）。
@@ -9359,7 +9915,8 @@ function cpVoidMedRecord(rec, label) {
 }
 
 // [Claude修正] 日々の記録を上書きするとき、直す前の値を edit_history に残す（誰が・いつ・何から直したか）
-function cpAppendEditHistory(target, old, fields) {
+// [Antigravity実装 2026-10-16] 訂正理由（reason）も edit_history に保存できるように拡張
+function cpAppendEditHistory(target, old, fields, reason) {
  if (!target || !old) return;
  const norm = v => (v === undefined || v === "" ? null : v);
  const before = {};
@@ -9368,7 +9925,11 @@ function cpAppendEditHistory(target, old, fields) {
  const key = v => { const x = norm(v); return (x !== null && typeof x === "object") ? JSON.stringify(x) : String(x); };
  const changed = fields.some(f => key(old[f]) !== key(target[f]));
  const hist = Array.isArray(old.edit_history) ? old.edit_history.slice() : [];
- if (changed) hist.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), before: before });
+ if (changed) {
+  const entry = { edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), before: before };
+  if (reason) entry.reason = reason;
+  hist.push(entry);
+ }
  if (hist.length) target.edit_history = hist;
 }
 
@@ -10727,6 +11288,7 @@ function renderNightTable() {
  }
 
  const times = ["22:00", "00:00", "02:00", "04:00", "06:00"];
+ const activeTurns = cpActiveTurnsForDate(gState.selectedDate);
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
  const isHospital = r.status === "入院中" || r.status === "ショート終了" || r.status !== "在所";
@@ -10749,14 +11311,25 @@ function renderNightTable() {
       const key = `${r.id}_${tm}`;
       const curAction = gState.nightTurnDrafts[key];
       const curNote = (gState.nightTurnNotes && gState.nightTurnNotes[key]) || "";
+      const savedTurn = activeTurns.find(t => t.resident_id === r.id && t.time === tm);
       // [Antigravity実装 2026-10-15] 各利用者・各時刻のチェックに任意で「様子・特変」を書ける欄を配置
       const noteInpHtml = `<input type="text" id="night_note_${r.id}_${tm}" class="form-control" placeholder="様子・特変" value="${escapeHtml(curNote)}" style="font-size:10.5px; padding:2px 4px; margin-top:3px; width:100%; min-width:85px; max-width:130px; box-sizing:border-box;" oninput="cpSetNightTurnNote(${r.id}, '${tm}', this.value)">`;
       if (curAction) {
+        // [Antigravity実装 2026-10-16] 保存済みの体位変換には「記入済み」・中身・書いた人・時刻と訂正ボタンを表示
+        const savedInfoHtml = savedTurn
+          ? `<div style="font-size:10px; color:#15803d; margin-top:2px; line-height:1.3;">
+              <span style="background:#dcfce7; border:1px solid #86efac; padding:0 4px; border-radius:3px; font-weight:bold;">記入済み</span>
+              ${escapeHtml(savedTurn.staff_name || "未記録")} (${escapeHtml(savedTurn.time || tm)})
+              ${savedTurn.edit_history && savedTurn.edit_history.length ? `<span style="color:#b45309;">[訂正${savedTurn.edit_history.length}]</span>` : ""}
+              <button type="button" class="btn btn-secondary" style="font-size:9.5px; padding:1px 4px; margin-left:2px;" onclick="editSavedNightTurn(${Number(savedTurn.id)})">訂正</button>
+            </div>`
+          : `<div style="font-size:10px; color:#b45309; margin-top:2px;">未保存(選択中)</div>`;
         return `
         <td style="text-align:center; vertical-align:top; padding:4px 3px;">
-          <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px; width:100%; max-width:130px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで解除">
-            ${curAction} 
+          <button class="btn btn-secondary" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:3px 6px; width:100%; max-width:130px;" onclick="toggleNightTurnAction(${r.id}, '${tm}')" title="クリックで取消">
+            ${escapeHtml(curAction)} 
           </button>
+          ${savedInfoHtml}
           ${noteInpHtml}
         </td>
         `;
@@ -10783,6 +11356,52 @@ function renderNightTable() {
  `;
  tbody.appendChild(tr);
  });
+}
+
+// [Antigravity実装 2026-10-16] 保存済みの体位変換記録の訂正（理由必須・edit_history保存・同じidの中身を書き換え）
+function editSavedNightTurn(turnId) {
+ const t = (db.data.turns || []).find(x => Number(x.id) === Number(turnId));
+ if (!t || t.voided) return;
+ const res = gState.residents.find(r => r.id === t.resident_id);
+ const newAction = prompt(`【${res ? res.name + " 様" : ""} ${t.time}】体位変換・巡視の内容を入力してください\n(安眠中 / 左側臥位 / 右側臥位 / 仰臥位 / おむつ交換):`, t.action || "");
+ if (newAction === null) return;
+ if (!newAction.trim()) {
+  alert("内容を入力してください（解除する場合はボタンをクリックして取消してください）。");
+  return;
+ }
+ const newNote = prompt(`様子・特変メモを入力してください（空欄可）:`, t.note || "");
+ if (newNote === null) return;
+ if (newAction.trim() === (t.action || "") && newNote.trim() === (t.note || "")) {
+  alert("変更された内容がありません。");
+  return;
+ }
+ const reason = cpPromptEditReason(`${t.time}の体位変換記録`, `${t.action}${t.note ? " (" + t.note + ")" : ""}`);
+ if (reason === null) return;
+
+ const oldCopy = JSON.parse(JSON.stringify(t));
+ t.action = newAction.trim();
+ t.note = newNote.trim();
+ t.staff_name = cpLedgerStaff();
+ cpAppendEditHistory(t, oldCopy, ["action", "note"], reason);
+
+ // 連動している自動巡視記録も更新
+ const tpls = getNightTurnTemplates();
+ const tpl = tpls[t.action] || DEFAULT_NIGHT_TURN_TEMPLATES[t.action] || `【{time} 定時巡視・体位変換】訪室確認。${t.action}実施。`;
+ let contentText = tpl.replace(/\{time\}/g, t.time).replace(/\{action\}/g, t.action);
+ if (t.note) contentText += ` 【様子】${t.note}`;
+ (db.data.care_records || []).forEach(rec => {
+  if (!rec.voided && rec.auto_night_turn && rec.resident_id === t.resident_id && rec.recorded_at === `${t.date} ${t.time}`) {
+   const oldRec = JSON.parse(JSON.stringify(rec));
+   rec.content = contentText;
+   rec.staff_name = t.staff_name;
+   cpAppendEditHistory(rec, oldRec, ["content"], reason);
+  }
+ });
+
+ db.save();
+ initNightTurnDrafts(true);
+ loadDateRecords(gState.selectedDate);
+ alert("体位変換・巡視の記録を訂正しました。");
 }
 
 function saveNightTurn(resId, time, action) {
@@ -20653,3 +21272,785 @@ window.cpToggleCategoryBilling = cpToggleCategoryBilling;
 window.cpToggleItemBilling = cpToggleItemBilling;
 window.cpSubmitBillingOverride = cpSubmitBillingOverride;
 window.cpVoidBillingOverride = cpVoidBillingOverride;
+
+// ======================================================================
+// [Antigravity実装 2026-10-16] 書く画面A：1人分をまとめて書く画面（看護師・介護職の共通）
+// - 利用者を1人選ぶと、その人のその日の分（食事量・水分・排泄・バイタル・入浴・体位変換・様子など）を1画面で書ける
+// - バイタル（体温・血圧・脈拍・SpO2）は看護師・介護職の両方に表示し、「看護の処置・観察」は看護師にのみ表示
+// - 入力欄はすべて空欄から始め、入れていない欄は保存しない
+// - チェック表（書く画面B）と双方向連動し、すでに書かれた欄は「記入済み」・中身・書いた人・時刻を表示し、理由必須で訂正できる
+// ======================================================================
+function cpOnSingleWriteMealTypeChange() {
+  const typeEl = document.getElementById("swMealType");
+  const mainEl = document.getElementById("swMealMain");
+  const sideEl = document.getElementById("swMealSide");
+  const waterEl = document.getElementById("swMealWater");
+  const statusEl = document.getElementById("swMealCurrentStatus");
+  if (!typeEl || !mainEl || !sideEl) return;
+  const resId = gState.selectedResidentId;
+  const type = typeEl.value;
+  const existing = (type && resId)
+    ? (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type)
+    : null;
+
+  if (statusEl) {
+    statusEl.innerHTML = existing
+      ? `<div style="margin-top:6px;">${cpFilledBadgeHtml(cpFormatMealDetail(existing), existing.staff_name, existing.time || "")} <span style="font-size:11px; color:#b45309; margin-left:4px;">※下の欄に入力して保存すると訂正（理由入力）になります</span></div>`
+      : "";
+  }
+
+  if (type === "その他") {
+    mainEl.type = "text"; mainEl.value = "ー"; mainEl.disabled = true;
+    mainEl.style.background = "#f1f5f9"; mainEl.style.color = "#64748b";
+    sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
+    sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
+  } else if (type === "おやつ") {
+    mainEl.disabled = false; mainEl.type = "number";
+    mainEl.min = "0"; mainEl.max = "10";
+    mainEl.style.background = ""; mainEl.style.color = "";
+    mainEl.value = "";
+    sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
+    sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
+  } else {
+    mainEl.disabled = false; mainEl.type = "number";
+    mainEl.min = "0"; mainEl.max = "10";
+    mainEl.style.background = ""; mainEl.style.color = "";
+    mainEl.value = "";
+    sideEl.disabled = false; sideEl.type = "number";
+    sideEl.min = "0"; sideEl.max = "10";
+    sideEl.style.background = ""; sideEl.style.color = "";
+    sideEl.value = "";
+  }
+  if (waterEl) waterEl.value = "";
+}
+
+function renderSingleWriteScreen() {
+  const container = document.getElementById("singleWriteContainer");
+  if (!container) return;
+
+  const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  const activeResidents = (gState.residents || []).filter(r => r.status !== "退所");
+  const dateStr = gState.selectedDate || getTodayStr();
+  const staffName = cpLoginStaffName();
+  const roleStr = cpStaffRoleOf(staffName) || "介護職";
+  const isNurse = cpIsCurrentNurse();
+
+  const resOptionsHtml = `<option value="">-- 利用者を選択 --</option>` + activeResidents.map(r =>
+    `<option value="${r.id}" ${res && r.id === res.id ? "selected" : ""}>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様${r.status !== "在所" ? " (" + escapeHtml(r.status) + ")" : ""}</option>`
+  ).join("");
+
+  if (!res) {
+    container.innerHTML = `
+      <div class="cp-sw-sticky-bar">
+        <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+          <span style="font-size:14px; font-weight:bold; color:#173f33;">入力する方：未選択</span>
+          <select class="form-control" style="width:auto; min-width:210px; font-weight:bold;" onchange="if(this.value) selectResident(Number(this.value))">
+            ${resOptionsHtml}
+          </select>
+        </div>
+      </div>
+      <div style="padding:28px; text-align:center; background:#f8faf9; border:1px dashed #cdd6d0; border-radius:8px; margin-top:12px;">
+        <p style="font-size:14px; color:#4a5852; margin:0;">上の選択欄、または左の一覧から記録する利用者様を選んでください。</p>
+      </div>
+    `;
+    return;
+  }
+
+  // 既存記録の取得（当日・対象利用者・取消されていないもの）
+  const dayMeals = (db.data.meals || []).filter(m => !m.voided && m.resident_id === res.id && m.date === dateStr);
+  const dayExcretions = (db.data.excretions || []).filter(e => !e.voided && e.resident_id === res.id && e.date === dateStr)
+    .slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  const dayVital = (db.data.vitals || []).find(v => !v.voided && v.resident_id === res.id && v.date === dateStr);
+  const dayBath = (db.data.baths || []).find(b => !b.voided && b.resident_id === res.id && b.date === dateStr);
+  const dayTurns = (db.data.turns || []).filter(t => !t.voided && t.resident_id === res.id && t.date === dateStr)
+    .slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
+  const dayCareRecords = (db.data.care_records || []).filter(c => !c.voided && c.resident_id === res.id && (c.recorded_at || "").startsWith(dateStr))
+    .slice().sort((a, b) => (b.recorded_at || "").localeCompare(a.recorded_at || ""));
+  const dayNurseRecords = dayCareRecords.filter(c => c.category === "看護");
+
+  // 1. 食事・水分の記入済み表示
+  const mealsFilledHtml = dayMeals.length > 0
+    ? `<div class="cp-filled-info-box">
+        <div style="font-size:11.5px; font-weight:bold; color:#15803d; margin-bottom:4px;">【本日の記入済み（食事・水分）】</div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${dayMeals.map(m => `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid #bbf7d0;">
+              <div>${cpFilledBadgeHtml(cpFormatMealDetail(m), m.staff_name, m.time || "", m.edit_history)}</div>
+              <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="cpQuickEditMealRecord(${Number(m.id)})">訂正</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b; margin-bottom:6px;">本日の食事・水分記録はまだありません。</div>`;
+
+  // 2. 排泄の記入済み表示
+  const excFilledHtml = dayExcretions.length > 0
+    ? `<div class="cp-filled-info-box">
+        <div style="font-size:11.5px; font-weight:bold; color:#15803d; margin-bottom:4px;">【本日の記入済み（排泄 ${dayExcretions.length}件）】</div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${dayExcretions.map(e => `
+            <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid #bbf7d0;">
+              <div>${cpFilledBadgeHtml((e.time ? e.time + " " : "") + cpFormatExcretionDetail(e), e.staff_name, e.time || "", e.edit_history)}</div>
+              <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="editExcretionRecord(${Number(e.id)})">訂正</button>
+            </div>
+          `).join("")}
+        </div>
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b; margin-bottom:6px;">本日の排泄記録はまだありません。</div>`;
+
+  // 3. バイタルの記入済み表示（看護師・介護職ともに表示）
+  const vitalFilledHtml = dayVital
+    ? `<div class="cp-filled-info-box">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:6px 10px; border-radius:4px; border:1px solid #bbf7d0;">
+          <div>
+            ${cpFilledBadgeHtml(cpFormatVitalBrief(dayVital) + (dayVital.notes ? " (" + dayVital.notes + ")" : ""), dayVital.staff_name, dayVital.time || "", dayVital.edit_history)}
+            <div style="font-size:11px; color:#b45309; margin-top:2px;">※下の欄に入力して保存すると、このバイタル記録の訂正（理由入力）になります。</div>
+          </div>
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="openPersonalVitalModal()">モーダルで訂正</button>
+        </div>
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b; margin-bottom:6px;">本日のバイタル記録はまだありません。</div>`;
+
+  // 4. 入浴・体位変換の記入済み表示
+  const bathFilledHtml = dayBath
+    ? `<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid #bbf7d0; margin-bottom:4px;">
+        <div>${cpFilledBadgeHtml(cpFormatBathDetail(dayBath), dayBath.staff_name, dayBath.time || "", dayBath.edit_history)}</div>
+        <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="cpQuickEditBathRecord(${Number(dayBath.id)})">訂正</button>
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b; margin-bottom:4px;">本日の入浴記録はまだありません。</div>`;
+
+  const turnsFilledHtml = dayTurns.length > 0
+    ? `<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">
+        ${dayTurns.map(t => `
+          <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid #bbf7d0;">
+            <div>${cpFilledBadgeHtml(`${t.time || ""} 体位変換:${t.action || ""}${t.note ? " (" + t.note + ")" : ""}`, t.staff_name, t.time || "", t.edit_history)}</div>
+            <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="editSavedNightTurn(${Number(t.id)})">訂正</button>
+          </div>
+        `).join("")}
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b;">本日の体位変換記録はまだありません。</div>`;
+
+  // 5. 時間＋あったこと（様子・特変）の記入済み表示
+  const eventsFilledHtml = dayCareRecords.length > 0
+    ? `<div class="cp-filled-info-box">
+        <div style="font-size:11.5px; font-weight:bold; color:#15803d; margin-bottom:4px;">【本日の記入済み（様子・出来事・特変 ${dayCareRecords.length}件）】</div>
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${dayCareRecords.map(c => {
+            const tm = (c.recorded_at || "").slice(11, 16);
+            return `
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; background:#fff; padding:4px 8px; border-radius:4px; border:1px solid #bbf7d0;">
+                <div>${cpFilledBadgeHtml(`[${c.category || "介護"}] ${c.content || ""}`, c.staff_name, tm, c.edit_history)}</div>
+                <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px;" onclick="openEditCareRecordModal(${Number(c.id)})">訂正・取消</button>
+              </div>
+            `;
+          }).join("")}
+        </div>
+      </div>`
+    : `<div style="font-size:11.5px; color:#64748b; margin-bottom:6px;">本日の様子・出来事の記録はまだありません。</div>`;
+
+  // 6. 看護の処置・観察セクション（看護師のみ表示）
+  const nurseSectionHtml = isNurse
+    ? `
+      <div class="cp-sw-section" style="border-color:#86efac; background:#f0fdf4;">
+        <div class="cp-sw-section-title" style="color:#166534;">
+          <span>看護の処置・観察（看護師専用欄）</span>
+          <span class="badge" style="background:#166534; color:#fff; font-size:11px; padding:2px 8px;">看護師のみ表示</span>
+        </div>
+        ${dayNurseRecords.length > 0 ? `
+          <div style="margin-bottom:8px; font-size:11.5px; color:#166534;">
+            記入済みの看護記録: ${dayNurseRecords.length}件（上の様子・出来事欄または見る画面から訂正できます）
+          </div>
+        ` : ""}
+        <div class="cp-sw-grid">
+          <div>
+            <label class="cp-sw-label">処置・観察の時刻（空欄なら現在時刻）</label>
+            <input type="time" id="swNurseTime" class="form-control" value="">
+          </div>
+          <div>
+            <label class="cp-sw-label">処置区分（任意）</label>
+            <select id="swNurseType" class="form-control">
+              <option value="" selected>選んでください（任意）</option>
+              <option value="創傷・皮膚処置">創傷・皮膚処置</option>
+              <option value="吸引・吸入">吸引・吸入</option>
+              <option value="血糖測定・インスリン">血糖測定・インスリン</option>
+              <option value="摘便・浣腸">摘便・浣腸</option>
+              <option value="点滴・医療管理">点滴・医療管理</option>
+              <option value="全身状態・症状観察">全身状態・症状観察</option>
+              <option value="医師連絡・往診対応">医師連絡・往診対応</option>
+            </select>
+          </div>
+        </div>
+        <div style="margin-top:8px;">
+          <label class="cp-sw-label">看護の処置・観察内容</label>
+          <textarea id="swNurseContent" class="form-control" rows="2" placeholder="例: 仙骨部発赤に対しアズノール軟膏塗布・ガーゼ保護。呼吸音清、喘鳴なし。" style="width:100%;"></textarea>
+        </div>
+      </div>
+    `
+    : "";
+
+  container.innerHTML = `
+    <!-- スクロールしても上に残る対象利用者・日付バー -->
+    <div class="cp-sw-sticky-bar">
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap;">
+        <span style="font-size:14.5px; font-weight:bold; color:#173f33;">
+          入力する方：<span style="color:#0284c7; text-decoration:underline;">${escapeHtml(res.name)} 様（${escapeHtml(res.room_no)}号室）</span>
+        </span>
+        <select id="swResidentSelect" class="form-control" style="width:auto; min-width:200px; font-size:13px; font-weight:bold; padding:4px 8px;" onchange="if(this.value) selectResident(Number(this.value))">
+          ${resOptionsHtml}
+        </select>
+      </div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <span style="font-size:12px; background:#eef2ef; color:#22302b; padding:3px 8px; border-radius:4px; font-weight:bold;">
+          対象日: ${escapeHtml(dateStr)} (${getWeekDayJp(dateStr)})
+        </span>
+        <span style="font-size:12px; background:${isNurse ? '#dcfce7' : '#e0f2fe'}; color:${isNurse ? '#166534' : '#0369a1'}; padding:3px 8px; border-radius:4px; font-weight:bold;">
+          記録者: ${escapeHtml(staffName)}（${escapeHtml(roleStr)}）
+        </span>
+        <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px;" onclick="switchCareTab('record')">
+          個別記録（見る）へ切替
+        </button>
+      </div>
+    </div>
+
+    <p style="font-size:12.5px; color:#4a5852; margin:8px 0 12px 0; line-height:1.5;">
+      ※すべての入力欄は<strong>空欄</strong>から始まります。<strong>入力した項目だけ</strong>が保存され、空欄の項目は保存されません。すでにチェック表などで書かれた項目は「記入済み」と表示されます。
+    </p>
+
+    <!-- 1. 時間＋あったこと（様子・出来事・特変） -->
+    <div class="cp-sw-section" style="border-left:4px solid #1e5b47;">
+      <div class="cp-sw-section-title">
+        <span>① 時間＋あったこと（様子・出来事・特変）</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">カルテ（care_records）に記録</span>
+      </div>
+      ${eventsFilledHtml}
+      <div class="cp-sw-grid" style="align-items:end;">
+        <div>
+          <label class="cp-sw-label">時間（例: 14:20 / 空欄なら現在時刻）</label>
+          <input type="time" id="swEventTime" class="form-control" value="">
+        </div>
+        <div>
+          <label class="cp-sw-label">区分（特変に印を付けると自動で「特変」になります）</label>
+          <select id="swEventCategory" class="form-control">
+            <option value="介護" selected>介護（日常の様子）</option>
+            <option value="連絡">連絡</option>
+            <option value="家族">家族</option>
+            <option value="リハビリ">リハビリ</option>
+            <option value="巡視">巡視</option>
+            ${isNurse ? `<option value="看護">看護</option>` : ""}
+          </select>
+        </div>
+        <div>
+          <label style="display:inline-flex; align-items:center; gap:6px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:7px 12px; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer;">
+            <input type="checkbox" id="swEventTokukan" style="width:16px; height:16px;">
+            特変の印を付ける（category:"特変"）
+          </label>
+        </div>
+      </div>
+      <div style="margin-top:8px;">
+        <label class="cp-sw-label">あったこと・様子（例：14:20 居室で転びそうになり職員が支えた）</label>
+        <textarea id="swEventContent" class="form-control" rows="2" placeholder="例：14:20 居室で転びそうになり職員が支えた" style="width:100%;"></textarea>
+      </div>
+    </div>
+
+    <!-- 2. バイタル（看護師・介護職ともに表示） -->
+    <div class="cp-sw-section">
+      <div class="cp-sw-section-title">
+        <span>② バイタル（体温・血圧・脈拍・SpO2）</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">バイタルチェック表と連動（看護師・介護職共通）</span>
+      </div>
+      ${vitalFilledHtml}
+      <div class="cp-sw-grid">
+        <div>
+          <label class="cp-sw-label">体温 (℃)</label>
+          <input type="number" step="0.1" id="swVitalTemp" class="form-control" value="" placeholder="例: 36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)">
+        </div>
+        <div>
+          <label class="cp-sw-label">血圧 上 (mmHg)</label>
+          <input type="number" id="swVitalBpHigh" class="form-control" value="" placeholder="上 (例: 128)">
+        </div>
+        <div>
+          <label class="cp-sw-label">血圧 下 (mmHg)</label>
+          <input type="number" id="swVitalBpLow" class="form-control" value="" placeholder="下 (例: 74)">
+        </div>
+        <div>
+          <label class="cp-sw-label">脈拍 (bpm)</label>
+          <input type="number" id="swVitalPulse" class="form-control" value="" placeholder="例: 72">
+        </div>
+        <div>
+          <label class="cp-sw-label">SpO2 (%)</label>
+          <input type="number" id="swVitalSpo2" class="form-control" value="" placeholder="例: 97">
+        </div>
+        <div style="display:flex; align-items:flex-end;">
+          <label style="display:inline-flex; align-items:center; gap:6px; padding:7px 10px; background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">
+            <input type="checkbox" id="swVitalUnusual"> バイタル特変
+          </label>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3. 食事・水分 -->
+    <div class="cp-sw-section">
+      <div class="cp-sw-section-title">
+        <span>③ 食事量・水分</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">食事・水分チェック表と連動</span>
+      </div>
+      ${mealsFilledHtml}
+      <div id="swMealCurrentStatus"></div>
+      <div class="cp-sw-grid" style="margin-top:6px;">
+        <div>
+          <label class="cp-sw-label">食事区分</label>
+          <select id="swMealType" class="form-control" onchange="cpOnSingleWriteMealTypeChange()">
+            <option value="" selected>選んでください</option>
+            <option value="朝食">朝食</option>
+            <option value="昼食">昼食</option>
+            <option value="夕食">夕食</option>
+            <option value="おやつ">おやつ</option>
+            <option value="その他">その他（水分のみ）</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">主食（0〜10割 / おやつ量）</label>
+          <input type="number" id="swMealMain" class="form-control" min="0" max="10" value="" placeholder="0-10">
+        </div>
+        <div>
+          <label class="cp-sw-label">副食（0〜10割）</label>
+          <input type="number" id="swMealSide" class="form-control" min="0" max="10" value="" placeholder="0-10">
+        </div>
+        <div>
+          <label class="cp-sw-label">水分量 (ml)</label>
+          <input type="number" id="swMealWater" class="form-control" step="50" value="" placeholder="例: 200">
+        </div>
+      </div>
+    </div>
+
+    <!-- 4. 排泄 -->
+    <div class="cp-sw-section">
+      <div class="cp-sw-section-title">
+        <span>④ 排泄</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">排泄チェック表と連動</span>
+      </div>
+      ${excFilledHtml}
+      <div class="cp-sw-grid">
+        <div>
+          <label class="cp-sw-label">時間（空欄なら現在時刻）</label>
+          <input type="time" id="swExcTime" class="form-control" value="">
+        </div>
+        <div>
+          <label class="cp-sw-label">排尿</label>
+          <select id="swExcUrine" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="1">あり (＋)</option>
+            <option value="0">なし (ー)</option>
+            <option value="2">バルーン測定</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">便の量</label>
+          <select id="swExcStoolAmount" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="なし">なし</option>
+            <option value="付着">付着</option>
+            <option value="微量">微量</option>
+            <option value="少量">少量</option>
+            <option value="中量">中量</option>
+            <option value="多量">多量</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">便の性状</label>
+          <select id="swExcStoolCond" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="なし">なし</option>
+            <option value="普通便">普通便</option>
+            <option value="軟便">軟便</option>
+            <option value="水様便">水様便</option>
+            <option value="泥状便">泥状便</option>
+            <option value="硬便">硬便 (コロコロ)</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">備考（失禁・パッド交換など）</label>
+          <input type="text" id="swExcNotes" class="form-control" value="" placeholder="備考">
+        </div>
+      </div>
+    </div>
+
+    <!-- 5. 入浴・夜間体位変換 -->
+    <div class="cp-sw-section">
+      <div class="cp-sw-section-title">
+        <span>⑤ 入浴・体位変換</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">入浴チェック表・体位変換表と連動</span>
+      </div>
+      <div class="cp-filled-info-box">
+        <div style="font-size:11.5px; font-weight:bold; color:#15803d; margin-bottom:4px;">【本日の記入済み（入浴・体位変換）】</div>
+        ${bathFilledHtml}
+        ${turnsFilledHtml}
+      </div>
+      <div class="cp-sw-grid">
+        <div>
+          <label class="cp-sw-label">入浴方法</label>
+          <select id="swBathType" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="一般浴">一般浴</option>
+            <option value="特浴">特浴(機械浴)</option>
+            <option value="清拭">清拭</option>
+            <option value="見合わせ">見合わせ</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">入浴時の処置・軟膏・様子</label>
+          <input type="text" id="swBathNotes" class="form-control" value="" placeholder="例: 仙骨部プロペト塗布">
+        </div>
+        <div>
+          <label class="cp-sw-label">体位変換（時間帯）</label>
+          <select id="swTurnTime" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="22:00">22:00</option>
+            <option value="00:00">00:00</option>
+            <option value="02:00">02:00</option>
+            <option value="04:00">04:00</option>
+            <option value="06:00">06:00</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">体位変換（向き・内容）</label>
+          <select id="swTurnAction" class="form-control">
+            <option value="" selected>選んでください</option>
+            <option value="安眠中">安眠中</option>
+            <option value="左側臥位">左側臥位</option>
+            <option value="右側臥位">右側臥位</option>
+            <option value="仰臥位">仰臥位</option>
+            <option value="おむつ交換">おむつ交換</option>
+          </select>
+        </div>
+        <div>
+          <label class="cp-sw-label">体位変換時の様子・特変メモ</label>
+          <input type="text" id="swTurnNote" class="form-control" value="" placeholder="例: 呼吸状態落ち着いている">
+        </div>
+      </div>
+    </div>
+
+    <!-- 6. 看護の処置・観察（看護師のみ） -->
+    ${nurseSectionHtml}
+
+    <!-- まとめて保存ボタン -->
+    <div style="margin-top:14px; display:flex; justify-content:flex-end; gap:10px; align-items:center; flex-wrap:wrap; padding:12px 16px; background:#f1f6f3; border:1px solid #a9cfbf; border-radius:8px;">
+      <span style="font-size:12.5px; color:#173f33; font-weight:bold;">入力した欄だけをまとめて保存します（空欄の項目は保存しません）</span>
+      <button type="button" id="btnSaveSingleWrite" class="btn btn-primary" style="font-size:14px; font-weight:bold; padding:10px 24px;" onclick="saveSingleWriteScreen()">
+        入力した項目をまとめて保存
+      </button>
+    </div>
+  `;
+}
+
+function saveSingleWriteScreen() {
+  const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  if (!res) {
+    alert("記録する利用者を選択してください。");
+    return;
+  }
+  const resId = res.id;
+  const dateStr = gState.selectedDate || getTodayStr();
+  const staff = cpLedgerStaff();
+  const nowTime = new Date().toTimeString().slice(0, 5);
+  const savedItems = [];
+  let idOffset = 1;
+
+  // 1. 時間＋あったこと（様子・特変）
+  const evtTime = (document.getElementById("swEventTime")?.value || "").trim();
+  const evtCatSel = (document.getElementById("swEventCategory")?.value || "介護").trim();
+  const evtTokukan = Boolean(document.getElementById("swEventTokukan")?.checked);
+  const evtContent = (document.getElementById("swEventContent")?.value || "").trim();
+
+  if (evtContent) {
+    const finalCat = evtTokukan ? "特変" : (evtCatSel || "介護");
+    const recTime = evtTime || nowTime;
+    if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+    db.data.care_records.unshift({
+      id: Date.now() + (idOffset++),
+      recorded_at: `${dateStr} ${recTime}`,
+      resident_id: resId,
+      category: finalCat,
+      content: evtContent,
+      staff_name: staff
+    });
+    if (finalCat === "特変" || finalCat === "連絡") {
+      if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
+      db.data.notebooks.unshift({
+        id: Date.now() + (idOffset++),
+        date: dateStr,
+        resident_id: resId,
+        content: `［${finalCat}］(${res.room_no}号室 ${res.name} 様) ${evtContent}`,
+        staff_name: staff,
+        status: "未対応"
+      });
+    }
+    savedItems.push(`様子・出来事（${finalCat}）`);
+  }
+
+  // 2. バイタル（看護師・介護職共通）
+  const tempInput = document.getElementById("swVitalTemp");
+  if (tempInput) formatTempInput(tempInput);
+  const vTemp = normalizeTempValue(tempInput ? tempInput.value : "");
+  const vBpH = (document.getElementById("swVitalBpHigh")?.value || "").trim();
+  const vBpL = (document.getElementById("swVitalBpLow")?.value || "").trim();
+  const vPulse = (document.getElementById("swVitalPulse")?.value || "").trim();
+  const vSpo2 = (document.getElementById("swVitalSpo2")?.value || "").trim();
+  const vUnusual = Boolean(document.getElementById("swVitalUnusual")?.checked);
+
+  if (vTemp || vBpH || vBpL || vPulse || vSpo2) {
+    if (!Array.isArray(db.data.vitals)) db.data.vitals = [];
+    const existingVital = db.data.vitals.find(v => !v.voided && v.resident_id === resId && v.date === dateStr);
+    const newTemp = vTemp ? parseFloat(vTemp) : (existingVital ? existingVital.temperature : null);
+    const newBpH = vBpH ? parseInt(vBpH, 10) : (existingVital ? existingVital.bp_high : null);
+    const newBpL = vBpL ? parseInt(vBpL, 10) : (existingVital ? existingVital.bp_low : null);
+    const newPulse = vPulse ? parseInt(vPulse, 10) : (existingVital ? existingVital.pulse : null);
+    const newSpo2 = vSpo2 ? parseInt(vSpo2, 10) : (existingVital ? existingVital.spo2 : null);
+
+    if (existingVital) {
+      const reason = cpPromptEditReason("バイタル記録", cpFormatVitalBrief(existingVital));
+      if (reason === null) return;
+      const oldCopy = JSON.parse(JSON.stringify(existingVital));
+      existingVital.time = nowTime;
+      existingVital.temperature = newTemp;
+      existingVital.bp_high = newBpH;
+      existingVital.bp_low = newBpL;
+      existingVital.pulse = newPulse;
+      existingVital.spo2 = newSpo2;
+      existingVital.is_unusual = (vUnusual || cpIsUnusualVital(res, existingVital)) ? 1 : 0;
+      existingVital.staff_name = staff;
+      cpAppendEditHistory(existingVital, oldCopy, ["time", "temperature", "bp_high", "bp_low", "pulse", "spo2", "is_unusual"], reason);
+      savedItems.push("バイタル（訂正）");
+    } else {
+      const vitalObj = {
+        id: Date.now() + (idOffset++),
+        resident_id: resId,
+        date: dateStr,
+        time: nowTime,
+        temperature: newTemp,
+        bp_high: newBpH,
+        bp_low: newBpL,
+        pulse: newPulse,
+        spo2: newSpo2,
+        is_unusual: 0,
+        staff_name: staff
+      };
+      vitalObj.is_unusual = (vUnusual || cpIsUnusualVital(res, vitalObj)) ? 1 : 0;
+      db.data.vitals.push(vitalObj);
+      savedItems.push("バイタル");
+    }
+  }
+
+  // 3. 食事・水分
+  const mType = (document.getElementById("swMealType")?.value || "").trim();
+  const mMainRaw = (document.getElementById("swMealMain")?.value || "").trim();
+  const mSideRaw = (document.getElementById("swMealSide")?.value || "").trim();
+  const mWaterRaw = (document.getElementById("swMealWater")?.value || "").trim();
+  const hasMealInput = (mMainRaw !== "" && mMainRaw !== "ー") || (mSideRaw !== "" && mSideRaw !== "ー") || mWaterRaw !== "";
+
+  if (mType && hasMealInput) {
+    if (!Array.isArray(db.data.meals)) db.data.meals = [];
+    let mainVal = null;
+    let sideVal = null;
+    if (mType === "その他") {
+      mainVal = null;
+      sideVal = null;
+    } else if (mType === "おやつ") {
+      mainVal = (mMainRaw !== "" && mMainRaw !== "ー" && !isNaN(parseInt(mMainRaw, 10))) ? parseInt(mMainRaw, 10) : null;
+      sideVal = null;
+    } else {
+      mainVal = (mMainRaw !== "" && mMainRaw !== "ー" && !isNaN(parseInt(mMainRaw, 10))) ? parseInt(mMainRaw, 10) : null;
+      sideVal = (mSideRaw !== "" && mSideRaw !== "ー" && !isNaN(parseInt(mSideRaw, 10))) ? parseInt(mSideRaw, 10) : null;
+    }
+    const waterVal = (mWaterRaw !== "" && !isNaN(parseInt(mWaterRaw, 10))) ? parseInt(mWaterRaw, 10) : 0;
+
+    const existingMeal = db.data.meals.find(m => !m.voided && m.date === dateStr && m.resident_id === resId && m.meal_type === mType);
+    if (existingMeal) {
+      const reason = cpPromptEditReason(`${mType}の記録`, cpFormatMealDetail(existingMeal));
+      if (reason === null) return;
+      const oldCopy = JSON.parse(JSON.stringify(existingMeal));
+      existingMeal.main_dish_ratio = mainVal;
+      existingMeal.side_dish_ratio = sideVal;
+      existingMeal.water_ml = waterVal;
+      existingMeal.time = nowTime;
+      existingMeal.staff_name = staff;
+      cpAppendEditHistory(existingMeal, oldCopy, ["main_dish_ratio", "side_dish_ratio", "water_ml", "time"], reason);
+      savedItems.push(`${mType}（訂正）`);
+    } else {
+      db.data.meals.push({
+        id: Date.now() + (idOffset++),
+        date: dateStr,
+        time: nowTime,
+        meal_type: mType,
+        resident_id: resId,
+        main_dish_ratio: mainVal,
+        side_dish_ratio: sideVal,
+        water_ml: waterVal,
+        staff_name: staff
+      });
+      savedItems.push(mType);
+    }
+  } else if (!mType && hasMealInput) {
+    alert("食事量または水分量を入力した場合は、「食事区分（朝食・昼食など）」も選んでください。");
+    return;
+  }
+
+  // 4. 排泄
+  const eTime = (document.getElementById("swExcTime")?.value || "").trim();
+  const eUrine = (document.getElementById("swExcUrine")?.value || "").trim();
+  const eAmount = (document.getElementById("swExcStoolAmount")?.value || "").trim();
+  const eCond = (document.getElementById("swExcStoolCond")?.value || "").trim();
+  const eNotes = (document.getElementById("swExcNotes")?.value || "").trim();
+
+  if (eUrine !== "" || eAmount !== "" || eCond !== "" || eNotes !== "") {
+    if (!Array.isArray(db.data.excretions)) db.data.excretions = [];
+    const amount = eAmount || "なし";
+    const cond = eCond || (amount === "なし" ? "なし" : "普通便");
+    db.data.excretions.unshift({
+      id: Date.now() + (idOffset++),
+      date: dateStr,
+      time: eTime || nowTime,
+      resident_id: resId,
+      urine_flag: eUrine !== "" ? parseInt(eUrine, 10) : 0,
+      stool_amount: amount,
+      stool_condition: cond,
+      notes: eNotes,
+      staff_name: staff
+    });
+    savedItems.push("排泄");
+  }
+
+  // 5. 入浴
+  const bType = (document.getElementById("swBathType")?.value || "").trim();
+  const bNotes = (document.getElementById("swBathNotes")?.value || "").trim();
+  if (bType !== "" || bNotes !== "") {
+    if (!bType) {
+      alert("入浴の処置・様子を入力した場合は、「入浴方法」も選んでください。");
+      return;
+    }
+    if (!Array.isArray(db.data.baths)) db.data.baths = [];
+    const existingBath = db.data.baths.find(b => !b.voided && b.date === dateStr && b.resident_id === resId);
+    if (existingBath) {
+      const reason = cpPromptEditReason("入浴記録", cpFormatBathDetail(existingBath));
+      if (reason === null) return;
+      const oldCopy = JSON.parse(JSON.stringify(existingBath));
+      existingBath.bath_type = bType;
+      existingBath.ointment_notes = bNotes;
+      existingBath.time = nowTime;
+      existingBath.staff_name = staff;
+      cpAppendEditHistory(existingBath, oldCopy, ["bath_type", "ointment_notes", "time"], reason);
+      savedItems.push("入浴（訂正）");
+    } else {
+      db.data.baths.push({
+        id: Date.now() + (idOffset++),
+        date: dateStr,
+        time: nowTime,
+        resident_id: resId,
+        bath_type: bType,
+        ointment_notes: bNotes,
+        staff_name: staff
+      });
+      savedItems.push("入浴");
+    }
+  }
+
+  // 6. 体位変換
+  const tTime = (document.getElementById("swTurnTime")?.value || "").trim();
+  const tAction = (document.getElementById("swTurnAction")?.value || "").trim();
+  const tNote = (document.getElementById("swTurnNote")?.value || "").trim();
+  if (tTime !== "" || tAction !== "" || tNote !== "") {
+    if (!tTime || !tAction) {
+      alert("体位変換を記録する場合は、「時間帯」と「向き・内容」の両方を選んでください。");
+      return;
+    }
+    if (!Array.isArray(db.data.turns)) db.data.turns = [];
+    const existingTurn = db.data.turns.find(t => !t.voided && t.date === dateStr && t.resident_id === resId && t.time === tTime);
+    const tpls = getNightTurnTemplates();
+    const tpl = tpls[tAction] || DEFAULT_NIGHT_TURN_TEMPLATES[tAction] || `【{time} 定時巡視・体位変換】訪室確認。${tAction}実施。`;
+    let contentText = tpl.replace(/\{time\}/g, tTime).replace(/\{action\}/g, tAction);
+    if (tNote) contentText += ` 【様子】${tNote}`;
+
+    if (existingTurn) {
+      const reason = cpPromptEditReason(`${tTime}の体位変換記録`, `${existingTurn.action}${existingTurn.note ? " (" + existingTurn.note + ")" : ""}`);
+      if (reason === null) return;
+      const oldCopy = JSON.parse(JSON.stringify(existingTurn));
+      existingTurn.action = tAction;
+      existingTurn.note = tNote;
+      existingTurn.staff_name = staff;
+      cpAppendEditHistory(existingTurn, oldCopy, ["action", "note"], reason);
+      savedItems.push(`体位変換 ${tTime}（訂正）`);
+    } else {
+      db.data.turns.push({
+        id: Date.now() + (idOffset++),
+        date: dateStr,
+        time: tTime,
+        resident_id: resId,
+        action: tAction,
+        note: tNote,
+        staff_name: staff
+      });
+      db.data.care_records.unshift({
+        id: Date.now() + (idOffset++),
+        recorded_at: `${dateStr} ${tTime}`,
+        resident_id: resId,
+        category: "巡視",
+        content: contentText,
+        staff_name: staff,
+        auto_night_turn: true
+      });
+      if (tNote) {
+        db.data.care_records.unshift({
+          id: Date.now() + (idOffset++),
+          recorded_at: `${dateStr} ${tTime}`,
+          resident_id: resId,
+          category: "特変",
+          content: contentText,
+          staff_name: staff,
+          auto_night_turn: true
+        });
+      }
+      savedItems.push(`体位変換 ${tTime}`);
+    }
+    initNightTurnDrafts(true);
+  }
+
+  // 7. 看護の処置・観察（看護師のみ）
+  if (cpIsCurrentNurse()) {
+    const nTime = (document.getElementById("swNurseTime")?.value || "").trim();
+    const nType = (document.getElementById("swNurseType")?.value || "").trim();
+    const nContent = (document.getElementById("swNurseContent")?.value || "").trim();
+    if (nContent) {
+      const prefix = nType ? `【${nType}】` : "【看護処置・観察】";
+      db.data.care_records.unshift({
+        id: Date.now() + (idOffset++),
+        recorded_at: `${dateStr} ${nTime || nowTime}`,
+        resident_id: resId,
+        category: "看護",
+        content: `${prefix}${nContent}`,
+        staff_name: staff
+      });
+      savedItems.push("看護の処置・観察");
+    }
+  }
+
+  if (savedItems.length === 0) {
+    alert("入力された項目がありません。記録したい欄に入力してから保存してください（空欄の項目は保存されません）。");
+    return;
+  }
+
+  db.save();
+  loadDateRecords(dateStr);
+  renderCalendar();
+  alert(`【${res.name} 様】の記録（${savedItems.join("・")}）を保存しました！`);
+}
+
+window.renderSingleWriteScreen = renderSingleWriteScreen;
+window.saveSingleWriteScreen = saveSingleWriteScreen;
+window.cpOnSingleWriteMealTypeChange = cpOnSingleWriteMealTypeChange;
+window.cpBuildUnifiedResidentRecords = cpBuildUnifiedResidentRecords;
+window.cpQuickEditMealRecord = cpQuickEditMealRecord;
+window.cpQuickEditBathRecord = cpQuickEditBathRecord;
+window.cpShowGenericEditHistory = cpShowGenericEditHistory;
+window.editExcretionRecord = editExcretionRecord;
+window.editSavedNightTurn = editSavedNightTurn;
+

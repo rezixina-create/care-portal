@@ -1900,3 +1900,93 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   }
 }
 
+/* [Antigravity実装 2026-10-16] 書く画面A（1人分まとめて書く画面）＆ 記入済み表示枠 */
+.cp-sw-sticky-bar {
+  position: sticky;
+  top: 0;
+  z-index: 25;
+  background: #ffffff;
+  padding: 10px 14px;
+  margin-bottom: 10px;
+  border: 1px solid #cdd6d0;
+  border-radius: 8px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.05);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 8px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.cp-sw-section {
+  background: #ffffff;
+  border: 1px solid #cdd6d0;
+  border-radius: 8px;
+  padding: 12px 14px;
+  margin-bottom: 12px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.cp-sw-section-title {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: bold;
+  color: #173f33;
+  border-bottom: 1px solid #eef2ef;
+  padding-bottom: 6px;
+  margin-bottom: 10px;
+}
+
+.cp-sw-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 10px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.cp-sw-label {
+  display: block;
+  font-size: 11.5px;
+  font-weight: bold;
+  color: #4a5852;
+  margin-bottom: 4px;
+}
+
+.cp-filled-info-box {
+  background: #f0fdf4;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  padding: 8px 10px;
+  margin-bottom: 10px;
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+@media (max-width: 480px) {
+  .cp-sw-sticky-bar {
+    padding: 8px 10px;
+    flex-direction: column;
+    align-items: flex-start;
+  }
+  .cp-sw-sticky-bar select {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .cp-sw-grid {
+    grid-template-columns: 1fr !important;
+    gap: 8px !important;
+  }
+  .cp-sw-section {
+    padding: 10px !important;
+  }
+}
+
+
