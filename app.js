@@ -15365,22 +15365,55 @@ function printIncidentReport(incId) {
 				.stamp-box th { white-space: nowrap; text-align: center; font-size: 8.5pt; padding: 2px 4px; }
 				.stamp-box td { height: 36px; width: 25%; text-align: center; vertical-align: top; font-size: 9pt; }
 				.pin-table th { white-space: nowrap; }
+				body { position: relative; }
+				.sec { break-inside: avoid; page-break-inside: avoid; }
+				.cont-note { text-align: right; font-size: 9pt; color: #333; margin: 2px 0 0 0; }
+				.cont-head { break-before: page; page-break-before: always; border-bottom: 2px solid #333; padding-bottom: 4px; margin-bottom: 8px; }
+				.cont-head .t { font-size: 13pt; font-weight: bold; }
+				.cont-head .i { font-size: 10pt; margin-top: 2px; }
 				@page { size: A4 portrait; margin: 10mm; }
 				@media print {
 					body { margin: 0; max-width: none; }
 				}
 			</style>
 			<script>
-				// [Claude修正 2026-10-16] 1枚（A4縦・余白10mm＝高さ277mm）に入らないときだけ少し縮める。字が小さくなりすぎないよう0.75倍まで
+				// [Claude修正 2026-10-16] 1枚（A4縦・余白10mm＝高さ277mm）に入らないときは、まず0.75倍まで縮めて1枚に収める。
+				// それでも入らないときは元の大きさに戻し、入りきらない項目は途中で切らずに項目ごと2枚目へ移す。
+				// 1枚目の下に「（2枚目に続きます）」、2枚目の上に「（2枚目）」と利用者名・部屋番号・発生日時・種別を入れる
 				window.cpFitOnePage = function () {
 					var b = document.body; b.style.zoom = "";
+					Array.prototype.slice.call(document.querySelectorAll(".cp-auto")).forEach(function (e) { e.parentNode.removeChild(e); });
 					var avail = 277 * 96 / 25.4 - 4;
 					var h = b.scrollHeight;
-					if (h > avail) b.style.zoom = String(Math.max(0.75, avail / h).toFixed(3));
+					if (h <= avail) return 1;
+					if (avail / h >= 0.75) { b.style.zoom = String((avail / h).toFixed(3)); return 1; }
+					var info = (document.getElementById("cpContInfo") || {}).textContent || "";
+					var secs = document.querySelectorAll(".sec");
+					var pageStart = 0, page = 1, noteH = 24;
+					for (var k = 0; k < secs.length; k++) {
+						var sc = secs[k];
+						var top = sc.offsetTop, bottom = top + sc.offsetHeight;
+						if (bottom - pageStart > avail - noteH && top > pageStart + 1) {
+							var note = document.createElement("div");
+							note.className = "cp-auto cont-note";
+							note.textContent = "（" + (page + 1) + "枚目に続きます）";
+							sc.parentNode.insertBefore(note, sc);
+							var head = document.createElement("div");
+							head.className = "cp-auto cont-head";
+							var t = document.createElement("div"); t.className = "t"; t.textContent = "事故・ヒヤリハット報告書（" + (page + 1) + "枚目）";
+							var i2 = document.createElement("div"); i2.className = "i"; i2.textContent = info;
+							head.appendChild(t); head.appendChild(i2);
+							sc.parentNode.insertBefore(head, sc);
+							pageStart = head.offsetTop;
+							page++;
+						}
+					}
+					return page;
 				};
 			</script>
 		</head>
 		<body>
+			<div id="cpContInfo" style="display:none;">${res ? `${escapeHtml(res.room_no)}号室　${escapeHtml(res.name)} 様` : "利用者"}　発生日時: ${escapeHtml(inc.occurred_at || "-")}　種別: ${escapeHtml(inc.report_type || "-")}</div>
 			<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
 				<div style="font-size:11pt; font-weight:bold;">${escapeHtml(facilityName)}</div>
 				<table style="width:300px; margin-bottom:0;" class="stamp-box">
@@ -15406,11 +15439,14 @@ function printIncidentReport(incId) {
 				</tr>
 			</table>
 
+			<div class="sec">
 			<table>
 				<tr><th style="background:#eef2ef;">1. 発生状況 (何が起きたか・発見時の状態)</th></tr>
 				<tr><td style="min-height:70px; padding:10px;">${escapeHtml(inc.situation || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
+			</div>
 
+			<div class="sec">
 			<!-- 受傷部位シェーマ図 ＆ 外傷ピン一覧 -->
 			<div style="border:1px solid #333; padding:8px; margin-bottom:8px; page-break-inside:avoid;">
 				<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cdd6d0; padding-bottom:3px;">
@@ -15440,21 +15476,28 @@ function printIncidentReport(incId) {
 					</div>
 				</div>
 			</div>
+			</div>
 
+			<div class="sec">
 			<table>
 				<tr><th style="background:#eef2ef;">3. 原因の分析 (なぜ起きたか・人的/環境要因)</th></tr>
 				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.cause || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
+			</div>
 
+			<div class="sec">
 			<table>
 				<tr><th style="background:#eef2ef;">4. 再発防止策 ＆ 今後の対応方針</th></tr>
 				<tr><td style="min-height:50px; padding:8px;">${escapeHtml(inc.prevention || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
+			</div>
 
+			<div class="sec">
 			<table>
 				<tr><th style="background:#eef2ef;">5. 施設長・管理者コメント ＆ 指導事項</th></tr>
 				<tr><td style="min-height:40px; padding:8px;">${escapeHtml(inc.supervisor_comment || '').replace(/\n/g, '<br>')}</td></tr>
 			</table>
+			</div>
 		</body>
 		</html>
 	`;
