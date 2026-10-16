@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261016_d6">
+ <link rel="stylesheet" href="style.css?v=20261016_d7">
 </head>
 <body>
 
@@ -913,10 +913,11 @@
 		</div>
  <table class="data-table" id="emergencyTable">
  <thead>
- <tr><th>品名</th><th>数量</th><th>単位</th><th>賞味期限</th><th>状態</th><th>保管メモ</th></tr>
+ <tr><th>品名</th><th>カテゴリ</th><th>数量</th><th>単位</th><th>賞味期限</th><th>状態</th><th>保管メモ</th><th>操作</th></tr><!-- [Claude修正 2026-10-16] 見出しが6列で中身（8列）とずれていた -->
  </thead>
  <tbody></tbody>
  </table>
+ <div id="emergencyUsageLog" style="margin-top:14px;"></div>
  </div>
 
  <!-- 3. 発注 ＆ 上司承認ワークフロー -->
@@ -3702,7 +3703,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261016_d6"></script>
+ <script src="app.js?v=20261016_d7"></script>
   
 
   <!-- ============================================================ -->
@@ -4208,6 +4209,42 @@
 			<div style="display:flex; justify-content:flex-end; gap:10px;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('emergencySupplyModal')">キャンセル</button>
 				<button type="button" class="btn btn-primary" onclick="submitEmergencySupplyRecord()">備蓄品を保存</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Claude修正 2026-10-16] 非常食の使用済み・破棄の記録（削除の代わり） -->
+	<div class="modal-overlay" id="emergencyUseModal" style="display:none; z-index:9998;">
+		<div class="modal-card" style="max-width:520px; width:94%; max-height:92vh; overflow-y:auto; padding:22px;">
+			<div class="modal-header" style="border-bottom:2px solid #ea580c; padding-bottom:10px; margin-bottom:14px; display:flex; justify-content:space-between; align-items:center;">
+				<h3 style="margin:0; font-size:17px; font-weight:bold; color:#c2410c;">使用済み・破棄の記録</h3>
+				<button class="modal-close-btn" onclick="closeModal('emergencyUseModal')">&times;</button>
+			</div>
+			<input type="hidden" id="emgUseId">
+			<p style="font-size:13.5px; font-weight:bold; color:#22302b; margin:0 0 12px 0;" id="emgUseTarget"></p>
+			<div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:12px;">
+				<label class="emg-use-choice"><input type="radio" name="emgUseType" value="使用済み" onchange="cpEmgUseTypeChanged()"> 使用済み（期限内に使った）</label>
+				<label class="emg-use-choice"><input type="radio" name="emgUseType" value="破棄" onchange="cpEmgUseTypeChanged()"> 破棄（捨てた）</label>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+				<div>
+					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">数量（一部だけでも可）:</label>
+					<div style="display:flex; align-items:center; gap:6px;"><input type="number" id="emgUseQty" class="form-control" style="font-size:13px;" min="1"><span id="emgUseUnit" style="font-size:13px;"></span></div>
+				</div>
+				<div>
+					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">日付:</label>
+					<input type="date" id="emgUseDate" class="form-control" style="font-size:13px;">
+				</div>
+			</div>
+			<div style="margin-bottom:12px;">
+				<label id="emgUseReasonLabel" style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">理由・用途:</label>
+				<select id="emgUseReasonSel" class="form-control" style="font-size:13px; margin-bottom:6px;"></select>
+				<input type="text" id="emgUseReason" class="form-control" style="font-size:13px;" placeholder="補足（「その他」のときは必須）">
+			</div>
+			<p style="font-size:12px; color:var(--text-muted); margin:0 0 14px 0;">記録した人・日時は自動で残ります。残りがなくなった品は一覧から外れ、下の「使用・破棄の記録」に残ります。</p>
+			<div style="display:flex; justify-content:flex-end; gap:10px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('emergencyUseModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" onclick="submitEmergencyUse()">記録する</button>
 			</div>
 		</div>
 	</div>

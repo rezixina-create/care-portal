@@ -2067,3 +2067,44 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   border-radius: 6px;
   cursor: pointer;
 }
+
+/* [Claude修正 2026-10-16] 本日の申し送り確認（確認者一覧）の名前 */
+.cp-hanko-name {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  color: #166534;
+  background: #dcfce7;
+  border: 1px solid #86efac;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.cp-hanko-time {
+  font-size: 11px;
+  font-weight: normal;
+  color: #4a5852;
+}
+
+/* [Claude修正 2026-10-16] 非常食の使用済み・破棄 */
+.emg-use-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 12px;
+  font-size: 13.5px;
+  font-weight: bold;
+  border: 1px solid #fdba74;
+  border-radius: 8px;
+  background: #fff7ed;
+  cursor: pointer;
+}
+.emg-usage > summary {
+  cursor: pointer;
+  font-weight: bold;
+  font-size: 13.5px;
+  color: #1a4f3d;
+  padding: 6px 0;
+}

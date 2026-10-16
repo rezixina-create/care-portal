@@ -3665,7 +3665,7 @@ function checkGlobalAlerts() {
   }
 
   // 2. 【事務専用：非常食・防災備蓄 賞味期限2週間前アラート】
-  (gState.emergencySupplies || []).forEach(item => {
+  (gState.emergencySupplies || []).filter(item => !cpEmgClosed(item)).forEach(item => { // [Claude修正 2026-10-16] 使い切った・破棄した品は出さない
     const emKey = `emergency_${item.id}_${item.expiry_date || ""}`;
     if (!isAlertDismissed(emKey) && item.expiry_date) {
       // [Claude修正] 日数を日付単位で計算し、当日・期限切れもアラートに出す (旧実装は期限切れが出なかった)
@@ -12098,12 +12098,16 @@ function renderNotebook() {
 	// 一括確認ボタン
 	const stampBtn = document.getElementById("notebookStampBtn");
 	if (stampBtn && currentStaff) {
-		stampBtn.textContent = `☑ 本日の全項目を［${currentStaff}］で一括確認済みにする`;
-		stampBtn.className = "btn btn-primary";
+		// [Claude修正 2026-10-16] 全部確認済みで名前もあるときは「確認済み」と出す（新しい申し送り・追記があれば押し直せる）
+		const allDone = notebooks.every(nb => getDailyNotebookConfirmationStatus(nb, currentStaff).confirmed);
+		const stamped = (db.data.notebook_stamps || []).some(x => !x.voided && x.date === gState.selectedDate && x.staff_name === currentStaff);
+		stampBtn.textContent = (allDone && stamped) ? `✓ ［${currentStaff}］本日の申し送りは確認済みです` : `☑ 本日の全項目を［${currentStaff}］で一括確認済みにする`;
+		stampBtn.className = (allDone && stamped) ? "btn btn-secondary" : "btn btn-primary";
 		stampBtn.style.padding = "8px 18px";
 		stampBtn.style.fontSize = "13px";
 		stampBtn.style.fontWeight = "bold";
 	}
+	renderNotebookStamps(); // [Claude修正 2026-10-16]
 }
 
 // 月間業務連絡表
@@ -12178,13 +12182,15 @@ function submitDailyNotebookUpdate() {
 		created_at: nowStr
 	});
 
-	nb.last_updated_at = nowStr;
+	// [Claude修正 2026-10-16] 確認済みかどうかの比較に使うため秒まで記録する（分単位だと、同じ分に確認した職員に「追記あり」が出なかった。月間業務連絡と同じ直し）
+	const stamp = nowStr + ":" + String(now.getSeconds()).padStart(2, "0");
+	nb.last_updated_at = stamp;
 	nb.last_updated_by = currentStaff;
 
 	if (!nb.confirmed_staff) nb.confirmed_staff = [];
 	if (!nb.confirmed_staff.includes(currentStaff)) nb.confirmed_staff.push(currentStaff);
 	if (!nb.confirmed_versions) nb.confirmed_versions = {};
-	nb.confirmed_versions[currentStaff] = nowStr;
+	nb.confirmed_versions[currentStaff] = stamp;
 
 	db.save();
 	closeModal("dailyNotebookUpdateModal");
@@ -12244,14 +12250,53 @@ function resolveNotebook(id) {
  }
 }
 
+// [Claude修正 2026-10-16] 「本日の全項目を一括確認済みにする」を押しても、確認者一覧に名前が出ず（一覧を描く処理がなかった）、
+// 各申し送りも「未確認」のままだった。押すと、その日の申し送りを全部（追記も含めて）確認済みにし、確認者一覧に名前を出す。
+// 名前の取り消しは確認者一覧の名前を押して行う（ボタンで外れないように、押し直しても取り消しにはしない）
 function toggleNotebookStamp() {
- const staff = document.getElementById("currentStaff").value;
- const isStamped = (db.data.notebook_stamps || []).some(s => !s.voided && s.date === gState.selectedDate && s.staff_name === staff);
- if (isStamped) {
- removeNotebookStamp(gState.selectedDate, staff);
- } else {
- stampNotebook();
+ const staff = (document.getElementById("currentStaff") || {}).value || "";
+ if (!staff) {
+  alert("担当職員を選択してください。");
+  return;
  }
+ const items = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate);
+ items.forEach(nb => {
+  const st = getDailyNotebookConfirmationStatus(nb, staff);
+  if (st.confirmed) return;
+  if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
+  if (!nb.confirmed_versions || typeof nb.confirmed_versions !== "object") nb.confirmed_versions = {};
+  if (!nb.confirmed_staff.includes(staff)) nb.confirmed_staff.push(staff);
+  nb.confirmed_versions[staff] = nb.last_updated_at || nb.created_at || toLocalDateTimeStr(new Date());
+  cpLogConfirm(nb, staff, "確認（一括）");
+ });
+ if (!Array.isArray(db.data.notebook_stamps)) db.data.notebook_stamps = [];
+ const nowStr = toLocalDateTimeStr(new Date());
+ const stamp = db.data.notebook_stamps.find(x => !x.voided && x.date === gState.selectedDate && x.staff_name === staff);
+ if (stamp) stamp.stamped_at = nowStr;
+ else db.data.notebook_stamps.push({ id: Date.now(), date: gState.selectedDate, staff_name: staff, stamped_at: nowStr });
+ db.save();
+ renderNotebook();
+}
+
+// [Claude修正 2026-10-16] 本日の申し送り確認（確認者一覧）を描く。名前を押すとその確認を取り消せる
+function renderNotebookStamps() {
+ const area = document.getElementById("hankoStampArea");
+ if (!area) return;
+ const stamps = (db.data.notebook_stamps || []).filter(x => !x.voided && x.date === gState.selectedDate);
+ area.innerHTML = "";
+ if (!stamps.length) {
+  area.innerHTML = '<span style="font-size:13px; color:#94a19a;">まだ確認した職員はいません。</span>';
+  return;
+ }
+ stamps.forEach(x => {
+  const b = document.createElement("button");
+  b.type = "button";
+  b.className = "cp-hanko-name";
+  b.title = "押すとこの確認を取り消せます";
+  b.innerHTML = `${escapeHtml(x.staff_name || "")} <span class="cp-hanko-time">${escapeHtml((x.stamped_at || "").slice(11, 16))}</span>`;
+  b.onclick = () => removeNotebookStamp(gState.selectedDate, x.staff_name);
+  area.appendChild(b);
+ });
 }
 
 function stampNotebook() {
@@ -13445,7 +13490,9 @@ function renderOfficeEmergencySupplies() {
 	if (!tbody) return;
 	tbody.innerHTML = "";
 	const today = new Date();
-	const list = db.data.emergency_supplies || gState.emergencySupplies || [];
+	// [Claude修正 2026-10-16] 使い切った・すべて破棄した品は一覧から外す（データと「使用・破棄の記録」には残る）
+	const list = (db.data.emergency_supplies || gState.emergencySupplies || []).filter(x => !cpEmgClosed(x));
+	renderEmergencyUsageLog();
 
 	if (list.length === 0) {
 		tbody.innerHTML = `<tr><td colspan="8" style="text-align:center; color:var(--text-muted); padding:16px;">非常食・備蓄品の登録はありません。</td></tr>`;
@@ -13480,7 +13527,7 @@ function renderOfficeEmergencySupplies() {
 			<td>${escapeHtml(item.storage_place || item.notes || '-')}</td>
 			<td style="text-align:center; white-space:nowrap;">
 				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="openEmergencySupplyModal(${item.id})">訂正</button>
-				<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteEmergencySupplyRecord(${item.id})">削除</button>
+				<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-left:3px; border-color:#ea580c; color:#c2410c;" onclick="openEmergencyUseModal(${item.id})">使用・破棄</button>
 			</td>
 		`;
 		tbody.appendChild(tr);
@@ -13559,14 +13606,78 @@ function submitEmergencySupplyRecord() {
 	alert("非常食・備蓄品を保存しました！");
 }
 
-function deleteEmergencySupplyRecord(id) {
-	if (!confirm("この備蓄品を削除しますか？")) return;
-	db.data.emergency_supplies = (db.data.emergency_supplies || []).filter(x => x.id !== id);
-	gState.emergencySupplies = db.data.emergency_supplies;
+// [Claude修正 2026-10-16] 非常食は「削除」をやめ、「使用済み」「破棄」を選んで記録する（期限内に使うこともあるため）。
+// いつ・だれ・どちらか・何個・理由（破棄は必須）／用途（使用は任意）を usage_log に残し、数量を減らす。
+// 一部だけ使ったときは残りの数量で一覧に残る。0になったら一覧から外す（データは消さない）
+function cpEmgClosed(item) {
+	return !!item && (item.closed === true || (Array.isArray(item.usage_log) && item.usage_log.length > 0 && Number(item.quantity) <= 0));
+}
+function deleteEmergencySupplyRecord(id) { openEmergencyUseModal(id); }
+function openEmergencyUseModal(id) {
+	const item = (db.data.emergency_supplies || []).find(x => x.id === id);
+	if (!item) return;
+	document.getElementById("emgUseId").value = item.id;
+	document.getElementById("emgUseTarget").textContent = `${item.name || ""}（残り ${item.quantity || 0}${item.unit || ""}・賞味期限 ${item.expiry_date || "-"}）`;
+	document.querySelectorAll('input[name="emgUseType"]').forEach(r => { r.checked = false; });
+	const q = document.getElementById("emgUseQty");
+	q.value = item.quantity || 0; q.max = item.quantity || 0; q.min = 1;
+	document.getElementById("emgUseUnit").textContent = item.unit || "";
+	document.getElementById("emgUseDate").value = toLocalDateStr(new Date());
+	document.getElementById("emgUseReasonSel").value = "";
+	document.getElementById("emgUseReason").value = "";
+	cpEmgUseTypeChanged();
+	openModal("emergencyUseModal");
+}
+function cpEmgUseTypeChanged() {
+	const t = (document.querySelector('input[name="emgUseType"]:checked') || {}).value || "";
+	const sel = document.getElementById("emgUseReasonSel");
+	const lbl = document.getElementById("emgUseReasonLabel");
+	sel.innerHTML = t === "破棄"
+		? '<option value="">選んでください（必須）</option><option>賞味期限切れ</option><option>破損・汚れ</option><option>その他</option>'
+		: '<option value="">選んでください（任意）</option><option>防災訓練</option><option>おやつ・食事で消費</option><option>災害・停電時に使用</option><option>その他</option>';
+	if (lbl) lbl.textContent = t === "破棄" ? "破棄の理由（必須）:" : "使った用途（任意）:";
+}
+function submitEmergencyUse() {
+	const id = Number(document.getElementById("emgUseId").value);
+	const item = (db.data.emergency_supplies || []).find(x => x.id === id);
+	if (!item) return;
+	const type = (document.querySelector('input[name="emgUseType"]:checked') || {}).value || "";
+	const qty = parseInt(cpToHalfWidth(document.getElementById("emgUseQty").value), 10);
+	const date = document.getElementById("emgUseDate").value;
+	const sel = document.getElementById("emgUseReasonSel").value;
+	const memo = document.getElementById("emgUseReason").value.trim();
+	const have = Number(item.quantity) || 0;
+	if (!type) { alert("「使用済み」か「破棄」を選んでください。"); return; }
+	if (isNaN(qty) || qty < 1 || qty > have) { alert(`数量は1〜${have}の間で入力してください。`); return; }
+	if (!date) { alert("日付を入力してください。"); return; }
+	if (type === "破棄" && !sel) { alert("破棄の理由を選んでください。"); return; }
+	if (sel === "その他" && !memo) { alert("「その他」のときは内容を書いてください。"); return; }
+	const reason = [sel, memo].filter(Boolean).join("：");
+	if (!Array.isArray(item.usage_log)) item.usage_log = [];
+	item.usage_log.push({ id: Date.now(), date, type, qty, reason, staff_name: cpLedgerStaff(), recorded_at: toLocalDateTimeStr(new Date()), before_qty: have });
+	item.quantity = have - qty;
+	if (item.quantity <= 0) { item.quantity = 0; item.closed = true; item.closed_type = type; item.closed_at = toLocalDateTimeStr(new Date()); }
 	db.save();
+	gState.emergencySupplies = db.data.emergency_supplies;
+	closeModal("emergencyUseModal");
 	renderOfficeEmergencySupplies();
 	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+	alert(item.quantity > 0 ? `${type}として ${qty}${item.unit || ""} を記録しました（残り ${item.quantity}${item.unit || ""}）。` : `${type}として記録しました。残りがなくなったので一覧から外しました（記録は下の「使用・破棄の記録」に残ります）。`);
 }
+function renderEmergencyUsageLog() {
+	const box = document.getElementById("emergencyUsageLog");
+	if (!box) return;
+	const rows = [];
+	(db.data.emergency_supplies || []).forEach(it => (it.usage_log || []).forEach(l => rows.push({ it, l })));
+	rows.sort((a, b) => (b.l.date + b.l.recorded_at).localeCompare(a.l.date + a.l.recorded_at));
+	box.innerHTML = `<details class="emg-usage"${rows.length ? "" : ""}><summary>使用・破棄の記録（${rows.length}件）</summary>` +
+		(rows.length ? `<div style="overflow-x:auto;"><table class="data-table"><thead><tr><th>日付</th><th>品名</th><th>区分</th><th>数量</th><th>理由・用途</th><th>記録した人</th><th>記録日時</th></tr></thead><tbody>` +
+		rows.map(({ it, l }) => `<tr><td>${escapeHtml(l.date || "")}</td><td>${escapeHtml(it.name || "")}</td><td><span class="badge" style="${l.type === "破棄" ? "background:#fee2e2; color:#991b1b;" : "background:#dcfce7; color:#166534;"}">${escapeHtml(l.type)}</span></td><td>${l.qty}${escapeHtml(it.unit || "")}</td><td>${escapeHtml(l.reason || "-")}</td><td>${escapeHtml(l.staff_name || "")}</td><td>${escapeHtml(l.recorded_at || "")}</td></tr>`).join("") +
+		`</tbody></table></div>` : `<p style="font-size:13px; color:var(--text-muted); margin:8px 0;">まだ記録はありません。</p>`) + `</details>`;
+}
+window.openEmergencyUseModal = openEmergencyUseModal;
+window.submitEmergencyUse = submitEmergencyUse;
+window.cpEmgUseTypeChanged = cpEmgUseTypeChanged;
 // 車両運行管理簿
 function renderOfficeVehicleLogs() {
  const tbody = document.querySelector("#vehicleLogsTable tbody");
@@ -15244,22 +15355,35 @@ function printIncidentReport(incId) {
 			<meta charset="UTF-8">
 			<title>事故・ヒヤリハット報告書 - ${escapeHtml(res ? res.name : '利用者')}</title>
 			<style>
-				body { font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 11pt; color: #111; margin: 20px; line-height: 1.5; }
-				table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
-				th, td { border: 1px solid #333; padding: 6px 8px; font-size: 10pt; }
+				/* [Claude修正 2026-10-16] A4で2枚目にはみ出していた（ページの余白と本文の余白が二重・承認欄の見出しが3行に折り返し・負傷箇所の表の見出しが縦に1文字ずつ折り返し）。
+				   余白を1つにし、詰めて、それでも入らないときは少しだけ縮めて1枚に収める（cpFitOnePage） */
+				body { font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 10pt; color: #111; margin: 0 auto; max-width: 190mm; line-height: 1.4; }
+				table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
+				th, td { border: 1px solid #333; padding: 4px 6px; font-size: 9.5pt; }
 				th { background: #eef2ef; text-align: left; }
-				.h-title { text-align: center; font-size: 16pt; font-weight: bold; margin-bottom: 8px; border-bottom: 2px solid #333; padding-bottom: 4px; }
-				.stamp-box td { height: 45px; text-align: center; vertical-align: top; font-size: 9pt; }
+				.h-title { text-align: center; font-size: 15pt; font-weight: bold; margin-bottom: 6px; border-bottom: 2px solid #333; padding-bottom: 3px; }
+				.stamp-box th { white-space: nowrap; text-align: center; font-size: 8.5pt; padding: 2px 4px; }
+				.stamp-box td { height: 36px; width: 25%; text-align: center; vertical-align: top; font-size: 9pt; }
+				.pin-table th { white-space: nowrap; }
+				@page { size: A4 portrait; margin: 10mm; }
 				@media print {
-					body { margin: 10mm; }
-					@page { size: A4 portrait; margin: 10mm; }
+					body { margin: 0; max-width: none; }
 				}
 			</style>
+			<script>
+				// [Claude修正 2026-10-16] 1枚（A4縦・余白10mm＝高さ277mm）に入らないときだけ少し縮める。字が小さくなりすぎないよう0.75倍まで
+				window.cpFitOnePage = function () {
+					var b = document.body; b.style.zoom = "";
+					var avail = 277 * 96 / 25.4 - 4;
+					var h = b.scrollHeight;
+					if (h > avail) b.style.zoom = String(Math.max(0.75, avail / h).toFixed(3));
+				};
+			</script>
 		</head>
 		<body>
 			<div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
 				<div style="font-size:11pt; font-weight:bold;">${escapeHtml(facilityName)}</div>
-				<table style="width:240px; margin-bottom:0;" class="stamp-box">
+				<table style="width:300px; margin-bottom:0;" class="stamp-box">
 					<tr><th>施設長</th><th>管理者</th><th>看護師長</th><th>報告者</th></tr>
 					<tr><td></td><td></td><td></td><td></td></tr>
 				</table>
@@ -15288,23 +15412,23 @@ function printIncidentReport(incId) {
 			</table>
 
 			<!-- 受傷部位シェーマ図 ＆ 外傷ピン一覧 -->
-			<div style="border:1px solid #333; padding:10px; margin-bottom:12px; page-break-inside:avoid;">
+			<div style="border:1px solid #333; padding:8px; margin-bottom:8px; page-break-inside:avoid;">
 				<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cdd6d0; padding-bottom:3px;">
 					2. 受傷部位シェーマ図 ＆ 負傷箇所一覧 (${pins.length}か所)
 				</div>
 				<div style="display:flex; gap:16px; align-items:flex-start;">
-					<div style="position:relative; width:220px; border:1px solid #cdd6d0; background:#fafafa; text-align:center;">
+					<div style="position:relative; width:200px; flex:0 0 200px; border:1px solid #cdd6d0; background:#fafafa; text-align:center;">
 						<img src="assets/body_schema.jpg" style="width:100%; display:block;">
 						<div style="position:absolute; top:0; left:0; width:100%; height:100%;">${pinsOverlayHtml}</div>
 					</div>
 					<div style="flex:1;">
-						<table style="margin:0; font-size:9.5pt;">
+						<table class="pin-table" style="margin:0; font-size:9pt;">
 							<thead>
 								<tr style="background:#f6f8f6;">
-									<th style="width:35px; text-align:center;">番号</th>
-									<th style="width:85px;">部位</th>
+									<th style="text-align:center;">番号</th>
+									<th>部位</th>
 									<th>外傷種別</th>
-									<th style="width:85px;">重症度</th>
+									<th>重症度</th>
 									<th>応急処置・対応</th>
 									<th>特記</th>
 								</tr>
@@ -15342,7 +15466,7 @@ function printIncidentReport(incId) {
 		win.document.close();
 		// [Claude修正] 人体図の読み込みを待ってから印刷 (読み込み前だと図が白紙になる)
 		let printed = false;
-		const doPrint = () => { if (!printed) { printed = true; win.focus(); win.print(); } };
+		const doPrint = () => { if (!printed) { printed = true; try { if (win.cpFitOnePage) win.cpFitOnePage(); } catch (e) {} win.focus(); win.print(); } };
 		const img = win.document.querySelector("img");
 		if (img && !img.complete) { img.onload = doPrint; img.onerror = doPrint; setTimeout(doPrint, 3000); }
 		else setTimeout(doPrint, 300);
