@@ -3307,7 +3307,7 @@ function updateStaffRoleUI() {
  if (adminRow) {
  adminRow.style.display = isAdminOrClerk ? "flex" : "none";
  }
- // [Antigravity実装 2026-10-16] 職種切り替え時に「1人分まとめて書く」画面の表示項目も即時更新
+ // [Antigravity実装 2026-10-16] 職種切り替え時に「経過記録」画面の表示項目も即時更新
  if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") {
   renderSingleWriteScreen();
  }
@@ -4768,104 +4768,35 @@ function updateRecordTargetBanner() {
   if (typeof updateExcretionStickyHeader === "function") updateExcretionStickyHeader();
 }
 
+// [Claude修正 2026-10-16] 経過記録の「あったこと」欄（swEventContent）。前の個別記録の書く欄（recordContent）は経過記録の画面へまとめたためなくした
+function cpRecordArea() {
+ return document.getElementById("swEventContent") || document.getElementById("recordContent");
+}
+
+// [Claude修正 2026-10-16] 書いた量に合わせて欄を広げる（上限は画面の半分。それ以上は欄の中でスクロール）
+function cpAutoGrowTextarea(el) {
+ if (!el) return;
+ el.style.height = "auto";
+ const max = Math.round(window.innerHeight * 0.5);
+ el.style.height = Math.min(el.scrollHeight + 2, max) + "px";
+ el.style.overflowY = el.scrollHeight + 2 > max ? "auto" : "hidden";
+}
+
 // リアルタイム文字数カウンター
 function updateRecordCharCount() {
- const area = document.getElementById("recordContent");
- const countEl = document.getElementById("recordCharCount");
- const fsCountEl = document.getElementById("fsCharCount");
- const badgeEl = document.getElementById("recordB5Badge");
- const fsBadgeEl = document.getElementById("fsB5Badge");
- if (!area) return;
-
- const len = area.value.length;
- if (countEl) countEl.textContent = len;
- if (fsCountEl) fsCountEl.textContent = len;
-
- let badgeText = "";
- let badgeBg = "#5f6d66";
-
- if (len === 0) {
- if (badgeEl) badgeEl.style.display = "none";
- if (fsBadgeEl) fsBadgeEl.style.display = "none";
- return;
- } else if (len < 400) {
- badgeText = " B5目安: 約1/3枚";
- badgeBg = "#5f6d66";
- } else if (len < 700) {
- badgeText = " B5目安: 約半分";
- badgeBg = "#0284c7";
- } else if (len <= 1000) {
- badgeText = " B5用紙1枚適量 (推奨)";
- badgeBg = "#16a34a";
- } else {
- badgeText = " B5用紙1枚超過 (2枚目へ)";
- badgeBg = "#d97706";
- }
-
- if (badgeEl) {
- badgeEl.textContent = badgeText;
- badgeEl.style.background = badgeBg;
- badgeEl.style.display = "inline-block";
- }
- if (fsBadgeEl) {
- fsBadgeEl.textContent = badgeText;
- fsBadgeEl.style.background = badgeBg;
- fsBadgeEl.style.display = "inline-block";
- }
+ // [Claude修正 2026-10-16] 文字数だけ表示する（B5用紙の目安は、経過記録は「あったこと」を書くだけで字数を目指す必要がないため外した）
+ const area = cpRecordArea();
+ const fsArea = document.getElementById("fsRecordContent");
+ const len = area ? area.value.length : (fsArea ? fsArea.value.length : 0);
+ ["swEventCharCount", "recordCharCount", "fsCharCount"].forEach(id => {
+  const el = document.getElementById(id);
+  if (el) el.textContent = len;
+ });
+ if (area && area.id === "swEventContent") cpAutoGrowTextarea(area);
 }
 
 // 日報・総合記録テンプレートの挿入
-function insertB5Template(isFullscreen = false) {
- const targetId = isFullscreen ? "fsRecordContent" : "recordContent";
- const area = document.getElementById(targetId);
- if (!area) return;
-
- // [Claude修正] 雛形は見出しと項目名だけにする（数値や様子の例文が入ったまま保存されると、実際とちがう記録になるため）
- const template =
-`【バイタル・全身状態】
-体温:  ℃ / 血圧:  /  / 脈拍:  / SpO2:  %
-表情・活気: 
-
-【食事・水分摂取】
-朝食:  / 昼食:  / 夕食: 
-水分摂取量計:  ml
-
-【排泄状況・介助】
-日中排尿:  回 / 夜間:  回 / 排便: 
-
-【活動・日中のご様子】
-
-
-【衛生・処置・皮膚状態】
-
-
-【夜勤・申し送り事項】
-`;
-
- if (area.value.trim().length > 0) {
- if (confirm("すでに入力されている文章があります。末尾に日報雛形を追加しますか？\n（[キャンセル]を押すと上書き確認に移ります）")) {
- area.value = area.value + "\n\n" + template;
- } else {
- if (confirm("現在の内容を消去して日報雛形を上書き挿入しますか？")) {
- area.value = template;
- } else {
- return;
- }
- }
- } else {
- area.value = template;
- }
-
- // 同期
- if (isFullscreen) {
- const normalArea = document.getElementById("recordContent");
- if (normalArea) normalArea.value = area.value;
- } else {
- const fsArea = document.getElementById("fsRecordContent");
- if (fsArea) fsArea.value = area.value;
- }
- updateRecordCharCount();
-}
+// [Claude修正 2026-10-16] 日報雛形（insertB5Template）はなくした。バイタル・食事・排泄はチェック表と経過記録の欄から記録に反映されるため、文章で打ち直すと二重入力・数字の食い違いになる
 
 // 定型文ボタン
 function renderQuickTemplates() {
@@ -4876,11 +4807,13 @@ function renderQuickTemplates() {
  const btn = document.createElement("button");
  btn.className = "template-btn";
  btn.textContent = `＋ ${t.label}`;
+ btn.type = "button";
  btn.onclick = () => {
- const area = document.getElementById("recordContent");
+ const area = cpRecordArea();
  if (area) {
  area.value = (area.value ? area.value + "\n" : "") + t.phrase;
  updateRecordCharCount();
+ area.focus();
  }
  };
  container.appendChild(btn);
@@ -4890,7 +4823,7 @@ function renderQuickTemplates() {
 // 全画面集中エディタ機能
 function openFullscreenRecord() {
  updateRecordTargetBanner();
- const area = document.getElementById("recordContent");
+ const area = cpRecordArea();
  const fsArea = document.getElementById("fsRecordContent");
  if (area && fsArea) {
  fsArea.value = area.value;
@@ -4902,7 +4835,7 @@ function openFullscreenRecord() {
 }
 
 function closeFullscreenRecord() {
- const area = document.getElementById("recordContent");
+ const area = cpRecordArea();
  const fsArea = document.getElementById("fsRecordContent");
  if (area && fsArea) {
  area.value = fsArea.value;
@@ -4913,7 +4846,7 @@ function closeFullscreenRecord() {
 }
 
 function syncFromFullscreen() {
- const area = document.getElementById("recordContent");
+ const area = cpRecordArea();
  const fsArea = document.getElementById("fsRecordContent");
  if (area && fsArea) {
  area.value = fsArea.value;
@@ -4941,11 +4874,11 @@ function renderFsQuickTemplates() {
 }
 
 function submitCareRecordFromFullscreen() {
+ // [Claude修正 2026-10-16] 全画面で書いた文は経過記録の「あったこと」欄へ戻し、経過記録の保存（入力した欄だけ保存）で残す
  syncFromFullscreen();
- submitCareRecord();
- // 保存に成功してフォームがクリアされていれば閉じる
- const area = document.getElementById("recordContent");
- if (area && !area.value) {
+ if (typeof saveSingleWriteScreen === "function" && document.getElementById("swEventContent")) saveSingleWriteScreen();
+ const area = cpRecordArea();
+ if (!area || !area.value) {
  const modal = document.getElementById("fullscreenRecordModal");
  if (modal) modal.style.display = "none";
  }
@@ -4953,7 +4886,7 @@ function submitCareRecordFromFullscreen() {
 
 function clearRecordForm() {
  if (confirm("記録入力欄をクリアしますか？")) {
- const area = document.getElementById("recordContent");
+ const area = cpRecordArea();
  const customTime = document.getElementById("recordCustomTime");
  const fsArea = document.getElementById("fsRecordContent");
  if (area) area.value = "";
@@ -7036,7 +6969,7 @@ function selectRecordCategory(cat) {
  syncCategoryButtons();
 
  // 特変・連絡選択時、本文が空なら即座に雛形をサジェスト＆フォーカス
- const contentArea = document.getElementById("recordContent");
+ const contentArea = cpRecordArea();
  if (contentArea) {
  if (!contentArea.value.trim()) {
  if (cat === "特変") {
@@ -7368,24 +7301,27 @@ function renderPersonalDailySummary(res, dateStr) {
  const latestWeight = exactWeight || weightRecords[0] || null;
 
  // 3. 食事検索
- const dayMeals = (db.data.meals || []).filter(m => m.resident_id === res.id && m.date === dateStr);
+ // [Claude修正 2026-10-16] 取消・訂正で外した記録（voided）は数えない。おやつ・その他は1日に何件でもあるので全部出す
+ const dayMeals = (db.data.meals || []).filter(m => !m.voided && m.resident_id === res.id && m.date === dateStr);
+ const snacks = dayMeals.filter(m => m.meal_type === "おやつ");
+ const others = dayMeals.filter(m => m.meal_type === "その他");
  const breakfast = dayMeals.find(m => m.meal_type === "朝食");
  const lunch = dayMeals.find(m => m.meal_type === "昼食");
  const dinner = dayMeals.find(m => m.meal_type === "夕食");
  const totalWater = dayMeals.reduce((sum, m) => sum + (m.water_ml || 0), 0);
 
  // 4. 排泄検索
- const dayExcretions = (db.data.excretions || []).filter(e => e.resident_id === res.id && e.date === dateStr);
+ const dayExcretions = (db.data.excretions || []).filter(e => !e.voided && e.resident_id === res.id && e.date === dateStr);
  const urineCount = dayExcretions.filter(e => e.urine_flag).length;
  const stoolCount = dayExcretions.filter(e => e.stool_condition && e.stool_condition !== "なし").length;
  const stoolSample = dayExcretions.find(e => e.stool_condition && e.stool_condition !== "なし");
 
  // 5. 入浴検索
- const bath = (db.data.baths || []).find(b => b.resident_id === res.id && b.date === dateStr);
+ const bath = (db.data.baths || []).find(b => !b.voided && b.resident_id === res.id && b.date === dateStr);
 
  // 6. 服薬・口腔ケア検索
  const dayMeds = (db.data.meds || []).filter(m => !m.voided && m.resident_id === res.id && m.date === dateStr);
- const dayOrals = (db.data.oral_cares || []).filter(o => o.resident_id === res.id && o.date === dateStr);
+ const dayOrals = (db.data.oral_cares || []).filter(o => !o.voided && o.resident_id === res.id && o.date === dateStr);
 
  // 血圧のハイライトスタイル
  let bpHtml = `<span style="color:#94a19a; font-size:12px;">未測定</span>`;
@@ -7452,12 +7388,11 @@ function renderPersonalDailySummary(res, dateStr) {
  食事 ＆ 水分摂取
  </div>
  <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
-  // [Antigravity実装 2026-10-15] 食事摂取量表示（nullを「ー」表示）
   <div>朝: ${cpFormatMealRatio(breakfast)}</div>
   <div>昼: ${cpFormatMealRatio(lunch)}</div>
   <div>夕: ${cpFormatMealRatio(dinner)}</div>
-  ${dayMeals.find(m => m.meal_type === "おやつ") ? `<div>おやつ: ${cpFormatMealRatio(dayMeals.find(m => m.meal_type === "おやつ"))}</div>` : ""}
-  ${dayMeals.find(m => m.meal_type === "その他") ? `<div>その他: ${cpFormatMealRatio(dayMeals.find(m => m.meal_type === "その他"))}</div>` : ""}
+  ${snacks.length ? `<div>おやつ: ${snacks.map(m => cpFormatMealRatio(m)).join("・")}</div>` : ""}
+  ${others.length ? `<div>その他（水分）: ${others.map(m => `${m.water_ml || 0}ml`).join("・")}</div>` : ""}
  <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px; color:#1e5b47; font-weight:bold;">
  1日合計水分: ${totalWater} ml
  </div>
@@ -7470,8 +7405,8 @@ function renderPersonalDailySummary(res, dateStr) {
  排泄 ＆ 入浴
  </div>
  <div style="font-size:11.5px; color:#36443e; line-height:1.5;">
- <div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
- <div style="font-size:11px; color:#5f6d66;">便状態: ${stoolSample ? `${stoolSample.stool_condition} (${stoolSample.stool_amount || ''})` : '特記なし'}</div>
+ ${dayExcretions.length === 0 ? `<div style="color:#94a19a;">排泄: 未記入</div>` : `<div>排尿: <strong>${urineCount}</strong> 回 | 排便: <strong>${stoolCount}</strong> 回</div>
+ <div style="font-size:11px; color:#5f6d66;">便状態: ${stoolSample ? `${escapeHtml(stoolSample.stool_condition)}${stoolSample.stool_amount ? ` (${escapeHtml(stoolSample.stool_amount)})` : ""}` : (dayExcretions.some(e => e.stool_amount === "なし") ? "排便なし" : "未記入")}</div>`}
  <div style="margin-top:2px; border-top:1px dashed #cdd6d0; padding-top:2px;">
  入浴: ${bath ? `<strong style="color:#16a34a;">${escapeHtml(bath.bath_type || "")}${bath.bath_type === "見合わせ" ? "" : " 実施"}</strong> ${bath.ointment_notes ? `(${escapeHtml(bath.ointment_notes)})` : ''}` : '<span style="color:#94a19a;">本日入浴なし</span>'}
  </div>
@@ -8036,7 +7971,7 @@ function renderSelectedDateRecords() {
      すべての過去履歴を表示する
     </button>
     <button type="button" class="btn btn-primary" style="font-size:12px;" onclick="switchCareTab('write_single')">
-     1人分まとめて書く画面へ
+     経過記録へ
     </button>
    </div>
    </div>
@@ -9430,7 +9365,8 @@ function cpOnMealTypeChange(resId) {
   const btnEl = document.getElementById(`mSaveBtn_${resId}`);
   if (!typeEl || !mainEl || !sideEl) return;
   const type = typeEl.value;
-  const existing = (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type);
+  // [Claude修正 2026-10-16] 記入済み・訂正になるのは朝食・昼食・夕食だけ。おやつ・その他（水分）は毎回新しい記録なので前の値を入れない
+  const existing = ["朝食", "昼食", "夕食"].includes(type) ? (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type) : null;
 
   if (statusEl) {
     statusEl.innerHTML = existing ? cpFilledBadgeHtml(cpFormatMealDetail(existing), existing.staff_name, existing.time || "", existing.edit_history) : "";
@@ -14901,7 +14837,9 @@ function updateIncidentPinsSummaryUI() {
 }
 
 function openIncidentFromRecord() {
-	const content = document.getElementById("recordContent").value;
+	// [Claude修正 2026-10-16] 経過記録の「あったこと」欄から作る
+	const contentArea = cpRecordArea();
+	const content = contentArea ? contentArea.value : "";
 	const resId = gState.selectedResidentId;
 	const now = new Date();
 	const nowStr = toLocalDateTimeStr(now).replace(" ", "T");
@@ -21293,7 +21231,8 @@ function cpOnSingleWriteMealTypeChange() {
   if (!typeEl || !mainEl || !sideEl) return;
   const resId = gState.selectedResidentId;
   const type = typeEl.value;
-  const existing = (type && resId)
+  // [Claude修正 2026-10-16] 訂正になるのは朝食・昼食・夕食だけ（おやつ・その他は毎回新しい記録）
+  const existing = (type && resId && ["朝食", "昼食", "夕食"].includes(type))
     ? (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type)
     : null;
 
@@ -21331,6 +21270,37 @@ function cpOnSingleWriteMealTypeChange() {
 function renderSingleWriteScreen() {
   const container = document.getElementById("singleWriteContainer");
   if (!container) return;
+  // [Claude修正 2026-10-16] 書きかけを消さない。ほかの端末が保存すると、入力欄から指が離れている間にこの画面が描き直され、書いた途中の文や数字が消えていた。
+  // 同じ方・同じ日の描き直しなら入力中の値を戻す（保存した直後と、方・日を変えたときは空欄に戻す）
+  const swKey = `${gState.selectedResidentId || ""}|${gState.selectedDate || ""}`;
+  const swKeep = {};
+  if (!window._cpSwClearOnce && container.dataset.swKey === swKey) {
+    container.querySelectorAll("input[id^='sw'], select[id^='sw'], textarea[id^='sw']").forEach(el => {
+      if (el.id === "swResidentSelect" || el.disabled) return;
+      if (el.type === "checkbox") { if (el.checked) swKeep[el.id] = true; }
+      else if (el.value !== "") swKeep[el.id] = el.value;
+    });
+  }
+  window._cpSwClearOnce = false;
+  container.dataset.swKey = swKey;
+  cpRenderSingleWriteScreenInner(container);
+  if (Object.keys(swKeep).length) {
+    if (swKeep.swMealType !== undefined) {
+      const t = document.getElementById("swMealType");
+      if (t) { t.value = swKeep.swMealType; cpOnSingleWriteMealTypeChange(); }
+    }
+    Object.keys(swKeep).forEach(id => {
+      if (id === "swMealType") return;
+      const el = document.getElementById(id);
+      if (!el || el.disabled) return;
+      if (el.type === "checkbox") el.checked = true; else el.value = swKeep[id];
+    });
+  }
+  if (typeof renderQuickTemplates === "function") renderQuickTemplates();
+  updateRecordCharCount();
+}
+
+function cpRenderSingleWriteScreenInner(container) {
 
   const res = gState.residents.find(r => r.id === gState.selectedResidentId);
   const activeResidents = (gState.residents || []).filter(r => r.status !== "退所");
@@ -21524,7 +21494,7 @@ function renderSingleWriteScreen() {
     <div class="cp-sw-section" style="border-left:4px solid #1e5b47;">
       <div class="cp-sw-section-title">
         <span>① 時間＋あったこと（様子・出来事・特変）</span>
-        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">カルテ（care_records）に記録</span>
+        <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">個別記録（見る）に出ます</span>
       </div>
       ${eventsFilledHtml}
       <div class="cp-sw-grid" style="align-items:end;">
@@ -21546,13 +21516,26 @@ function renderSingleWriteScreen() {
         <div>
           <label style="display:inline-flex; align-items:center; gap:6px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:7px 12px; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer;">
             <input type="checkbox" id="swEventTokukan" style="width:16px; height:16px;">
-            特変の印を付ける（category:"特変"）
+            特変の印を付ける
           </label>
         </div>
       </div>
+      <!-- [Claude修正 2026-10-16] 定型文・全画面・ヒヤリハットの作成をここへまとめた（前は下にたたんだ補助の欄にあった） -->
       <div style="margin-top:8px;">
-        <label class="cp-sw-label">あったこと・様子（例：14:20 居室で転びそうになり職員が支えた）</label>
-        <textarea id="swEventContent" class="form-control" rows="2" placeholder="例：14:20 居室で転びそうになり職員が支えた" style="width:100%;"></textarea>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">
+          <label class="cp-sw-label" style="margin:0;">あったこと・様子（例：14:20 居室で転びそうになり職員が支えた）</label>
+          <span style="font-size:12px; color:var(--text-muted);">文字数: <strong id="swEventCharCount" style="color:#1e5b47;">0</strong> 字</span>
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
+          <span style="font-size:12px; color:#4a5852; font-weight:bold;">定型文:</span>
+          <div class="templates-list" id="quickTemplatesList" style="margin:0; display:inline-flex; flex-wrap:wrap; gap:4px;"></div>
+          <button type="button" class="btn btn-secondary" style="font-size:12px; padding:2px 8px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
+        </div>
+        <textarea id="swEventContent" class="form-control" rows="3" placeholder="例：14:20 居室で転びそうになり職員が支えた" style="width:100%; resize:vertical; overflow-y:hidden; line-height:1.6;" oninput="updateRecordCharCount()"></textarea>
+        <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
+          <button type="button" class="btn btn-secondary" style="font-size:12.5px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openFullscreenRecord()">全画面で大きく書く</button>
+          <button type="button" class="btn btn-secondary" style="font-size:12.5px;" onclick="openIncidentFromRecord()">ヒヤリハット・事故報告書を作成</button>
+        </div>
       </div>
     </div>
 
@@ -22045,6 +22028,7 @@ function saveSingleWriteScreen() {
   }
 
   db.save();
+  window._cpSwClearOnce = true; // [Claude修正 2026-10-16] 保存した直後の描き直しは空欄に戻す
   loadDateRecords(dateStr);
   renderCalendar();
   alert(`【${res.name} 様】の記録（${savedItems.join("・")}）を保存しました！`);
