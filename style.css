@@ -1990,3 +1990,10 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 }
 
 
+
+/* [Claude修正 2026-10-16] 経過記録：項目ごとの「この項目だけ保存」ボタン */
+.cp-sw-section-save {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 8px;
+}
