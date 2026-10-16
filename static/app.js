@@ -9065,9 +9065,10 @@ function cpFormatMealDetail(m) {
 
 function cpFormatExcretionDetail(e) {
  if (!e) return "";
- const u = e.urine_flag === 1 ? "排尿あり(＋)" : (e.urine_flag === 2 ? "バルーン" : "排尿なし(ー)");
- const s = (e.stool_amount && e.stool_amount !== "なし") ? `排便:${e.stool_amount}(${e.stool_condition || "-"})` : "排便なし";
- return `${u}・${s}${e.notes ? " (" + e.notes + ")" : ""}`;
+ // [Claude修正 2026-10-16] 書いていない欄は表示しない（「なし」と決めつけない）
+ const u = e.urine_flag === 1 ? "排尿あり(＋)" : (e.urine_flag === 2 ? "バルーン" : (e.urine_flag === 0 ? "排尿なし(ー)" : ""));
+ const s = (e.stool_amount && e.stool_amount !== "なし") ? `排便:${e.stool_amount}(${e.stool_condition || "-"})` : (e.stool_amount === "なし" ? "排便なし" : "");
+ return `${[u, s].filter(Boolean).join("・") || "（排尿・排便は未記入）"}${e.notes ? " (" + e.notes + ")" : ""}`;
 }
 
 function cpFormatBathDetail(b) {
@@ -9290,7 +9291,7 @@ function renderExcretionTable() {
  tr.innerHTML = `
  <td><strong>${escapeHtml(e.time || "")}</strong></td>
  <td>${res ? escapeHtml(res.name) + ' 様' : '-'}</td>
- <td>${e.urine_flag === 1 ? 'あり (＋)' : (e.urine_flag === 2 ? 'バルーン' : 'なし')}</td>
+ <td>${e.urine_flag === 1 ? 'あり (＋)' : (e.urine_flag === 2 ? 'バルーン' : (e.urine_flag === 0 ? 'なし' : '-'))}</td>
  <td><span style="font-weight:bold; color:#b45309;">${escapeHtml(e.stool_amount || "-")}</span></td>
  <td>${escapeHtml(e.stool_condition || "-")}</td>
  <td>${escapeHtml(e.notes || '-')}</td>
@@ -9372,9 +9373,10 @@ function submitExcretion() {
    alert("排尿・便の量・性状・備考のいずれかを入力してください。");
    return;
  }
- const urine = urineVal !== "" ? parseInt(urineVal, 10) : 0;
- const amount = amountVal || "なし";
- const cond = condVal || (amount === "なし" ? "なし" : "普通便");
+ // [Claude修正 2026-10-16] 書いていない欄は「未記入」のまま残す（以前は空欄が「排尿なし」「便なし」「普通便」として記録されていた）
+ const urine = urineVal !== "" ? parseInt(urineVal, 10) : null;
+ const amount = amountVal;
+ const cond = condVal || (amount === "なし" ? "なし" : "");
  const staff = cpLedgerStaff();
 
  db.data.excretions.unshift({
@@ -9547,7 +9549,9 @@ function saveMeal(resId) {
   const staff = cpLedgerStaff();
   const nowTime = new Date().toTimeString().slice(0, 5);
 
-  const existing = (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type);
+  // [Claude修正 2026-10-16] 1日1回なのは朝食・昼食・夕食だけ。その他（水分）・おやつは何度でも記録できる
+  // （以前は2回目の水分が1回目の「訂正」になって上書きされ、1日の水分の合計も合わなかった）
+  const existing = ["朝食", "昼食", "夕食"].includes(type) ? (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type) : null;
   if (existing) {
     const isSame = (existing.main_dish_ratio ?? null) === main &&
       (existing.side_dish_ratio ?? null) === side &&
@@ -21864,7 +21868,8 @@ function saveSingleWriteScreen() {
     }
     const waterVal = (mWaterRaw !== "" && !isNaN(parseInt(mWaterRaw, 10))) ? parseInt(mWaterRaw, 10) : 0;
 
-    const existingMeal = db.data.meals.find(m => !m.voided && m.date === dateStr && m.resident_id === resId && m.meal_type === mType);
+    // [Claude修正 2026-10-16] 1日1回なのは朝食・昼食・夕食だけ。その他（水分）・おやつは何度でも記録できる
+    const existingMeal = ["朝食", "昼食", "夕食"].includes(mType) ? db.data.meals.find(m => !m.voided && m.date === dateStr && m.resident_id === resId && m.meal_type === mType) : null;
     if (existingMeal) {
       const reason = cpPromptEditReason(`${mType}の記録`, cpFormatMealDetail(existingMeal));
       if (reason === null) return;
@@ -21904,14 +21909,15 @@ function saveSingleWriteScreen() {
 
   if (eUrine !== "" || eAmount !== "" || eCond !== "" || eNotes !== "") {
     if (!Array.isArray(db.data.excretions)) db.data.excretions = [];
-    const amount = eAmount || "なし";
-    const cond = eCond || (amount === "なし" ? "なし" : "普通便");
+    // [Claude修正 2026-10-16] 書いていない欄は「未記入」のまま残す（空欄を「排尿なし」「便なし」「普通便」にしない）
+    const amount = eAmount;
+    const cond = eCond || (amount === "なし" ? "なし" : "");
     db.data.excretions.unshift({
       id: Date.now() + (idOffset++),
       date: dateStr,
       time: eTime || nowTime,
       resident_id: resId,
-      urine_flag: eUrine !== "" ? parseInt(eUrine, 10) : 0,
+      urine_flag: eUrine !== "" ? parseInt(eUrine, 10) : null,
       stool_amount: amount,
       stool_condition: cond,
       notes: eNotes,
