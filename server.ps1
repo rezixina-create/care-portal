@@ -617,80 +617,188 @@ namespace CarePortal
         {
             JObj root = MiniJson.Parse(json) as JObj;
             if (root == null) throw new Exception("保存する内容が読めません");
+            lock (_lock) { Apply(root, null, null, null); }
+        }
+
+        // [第2段階] 差分保存のときの書き込み: 変わった記録（ops に出てくる記録）と版番号の行だけを書く。
+        // 全体を組み立て直したり、ほかの記録を見比べたりしない。うまく当てはまらないときは全体の書き込みに切り替える
+        public void WriteDelta(JObj root, List<object> ops)
+        {
             lock (_lock)
             {
-                List<string> newKeys = new List<string>(root.Keys);
-                Dictionary<string, string> newWhole = new Dictionary<string, string>();
-                Dictionary<string, List<string>> newOrder = new Dictionary<string, List<string>>();
-                Dictionary<string, Dictionary<string, string>> newRecs = new Dictionary<string, Dictionary<string, string>>();
-                Dictionary<string, int> oldPos = new Dictionary<string, int>();
-                for (int i = 0; i < _keys.Count; i++) oldPos[_keys[i]] = i;
-
-                IntPtr upItem = IntPtr.Zero, delItem = IntPtr.Zero, upRec = IntPtr.Zero, delRec = IntPtr.Zero, delColl = IntPtr.Zero;
-                bool began = false;
-                try
+                bool keysSame = root.Keys.Count == _keys.Count;
+                for (int i = 0; keysSame && i < _keys.Count; i++) if (root.Keys[i] != _keys[i]) keysSame = false;
+                if (!keysSame) { Apply(root, null, null, null); return; }
+                Dictionary<string, bool> onlyKeys = new Dictionary<string, bool>();
+                Dictionary<string, Dictionary<string, bool>> upIds = new Dictionary<string, Dictionary<string, bool>>();
+                Dictionary<string, Dictionary<string, bool>> rmIds = new Dictionary<string, Dictionary<string, bool>>();
+                foreach (object o in ops)
                 {
-                    Check(_api.Prepare(_db, "INSERT OR REPLACE INTO items(key, pos, kind, json) VALUES(?, ?, ?, ?)", out upItem), "準備");
-                    Check(_api.Prepare(_db, "DELETE FROM items WHERE key = ?", out delItem), "準備");
-                    Check(_api.Prepare(_db, "INSERT OR REPLACE INTO records(coll, id, json) VALUES(?, ?, ?)", out upRec), "準備");
-                    Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ? AND id = ?", out delRec), "準備");
-                    Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ?", out delColl), "準備");
-                    Exec("BEGIN IMMEDIATE");
-                    began = true;
-
-                    for (int i = 0; i < newKeys.Count; i++)
+                    JObj op = o as JObj;
+                    if (op == null) continue;
+                    string k = op.GetStr("k"), t = op.GetStr("t"), id = op.GetStr("id");
+                    if (string.IsNullOrEmpty(k)) continue;
+                    if ((t == "up" || t == "rm") && id != null && _recs.ContainsKey(k) && root.Get(k) is List<object>)
                     {
-                        string k = newKeys[i];
-                        object v = root.Map[k];
-                        int op;
-                        bool posChanged = !oldPos.TryGetValue(k, out op) || op != i;
-                        List<string> ids = RecordIds(v);
-                        if (ids != null)
+                        Dictionary<string, Dictionary<string, bool>> d = t == "up" ? upIds : rmIds;
+                        Dictionary<string, bool> m;
+                        if (!d.TryGetValue(k, out m)) { m = new Dictionary<string, bool>(); d[k] = m; }
+                        m[id] = true;
+                    }
+                    else onlyKeys[k] = true;
+                }
+                onlyKeys["_rev"] = true;
+                try { Apply(root, onlyKeys, upIds, rmIds); }
+                catch (DeltaMismatch) { Apply(root, null, null, null); }
+            }
+        }
+
+        private class DeltaMismatch : Exception { public DeltaMismatch(string m) : base(m) { } }
+
+        private static string RecKeyOf(JObj rec)
+        {
+            object idv = rec.Get("id");
+            if (idv is string) return "s:" + (string)idv;
+            if (idv is JNum) return "n:" + ((JNum)idv).Raw;
+            return null;
+        }
+
+        // onlyKeys == null なら全部の項目を見比べる。そうでなければ、onlyKeys の項目は丸ごと見比べ、
+        // upIds・rmIds の項目は書かれた記録だけを書く・消す。ほかの項目は触らない（_lock の中で呼ぶ）
+        private void Apply(JObj root, Dictionary<string, bool> onlyKeys, Dictionary<string, Dictionary<string, bool>> upIds, Dictionary<string, Dictionary<string, bool>> rmIds)
+        {
+            bool full = onlyKeys == null;
+            List<string> newKeys = new List<string>(root.Keys);
+            Dictionary<string, string> newWhole = new Dictionary<string, string>(_whole);
+            Dictionary<string, List<string>> newOrder = new Dictionary<string, List<string>>(_order);
+            Dictionary<string, Dictionary<string, string>> newRecs = new Dictionary<string, Dictionary<string, string>>(_recs);
+            Dictionary<string, int> oldPos = new Dictionary<string, int>();
+            for (int i = 0; i < _keys.Count; i++) oldPos[_keys[i]] = i;
+            if (full) { newWhole.Clear(); newOrder.Clear(); newRecs.Clear(); }
+
+            IntPtr upItem = IntPtr.Zero, delItem = IntPtr.Zero, upRec = IntPtr.Zero, delRec = IntPtr.Zero, delColl = IntPtr.Zero;
+            bool began = false;
+            try
+            {
+                Check(_api.Prepare(_db, "INSERT OR REPLACE INTO items(key, pos, kind, json) VALUES(?, ?, ?, ?)", out upItem), "準備");
+                Check(_api.Prepare(_db, "DELETE FROM items WHERE key = ?", out delItem), "準備");
+                Check(_api.Prepare(_db, "INSERT OR REPLACE INTO records(coll, id, json) VALUES(?, ?, ?)", out upRec), "準備");
+                Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ? AND id = ?", out delRec), "準備");
+                Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ?", out delColl), "準備");
+                Exec("BEGIN IMMEDIATE");
+                began = true;
+
+                for (int i = 0; i < newKeys.Count; i++)
+                {
+                    string k = newKeys[i];
+                    object v = root.Map[k];
+                    bool inUp = upIds != null && upIds.ContainsKey(k);
+                    bool inRm = rmIds != null && rmIds.ContainsKey(k);
+                    bool whole = full || onlyKeys.ContainsKey(k);
+                    if (!whole && !inUp && !inRm) continue; // 変わっていない項目
+                    int op;
+                    bool posChanged = !oldPos.TryGetValue(k, out op) || op != i;
+
+                    if (!whole)
+                    {
+                        // 書かれた記録だけを書く・消す
+                        List<object> list = v as List<object>;
+                        Dictionary<string, string> m = new Dictionary<string, string>(_recs[k]);
+                        bool orderChanged = false;
+                        if (inRm)
                         {
-                            List<object> list = (List<object>)v;
-                            Dictionary<string, string> oldRecs;
-                            bool wasColl = _recs.TryGetValue(k, out oldRecs);
-                            if (!wasColl) { oldRecs = new Dictionary<string, string>(); _api.BindText(delColl, 1, k); Run(delColl); }
-                            Dictionary<string, string> nr = new Dictionary<string, string>();
-                            for (int j = 0; j < list.Count; j++)
+                            foreach (string id in rmIds[k].Keys)
                             {
-                                string t = MiniJson.Serialize(list[j]);
-                                nr[ids[j]] = t;
-                                string ot;
-                                if (!oldRecs.TryGetValue(ids[j], out ot) || ot != t)
+                                bool stillThere = false;
+                                foreach (object e in list) { JObj je = e as JObj; if (je != null && je.GetStr("id") == id) { stillThere = true; break; } }
+                                if (stillThere) continue; // 同じ保存の中で消して書き直した記録
+                                foreach (string pre in new string[] { "s:", "n:" })
                                 {
-                                    _api.BindText(upRec, 1, k); _api.BindText(upRec, 2, ids[j]); _api.BindText(upRec, 3, t);
-                                    Run(upRec);
+                                    if (m.Remove(pre + id)) { _api.BindText(delRec, 1, k); _api.BindText(delRec, 2, pre + id); Run(delRec); orderChanged = true; }
                                 }
                             }
-                            foreach (string oid in oldRecs.Keys)
-                            {
-                                if (!nr.ContainsKey(oid)) { _api.BindText(delRec, 1, k); _api.BindText(delRec, 2, oid); Run(delRec); }
-                            }
-                            string newOrderJson = OrderJson(ids);
-                            List<string> oldIds;
-                            bool orderSame = wasColl && _order.TryGetValue(k, out oldIds) && OrderJson(oldIds) == newOrderJson;
-                            if (!orderSame || posChanged)
-                            {
-                                _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 1); _api.BindText(upItem, 4, newOrderJson);
-                                Run(upItem);
-                            }
-                            newOrder[k] = ids;
-                            newRecs[k] = nr;
                         }
-                        else
+                        if (inUp)
                         {
-                            string t = MiniJson.Serialize(v);
-                            if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
-                            string ow;
-                            if (!_whole.TryGetValue(k, out ow) || ow != t || posChanged)
+                            foreach (string id in upIds[k].Keys)
                             {
-                                _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 0); _api.BindText(upItem, 4, t);
-                                Run(upItem);
+                                JObj rec = null;
+                                foreach (object e in list) { JObj je = e as JObj; if (je != null && je.GetStr("id") == id) { rec = je; break; } }
+                                if (rec == null) continue; // 同じ保存の中で書いてから消した記録
+                                string rk = RecKeyOf(rec);
+                                if (rk == null) throw new DeltaMismatch("id がない記録");
+                                string t = MiniJson.Serialize(rec);
+                                string ot;
+                                if (!m.TryGetValue(rk, out ot)) orderChanged = true;
+                                if (ot != t) { _api.BindText(upRec, 1, k); _api.BindText(upRec, 2, rk); _api.BindText(upRec, 3, t); Run(upRec); }
+                                m[rk] = t;
                             }
-                            newWhole[k] = t;
                         }
+                        if (orderChanged || posChanged)
+                        {
+                            List<string> ids = RecordIds(v);
+                            if (ids == null || ids.Count != m.Count) throw new DeltaMismatch("並びが合わない: " + k);
+                            foreach (string rid in ids) if (!m.ContainsKey(rid)) throw new DeltaMismatch("並びが合わない: " + k);
+                            _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 1); _api.BindText(upItem, 4, OrderJson(ids));
+                            Run(upItem);
+                            newOrder[k] = ids;
+                        }
+                        newRecs[k] = m;
+                        continue;
                     }
+
+                    // 項目を丸ごと見比べる
+                    List<string> allIds = RecordIds(v);
+                    if (allIds != null)
+                    {
+                        List<object> list = (List<object>)v;
+                        Dictionary<string, string> oldRecs;
+                        bool wasColl = _recs.TryGetValue(k, out oldRecs);
+                        if (!wasColl) { oldRecs = new Dictionary<string, string>(); _api.BindText(delColl, 1, k); Run(delColl); }
+                        Dictionary<string, string> nr = new Dictionary<string, string>();
+                        for (int j = 0; j < list.Count; j++)
+                        {
+                            string t = MiniJson.Serialize(list[j]);
+                            nr[allIds[j]] = t;
+                            string ot;
+                            if (!oldRecs.TryGetValue(allIds[j], out ot) || ot != t)
+                            {
+                                _api.BindText(upRec, 1, k); _api.BindText(upRec, 2, allIds[j]); _api.BindText(upRec, 3, t);
+                                Run(upRec);
+                            }
+                        }
+                        foreach (string oid in oldRecs.Keys)
+                        {
+                            if (!nr.ContainsKey(oid)) { _api.BindText(delRec, 1, k); _api.BindText(delRec, 2, oid); Run(delRec); }
+                        }
+                        string newOrderJson = OrderJson(allIds);
+                        List<string> oldIds;
+                        bool orderSame = wasColl && _order.TryGetValue(k, out oldIds) && OrderJson(oldIds) == newOrderJson;
+                        if (!orderSame || posChanged)
+                        {
+                            _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 1); _api.BindText(upItem, 4, newOrderJson);
+                            Run(upItem);
+                        }
+                        newWhole.Remove(k);
+                        newOrder[k] = allIds;
+                        newRecs[k] = nr;
+                    }
+                    else
+                    {
+                        string t = MiniJson.Serialize(v);
+                        if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
+                        string ow;
+                        if (!_whole.TryGetValue(k, out ow) || ow != t || posChanged)
+                        {
+                            _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 0); _api.BindText(upItem, 4, t);
+                            Run(upItem);
+                        }
+                        newOrder.Remove(k); newRecs.Remove(k);
+                        newWhole[k] = t;
+                    }
+                }
+                if (full)
+                {
                     // なくなった項目を消す
                     Dictionary<string, bool> keep = new Dictionary<string, bool>();
                     foreach (string k in newKeys) keep[k] = true;
@@ -700,21 +808,21 @@ namespace CarePortal
                         _api.BindText(delItem, 1, k); Run(delItem);
                         if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
                     }
-                    Exec("COMMIT");
-                    began = false;
-                    _keys = newKeys; _whole = newWhole; _order = newOrder; _recs = newRecs;
-                    _text = null;
-                    _stamp++;
                 }
-                catch
-                {
-                    if (began) { try { Exec("ROLLBACK"); } catch { } }
-                    throw;
-                }
-                finally
-                {
-                    foreach (IntPtr p in new IntPtr[] { upItem, delItem, upRec, delRec, delColl }) { if (p != IntPtr.Zero) _api.FinalizeStmt(p); }
-                }
+                Exec("COMMIT");
+                began = false;
+                _keys = newKeys; _whole = newWhole; _order = newOrder; _recs = newRecs;
+                _text = null;
+                _stamp++;
+            }
+            catch
+            {
+                if (began) { try { Exec("ROLLBACK"); } catch { } }
+                throw;
+            }
+            finally
+            {
+                foreach (IntPtr p in new IntPtr[] { upItem, delItem, upRec, delRec, delColl }) { if (p != IntPtr.Zero) _api.FinalizeStmt(p); }
             }
         }
 
@@ -2199,19 +2307,30 @@ namespace CarePortal
                             if (rn != null) long.TryParse(rn.Raw, out prevRev);
                             long newRev = prevRev + 1;
                             db.Set("_rev", new JNum(newRev.ToString(System.Globalization.CultureInfo.InvariantCulture)));
-                            string outJson = MiniJson.Serialize(db);
+                            string outJson = null;
                             if (slow)
                             {
-                                outJson = MergeAccountSecrets(outJson, beforeJson);
+                                outJson = MergeAccountSecrets(MiniJson.Serialize(db), beforeJson);
                                 _dbCache = MiniJson.Parse(outJson) as JObj;
                                 sessionsJson = outJson;
+                                DbWriteText(outJson);
                             }
-                            DbWriteText(outJson);
+                            else if (_store != null)
+                            {
+                                // [第2段階] データベースには、変わった記録と版番号だけを書く（全体を組み立て直さない）
+                                _store.WriteDelta(db, ops);
+                            }
+                            else
+                            {
+                                outJson = MiniJson.Serialize(db);
+                                DbWriteText(outJson);
+                            }
                             RecordChange(prevRev, newRev, ops, !slow);
                             long stampAfter = DbStamp();
                             _dbCacheStamp = stampAfter;
                             _revCacheVal = newRev; _revCacheStamp = stampAfter;
-                            WriteMinuteBackup(outJson);
+                            if (outJson != null) WriteMinuteBackup(outJson);
+                            else WriteMinuteBackupIfDue(db);
                             resp = "{\"success\":true,\"rev\":" + newRev + ",\"prev_rev\":" + prevRev + ",\"saved_at\":\"" + DateTime.Now.ToString("HH:mm") + "\"}";
                         }
                     }
@@ -2234,6 +2353,23 @@ namespace CarePortal
                 string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
                 string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
                 if (!File.Exists(backupPath)) File.WriteAllText(backupPath, json, Encoding.UTF8);
+                File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), json, Encoding.UTF8);
+            }
+            catch { }
+            CleanupMinuteBackups();
+        }
+
+        // [第2段階] データベースのとき: 控え（その分の最初の1つと backup_latest.json）は1分に1回だけ作る。
+        // データベースは書きかけが残らないので、保存のたびに全体を書く必要がない（保存を速くするため）
+        private void WriteMinuteBackupIfDue(JObj db)
+        {
+            try
+            {
+                string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+                string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
+                if (File.Exists(backupPath)) return;
+                string json = MiniJson.Serialize(db);
+                File.WriteAllText(backupPath, json, Encoding.UTF8);
                 File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), json, Encoding.UTF8);
             }
             catch { }

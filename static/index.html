@@ -2259,7 +2259,7 @@
  【常時監視ステータス】多重保護システム正常稼働中
  </div>
  <div style="font-size:13px; color:#047857;">
- 記録・入力・変更を保存するたびに、親機PCの data/backup/ に日時つきのファイル（同じ分の保存は上書き）と最新版（backup_latest.json）が自動で作られます。
+ 記録・入力・変更は、親機PCのデータベース（data/portal.db）に保存されます。途中で電源が落ちても、書きかけの状態は残りません。あわせて data/backup/ に1分ごとの控え（日時つきのファイル）と最新版（backup_latest.json）が自動で作られます。
  </div>
  </div>
 
@@ -2267,10 +2267,10 @@
  <div style="font-weight:bold; color:#22302b; margin-bottom:8px;">バックアップの仕組み</div>
  <ul style="margin:0; padding-left:18px; font-size:13px; color:#4a5852; display:flex; flex-direction:column; gap:6px;">
  <li><strong>手元の端末:</strong> ブラウザの中にも控えを保存（通信が切れたときのための一時的な控え）</li>
- <li><strong>親機PC:</strong> データファイル（data/portal_database.json）</li>
+ <li><strong>親機PC:</strong> データベース（data/portal.db）と、その中身の書き出し（data/portal_database.json。30秒ごと・サーバーを止めるとき）</li>
  <li><strong>親機PCの世代保管:</strong> data/backup/（保存した日時ごとのファイル）</li>
  <li><strong>注意:</strong> どれも同じ親機PCの中です。PCの故障に備えて、data/backup/ をときどきUSBメモリなど別の場所へコピーしてください。</li>
- <li><strong>戻し方:</strong> ①ポータルの黒い画面を閉じる ②data/backup/ の戻したい日時のファイルを data/portal_database.json という名前で上書きコピー ③run_portal.bat で起動し直す</li>
+ <li><strong>戻し方:</strong> ①ポータルの黒い画面を閉じる ②data/backup/ の戻したい日時のファイルを data/portal_database.json という名前で上書きコピー ③run_portal.bat で起動し直す（起動すると自動でデータベースに取り込まれます。取り込む前の中身は data/backup/before_import_… に残ります）</li>
  </ul>
  </div>
 
