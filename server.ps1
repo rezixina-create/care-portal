@@ -2612,10 +2612,29 @@ namespace CarePortal
             else _storeWhy = "CARE_PORTAL_NO_DB=1 のため使わない";
         }
 
+        // [Claude修正 2026-10-18] ブラウザは、サーバーが受け付けを始めてから開く
+        //（データが多いと起動の準備に数秒かかり、先に開いたブラウザに「開けません」が一瞬出ていた）
+        private readonly ManualResetEvent _ready = new ManualResetEvent(false);
+        public void OpenBrowserWhenReady(string url)
+        {
+            Thread t = new Thread(delegate()
+            {
+                if (!_ready.WaitOne(120000)) return;
+                try { System.Diagnostics.Process.Start(url); }
+                catch
+                {
+                    try { System.Diagnostics.Process.Start("cmd.exe", "/c start \"\" \"" + url + "\""); } catch { }
+                }
+            });
+            t.IsBackground = true;
+            t.Start();
+        }
+
         public void Start()
         {
             _listener = new TcpListener(IPAddress.Any, _port);
             _listener.Start();
+            _ready.Set();
             // [Claude追加 2026-10-16] 端末が多いときに、要求を待たせないよう同時に動ける作業の下限を上げる
             try { int w, io; ThreadPool.GetMinThreads(out w, out io); ThreadPool.SetMinThreads(Math.Max(w, 64), Math.Max(io, 64)); } catch { }
 
@@ -3210,19 +3229,13 @@ $cleanup = {
     Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
 
-# 4. ブラウザ自動起動
-if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
-    Write-Host "ブラウザを起動しています (http://localhost:$port)..." -ForegroundColor Green
-    try {
-        Start-Process "http://localhost:$port"
-    } catch {
-        cmd.exe /c start "" "http://localhost:$port"
-    }
-}
-
-# 5. サーバー待機
+# 4. サーバーの準備（データの読み込み）→ 受け付けを始めたらブラウザを開く
+Write-Host "データを読み込んでいます。準備ができたらブラウザが開きます..." -ForegroundColor Green
 try {
     $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
+    if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
+        $server.OpenBrowserWhenReady("http://localhost:$port")
+    }
     # [Claude修正 2026-10-18] 保存先は画面に出さない（見た人に分かってしまうため。取扱説明書に書く）。予備の方法で動くときだけ知らせる
     if ($server.StorageInfo.StartsWith("JSON")) { Write-Host " [データ] データベースが使えないため、予備の方法で保存しています（取扱説明書の「困ったとき」）" -ForegroundColor Yellow }
     Write-Host ""
