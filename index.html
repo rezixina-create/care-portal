@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_a4">
+ <link rel="stylesheet" href="style.css?v=20261018_a5">
 </head>
 <body>
 
@@ -46,14 +46,14 @@
         <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">職員ID (半角英字4文字以上) <span style="color:#dc2626;">*</span>:</label>
         <!-- [Claude修正 2026-10-16] 伏せ字の欄にすると Chrome・Edge では自動で半角入力になる。「表示」で打った文字を確かめられる -->
         <div class="cp-pw-wrap">
-          <input type="password" id="loginStaffIdInput" class="form-control" placeholder="例: aaaa または 登録ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+          <input type="password" id="loginStaffIdInput" class="form-control"placeholder="職員ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
           <button type="button" class="cp-pw-toggle" aria-pressed="false" aria-label="職員IDを表示" onclick="cpToggleLoginIdVisible(this)">表示</button>
         </div>
       </div>
 
       <div style="margin-bottom:20px;">
         <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">パスワード (半角数字4桁) <span style="color:#dc2626;">*</span>:</label>
-        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control" placeholder="数字4桁 (例: 0000)" style="width:100%; font-size:18px; padding:10px 12px; letter-spacing:6px;" inputmode="numeric" pattern="[0-9]*">
+        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control"placeholder="数字4桁" style="width:100%; font-size:18px; padding:10px 12px; letter-spacing:6px;" inputmode="numeric" pattern="[0-9]*">
       </div>
 
       <button type="button" class="btn btn-primary login-submit" onclick="handleLoginSubmit()">ログイン</button>
@@ -253,7 +253,7 @@
  <span> 全文文字検索 (発熱、転倒、血圧、ふらつき等)</span>
  </div>
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
- <input type="text" id="searchInput" class="form-control" style="flex:1; min-width:180px;" placeholder="検索キーワードを入力（例: 熱、転倒、佐藤、ふらつき）" onkeypress="if(event.key==='Enter') doSearch()">
+ <input type="text" id="searchInput" class="form-control" style="flex:1; min-width:180px;"placeholder="検索キーワードを入力" onkeypress="if(event.key==='Enter') doSearch()">
  <button class="btn btn-primary" onclick="doSearch()">検索</button>
  <button class="btn btn-secondary" onclick="clearSearch()">クリア</button>
  </div>
@@ -425,7 +425,7 @@
  </div>
  <div style="flex:1; min-width:200px;">
  <label style="font-size:13px; font-weight:bold;">備考:</label>
- <input type="text" id="exNotes" class="form-control" placeholder="失禁、浣腸実施、腹部膨満など">
+ <input type="text" id="exNotes" class="form-control">
  </div>
  <button class="btn btn-primary" onclick="submitExcretion()">排泄を記録</button>
  </div>
@@ -687,19 +687,19 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label>来訪者氏名・続柄:</label>
- <input type="text" id="visitVisitor" class="form-control" placeholder="長男: 佐藤 一郎 様">
+ <input type="text" id="visitVisitor" class="form-control">
  </div>
  <div>
  <label>持参品・差し入れ荷物:</label>
- <input type="text" id="visitItems" class="form-control" placeholder="冬用カーディガン2着、カステラ1箱">
+ <input type="text" id="visitItems" class="form-control">
  </div>
  <div>
  <label>保管場所:</label>
- <input type="text" id="visitStorage" class="form-control" placeholder="居室タンス上段、事務所預かり等">
+ <input type="text" id="visitStorage" class="form-control">
  </div>
  <div>
  <label>面会内容・様子:</label>
- <input type="text" id="visitNotes" class="form-control" placeholder="ご本人笑顔で談笑。お菓子は事務所で預かりおやつに提供。">
+ <input type="text" id="visitNotes" class="form-control">
  </div>
  </div>
  <button class="btn btn-primary" onclick="submitVisitation()">面会・荷物を登録 (個人記録へ自動転記)</button>
@@ -1048,6 +1048,7 @@
  <div>
  <label>区分:</label>
  <select id="depType" class="form-control" style="width:110px;">
+ <option value="">選んでください</option>
  <option value="出金">出金</option>
  <option value="入金">入金 (お預かり)</option>
  </select>
@@ -1055,6 +1056,7 @@
  <div>
  <label>費目:</label>
  <select id="depCategory" class="form-control" style="width:140px;">
+ <option value="">選んでください</option>
  <option value="訪問理美容代">訪問理美容代</option>
  <option value="医療費・受診代">医療費・受診代</option>
  <option value="買い物代">買い物代</option>
@@ -1063,11 +1065,11 @@
  </div>
  <div>
  <label>金額 (円):</label>
- <input type="number" id="depAmount" class="form-control" style="width:120px;" placeholder="2500">
+ <input type="number" id="depAmount" class="form-control" style="width:120px;">
  </div>
  <div style="flex:1; min-width:160px;">
  <label>備考:</label>
- <input type="text" id="depNotes" class="form-control" placeholder="散髪・顔剃り実施など">
+ <input type="text" id="depNotes" class="form-control">
  </div>
  <button class="btn btn-primary" onclick="submitDeposit()">出納を記録</button>
  </div>
@@ -1139,6 +1141,7 @@
  <div>
  <label>車両:</label>
  <select id="vehName" class="form-control" style="width:130px;">
+ <option value="">選んでください</option>
  <option value="キャラバン1号">キャラバン1号</option>
  <option value="タント2号">タント2号</option>
  </select>
@@ -1149,7 +1152,7 @@
  </div>
  <div style="flex:1; min-width:180px;">
  <label>行先・目的:</label>
- <input type="text" id="vehPurpose" class="form-control" placeholder="佐藤様眼科受診送迎、消耗品買い出し等">
+ <input type="text" id="vehPurpose" class="form-control">
  </div>
  <div>
  <label>出発時メーター (km):</label>
@@ -1279,7 +1282,7 @@
  <label style="display:block; font-size:13px; font-weight:bold; color:#22302b; margin-bottom:4px;">
  保存先フォルダのパス（UNCパス または ローカル/ネットワークドライブ）:
  </label>
- <input type="text" id="extBackupDestPath" class="form-control" style="width:100%; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;" placeholder="例: \\192.168.1.100\share\care_portal_backup または D:\backup">
+ <input type="text" id="extBackupDestPath" class="form-control" style="width:100%; height:38px; font-size:13px; padding:6px 10px; border:1px solid #d3dbd5; border-radius:4px; box-sizing:border-box;">
  </div>
  <div style="display:flex; gap:16px; align-items:center; flex-wrap:wrap;">
  <div>
@@ -1504,6 +1507,7 @@
     <div class="form-group" style="margin-bottom:12px;">
      <label style="font-weight:bold; font-size:13px;">新しい要介護度:</label>
      <select id="newCareLevelSelect" class="form-control" style="font-size:13px;">
+ <option value="">選んでください</option>
       <option value="自立">自立</option>
       <option value="要支援1">要支援1</option>
       <option value="要支援2">要支援2</option>
@@ -1581,7 +1585,7 @@
     <div style="margin-bottom:16px; background:#f6f8f6; padding:12px; border-radius:6px; border:1px solid #dfe5e1;">
      <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">＋ 新規職員の追加</div>
      <div style="display:flex; gap:8px; align-items:center;">
-      <input type="text" id="newStaffName" class="form-control" style="flex:1; font-size:13px;" placeholder="氏名 (例: 山田 太郎)">
+      <input type="text" id="newStaffName" class="form-control" style="flex:1; font-size:13px;">
       <select id="newStaffRole" class="form-control" style="width:140px; font-size:13px;" aria-label="役職">
        <option value="">役職を選ぶ</option>
        <option value="介護職員">介護職員</option>
@@ -1640,22 +1644,22 @@
   </div>
  <div class="form-group">
  <label>居室番号 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="resRoomNo" class="form-control" placeholder="例: 106">
+ <input type="text" id="resRoomNo" class="form-control">
  </div>
  <div class="form-group">
  <label>氏名 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="resName" class="form-control" placeholder="例: 木村 健一">
+ <input type="text" id="resName" class="form-control">
  </div>
  <div class="form-group">
  <label>要介護度:</label>
  <select id="resCareLevel" class="form-control">
- <option value="">（未選択）</option>
+ <option value="">選んでください</option>
  <option value="自立">自立</option>
  <option value="要支援1">要支援1</option>
  <option value="要支援2">要支援2</option>
  <option value="要介護1">要介護1</option>
  <option value="要介護2">要介護2</option>
- <option value="要介護3" selected>要介護3</option>
+ <option value="要介護3">要介護3</option>
  <option value="要介護4">要介護4</option>
  <option value="要介護5">要介護5</option>
  </select>
@@ -1681,7 +1685,7 @@
  <div class="form-group">
  <label>基本方針:</label>
  <select id="resPolicyStamp" class="form-control">
- <option value="">（未選択）</option>
+ <option value="">選んでください</option>
  <option value="緊急搬送">緊急搬送</option>
  <option value="看取り">看取り</option>
  </select>
@@ -1689,7 +1693,7 @@
  <div class="form-group">
  <label>食事形態:</label>
  <select id="resDietType" class="form-control">
- <option value="">（未選択）</option>
+ <option value="">選んでください</option>
  <option value="普通食 (一口大)">普通食 (一口大)</option>
  <option value="普通食">普通食</option>
  <option value="軟飯・一口刻み">軟飯・一口刻み</option>
@@ -1699,45 +1703,45 @@
  </div>
  <div class="form-group">
  <label>アレルギー:</label>
- <input type="text" id="resAllergies" class="form-control" placeholder="例: なし, 卵, そば 等">
+ <input type="text" id="resAllergies" class="form-control">
  </div>
  <div class="form-group">
  <label>麻痺・身体状況:</label>
- <input type="text" id="resParalysis" class="form-control" placeholder="例: 麻痺なし, 右片麻痺 等">
+ <input type="text" id="resParalysis" class="form-control">
  </div>
  <div class="form-group">
  <label>口腔・義歯状態:</label>
- <input type="text" id="resOralState" class="form-control" placeholder="例: 総義歯, 上部義歯, 残歯 等">
+ <input type="text" id="resOralState" class="form-control">
  </div>
  </div>
  <div class="form-group">
  <label>既往歴・主病名 (カンマ区切り):</label>
- <input type="text" id="resDiseases" class="form-control" placeholder="例: 糖尿病, 高血圧, 脳梗塞後遺症">
+ <input type="text" id="resDiseases" class="form-control">
  </div>
  <div class="form-group">
  <label>緊急連絡先 (家族氏名・続柄・電話番号):</label>
- <input type="text" id="resEmergencyContact" class="form-control" placeholder="例: 長男: 木村 一郎 (090-1234-5678)">
+ <input type="text" id="resEmergencyContact" class="form-control">
  </div>
  <div class="form-group">
  <label>見守り注意事項・センサー等:</label>
- <input type="text" id="resSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中 (ベッド脇)">
+ <input type="text" id="resSensorAlert" class="form-control">
  </div>
  <div class="form-group">
  <label>ケアプラン目標・配慮事項:</label>
- <input type="text" id="resCarePlanGoal" class="form-control" placeholder="例: 歩行器での安全な移動。食事時のむせ込み予防。">
+ <input type="text" id="resCarePlanGoal" class="form-control">
  </div>
  <div class="form-group">
  <label>家族の意向・要望:</label>
- <input type="text" id="resFamilyWishes" class="form-control" placeholder="例: 本人が穏やかに過ごせるようにお願いします。">
+ <input type="text" id="resFamilyWishes" class="form-control">
  </div>
  <div class="form-group">
  <label>生活歴・人生歴・こだわり:</label>
- <textarea id="resLifeHistory" class="form-control" rows="2" placeholder="例: 元大工職人。相撲観戦が大好き。"></textarea>
+ <textarea id="resLifeHistory" class="form-control" rows="2"></textarea>
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
  <div class="form-group">
  <label>往診医・受診時指示:</label>
- <input type="text" id="resDrInstructions" class="form-control" placeholder="例: 定期採血・低血糖留意">
+ <input type="text" id="resDrInstructions" class="form-control">
  </div>
  <div class="form-group">
  <label>次回受診・往診予定日:</label>
@@ -1748,7 +1752,7 @@
  <div style="font-size:13px; font-weight:bold; color:#1e5b47; margin-bottom:6px;">往診時 特殊指示 (絶食・薬のみ等 / アラート自動表示):</div>
  <div class="form-group">
  <label>往診・受診 特殊指示 (絶食、薬のみ服用可、採血あり等):</label>
- <input type="text" id="resClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、採血あり（糖尿病の薬は医師の指示を確認）">
+ <input type="text" id="resClinicSpecialNotes" class="form-control">
  </div>
  </div>
  <div style="border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px;">
@@ -1756,27 +1760,27 @@
  <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:8px;">
  <div class="form-group">
  <label style="font-size:13px;">最高血圧上限 (mmHg):</label>
- <input type="number" id="resBpHighMax" class="form-control" placeholder="例: 150">
+ <input type="number" id="resBpHighMax" class="form-control">
  </div>
  <div class="form-group">
  <label style="font-size:13px;">最高血圧下限 (mmHg):</label>
- <input type="number" id="resBpHighMin" class="form-control" placeholder="例: 95">
+ <input type="number" id="resBpHighMin" class="form-control">
  </div>
  <div class="form-group">
  <label style="font-size:13px;">体温上限 (℃):</label>
- <input type="number" step="0.1" id="resTempMax" class="form-control" placeholder="例: 37.3">
+ <input type="number" step="0.1" id="resTempMax" class="form-control">
  </div>
  <div class="form-group">
  <label style="font-size:13px;">SpO2下限 (%):</label>
- <input type="number" id="resSpo2Min" class="form-control" placeholder="例: 93">
+ <input type="number" id="resSpo2Min" class="form-control">
  </div>
  <div class="form-group">
  <label style="font-size:13px;">脈拍上限 (bpm):</label>
- <input type="number" id="resPulseMax" class="form-control" placeholder="例: 100">
+ <input type="number" id="resPulseMax" class="form-control">
  </div>
  <div class="form-group">
  <label style="font-size:13px;">脈拍下限 (bpm):</label>
- <input type="number" id="resPulseMin" class="form-control" placeholder="例: 50">
+ <input type="number" id="resPulseMin" class="form-control">
  </div>
  </div>
  </div>
@@ -1801,21 +1805,21 @@
      <input type="hidden" id="editSupplierId">
      <div class="form-group" style="margin-bottom:10px;">
        <label style="font-weight:bold; font-size:13px;">取引先名 (会社名・屋号) <span style="color:#dc2626;">*</span>:</label>
-       <input type="text" id="suppName" class="form-control" placeholder="例: サトー医療器株式会社">
+       <input type="text" id="suppName" class="form-control">
      </div>
      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
        <div class="form-group">
          <label style="font-weight:bold; font-size:13px;">担当者名:</label>
-         <input type="text" id="suppContact" class="form-control" placeholder="例: 佐藤 健司">
+         <input type="text" id="suppContact" class="form-control">
        </div>
        <div class="form-group">
          <label style="font-weight:bold; font-size:13px;">電話番号:</label>
-         <input type="text" id="suppPhone" class="form-control" placeholder="例: 03-3333-5555">
+         <input type="text" id="suppPhone" class="form-control">
        </div>
      </div>
      <div class="form-group" style="margin-bottom:14px;">
        <label style="font-weight:bold; font-size:13px;">メールアドレス:</label>
-       <input type="email" id="suppEmail" class="form-control" placeholder="例: info@sato-med.example.com">
+       <input type="email" id="suppEmail" class="form-control">
      </div>
      <div style="display:none;">
        <textarea id="suppItems"></textarea>
@@ -1841,16 +1845,16 @@
      </div>
      <div class="form-group" style="margin-bottom:10px;">
        <label style="font-weight:bold; font-size:13px;">商品名 <span style="color:#dc2626;">*</span>:</label>
-       <input type="text" id="itemModalName" class="form-control" placeholder="例: 使い捨て不織布マスク (50枚入)">
+       <input type="text" id="itemModalName" class="form-control">
      </div>
      <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px;">
        <div class="form-group">
          <label style="font-weight:bold; font-size:13px;">単価 (円) <span style="color:#dc2626;">*</span>:</label>
-         <input type="number" id="itemModalPrice" class="form-control" placeholder="例: 450" min="0">
+         <input type="number" id="itemModalPrice" class="form-control" min="0">
        </div>
        <div class="form-group">
          <label style="font-weight:bold; font-size:13px;">単位 <span style="color:#dc2626;">*</span>:</label>
-         <input type="text" id="itemModalUnit" class="form-control" placeholder="例: 箱, 本, パック, 個">
+         <input type="text" id="itemModalUnit" class="form-control">
        </div>
      </div>
      <div style="margin-bottom:10px;">
@@ -1940,7 +1944,7 @@
  </div>
  <div class="form-group">
  <label>申出者 (長男様・ご本人等):</label>
- <input type="text" id="compClaimant" class="form-control" placeholder="例: 長女: 田中 美咲 様">
+ <input type="text" id="compClaimant" class="form-control">
  </div>
  <div class="form-group">
  <label>対象利用者:</label>
@@ -1952,11 +1956,11 @@
  </div>
  <div class="form-group">
  <label>事実確認・初期対応:</label>
- <textarea id="compInvestigation" class="form-control" rows="2" placeholder="担当職員へのヒアリング、状況確認..."></textarea>
+ <textarea id="compInvestigation" class="form-control" rows="2"></textarea>
  </div>
  <div class="form-group">
  <label>再発防止策・改善対応:</label>
- <textarea id="compImprovement" class="form-control" rows="2" placeholder="施設内ミーティングで周知徹底..."></textarea>
+ <textarea id="compImprovement" class="form-control" rows="2"></textarea>
  </div>
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('complaintModal')">キャンセル</button>
@@ -1977,6 +1981,7 @@
  <div style="flex:1;">
  <label>種別:</label>
  <select id="incType" class="form-control">
+ <option value="">選んでください</option>
  <option value="ヒヤリハット">ヒヤリハット</option>
  <option value="事故報告書">事故報告書</option>
  </select>
@@ -1993,7 +1998,7 @@
  </div>
  <div style="flex:1;">
  <label>発生場所:</label>
- <input type="text" id="incPlace" class="form-control" placeholder="例: 居室ベッド脇, 食堂など">
+ <input type="text" id="incPlace" class="form-control">
  </div>
  </div>
  		<div class="form-group">
@@ -2016,11 +2021,11 @@
 		</div>
  <div class="form-group">
  <label>原因の分析:</label>
- <textarea id="incCause" class="form-control" rows="2" placeholder="足元のスリッパの引っかかり、照明の暗さ等"></textarea>
+ <textarea id="incCause" class="form-control" rows="2"></textarea>
  </div>
  <div class="form-group">
  <label>再発防止策:</label>
- <textarea id="incPrevention" class="form-control" rows="2" placeholder="履物をかかと付きシューズに変更、センサーマット設置"></textarea>
+ <textarea id="incPrevention" class="form-control" rows="2"></textarea>
  </div>
  <div class="form-group">
  <label>上司・管理者コメント:</label>
@@ -2044,6 +2049,7 @@
  <div class="form-group">
  <label>区分:</label>
  <select id="belCat" class="form-control">
+ <option value="">選んでください</option>
  <option value="衣類・日用品">衣類・日用品</option>
  <option value="家具・家電・私物">家具・家電・私物</option>
  </select>
@@ -2051,16 +2057,16 @@
  <div class="form-group" style="display:flex; gap:12px;">
  <div style="flex:2;">
  <label>品名 (物):</label>
- <input type="text" id="belItemName" class="form-control" placeholder="例: ズボン, 半袖肌着, テレビ24型">
+ <input type="text" id="belItemName" class="form-control">
  </div>
  <div style="flex:1;">
  <label>個数 (数量):</label>
- <input type="text" id="belQty" class="form-control" placeholder="例: 4枚, 1台">
+ <input type="text" id="belQty" class="form-control">
  </div>
  </div>
  <div class="form-group">
  <label>記名確認・特徴・劣化状態メモ:</label>
- <input type="text" id="belNotes" class="form-control" placeholder="タグ記名あり, 劣化破棄1着, 娘様持参品など">
+ <input type="text" id="belNotes" class="form-control">
  </div>
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('belongingModal')">キャンセル</button>
@@ -2078,11 +2084,12 @@
  </div>
  <div class="form-group">
  <label>用具・備品名:</label>
- <input type="text" id="eqName" class="form-control" placeholder="例: 標準自走式車椅子, エアマット (ここちあ), 四輪歩行器, 杖, ポータブルトイレ">
+ <input type="text" id="eqName" class="form-control">
  </div>
  <div class="form-group">
  <label>所有・利用区分:</label>
  <select id="eqOwnership" class="form-control">
+ <option value="">選んでください</option>
  <option value="施設備品">施設備品 (施設貸与)</option>
  <option value="個人レンタル">個人レンタル (介護保険貸与)</option>
  <option value="個人購入・私物持込">個人購入・私物持込</option>
@@ -2090,7 +2097,7 @@
  </div>
  <div class="form-group">
  <label>型番・特記事項 (設置場所など):</label>
- <input type="text" id="eqNotes" class="form-control" placeholder="例: ノーパンクタイヤ, ベッド右側設置, 褥瘡防止圧切替など">
+ <input type="text" id="eqNotes" class="form-control">
  </div>
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('equipmentModal')">キャンセル</button>
@@ -2114,7 +2121,7 @@
 
  <div class="form-group">
  <label style="font-weight:bold;"> 緊急連絡先 ＆ 搬送・延命処置方針:</label>
- <input type="text" id="fhEmergencyContact" class="form-control" placeholder="例: 長男: 佐藤 一郎 (090-1111-2222) / 救急搬送時: 延命処置希望なし(DNAR同意済)">
+ <input type="text" id="fhEmergencyContact" class="form-control">
  <small style="color:var(--text-muted); font-size:13px;">※看取り移行時の連絡優先順位や、「搬送されても延命処置は行わないでほしい」等の指示も明記できます。</small>
  </div>
 
@@ -2122,6 +2129,7 @@
  <div style="flex:1;">
  <label style="font-weight:bold;">［医療・看取り基本方針］:</label>
  <select id="fhPolicyStamp" class="form-control">
+ <option value="">選んでください</option>
  <option value="看取り">［ 看取り ］(穏やかな終末期ケア)</option>
  <option value="緊急搬送">［ 緊急搬送 ］(急変時即時救急要請)</option>
  <option value="医療連携">［ 医療連携 ］(嘱託医・協力病院相談)</option>
@@ -2129,18 +2137,18 @@
  </div>
  <div style="flex:1;">
  <label style="font-weight:bold;"> 見守り・離床センサー:</label>
- <input type="text" id="fhSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中">
+ <input type="text" id="fhSensorAlert" class="form-control">
  </div>
  </div>
 
  <div class="form-group">
  <label style="font-weight:bold;"> 家族の要望 (ACP・看取り・面会・ケアへの希望):</label>
- <textarea id="fhFamilyWishes" class="form-control" rows="3" placeholder="例: 状態悪化時も苦痛のない穏やかな看取りを希望。夜間急変時も直ちに連絡希望。週1回面会来所。"></textarea>
+ <textarea id="fhFamilyWishes" class="form-control" rows="3"></textarea>
  </div>
 
  <div class="form-group">
  <label style="font-weight:bold;"> 生活歴・人生歴・こだわり (元職歴・趣味・習慣・性格):</label>
- <textarea id="fhLifeHistory" class="form-control" rows="3" placeholder="例: 元大工職人。相撲観戦が大好き。頑固だが笑顔が優しい。朝の温茶にこだわりあり。"></textarea>
+ <textarea id="fhLifeHistory" class="form-control" rows="3"></textarea>
  </div>
 
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
@@ -2346,7 +2354,7 @@
  </div>
  <div>
  <label style="font-size:13px; color:#4a5852; display:block; margin-bottom:3px;">タイトル・備考:</label>
- <input type="text" id="photoNewTitle" placeholder="例: 介護利用同意書、誕生会笑顔" style="width:100%; padding:6px; font-size:13px; border:1px solid #cdd6d0; border-radius:4px;">
+ <input type="text" id="photoNewTitle" style="width:100%; padding:6px; font-size:13px; border:1px solid #cdd6d0; border-radius:4px;">
  </div>
  </div>
  <div style="margin-bottom:10px;">
@@ -2420,6 +2428,7 @@
  <div class="form-group">
  <label>種別 <span style="color:#dc2626;">*</span>:</label>
  <select id="comCategory" class="form-control">
+ <option value="">選んでください</option>
  <option value="法定委員会">法定委員会</option>
  <option value="施設内研修">施設内研修</option>
  <option value="外部研修">外部研修</option>
@@ -2429,15 +2438,15 @@
  </div>
  <div class="form-group">
  <label>委員会・研修名 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="comName" class="form-control" placeholder="例: 身体拘束廃止委員会、虐待防止研修、感染対策会議">
+ <input type="text" id="comName" class="form-control">
  </div>
  <div class="form-group">
  <label>出席者・参加職員:</label>
- <input type="text" id="comAttendees" class="form-control" placeholder="例: 施設長、山田、鈴木、佐藤、田中">
+ <input type="text" id="comAttendees" class="form-control">
  </div>
  <div class="form-group">
  <label>議題・テーマ:</label>
- <input type="text" id="comAgenda" class="form-control" placeholder="例: スピーチロックの防止とセンサーマットの適切な使用">
+ <input type="text" id="comAgenda" class="form-control">
  </div>
  <div class="form-group">
  <label>協議内容・決定事項・所見 <span style="color:#dc2626;">*</span>:</label>
@@ -2467,16 +2476,16 @@
  </div>
  <div class="form-group">
  <label>日課・項目名 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="schedTitle" class="form-control" placeholder="例: 10時レクリエーション、11時40分口腔体操">
+ <input type="text" id="schedTitle" class="form-control">
  </div>
  </div>
  <div class="form-group">
  <label>実施内容・詳細・様子:</label>
- <textarea id="schedContent" class="form-control" rows="3" placeholder="例: 全体でラジオ体操および風船バレー実施。全員参加され活気あり。"></textarea>
+ <textarea id="schedContent" class="form-control" rows="3"></textarea>
  </div>
  <div class="form-group">
  <label>担当職員:</label>
- <input type="text" id="schedStaff" class="form-control" placeholder="例: 山田、佐藤">
+ <input type="text" id="schedStaff" class="form-control">
  </div>
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('dailyScheduleModal')">キャンセル</button>
@@ -2500,6 +2509,7 @@
  <div class="form-group">
  <label>重要度:</label>
  <select id="noticePriority" class="form-control">
+ <option value="">選んでください</option>
  <option value="通常">通常</option>
  <option value="重要">重要 (赤枠強調)</option>
  <option value="至急">至急 (全員必読)</option>
@@ -2508,7 +2518,7 @@
  </div>
  <div class="form-group">
  <label>件名 (変更項目等) <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="noticeTitle" class="form-control" placeholder="例: 10月度 シフト勤務体制変更および入浴時間帯の改定について">
+ <input type="text" id="noticeTitle" class="form-control">
  </div>
  <div class="form-group">
  <label>連絡内容・周知事項 <span style="color:#dc2626;">*</span>:</label>
@@ -2593,7 +2603,7 @@
  
  <div class="form-group">
  <label> 往診・受診 特殊指示 (絶食・薬のみ等):</label>
- <input type="text" id="quickClinicSpecialNotes" class="form-control" placeholder="例: 当日朝は絶食、採血あり（糖尿病の薬は医師の指示を確認）">
+ <input type="text" id="quickClinicSpecialNotes" class="form-control">
  <div style="margin-top:6px; display:flex; gap:6px; flex-wrap:wrap;">
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="insertQuickSpecialNote('当日朝は絶食 (採血あり)')">＋ 絶食(採血)</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="insertQuickSpecialNote('朝薬のみ水分少量で服用可（糖尿病の薬・インスリンは医師の指示を確認）')">＋ 朝薬のみ水分可</button>
@@ -2630,12 +2640,12 @@
 
  <div class="form-group">
  <label> ケアプラン目標・注意事項:</label>
- <textarea id="quickCarePlanGoal" class="form-control" rows="2" placeholder="例: 安全な日常生活の維持・転倒予防"></textarea>
+ <textarea id="quickCarePlanGoal" class="form-control" rows="2"></textarea>
  </div>
 
  <div class="form-group" style="margin-top:10px;">
  <label> 離床センサー・見守り注意:</label>
- <input type="text" id="quickSensorAlert" class="form-control" placeholder="例:  離床センサーマット使用中 (ベッド脇)">
+ <input type="text" id="quickSensorAlert" class="form-control">
  </div>
 
  <div style="margin-top:12px; border-top:1px solid #dfe5e1; padding-top:10px;">
@@ -2643,19 +2653,19 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
  <div>
  <label style="font-size:13px;">最高血圧 上限 (mmHg):</label>
- <input type="number" id="quickBpHMax" class="form-control" placeholder="150">
+ <input type="number" id="quickBpHMax" class="form-control">
  </div>
  <div>
  <label style="font-size:13px;">最高血圧 下限 (mmHg):</label>
- <input type="number" id="quickBpHMin" class="form-control" placeholder="90">
+ <input type="number" id="quickBpHMin" class="form-control">
  </div>
  <div>
  <label style="font-size:13px;">体温 上限 (℃):</label>
- <input type="number" step="0.1" id="quickTempMax" class="form-control" placeholder="37.5">
+ <input type="number" step="0.1" id="quickTempMax" class="form-control">
  </div>
  <div>
  <label style="font-size:13px;">SpO2 下限 (%):</label>
- <input type="number" id="quickSpo2Min" class="form-control" placeholder="93">
+ <input type="number" id="quickSpo2Min" class="form-control">
  </div>
  </div>
  </div>
@@ -2678,17 +2688,17 @@
 
  <div class="form-group">
  <label>病歴・既往歴 (カンマ区切り):</label>
- <input type="text" id="quickDiseases" class="form-control" placeholder="例: 脳梗塞後遺症, 高血圧">
+ <input type="text" id="quickDiseases" class="form-control">
  </div>
 
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:10px;">
  <div class="form-group">
  <label>身体・麻痺:</label>
- <input type="text" id="quickParalysis" class="form-control" placeholder="例: 右片麻痺">
+ <input type="text" id="quickParalysis" class="form-control">
  </div>
  <div class="form-group">
  <label>アレルギー:</label>
- <input type="text" id="quickAllergies" class="form-control" placeholder="例: 卵, エビ, なし">
+ <input type="text" id="quickAllergies" class="form-control">
  </div>
  </div>
 
@@ -2696,7 +2706,7 @@
  <div class="form-group">
  <label>食形態:</label>
  <select id="quickDietType" class="form-control">
- <option value="">（未選択）</option>
+ <option value="">選んでください</option>
  <option value="普通食">普通食</option>
  <option value="普通食 (一口大)">普通食 (一口大)</option>
  <option value="一口大">一口大</option>
@@ -2710,7 +2720,7 @@
  </div>
  <div class="form-group">
  <label>口腔状態:</label>
- <input type="text" id="quickOralState" class="form-control" placeholder="例: 上下義歯, 残歯あり">
+ <input type="text" id="quickOralState" class="form-control">
  </div>
  </div>
 
@@ -2738,39 +2748,39 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">体温 (℃):</label>
- <input type="number" step="0.1" id="pvmTemp" class="form-control" placeholder="例: 36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)" style="margin-top:3px;">
+ <input type="number" step="0.1" id="pvmTemp" class="form-control" onblur="formatTempInput(this)" oninput="formatTempInput(this)" style="margin-top:3px;">
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">脈拍 (bpm):</label>
- <input type="number" id="pvmPulse" class="form-control" placeholder="例: 72" style="margin-top:3px;">
+ <input type="number" id="pvmPulse" class="form-control" style="margin-top:3px;">
  </div>
  </div>
 
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">最高血圧 (mmHg):</label>
- <input type="number" id="pvmBpHigher" class="form-control" placeholder="例: 128" style="margin-top:3px;">
+ <input type="number" id="pvmBpHigher" class="form-control" style="margin-top:3px;">
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">最低血圧 (mmHg):</label>
- <input type="number" id="pvmBpLower" class="form-control" placeholder="例: 78" style="margin-top:3px;">
+ <input type="number" id="pvmBpLower" class="form-control" style="margin-top:3px;">
  </div>
  </div>
 
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">SpO2 (%):</label>
- <input type="number" id="pvmSpo2" class="form-control" placeholder="例: 98" style="margin-top:3px;">
+ <input type="number" id="pvmSpo2" class="form-control" style="margin-top:3px;">
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e;">体重 (kg):</label>
- <input type="number" step="0.1" id="pvmWeight" class="form-control" placeholder="例: 51.7 (測定時のみ)" style="margin-top:3px;">
+ <input type="number" step="0.1" id="pvmWeight" class="form-control" style="margin-top:3px;">
  </div>
  </div>
 
  <div style="margin-bottom:14px;">
  <label style="font-size:13px; font-weight:bold; color:#36443e;">特記事項・様子:</label>
- <input type="text" id="pvmNotes" class="form-control" placeholder="例: 顔色良好、自覚症状なし" style="margin-top:3px;">
+ <input type="text" id="pvmNotes" class="form-control" style="margin-top:3px;">
  </div>
 
  <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
@@ -2851,7 +2861,7 @@
  <button type="button" class="btn btn-outline" style="font-size:13px; padding:2px 6px;" onclick="insertDailyJournalTemplate('連絡')">＋連絡雛形</button>
  </div>
  </div>
- <textarea id="djmContent" class="form-control" rows="4" placeholder="例: 【特変】14:20頃、居室にてふらつきあり。バイタル測定しDr.へ報告。..." style="margin-top:3px; resize:vertical; font-size:13px; line-height:1.5;"></textarea>
+ <textarea id="djmContent" class="form-control" rows="4" style="margin-top:3px; resize:vertical; font-size:13px; line-height:1.5;"></textarea>
  </div>
 
  <div style="display:flex; justify-content:flex-end; gap:10px; margin-top:16px;">
@@ -2918,7 +2928,7 @@
  </div>
  <div style="flex:1; min-width:150px;">
  <label style="font-size:13px; color:#5f6d66; display:block; margin-bottom:2px;">理由・メモ (任意):</label>
- <input type="text" id="shiftHopeReason" class="form-control" style="width:100%; font-size:13px;" placeholder="例: 冠婚葬祭・通院・私用">
+ <input type="text" id="shiftHopeReason" class="form-control" style="width:100%; font-size:13px;">
  </div>
  <div style="margin-top:18px;">
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="submitShiftHopeOff()">登録</button>
@@ -2964,7 +2974,7 @@
  <select id="shiftNgStaff2" class="form-control" style="flex:1; min-width:120px; font-size:13px;"></select>
  </div>
  <div style="display:flex; gap:8px; align-items:center;">
- <input type="text" id="shiftNgReason" class="form-control" style="flex:1; font-size:13px;" placeholder="理由・配慮メモ (例: 相性配慮・新人指導等)">
+ <input type="text" id="shiftNgReason" class="form-control" style="flex:1; font-size:13px;"placeholder="理由・配慮メモ">
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="submitShiftNgPair()">登録</button>
  </div>
  </div>
@@ -3085,7 +3095,7 @@
  </div>
  <div>
  <label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">ボタン表示名 (短縮ラベル):</label>
- <input type="text" id="tplLabelInput" class="form-control" style="width:100%; font-size:13px;" placeholder="例: むせ込みあり、安眠中、水分補給促し">
+ <input type="text" id="tplLabelInput" class="form-control" style="width:100%; font-size:13px;">
  </div>
  </div>
  <div style="margin-bottom:10px;">
@@ -3296,7 +3306,7 @@
  <label style="font-size:13px; font-weight:bold; color:#991b1b; display:block; margin-bottom:4px;">
  本日の救急搬送・受診理由 ＆ 発生時の状況 (印刷用紙に即座に反映されます):
  </label>
- <textarea id="emgReasonInput" class="form-control" rows="2" style="width:100%; font-size:13px;" placeholder="例: 14:15 居室にて意識レベル低下。呼びかけに開眼するも応答鈍い。バイタル測定: 血圧85/50、SpO2 91%、体温37.8℃。往診医へ電話報告の上、119番救急搬送を要請。" oninput="updateEmergencyPreviewReason()"></textarea>
+ <textarea id="emgReasonInput" class="form-control" rows="2" style="width:100%; font-size:13px;" oninput="updateEmergencyPreviewReason()"></textarea>
  </div>
 
  <!-- 申し送りシートのリアルタイムプレビュー -->
@@ -3392,7 +3402,7 @@
  <div class="form-group" style="display:flex; gap:10px; margin-bottom:8px;">
  <div style="flex:1;">
  <label style="font-size:13px; font-weight:bold;">部位名:</label>
- <input type="text" id="schemaPinSite" class="form-control" placeholder="例: 背部 (肩甲骨間), 仙骨部, 右膝 等" style="font-size:13px;">
+ <input type="text" id="schemaPinSite" class="form-control" style="font-size:13px;">
  </div>
  <div style="flex:1;">
  <label style="font-size:13px; font-weight:bold;">区分:</label>
@@ -3428,7 +3438,7 @@
  <!-- 処置内容・薬剤名 -->
  <div class="form-group" style="margin-bottom:8px;">
  <label style="font-size:13px; font-weight:bold;">処置内容・薬剤名:</label>
- <input type="text" id="schemaPinItem" class="form-control" placeholder="例: ヒルドイドソフト軟膏 0.3%, モーラステープL 40mg 等" style="font-size:13px;">
+ <input type="text" id="schemaPinItem" class="form-control" style="font-size:13px;">
  <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:3px;">
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:1px 6px;" onclick="setSchemaItem('ヒルドイドソフト軟膏 0.3%', '軟膏塗布')">ヒルドイドソフト</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:1px 6px;" onclick="setSchemaItem('プロペト (白色ワセリン)', '軟膏塗布')">プロペト</button>
@@ -3443,7 +3453,7 @@
  <div class="form-group" style="display:flex; gap:10px; margin-bottom:8px;">
  <div style="flex:1;">
  <label style="font-size:13px; font-weight:bold;">塗布・貼付頻度:</label>
- <input type="text" id="schemaPinFrequency" class="form-control" placeholder="例: 入浴後, 朝・夕, 1日1回 朝 等" style="font-size:13px;">
+ <input type="text" id="schemaPinFrequency" class="form-control" style="font-size:13px;">
  <div style="display:flex; flex-wrap:wrap; gap:4px; margin-top:2px;">
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:1px 5px;" onclick="setSchemaFrequency('入浴後')">入浴後</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:1px 5px;" onclick="setSchemaFrequency('朝・夕 (1日2回)')">朝・夕</button>
@@ -3465,7 +3475,7 @@
  <!-- 特記事項・処置方法・注意点 -->
  <div class="form-group" style="margin-bottom:10px;">
  <label style="font-size:13px; font-weight:bold;">処置方法・特記メモ:</label>
- <input type="text" id="schemaPinNotes" class="form-control" placeholder="例: 薄く広げて塗布。擦らないこと。赤み引くまで継続。" style="font-size:13px;">
+ <input type="text" id="schemaPinNotes" class="form-control" style="font-size:13px;">
  </div>
 
  <!-- ボタン類 -->
@@ -3529,7 +3539,7 @@
  <!-- 点眼薬名 -->
  <div style="margin-bottom:14px;">
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">点眼薬の薬品名・規格</label>
- <input type="text" id="eoMedicineName" class="form-control" placeholder="例: キサラタン点眼液 0.005%" style="width:100%; font-size:13px; margin-bottom:6px;">
+ <input type="text" id="eoMedicineName" class="form-control" style="width:100%; font-size:13px; margin-bottom:6px;">
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
  <span style="font-size:13px; color:#5f6d66;">よく使う点眼薬:</span>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="quickFillEyedropMed('キサラタン点眼液 0.005%')">キサラタン (緑内障)</button>
@@ -3569,17 +3579,17 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
  <div>
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">1回用量・滴数</label>
- <input type="text" id="eoDosage" class="form-control" value="1回1滴" placeholder="例: 1回1滴" style="width:100%; font-size:13px;">
+ <input type="text" id="eoDosage" class="form-control" value="1回1滴" style="width:100%; font-size:13px;">
  </div>
  <div>
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">処方医療機関・医師</label>
- <input type="text" id="eoDoctor" class="form-control" placeholder="例: さくら眼科クリニック" style="width:100%; font-size:13px;">
+ <input type="text" id="eoDoctor" class="form-control" style="width:100%; font-size:13px;">
  </div>
  </div>
 
  <div style="margin-bottom:14px;">
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">注意事項・点眼方法</label>
- <textarea id="eoNotes" class="form-control" rows="2" placeholder="例: 点眼後1分間軽く目頭を押さえる。複数ある場合は5分以上間隔を空ける。まつ毛に容器先端を触れさせない。" style="width:100%; font-size:13px;"></textarea>
+ <textarea id="eoNotes" class="form-control" rows="2" style="width:100%; font-size:13px;"></textarea>
  </div>
 
  <div style="margin-bottom:16px;">
@@ -3698,7 +3708,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_a4"></script>
+ <script src="app.js?v=20261018_a5"></script>
   
 
   <!-- ============================================================ -->
@@ -3776,7 +3786,7 @@
         </div>
         <div class="form-group" style="margin-bottom:12px;">
           <label style="font-size:13px; font-weight:bold; color:#36443e;">新しい職員ID (ローマ字4文字以上) <span style="color:#dc2626;">*</span>:</label>
-          <input type="text" id="accSetNewId" class="form-control" placeholder="例: tanaka, sato2">
+          <input type="text" id="accSetNewId" class="form-control">
         </div>
         <div class="form-group" style="margin-bottom:12px;">
           <label style="font-size:13px; font-weight:bold; color:#36443e;">新しいパスワード (数字4文字) <span style="color:#dc2626;">*</span>:</label>
@@ -3851,7 +3861,7 @@
         </p>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:13px; font-weight:bold; color:#36443e;">新しい施設名・事業所名 <span style="color:#dc2626;">*</span>:</label>
-          <input type="text" id="newFacilityNameInput" class="form-control" placeholder="例: 陽だまりの家" style="font-size:14px; font-weight:bold;">
+          <input type="text" id="newFacilityNameInput" class="form-control" style="font-size:14px; font-weight:bold;">
         </div>
 
         <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px; margin-bottom:10px;">
@@ -3983,7 +3993,7 @@
 						<div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
 							<div>
 								<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">負傷部位名:</label>
-								<input type="text" id="incInjurySiteName" class="form-control" style="font-size:13px;" placeholder="例: 右膝、左前腕、頭頂部等">
+								<input type="text" id="incInjurySiteName" class="form-control" style="font-size:13px;">
 							</div>
 							<div>
 								<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">外傷・受傷種別:</label>
@@ -4015,13 +4025,13 @@
 							</div>
 							<div>
 								<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">応急処置・対応内容:</label>
-								<input type="text" id="incInjuryTreatment" class="form-control" style="font-size:13px;" placeholder="例: 生理食塩水洗浄、ガーゼ保護、冷却等">
+								<input type="text" id="incInjuryTreatment" class="form-control" style="font-size:13px;">
 							</div>
 						</div>
 
 						<div style="margin-bottom:12px;">
 							<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">特記・詳細観察:</label>
-							<input type="text" id="incInjuryNotes" class="form-control" style="font-size:13px;" placeholder="例: 出血は圧迫にて止血、骨変形・熱感なし">
+							<input type="text" id="incInjuryNotes" class="form-control" style="font-size:13px;">
 						</div>
 
 						<div style="display:flex; justify-content:space-between; align-items:center;">
@@ -4055,6 +4065,7 @@
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">プログラム種別:</label>
 					<select id="recType" class="form-control" style="font-size:13px;">
+ <option value="">選んでください</option>
 						<option value="機能訓練体操">機能訓練体操</option>
 						<option value="音楽療法・合唱">音楽療法・合唱</option>
 						<option value="脳トレ・クイズ">脳トレ・クイズ</option>
@@ -4068,11 +4079,11 @@
 			<div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">種目・プログラム名:</label>
-					<input type="text" id="recTitle" class="form-control" style="font-size:13px;" placeholder="例: 懐かしの唱歌合唱 ＆ リズム体操">
+					<input type="text" id="recTitle" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">参加人数:</label>
-					<input type="number" id="recParticipants" class="form-control" style="font-size:13px;" placeholder="14">
+					<input type="number" id="recParticipants" class="form-control" style="font-size:13px;">
 				</div>
 			</div>
 			<div style="margin-bottom:12px;">
@@ -4081,11 +4092,11 @@
 			</div>
 			<div style="margin-bottom:12px;">
 				<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">利用者のご様子・反応:</label>
-				<textarea id="recReaction" class="form-control" rows="2" style="font-size:13px;" placeholder="終始笑顔で手拍子参加された。自発的な発言や歌唱が多く見られた等"></textarea>
+				<textarea id="recReaction" class="form-control" rows="2" style="font-size:13px;"></textarea>
 			</div>
 			<div style="margin-bottom:16px;">
 				<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">特記・個別配慮事項:</label>
-				<input type="text" id="recNotes" class="form-control" style="font-size:13px;" placeholder="例: 佐藤様は途中疲労訴えあり水分補給後見学へ移行">
+				<input type="text" id="recNotes" class="form-control" style="font-size:13px;">
 			</div>
 			<div style="display:flex; justify-content:flex-end; gap:10px;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('recreationModal')">キャンセル</button>
@@ -4110,6 +4121,7 @@
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">訓練種別:</label>
 					<select id="fireType" class="form-control" style="font-size:13px;">
+ <option value="">選んでください</option>
 						<option value="昼間火災想定訓練">昼間火災想定訓練</option>
 						<option value="夜間想定避難訓練 (少人数)">夜間想定避難訓練 (少人数)</option>
 						<option value="地震・津波避難訓練">地震・津波避難訓練</option>
@@ -4121,25 +4133,25 @@
 			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">参加人数 (入所者＋職員):</label>
-					<input type="text" id="fireParticipants" class="form-control" style="font-size:13px;" placeholder="例: 28名 (入所者16, 職員12)">
+					<input type="text" id="fireParticipants" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">避難所要時間:</label>
-					<input type="text" id="fireDuration" class="form-control" style="font-size:13px;" placeholder="例: 6分45秒">
+					<input type="text" id="fireDuration" class="form-control" style="font-size:13px;">
 				</div>
 			</div>
 			<div style="margin-bottom:12px;">
 				<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">想定出火元・訓練シナリオ:</label>
-				<input type="text" id="fireScenario" class="form-control" style="font-size:13px;" placeholder="例: 1F厨房ガスコンロ出火、初期消火失敗、非常ベル吹鳴">
+				<input type="text" id="fireScenario" class="form-control" style="font-size:13px;">
 			</div>
 			<div style="margin-bottom:12px;">
 				<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">講評・反省点・次回課題:</label>
-				<textarea id="fireNotes" class="form-control" rows="2" style="font-size:13px;" placeholder="車椅子誘導時の声かけ連携良好。夜間訓練に向けたシミュレーションを継続。"></textarea>
+				<textarea id="fireNotes" class="form-control" rows="2" style="font-size:13px;"></textarea>
 			</div>
 			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">消防署への事前通報・報告:</label>
-					<input type="text" id="fireReported" class="form-control" style="font-size:13px;" placeholder="事前通報済 / 報告済">
+					<input type="text" id="fireReported" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">統括責任者:</label>
@@ -4164,11 +4176,12 @@
 			<div style="display:grid; grid-template-columns:2fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">品名:</label>
-					<input type="text" id="emgName" class="form-control" style="font-size:13px;" placeholder="例: アルファ化米 (白飯・五目ご飯)">
+					<input type="text" id="emgName" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">カテゴリ:</label>
 					<select id="emgCat" class="form-control" style="font-size:13px;">
+ <option value="">選んでください</option>
 						<option value="主食">主食</option>
 						<option value="副食・缶詰">副食・缶詰</option>
 						<option value="飲料水・保存水">飲料水・保存水</option>
@@ -4180,11 +4193,11 @@
 			<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">数量:</label>
-					<input type="number" id="emgQty" class="form-control" style="font-size:13px;" placeholder="100">
+					<input type="number" id="emgQty" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">単位:</label>
-					<input type="text" id="emgUnit" class="form-control" style="font-size:13px;" placeholder="食 / 本 / 箱" value="食">
+					<input type="text" id="emgUnit" class="form-control" style="font-size:13px;" value="食">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">賞味期限:</label>
@@ -4194,11 +4207,11 @@
 			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:16px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">保管場所:</label>
-					<input type="text" id="emgPlace" class="form-control" style="font-size:13px;" placeholder="例: 1F防災備蓄倉庫 A棚">
+					<input type="text" id="emgPlace" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">特記事項・備考:</label>
-					<input type="text" id="emgNotes" class="form-control" style="font-size:13px;" placeholder="例: アレルギー対応、スプーン同梱">
+					<input type="text" id="emgNotes" class="form-control" style="font-size:13px;">
 				</div>
 			</div>
 			<div style="display:flex; justify-content:flex-end; gap:10px;">
@@ -4290,6 +4303,7 @@
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">ワクチン種別:</label>
 					<select id="vacType" class="form-control" style="font-size:13px;">
+ <option value="">選んでください</option>
 						<option value="季節性インフルエンザ">季節性インフルエンザ</option>
 						<option value="新型コロナウイルス (定期)">新型コロナウイルス (定期)</option>
 						<option value="肺炎球菌 (23価/13価)">肺炎球菌 (23価/13価)</option>
@@ -4301,7 +4315,7 @@
 			<div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">接種回数:</label>
-					<input type="text" id="vacDose" class="form-control" style="font-size:13px;" placeholder="例: 定期接種 / 1回目" value="定期接種">
+					<input type="text" id="vacDose" class="form-control" style="font-size:13px;" value="定期接種">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">家族同意状況:</label>
@@ -4320,16 +4334,16 @@
 			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">接種医療機関・医師:</label>
-					<input type="text" id="vacDoctor" class="form-control" style="font-size:13px;" placeholder="例: 施設配置医・中央医院">
+					<input type="text" id="vacDoctor" class="form-control" style="font-size:13px;">
 				</div>
 				<div>
 					<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">ロット番号:</label>
-					<input type="text" id="vacLot" class="form-control" style="font-size:13px;" placeholder="例: AB1234">
+					<input type="text" id="vacLot" class="form-control" style="font-size:13px;">
 				</div>
 			</div>
 			<div style="margin-bottom:16px;">
 				<label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:3px;">副反応観察・特記:</label>
-				<input type="text" id="vacReactions" class="form-control" style="font-size:13px;" placeholder="例: 異常なし、接種後30分間アナフィラキシー徴候なし">
+				<input type="text" id="vacReactions" class="form-control" style="font-size:13px;">
 			</div>
 			<div style="display:flex; justify-content:flex-end; gap:10px;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('vaccineModal')">キャンセル</button>

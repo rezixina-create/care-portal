@@ -9911,7 +9911,7 @@ function renderOralTable() {
  <td>${getOralBtn("朝")}</td>
  <td>${getOralBtn("昼")}</td>
  <td>${getOralBtn("夕")}</td>
- <td><input type="text" id="oralNotes_${r.id}" class="form-control" placeholder="口内炎、残渣なし等" style="font-size:12px;"></td>
+ <td><input type="text" id="oralNotes_${r.id}" class="form-control" style="font-size:12px;"></td>
  `;
  tbody.appendChild(tr);
  });
@@ -10183,6 +10183,12 @@ function cpStatusOn(r, dateStr) {
  if (r.status === "退所") return (r.discharge_date && d <= r.discharge_date) ? (r.status_before_discharge && r.status_before_discharge !== "退所" ? r.status_before_discharge : "在所") : "退所";
  if (r.status === "入院中") return (r.hospital_date && d < r.hospital_date) ? "在所" : "入院中";
  return r.status || "在所";
+}
+// [Claude追加 2026-10-18] 選ぶ欄は「選んでください」から始め、選ばずには保存できないようにする
+function cpRequireSelect(id, label) {
+ const el = document.getElementById(id);
+ if (el && !el.value) { alert(`${label}を選んでください。`); try { el.focus(); } catch (e) {} return false; }
+ return true;
 }
 function cpResidentIsHere(r, dateStr) { const s = cpStatusOn(r, dateStr); return !!r && s !== "入院中" && s !== "退所" && s !== "入居前"; }
 function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
@@ -11605,7 +11611,7 @@ function renderWeightTable() {
  <td>${r.room_no}</td>
  <td><strong>${r.name} 様</strong></td>
  <td>${gState.currentMonth}</td>
- <td><input type="number" step="0.1" class="form-control" style="width:90px;" id="wVal_${r.id}" value="${currentVal}" placeholder="52.4"></td>
+ <td><input type="number" step="0.1" class="form-control" style="width:90px;" id="wVal_${r.id}" value="${currentVal}"></td>
  <td>${diffDisplay}</td>
  <td>${diff2Display}</td>
  <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveWeight(${r.id})">測定登録</button></td>
@@ -11895,7 +11901,7 @@ function renderGroomingTable() {
  <td><label><input type="checkbox" id="gNail_${r.id}" ${g && g.nail_done ? 'checked' : ''}> 爪切り済</label></td>
  <td><label><input type="checkbox" id="gShave_${r.id}" ${g && g.shave_done ? 'checked' : ''}> 髭剃り済</label></td>
  <td><label><input type="checkbox" id="gEar_${r.id}" ${g && g.ear_done ? 'checked' : ''}> 耳掃除済</label></td>
- <td><input type="text" id="gNotes_${r.id}" class="form-control" style="font-size:12px;" value="${g ? g.notes : ''}" placeholder="深爪注意、巻き爪等"></td>
+ <td><input type="text" id="gNotes_${r.id}" class="form-control" style="font-size:12px;" value="${g ? g.notes : ''}"></td>
  <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveGrooming(${r.id})">保存</button></td>
  `;
  tbody.appendChild(tr);
@@ -12037,7 +12043,7 @@ function openRecreationModal(editId = null) {
 		if (!rec) return;
 		idEl.value = rec.id;
 		dateEl.value = rec.date || toLocalDateStr(new Date());
-		typeEl.value = rec.program_type || "機能訓練体操";
+		typeEl.value = rec.program_type || "";
 		titleEl.value = rec.title || "";
 		partEl.value = rec.participants_count || "";
 		contEl.value = rec.content || "";
@@ -12046,7 +12052,7 @@ function openRecreationModal(editId = null) {
 	} else {
 		idEl.value = "";
 		dateEl.value = gState.selectedDate || toLocalDateStr(new Date());
-		typeEl.value = "機能訓練体操";
+		typeEl.value = "";
 		titleEl.value = "";
 		partEl.value = "";
 		contEl.value = "";
@@ -12059,6 +12065,7 @@ function openRecreationModal(editId = null) {
 function submitRecreationRecord() {
 	const editId = document.getElementById("recEditId")?.value;
 	const date = document.getElementById("recDate")?.value;
+	if (!cpRequireSelect("recType", "レクの種類")) return;
 	const type = document.getElementById("recType")?.value;
 	const title = document.getElementById("recTitle")?.value.trim();
 	const part = document.getElementById("recParticipants")?.value;
@@ -12632,7 +12639,7 @@ function renderMonthlyNotices() {
 function openMonthlyNoticeModal() {
  const curMonth = (gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
  document.getElementById("noticeMonth").value = curMonth;
- document.getElementById("noticePriority").value = "重要";
+ document.getElementById("noticePriority").value = "";
  document.getElementById("noticeTitle").value = "";
  document.getElementById("noticeContent").value = "";
  document.getElementById("monthlyNoticeModal").style.display = "flex";
@@ -12640,6 +12647,7 @@ function openMonthlyNoticeModal() {
 
 function submitMonthlyNotice() {
  const m = document.getElementById("noticeMonth").value;
+ if (!cpRequireSelect("noticePriority", "重要度")) return;
  const prio = document.getElementById("noticePriority").value;
  const title = document.getElementById("noticeTitle").value.trim();
  const content = document.getElementById("noticeContent").value.trim();
@@ -13717,7 +13725,7 @@ function openEmergencySupplyModal(editId = null) {
 		if (!item) return;
 		idEl.value = item.id;
 		nameEl.value = item.name || "";
-		catEl.value = item.category || "主食";
+		catEl.value = item.category || "";
 		qtyEl.value = item.quantity || "";
 		unitEl.value = item.unit || "食";
 		expEl.value = item.expiry_date || "";
@@ -13726,7 +13734,7 @@ function openEmergencySupplyModal(editId = null) {
 	} else {
 		idEl.value = "";
 		nameEl.value = "";
-		catEl.value = "主食";
+		catEl.value = "";
 		qtyEl.value = "";
 		unitEl.value = "食";
 		expEl.value = "";
@@ -13739,6 +13747,7 @@ function openEmergencySupplyModal(editId = null) {
 function submitEmergencySupplyRecord() {
 	const editId = document.getElementById("emgEditId")?.value;
 	const name = document.getElementById("emgName")?.value.trim();
+	if (!cpRequireSelect("emgCat", "品目の分類")) return;
 	const cat = document.getElementById("emgCat")?.value;
 	const qty = parseInt(document.getElementById("emgQty")?.value, 10);
 	const unit = document.getElementById("emgUnit")?.value.trim();
@@ -13868,6 +13877,7 @@ function renderOfficeVehicleLogs() {
 }
 
 function submitVehicleLog() {
+ if (!cpRequireSelect("vehName", "車両")) return;
  const vname = document.getElementById("vehName").value;
  const driver = document.getElementById("vehDriver").value;
  const purpose = document.getElementById("vehPurpose").value;
@@ -13939,7 +13949,7 @@ function openFireDrillModal(editId = null) {
 		if (!d) return;
 		idEl.value = d.id;
 		dateEl.value = d.date || toLocalDateStr(new Date());
-		typeEl.value = d.drill_type || "昼間火災想定訓練";
+		typeEl.value = d.drill_type || "";
 		partEl.value = d.participants_count || "";
 		durEl.value = d.duration || "";
 		scenEl.value = d.scenario || "";
@@ -13949,7 +13959,7 @@ function openFireDrillModal(editId = null) {
 	} else {
 		idEl.value = "";
 		dateEl.value = toLocalDateStr(new Date());
-		typeEl.value = "昼間火災想定訓練";
+		typeEl.value = "";
 		// [Claude修正] 旧実装は参加人数・所要時間・所見・通報状況に例文が入っており、
 		// そのまま保存すると実施していない内容が公式記録になっていた。空欄で開く
 		partEl.value = "";
@@ -13965,6 +13975,7 @@ function openFireDrillModal(editId = null) {
 function submitFireDrillRecord() {
 	const editId = document.getElementById("fireEditId")?.value;
 	const date = document.getElementById("fireDate")?.value;
+	if (!cpRequireSelect("fireType", "訓練の種類")) return;
 	const type = document.getElementById("fireType")?.value;
 	const part = document.getElementById("fireParticipants")?.value.trim();
 	const dur = document.getElementById("fireDuration")?.value.trim();
@@ -14070,7 +14081,7 @@ function openCommitteeModal() {
  const contentInput = document.getElementById("comContent");
  if (contentInput) contentInput.value = "";
  const catInput = document.getElementById("comCategory");
- if (catInput) catInput.value = "法定委員会";
+ if (catInput) catInput.value = "";
 
  const modal = document.getElementById("committeeModal");
  if (modal) modal.style.display = "flex";
@@ -14078,7 +14089,8 @@ function openCommitteeModal() {
 
 function submitCommittee() {
  const date = document.getElementById("comDate")?.value;
- const category = document.getElementById("comCategory")?.value || "法定委員会";
+ if (!cpRequireSelect("comCategory", "種類")) return;
+ const category = document.getElementById("comCategory")?.value;
  const name = document.getElementById("comName")?.value?.trim();
  const attendees = document.getElementById("comAttendees")?.value?.trim() || "-";
  const agenda = document.getElementById("comAgenda")?.value?.trim() || "-";
@@ -14940,7 +14952,9 @@ function submitDeposit() {
  const resId = parseInt(document.getElementById("depResidentSelect").value, 10);
  const dateInput = document.getElementById("depDate");
  const depDate = (dateInput && dateInput.value) ? dateInput.value : toLocalDateStr(new Date());
+ if (!cpRequireSelect("depType", "入出金の種類")) return;
  const type = document.getElementById("depType").value;
+ if (!cpRequireSelect("depCategory", "内訳")) return;
  const category = document.getElementById("depCategory").value;
  const amount = parseInt(document.getElementById("depAmount").value, 10);
  const notes = document.getElementById("depNotes").value;
@@ -15040,7 +15054,7 @@ function openNewIncidentModal() {
 		const incId = document.getElementById("incId");
 		if (incId) incId.value = "";
 		const incType = document.getElementById("incType");
-		if (incType) incType.value = "ヒヤリハット";
+		if (incType) incType.value = "";
 		const incPlace = document.getElementById("incPlace");
 		if (incPlace) incPlace.value = "";
 		const now = new Date();
@@ -15158,7 +15172,7 @@ function openIncidentFromRecord() {
 
 	document.getElementById("incId").value = "";
 	// [Claude修正] 前回開いた報告書の種別・場所が残っていたため初期化する
-	document.getElementById("incType").value = "ヒヤリハット";
+	document.getElementById("incType").value = "";
 	document.getElementById("incPlace").value = "";
 	document.getElementById("incOccurredAt").value = nowStr;
 	document.getElementById("incSituation").value = content;
@@ -15185,7 +15199,7 @@ function editIncident(id) {
 	if (!inc) return;
 
 	document.getElementById("incId").value = inc.id;
-	document.getElementById("incType").value = inc.report_type || inc.level || "ヒヤリハット";
+	document.getElementById("incType").value = inc.report_type || inc.level || "";
 	const occTime = inc.occurred_at || (inc.date ? `${inc.date}T09:00` : "");
 	document.getElementById("incOccurredAt").value = occTime.replace(" ", "T");
 	document.getElementById("incPlace").value = inc.place || "居室";
@@ -15214,6 +15228,7 @@ function editIncident(id) {
 
 function saveIncidentReport() {
 	const id = document.getElementById("incId").value;
+	if (!cpRequireSelect("incType", "報告の種類（ヒヤリハット・事故報告書）")) return;
 	const type = document.getElementById("incType").value;
 	const occurredAt = document.getElementById("incOccurredAt").value.replace("T", " ");
 	const resSelectVal = document.getElementById("incResidentSelect").value;
@@ -15752,7 +15767,7 @@ function openVaccineModal(editId = null) {
 		if (!v) return;
 		idEl.value = v.id;
 		selEl.value = v.resident_id;
-		typeEl.value = v.vaccine_name || "季節性インフルエンザ";
+		typeEl.value = v.vaccine_name || "";
 		doseEl.value = v.dose || "定期接種";
 		// [Claude修正] 同意の欄が空のとき「同意受領済」を選んだ状態で開いていた（誰も確かめていないのに同意済みで保存されるおそれ）。
 		// 空や一覧にない値なら「選んでください」から始める
@@ -15781,6 +15796,7 @@ function openVaccineModal(editId = null) {
 function submitVaccineRecord() {
 	const editId = document.getElementById("vacEditId")?.value;
 	const resId = Number(document.getElementById("vacResidentSelect")?.value);
+	if (!cpRequireSelect("vacType", "ワクチンの種類")) return;
 	const type = document.getElementById("vacType")?.value;
 	const dose = document.getElementById("vacDose")?.value.trim();
 	const con = document.getElementById("vacConsent")?.value;
@@ -15873,7 +15889,7 @@ function openBelongingModal(editId = null) {
  if (editIdEl) editIdEl.value = b.id;
  if (titleEl) titleEl.textContent = ` 私物・持ち込み品の編集 (${b.item_name})`;
  if (submitBtn) submitBtn.textContent = "私物情報を更新・保存";
- document.getElementById("belCat").value = b.category || "衣類・日用品";
+ document.getElementById("belCat").value = b.category || "";
  document.getElementById("belItemName").value = b.item_name || "";
  document.getElementById("belQty").value = b.quantity || "";
  document.getElementById("belNotes").value = b.notes || "";
@@ -15881,7 +15897,7 @@ function openBelongingModal(editId = null) {
  if (editIdEl) editIdEl.value = "";
  if (titleEl) titleEl.textContent = " 私物・持ち込み品の追加 (品名と個数)";
  if (submitBtn) submitBtn.textContent = "私物台帳へ追加";
- document.getElementById("belCat").value = "衣類・日用品";
+ document.getElementById("belCat").value = "";
  document.getElementById("belItemName").value = "";
  document.getElementById("belQty").value = "";
  document.getElementById("belNotes").value = "";
@@ -15891,6 +15907,7 @@ function openBelongingModal(editId = null) {
 
 function submitBelonging() {
  const editId = document.getElementById("belEditId")?.value;
+ if (!cpRequireSelect("belCat", "分類")) return;
  const cat = document.getElementById("belCat").value;
  const name = document.getElementById("belItemName").value.trim();
  const qty = document.getElementById("belQty").value.trim();
@@ -15983,13 +16000,14 @@ function openEquipmentModal() {
  const modal = document.getElementById("equipmentModal");
  if (!modal) return;
  document.getElementById("eqName").value = "";
- document.getElementById("eqOwnership").value = "施設備品";
+ document.getElementById("eqOwnership").value = "";
  document.getElementById("eqNotes").value = "";
  modal.style.display = "flex";
 }
 
 function submitEquipment() {
  const name = document.getElementById("eqName").value.trim();
+ if (!cpRequireSelect("eqOwnership", "所有区分")) return;
  const ownership = document.getElementById("eqOwnership").value;
  const notes = document.getElementById("eqNotes").value.trim();
 
@@ -16042,7 +16060,7 @@ function openFamilyHistoryModal(residentId) {
  document.getElementById("familyHistoryModalTitle").textContent = ` 緊急連絡先 ＆ 家族の要望・生活歴・看取り方針の変更 (${r.name} 様)`;
  document.getElementById("fhResidentId").value = r.id;
  document.getElementById("fhEmergencyContact").value = r.emergency_contact || "";
- document.getElementById("fhPolicyStamp").value = r.policy_stamp || "緊急搬送";
+ document.getElementById("fhPolicyStamp").value = r.policy_stamp || "";
  document.getElementById("fhSensorAlert").value = r.sensor_alert || "";
  document.getElementById("fhFamilyWishes").value = r.family_wishes || "";
  document.getElementById("fhLifeHistory").value = r.life_history || "";
@@ -16060,6 +16078,7 @@ function submitFamilyHistory() {
  const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  const newContact = document.getElementById("fhEmergencyContact").value.trim();
+ if (!cpRequireSelect("fhPolicyStamp", "基本方針")) return;
  const newStamp = document.getElementById("fhPolicyStamp").value;
  const newSensor = document.getElementById("fhSensorAlert").value.trim();
  const newWishes = document.getElementById("fhFamilyWishes").value.trim();
@@ -16151,11 +16170,11 @@ function openEditResidentModal(id) {
  document.getElementById("resRoomNo").value = r.room_no || "";
   if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml(r.unit_id, cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = r.name || "";
- document.getElementById("resCareLevel").value = r.care_level || "要介護3";
+ document.getElementById("resCareLevel").value = r.care_level || ""; // [Claude修正 2026-10-18] 空のときに「要介護3」を入れない
  document.getElementById("resStatus").value = r.status || "在所";
  document.getElementById("resBirthDate").value = r.birth_date || "";
  document.getElementById("resAdmissionDate").value = r.admission_date || "";
- document.getElementById("resPolicyStamp").value = r.policy_stamp || "緊急搬送";
+ document.getElementById("resPolicyStamp").value = r.policy_stamp || ""; // [Claude修正 2026-10-18] 空のときに「緊急搬送」を入れない
  document.getElementById("resDietType").value = r.diet_type || "";
  document.getElementById("resAllergies").value = r.allergies || "";
  document.getElementById("resParalysis").value = r.paralysis || "";
@@ -20377,7 +20396,7 @@ function openUpdateCareLevelModal(residentId) {
   if (!r) return;
   document.getElementById("updateCareLevelResidentId").value = r.id;
   document.getElementById("updateCareLevelModalTitle").textContent = `要介護認定の更新登録 (${r.name} 様)`;
-  document.getElementById("newCareLevelSelect").value = r.care_level || "要介護3";
+  document.getElementById("newCareLevelSelect").value = r.care_level || "";
   
   const defaultNextYear = new Date();
   defaultNextYear.setFullYear(defaultNextYear.getFullYear() + 1);
@@ -20394,6 +20413,7 @@ function submitUpdateCareLevelModal() {
   const r = gState.residents.find(x => x.id === residentId);
   if (!r) return;
 
+  if (!cpRequireSelect("newCareLevelSelect", "要介護度")) return;
   const newLevel = document.getElementById("newCareLevelSelect").value;
   const newExpiry = document.getElementById("newCareExpiryDateInput").value;
 
@@ -21979,7 +21999,7 @@ function cpRenderSingleWriteScreenInner(container) {
         </div>
         <div style="margin-top:8px;">
           <label class="cp-sw-label">看護の処置・観察内容</label>
-          <textarea id="swNurseContent" class="form-control" rows="2" placeholder="例: 仙骨部発赤に対しアズノール軟膏塗布・ガーゼ保護。呼吸音清、喘鳴なし。" style="width:100%;"></textarea>
+          <textarea id="swNurseContent" class="form-control" rows="2" style="width:100%;"></textarea>
         </div>
         <div class="cp-sw-section-save"><button type="button" class="btn btn-secondary" style="font-size:12.5px; padding:4px 14px; border:1px solid #1e5b47; color:#1e5b47; background:#fff; font-weight:bold;" onclick="saveSingleWriteScreen('nurse')">この項目だけ保存</button></div>
       </div>
@@ -22055,7 +22075,7 @@ function cpRenderSingleWriteScreenInner(container) {
           <div class="templates-list" id="quickTemplatesList" style="margin:0; display:inline-flex; flex-wrap:wrap; gap:4px;"></div>
           <button type="button" class="btn btn-secondary" style="font-size:12px; padding:2px 8px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openTemplateManageModal()">定型文の編集・追加</button>
         </div>
-        <textarea id="swEventContent" class="form-control" rows="3" placeholder="例：14:20 居室で転びそうになり職員が支えた" style="width:100%; resize:vertical; overflow-y:hidden; line-height:1.6;" oninput="updateRecordCharCount()"></textarea>
+        <textarea id="swEventContent" class="form-control" rows="3" style="width:100%; resize:vertical; overflow-y:hidden; line-height:1.6;" oninput="updateRecordCharCount()"></textarea>
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
           <button type="button" class="btn btn-secondary" style="font-size:12.5px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openFullscreenRecord()">全画面で大きく書く</button>
           <button type="button" class="btn btn-secondary" style="font-size:12.5px;" onclick="openIncidentFromRecord()">ヒヤリハット・事故報告書を作成</button>
@@ -22074,23 +22094,23 @@ function cpRenderSingleWriteScreenInner(container) {
       <div class="cp-sw-grid">
         <div>
           <label class="cp-sw-label">体温 (℃)</label>
-          <input type="number" step="0.1" id="swVitalTemp" class="form-control" value="" placeholder="例: 36.5" onblur="formatTempInput(this)" oninput="formatTempInput(this)">
+          <input type="number" step="0.1" id="swVitalTemp" class="form-control" value="" onblur="formatTempInput(this)" oninput="formatTempInput(this)">
         </div>
         <div>
           <label class="cp-sw-label">血圧 上 (mmHg)</label>
-          <input type="number" id="swVitalBpHigh" class="form-control" value="" placeholder="上 (例: 128)">
+          <input type="number" id="swVitalBpHigh" class="form-control" value=""placeholder="上">
         </div>
         <div>
           <label class="cp-sw-label">血圧 下 (mmHg)</label>
-          <input type="number" id="swVitalBpLow" class="form-control" value="" placeholder="下 (例: 74)">
+          <input type="number" id="swVitalBpLow" class="form-control" value=""placeholder="下">
         </div>
         <div>
           <label class="cp-sw-label">脈拍 (bpm)</label>
-          <input type="number" id="swVitalPulse" class="form-control" value="" placeholder="例: 72">
+          <input type="number" id="swVitalPulse" class="form-control" value="">
         </div>
         <div>
           <label class="cp-sw-label">SpO2 (%)</label>
-          <input type="number" id="swVitalSpo2" class="form-control" value="" placeholder="例: 97">
+          <input type="number" id="swVitalSpo2" class="form-control" value="">
         </div>
         <div style="display:flex; align-items:flex-end;">
           <label style="display:inline-flex; align-items:center; gap:6px; padding:7px 10px; background:#fef3c7; color:#92400e; border:1px solid #fde68a; border-radius:6px; font-size:12.5px; font-weight:bold; cursor:pointer;">
@@ -22131,7 +22151,7 @@ function cpRenderSingleWriteScreenInner(container) {
         </div>
         <div>
           <label class="cp-sw-label">水分量 (ml)</label>
-          <input type="number" id="swMealWater" class="form-control" step="50" value="" placeholder="例: 200">
+          <input type="number" id="swMealWater" class="form-control" step="50" value="">
         </div>
       </div>
       <div class="cp-sw-section-save"><button type="button" class="btn btn-secondary" style="font-size:12.5px; padding:4px 14px; border:1px solid #1e5b47; color:#1e5b47; background:#fff; font-weight:bold;" onclick="saveSingleWriteScreen('meal')">この項目だけ保存</button></div>
@@ -22212,7 +22232,7 @@ function cpRenderSingleWriteScreenInner(container) {
         </div>
         <div>
           <label class="cp-sw-label">入浴時の処置・軟膏・様子</label>
-          <input type="text" id="swBathNotes" class="form-control" value="" placeholder="例: 仙骨部プロペト塗布">
+          <input type="text" id="swBathNotes" class="form-control" value="">
         </div>
       </div>
       <div class="cp-sw-section-save"><button type="button" class="btn btn-secondary" style="font-size:12.5px; padding:4px 14px; border:1px solid #1e5b47; color:#1e5b47; background:#fff; font-weight:bold;" onclick="saveSingleWriteScreen('bath')">この項目だけ保存</button></div>
@@ -22252,7 +22272,7 @@ function cpRenderSingleWriteScreenInner(container) {
         </div>
         <div>
           <label class="cp-sw-label">体位変換時の様子・特変メモ</label>
-          <input type="text" id="swTurnNote" class="form-control" value="" placeholder="例: 呼吸状態落ち着いている">
+          <input type="text" id="swTurnNote" class="form-control" value="">
         </div>
       </div>
       <div class="cp-sw-section-save"><button type="button" class="btn btn-secondary" style="font-size:12.5px; padding:4px 14px; border:1px solid #1e5b47; color:#1e5b47; background:#fff; font-weight:bold;" onclick="saveSingleWriteScreen('turn')">この項目だけ保存</button></div>
