@@ -993,7 +993,7 @@ namespace CarePortal
                 if (parsed == null)
                 {
                     // 読めないファイルは取り込まず、上書きもしない（書き換えの途中かもしれないため）
-                    if (!_warnedBadJson) Console.WriteLine("[データ] portal_database.json が読めないため、取り込みと書き出しを止めています。");
+                    if (!_warnedBadJson) Console.WriteLine("[データ] データの書き出しファイルが読めないため、取り込みと書き出しを止めています（取扱説明書の「困ったとき」）。");
                     _warnedBadJson = true;
                     return;
                 }
@@ -1008,8 +1008,8 @@ namespace CarePortal
                 ResetChangeLog();
                 _exportedStamp = -1;
                 Console.WriteLine(first
-                    ? "[データ] portal_database.json をデータベースに取り込みました（初めての起動）"
-                    : "[データ] portal_database.json が外から変わったので、データベースに取り込みました（" + DateTime.Now.ToString("HH:mm:ss") + "）。前の中身は data\\backup\\before_import_*.json");
+                    ? "[データ] データをデータベースに取り込みました（初めての起動）"
+                    : "[データ] データの書き出しファイルが外から変わったので、データベースに取り込みました（" + DateTime.Now.ToString("HH:mm:ss") + "）。前の中身は控えに残しています");
             }
             if (_store.IsEmpty) return;
             long st = _store.Stamp;
@@ -1033,7 +1033,7 @@ namespace CarePortal
                 }
                 catch (Exception ex)
                 {
-                    Console.WriteLine("[データ] portal_database.json に書き出せませんでした。30秒後にもう一度試します（" + ex.Message + "）");
+                    Console.WriteLine("[データ] データの書き出しができませんでした。30秒後にもう一度試します（" + ex.GetType().Name + "）");
                     return;
                 }
             }
@@ -1044,7 +1044,7 @@ namespace CarePortal
         private void OnJsonSyncTick(object state)
         {
             try { lock (_fileLock) { SyncJsonFile(); } }
-            catch (Exception ex) { Console.WriteLine("[データ] 書き出しに失敗しました: " + ex.Message); }
+            catch (Exception ex) { Console.WriteLine("[データ] 書き出しに失敗しました（" + ex.GetType().Name + "）"); }
         }
         private System.Threading.Timer _extBackupTimer;
 
@@ -3205,7 +3205,8 @@ if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
 # 5. サーバー待機
 try {
     $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
-    Write-Host (" [データの保存先]: " + $server.StorageInfo) -ForegroundColor White
+    # [Claude修正 2026-10-18] 保存先は画面に出さない（見た人に分かってしまうため。取扱説明書に書く）。予備の方法で動くときだけ知らせる
+    if ($server.StorageInfo.StartsWith("JSON")) { Write-Host " [データ] データベースが使えないため、予備の方法で保存しています（取扱説明書の「困ったとき」）" -ForegroundColor Yellow }
     Write-Host ""
     $server.Start()
 } finally {

@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_a1">
+ <link rel="stylesheet" href="style.css?v=20261018_a2">
 </head>
 <body>
 
@@ -1319,7 +1319,7 @@
  <strong>【外部バックアップ失敗】</strong><br>
  失敗日時: <span id="extBackupErrorTime">-</span><br>
  失敗理由: <span id="extBackupErrorReason">-</span><br>
- <span style="font-size:12px; color:#4a5852;">※ 外部バックアップが失敗しても、親機PC内の通常記録や世代保管（data/backup/）は正常に保存されています。ネットワーク接続や共有フォルダのアクセス権をご確認ください。</span>
+ <span style="font-size:12px; color:#4a5852;">※ 外部バックアップが失敗しても、親機PC内の通常記録や日時ごとの控えは正常に保存されています。ネットワーク接続や共有フォルダのアクセス権をご確認ください。</span>
  </div>
  <div id="extBackupRunNotice" style="font-size:13px; font-weight:bold; margin-top:8px; min-height:18px;"></div>
  </div>
@@ -1329,16 +1329,8 @@
  <div style="font-weight:bold; font-size:14px; color:#173f33; margin-bottom:6px;">
  【外部の控えから戻す手順（復元・リストア）】
  </div>
- <ol style="font-size:13px; color:#4a5852; line-height:1.7; margin:0; padding-left:20px;">
- <li>親機PCでポータルサーバーの黒い画面（run_portal.bat）が起動している場合は、画面の「×」を押して終了します。</li>
- <li>設定した外部保存先フォルダを開き、戻したい日時のフォルダ（例: <code>backup_20261009_204500</code>）を開きます。</li>
- <li>その中にある <code>portal_database.json</code> を、親機PCの <code>care_portal/data/portal_database.json</code> に上書きコピーします。</li>
- <li>その中にある <code>photos</code> フォルダを、親機PCの <code>care_portal/data/photos/</code> に上書きコピーします（写真・重要書類・処方箋画像が元に戻ります）。</li>
- <li>親機PCの <code>run_portal.bat</code> を起動し直します。</li>
- <li>ブラウザを再読み込み（F5）し、記録や画像が正しく戻っていることを確認します。</li>
- </ol>
- <div style="font-size:12px; color:#66736d; margin-top:6px;">
- ※ 親機PC自体の故障時は、新しいPCに本システム一式を配置し、上記と同様に外部の控えファイルを data/ に配置して起動してください。
+ <div style="font-size:13px; color:#4a5852; line-height:1.7;">
+ 外部の控えから戻す手順や、親機PCが故障したときの手順は、取扱説明書の「データを戻す」をご覧ください。
  </div>
  </div>
  </div>
@@ -1348,7 +1340,7 @@
  <div>
  <div style="font-weight:bold; font-size:15px; color:#1e5b47; margin-bottom:6px;">【USB・手元PCへ外部保存】</div>
  <p style="font-size:13px; color:#5f6d66; line-height:1.5; margin-bottom:12px;">
- 入居者カルテ・日誌・ケア記録・勤務表などのデータを、JSONファイルとしてこの端末にダウンロードします（USBメモリへの保存はダウンロード後に手で行ってください）。<br><strong style="color:#b91c1c;">※ パスワード・暗証番号は含まれません。</strong>このファイルから戻すと、全職員のIDとパスワードが初期値（aaaa / 0000）になります。ふだんの戻しには親機の data/backup/ のファイルを使ってください。
+ 入居者カルテ・日誌・ケア記録・勤務表などのデータを、JSONファイルとしてこの端末にダウンロードします（USBメモリへの保存はダウンロード後に手で行ってください）。<br><strong style="color:#b91c1c;">※ パスワード・暗証番号は含まれません。</strong>このファイルから戻すと、全職員のIDとパスワードが初期値に戻ります。ふだんの戻しには親機PCの控えを使ってください（取扱説明書の「データを戻す」）。
  </p>
  </div>
  <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#1e5b47; border-color:#1a4f3d;" onclick="downloadBackupJson()">
@@ -1360,7 +1352,7 @@
  <div>
  <div style="font-weight:bold; font-size:15px; color:#065f46; margin-bottom:6px;">【親機PCマスターへ即時同期】</div>
  <p style="font-size:13px; color:#5f6d66; line-height:1.5; margin-bottom:12px;">
- 親機PCのデータファイル（data/portal_database.json）と世代別の保管庫（data/backup/）へ、いまのデータを保存します。
+ 親機PCと、その中の日時ごとの控えへ、いまのデータを保存します。
  </p>
  </div>
  <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#059669; border-color:#047857;" onclick="triggerManualBackup()">
@@ -2259,18 +2251,17 @@
  【常時監視ステータス】多重保護システム正常稼働中
  </div>
  <div style="font-size:13px; color:#047857;">
- 記録・入力・変更は、親機PCのデータベース（data/portal.db）に保存されます。途中で電源が落ちても、書きかけの状態は残りません。あわせて data/backup/ に1分ごとの控え（日時つきのファイル）と最新版（backup_latest.json）が自動で作られます。
+ 記録・入力・変更は、親機PCのデータベースに保存されます。途中で電源が落ちても、書きかけの状態は残りません。あわせて1分ごとの控え（日時つき）と最新版の控えが自動で作られます。
  </div>
  </div>
 
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px 16px; margin-bottom:14px;">
  <div style="font-weight:bold; color:#22302b; margin-bottom:8px;">バックアップの仕組み</div>
  <ul style="margin:0; padding-left:18px; font-size:13px; color:#4a5852; display:flex; flex-direction:column; gap:6px;">
- <li><strong>手元の端末:</strong> ブラウザの中にも控えを保存（通信が切れたときのための一時的な控え）</li>
- <li><strong>親機PC:</strong> データベース（data/portal.db）と、その中身の書き出し（data/portal_database.json。30秒ごと・サーバーを止めるとき）</li>
- <li><strong>親機PCの世代保管:</strong> data/backup/（保存した日時ごとのファイル）</li>
- <li><strong>注意:</strong> どれも同じ親機PCの中です。PCの故障に備えて、data/backup/ をときどきUSBメモリなど別の場所へコピーしてください。</li>
- <li><strong>戻し方:</strong> ①ポータルの黒い画面を閉じる ②data/backup/ の戻したい日時のファイルを data/portal_database.json という名前で上書きコピー ③run_portal.bat で起動し直す（起動すると自動でデータベースに取り込まれます。取り込む前の中身は data/backup/before_import_… に残ります）</li>
+ <li><strong>親機PC:</strong> データベースと、その中身の書き出し（30秒ごと・サーバーを止めるとき）</li>
+ <li><strong>親機PCの世代保管:</strong> 保存した日時ごとの控え</li>
+ <li><strong>注意:</strong> どれも同じ親機PCの中です。PCの故障に備えて、外部バックアップを設定するか、控えをときどきUSBメモリなど別の場所へコピーしてください。</li>
+ <li><strong>戻し方:</strong> 取扱説明書の「データを戻す」をご覧ください。</li>
  </ul>
  </div>
 
@@ -3703,7 +3694,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_a1"></script>
+ <script src="app.js?v=20261018_a2"></script>
   
 
   <!-- ============================================================ -->

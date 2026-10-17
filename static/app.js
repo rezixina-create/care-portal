@@ -1244,7 +1244,7 @@ class LocalDB {
  if (!b) return;
  b.textContent = `自動バックアップ済 (${timeStr})`;
  b.dataset.state = "ok";
- b.title = `${timeStr} に親機PCへ保存し、data/backup/ にもバックアップしました（USBへの保存は手動です）`;
+ b.title = `${timeStr} に親機PCへ保存し、控えも作りました（USBへの保存は手動です）`;
  }
 
  async initServerSync() {
@@ -19447,7 +19447,7 @@ function triggerManualBackup() {
   const noticeEl = document.getElementById("backupManualNotice");
   if (noticeEl) {
    const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-   noticeEl.textContent = `親機PCおよび世代保管庫 (data/backup/) に最新データを保管しました (${now})`;
+   noticeEl.textContent = `親機PCと日時ごとの控えに最新データを保管しました (${now})`;
   }
  }
 }
