@@ -8371,8 +8371,8 @@ function renderDailyJournal() {
  // 1. サマリーバー（勤務体制 ＆ 利用者概況 ＆ 記録件数）
  const summaryBar = document.getElementById("dailyJournalSummaryBar");
  if (summaryBar) {
- const presentCount = gState.residents.filter(r => r.status === "在所").length;
- const hospitalCount = gState.residents.filter(r => r.status === "入院中").length;
+ const presentCount = cpResidentsOn(gState.selectedDate).filter(r => cpStatusOn(r, gState.selectedDate) === "在所").length;
+ const hospitalCount = cpResidentsOn(gState.selectedDate).filter(r => cpStatusOn(r, gState.selectedDate) === "入院中").length;
 
  const dayRecords = (db.data.care_records || []).filter(r => {
  if (r.voided) return false; // [Claude修正] 取消済みは数えない
@@ -8494,7 +8494,7 @@ function renderDailyJournal() {
 
  // 本日の入浴
  const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
- const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+ const bathStr = bath ? `${bath.bath_type} 済` : (cpStatusOn(r, gState.selectedDate) === "入院中" ? "入院中" : "なし");
 
  return `
  <tr>
@@ -8591,7 +8591,7 @@ function printDailyJournal() {
  const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
  const excStr = excs.length > 0 ? `尿:${excs.length}回 便:${stoolCount}回` : "記録なし";
  const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
- const bathStr = bath ? `${bath.bath_type} 済` : (r.status === "入院中" ? "入院中" : "なし");
+ const bathStr = bath ? `${bath.bath_type} 済` : (cpStatusOn(r, gState.selectedDate) === "入院中" ? "入院中" : "なし");
 
  return `
  <tr>
@@ -9224,13 +9224,13 @@ function renderVitalsTable() {
    const vList = cpDayVitals(r.id, gState.selectedDate);
    const v = null;
    const tr = document.createElement("tr");
-   if (r.status !== "在所") tr.style.opacity = "0.5";
+   if (cpStatusOn(r, gState.selectedDate) !== "在所") tr.style.opacity = "0.5";
    const filledHtml = vList.map(x => `<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:2px;">${cpFilledBadgeHtml(cpFormatVitalBrief(x), x.staff_name, x.time || "", x.edit_history)}<button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="openPersonalVitalModal(${Number(x.id)})">訂正</button></div>`).join("");
 
    tr.innerHTML = `
      <td>${r.room_no}</td>
      <td>
-       <strong>${r.name} 様</strong> ${r.status !== '在所' ? `(${r.status})` : ''}
+       <strong>${r.name} 様</strong> ${cpStatusOn(r, gState.selectedDate) !== '在所' ? `(${cpStatusOn(r, gState.selectedDate)})` : ''}
        ${filledHtml}
      </td>
      <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v && v.temperature !== null && v.temperature !== undefined ? v.temperature : ''}" placeholder="体温" onblur="formatTempInput(this)" oninput="formatTempInput(this)"></td>
@@ -9597,7 +9597,7 @@ function renderMealsTable() {
  const userMeals = meals.filter(m => m.resident_id === r.id);
  const totalWater = userMeals.reduce((acc, cur) => acc + (cur.water_ml || 0), 0);
  const tr = document.createElement("tr");
- if (r.status !== "在所") tr.style.opacity = "0.5";
+ if (cpStatusOn(r, gState.selectedDate) !== "在所") tr.style.opacity = "0.5";
 
  // 既に記録されている時間帯の一覧表示
  const allMealsSummaryHtml = userMeals.length > 0
@@ -10174,7 +10174,17 @@ function cpStaffRoleOf(name) {
 }
 function cpIsNurseStaff(name) { return cpStaffRoleOf(name).includes("看護"); }
 function cpIsCurrentNurse() { return cpIsNurseStaff(cpLoginStaffName()); }
-function cpResidentIsHere(r) { return r && r.status !== "入院中" && r.status !== "退所"; }
+// [Claude修正 2026-10-18] その日の在所状況。以前は今の状況（status）だけで決めていたため、
+// 過去の日付の表でも、いま入院中の方が「入院中」になったり、入居前・退所後の方が出たりしていた
+function cpStatusOn(r, dateStr) {
+ if (!r) return "";
+ const d = dateStr || gState.selectedDate || toLocalDateStr(new Date());
+ if (r.admission_date && d < r.admission_date) return "入居前";
+ if (r.status === "退所") return (r.discharge_date && d <= r.discharge_date) ? (r.status_before_discharge && r.status_before_discharge !== "退所" ? r.status_before_discharge : "在所") : "退所";
+ if (r.status === "入院中") return (r.hospital_date && d < r.hospital_date) ? "在所" : "入院中";
+ return r.status || "在所";
+}
+function cpResidentIsHere(r, dateStr) { const s = cpStatusOn(r, dateStr); return !!r && s !== "入院中" && s !== "退所" && s !== "入居前"; }
 function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
 function cpMinutes(hhmm) { const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
 
@@ -11343,7 +11353,7 @@ function submitNightTurnsBatch() {
  let totalRecordsCreated = 0;
  added.forEach((item, index) => {
  const r = gState.residents.find(x => x.id === item.resId);
- if (!r || r.status !== "在所") return; // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から除外
+ if (!r || cpStatusOn(r, date) !== "在所") return; // 安全ガード: 入院中・不在の利用者は巡視記録の自動生成から除外
  const tpl = tpls[item.action] || DEFAULT_NIGHT_TURN_TEMPLATES[item.action] || `【{time} 定時巡視・体位変換】訪室確認。${item.action}実施。`;
     let contentText = tpl.replace(/\{time\}/g, item.time).replace(/\{action\}/g, item.action);
     // [Antigravity実装 2026-10-15] 書いたときは自動定型文の後ろに「【様子】（書いた内容）」を付与
@@ -11377,7 +11387,7 @@ function submitNightTurnsBatch() {
  // [Claude修正 2026-10-15] あとから書いた様子は、特変として1件ずつ残す（巡視の記録は書き換えない）
  lateNotes.forEach((item, index) => {
   const r = gState.residents.find(x => x.id === item.resId);
-  if (!r || r.status !== "在所") return;
+  if (!r || cpStatusOn(r, date) !== "在所") return;
   db.data.care_records.unshift({
    id: Date.now() + Math.floor(Math.random() * 100000) + index + 70000,
    recorded_at: `${date} ${item.time}`,
@@ -11421,7 +11431,7 @@ function renderNightTable() {
  const activeTurns = cpActiveTurnsForDate(gState.selectedDate);
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
- const isHospital = r.status === "入院中" || r.status === "ショート終了" || r.status !== "在所";
+ const isHospital = cpStatusOn(r, gState.selectedDate) !== "在所";
  const tr = document.createElement("tr");
 
  if (isHospital) {
@@ -17728,7 +17738,7 @@ function renderResidentsStrip() {
  const showBadge = cpUnits().length > 1;
  shown.forEach(r => {
  const card = document.createElement("div");
- card.className = `resident-card ${r.id === gState.selectedResidentId ? "selected" : ""} ${r.status !== "在所" ? "inactive" : ""}`;
+ card.className = `resident-card ${r.id === gState.selectedResidentId ? "selected" : ""} ${cpStatusOn(r, gState.selectedDate) !== "在所" ? "inactive" : ""}`;
  card.onclick = () => selectResident(r.id);
  const un = cpUnitName(r.unit_id);
  card.innerHTML = `

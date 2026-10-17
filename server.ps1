@@ -1119,15 +1119,19 @@ namespace CarePortal
             }
         }
 
+        // [Claude修正 2026-10-18] 読むだけに使う（ログインの照合・暗証番号の確かめ など）。書き換えない。
+        // 以前は呼ぶたびに全データを読み直していて、記録が1年分あるとログインに3秒ほどかかっていた。
+        // 読み込み済みのデータの「項目の一覧」だけを写して渡す（保存で項目が差し替わっても、渡した側は変わらない）
         private JObj LoadDb()
         {
-            string txt = null;
             lock (_fileLock)
             {
-                txt = DbReadText();
+                JObj c = GetDbCached();
+                if (c == null) return null;
+                JObj o = new JObj();
+                foreach (string k in c.Keys) o.Set(k, c.Map[k]);
+                return o;
             }
-            if (string.IsNullOrEmpty(txt)) return null;
-            return MiniJson.Parse(txt) as JObj;
         }
 
         private static List<object> GetList(JObj o, string key)
@@ -2136,6 +2140,40 @@ namespace CarePortal
         private string _maskedCache;
         private byte[] _maskedGz;
         private string _maskedGzSrc;
+        // _fileLock の中で呼ぶ。伏せ字にした全データ（中身が変わるまで使い回す）
+        // [Claude修正 2026-10-16] 以前は端末が取りに来るたびに読み込み・伏せ字の処理をし、その間ほかの要求を待たせていた
+        private string GetMaskedText()
+        {
+            if (!DbExists()) return "";
+            long stamp = DbStamp();
+            if (_maskedCache != null && stamp == _maskedCacheStamp) return _maskedCache;
+            string txt = DbReadText();
+            // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
+            _maskedCache = string.IsNullOrEmpty(txt) ? "" : MaskPasswords(txt);
+            _maskedCacheStamp = stamp;
+            return _maskedCache;
+        }
+
+        // [Claude追加 2026-10-18] 起動したあと、最初の保存とログインを待たせないよう、読み込み済みのデータを先に用意する
+        //（記録が1年分あると、最初の保存で全データの読み込みに2秒ほどかかっていた）
+        private void WarmCaches()
+        {
+            ThreadPool.QueueUserWorkItem(delegate(object st)
+            {
+                try
+                {
+                    string masked;
+                    lock (_fileLock) { GetDbCached(); GetCurrentRev(); masked = GetMaskedText(); }
+                    if (!string.IsNullOrEmpty(masked) && masked.Length > 8192)
+                    {
+                        byte[] gz = Gzip(Encoding.UTF8.GetBytes(masked));
+                        lock (_fileLock) { if (object.ReferenceEquals(_maskedCache, masked)) { _maskedGz = gz; _maskedGzSrc = masked; } }
+                    }
+                }
+                catch { }
+            });
+        }
+
         private static byte[] Gzip(byte[] raw)
         {
             using (MemoryStream ms = new MemoryStream())
@@ -2561,7 +2599,7 @@ namespace CarePortal
                 _storeWhy = why;
                 if (_store != null)
                 {
-                    try { lock (_fileLock) { SyncJsonFile(); LoadChangeLog(); } }
+                    try { lock (_fileLock) { SyncJsonFile(); LoadChangeLog(); } WarmCaches(); }
                     catch (Exception ex)
                     {
                         // 取り込みに失敗したら、データベースは使わず JSON ファイルで動く（データを失わないことを優先）
@@ -2832,27 +2870,7 @@ namespace CarePortal
                     if (urlPath == "/api/data")
                     {
                         string dataJson = "";
-                        lock (_fileLock)
-                        {
-                            if (DbExists())
-                            {
-                                // [Claude修正 2026-10-16] 伏せ字にした全データを覚えておき、中身が変わるまで使い回す
-                                // （以前は端末が取りに来るたびに読み込み・伏せ字の処理をし、その間ほかの要求を待たせていた）
-                                long stamp = DbStamp();
-                                if (_maskedCache != null && stamp == _maskedCacheStamp)
-                                {
-                                    dataJson = _maskedCache;
-                                }
-                                else
-                                {
-                                    string txt = DbReadText();
-                                    // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
-                                    dataJson = string.IsNullOrEmpty(txt) ? "" : MaskPasswords(txt);
-                                    _maskedCache = dataJson;
-                                    _maskedCacheStamp = stamp;
-                                }
-                            }
-                        }
+                        lock (_fileLock) { dataJson = GetMaskedText(); }
                         // [第3段階] ブラウザには縮めて渡す（gzip。記録が増えても受け取りが軽い。ブラウザがそのまま元に戻す）
                         string ae = GetHeader(lines, "Accept-Encoding") ?? "";
                         if (!string.IsNullOrEmpty(dataJson) && dataJson.Length > 8192 && ae.IndexOf("gzip", StringComparison.OrdinalIgnoreCase) >= 0)
