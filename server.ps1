@@ -488,6 +488,8 @@ namespace CarePortal
             Exec("CREATE TABLE IF NOT EXISTS items(key TEXT PRIMARY KEY, pos INTEGER NOT NULL, kind INTEGER NOT NULL, json TEXT NOT NULL)");
             Exec("CREATE TABLE IF NOT EXISTS records(coll TEXT NOT NULL, id TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(coll, id))");
             Exec("CREATE TABLE IF NOT EXISTS sysinfo(key TEXT PRIMARY KEY, value TEXT)");
+            // [第3段階] 差分保存の変更の記録（端末への差分の受け渡しを、サーバーの再起動をまたいでも続けるため）
+            Exec("CREATE TABLE IF NOT EXISTS changes(rev INTEGER PRIMARY KEY, prev INTEGER NOT NULL, ops TEXT NOT NULL)");
             // 読み込み
             List<string> keys = new List<string>();
             Dictionary<string, string> whole = new Dictionary<string, string>();
@@ -622,9 +624,59 @@ namespace CarePortal
 
         // [第2段階] 差分保存のときの書き込み: 変わった記録（ops に出てくる記録）と版番号の行だけを書く。
         // 全体を組み立て直したり、ほかの記録を見比べたりしない。うまく当てはまらないときは全体の書き込みに切り替える
-        public void WriteDelta(JObj root, List<object> ops)
+        // [第3段階] change を渡すと、同じ書き込みの中で変更の記録も残す（書けたときは両方、だめなときはどちらも残らない）
+        public void WriteDelta(JObj root, List<object> ops, long prevRev, long newRev, string change)
         {
             lock (_lock)
+            {
+                _pendOps = change; _pendPrev = prevRev; _pendRev = newRev;
+                try { WriteDeltaCore(root, ops); }
+                finally { _pendOps = null; }
+            }
+        }
+
+        public const int ChangeKeep = 500;
+        private string _pendOps;
+        private long _pendPrev, _pendRev;
+
+        // 残っている変更の記録を読む。今の版までとぎれずにつながる分だけを返す（つながらなければ空）
+        public List<KeyValuePair<long, string>> LoadChanges(out long baseRev)
+        {
+            lock (_lock)
+            {
+                baseRev = -1;
+                List<KeyValuePair<long, string>> res = new List<KeyValuePair<long, string>>();
+                string rv;
+                long cur;
+                if (!_whole.TryGetValue("_rev", out rv) || !long.TryParse(rv, out cur)) return res;
+                List<long> revs = new List<long>(), prevs = new List<long>();
+                List<string> opsl = new List<string>();
+                IntPtr st;
+                Check(_api.Prepare(_db, "SELECT rev, prev, ops FROM changes ORDER BY rev", out st), "変更の記録の読み込み");
+                try
+                {
+                    int rc;
+                    while ((rc = _api.Step(st)) == SqApi.SQ_ROW)
+                    {
+                        revs.Add(_api.ColumnInt64(st, 0));
+                        prevs.Add(_api.ColumnInt64(st, 1));
+                        opsl.Add(_api.ColumnText(st, 2));
+                    }
+                    Check(rc, "変更の記録の読み込み");
+                }
+                finally { _api.FinalizeStmt(st); }
+                int n = revs.Count;
+                if (n == 0 || revs[n - 1] != cur) return res;
+                int from = n - 1;
+                while (from > 0 && prevs[from] == revs[from - 1]) from--;
+                for (int i = from; i < n; i++) res.Add(new KeyValuePair<long, string>(revs[i], opsl[i]));
+                baseRev = prevs[from];
+                return res;
+            }
+        }
+
+        private void WriteDeltaCore(JObj root, List<object> ops)
+        {
             {
                 bool keysSame = root.Keys.Count == _keys.Count;
                 for (int i = 0; keysSame && i < _keys.Count; i++) if (root.Keys[i] != _keys[i]) keysSame = false;
@@ -676,7 +728,7 @@ namespace CarePortal
             for (int i = 0; i < _keys.Count; i++) oldPos[_keys[i]] = i;
             if (full) { newWhole.Clear(); newOrder.Clear(); newRecs.Clear(); }
 
-            IntPtr upItem = IntPtr.Zero, delItem = IntPtr.Zero, upRec = IntPtr.Zero, delRec = IntPtr.Zero, delColl = IntPtr.Zero;
+            IntPtr upItem = IntPtr.Zero, delItem = IntPtr.Zero, upRec = IntPtr.Zero, delRec = IntPtr.Zero, delColl = IntPtr.Zero, chIns = IntPtr.Zero, chDel = IntPtr.Zero;
             bool began = false;
             try
             {
@@ -809,6 +861,18 @@ namespace CarePortal
                         if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
                     }
                 }
+                // [第3段階] 変更の記録: 差分保存なら1行足して古い分を消す。全体の書き込み（取り込み・パスワードの変更など）では
+                // どの記録が変わったか言えないので、全部消す（端末は次に全体を取りに来る）
+                if (_pendOps != null)
+                {
+                    Check(_api.Prepare(_db, "INSERT OR REPLACE INTO changes(rev, prev, ops) VALUES(?, ?, ?)", out chIns), "準備");
+                    _api.BindInt64(chIns, 1, _pendRev); _api.BindInt64(chIns, 2, _pendPrev); _api.BindText(chIns, 3, _pendOps);
+                    Run(chIns);
+                    Check(_api.Prepare(_db, "DELETE FROM changes WHERE rev <= ? OR rev > ?", out chDel), "準備");
+                    _api.BindInt64(chDel, 1, _pendRev - ChangeKeep); _api.BindInt64(chDel, 2, _pendRev);
+                    Run(chDel);
+                }
+                else Exec("DELETE FROM changes");
                 Exec("COMMIT");
                 began = false;
                 _keys = newKeys; _whole = newWhole; _order = newOrder; _recs = newRecs;
@@ -822,7 +886,7 @@ namespace CarePortal
             }
             finally
             {
-                foreach (IntPtr p in new IntPtr[] { upItem, delItem, upRec, delRec, delColl }) { if (p != IntPtr.Zero) _api.FinalizeStmt(p); }
+                foreach (IntPtr p in new IntPtr[] { upItem, delItem, upRec, delRec, delColl, chIns, chDel }) { if (p != IntPtr.Zero) _api.FinalizeStmt(p); }
             }
         }
 
@@ -893,6 +957,7 @@ namespace CarePortal
         }
         private void DbWriteText(string json)
         {
+            ResetChangeLog();
             if (_store != null) { _store.Write(json); return; }
             File.WriteAllText(_dbFile, json, Encoding.UTF8);
         }
@@ -940,6 +1005,7 @@ namespace CarePortal
                     try { File.WriteAllText(Path.Combine(_backupDir, "before_import_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json"), _store.Read(), Encoding.UTF8); } catch { }
                 }
                 _store.Write(txt);
+                ResetChangeLog();
                 _exportedStamp = -1;
                 Console.WriteLine(first
                     ? "[データ] portal_database.json をデータベースに取り込みました（初めての起動）"
@@ -2068,6 +2134,19 @@ namespace CarePortal
         private long _dbCacheStamp = -1;
         private DateTime _lastBackupCleanup = DateTime.MinValue;
         private string _maskedCache;
+        private byte[] _maskedGz;
+        private string _maskedGzSrc;
+        private static byte[] Gzip(byte[] raw)
+        {
+            using (MemoryStream ms = new MemoryStream())
+            {
+                using (System.IO.Compression.GZipStream z = new System.IO.Compression.GZipStream(ms, System.IO.Compression.CompressionMode.Compress, true))
+                {
+                    z.Write(raw, 0, raw.Length);
+                }
+                return ms.ToArray();
+            }
+        }
         private long _maskedCacheStamp = -1;
         // 受け取りも差分: 差分保存で当てはめた変更を覚えておき、端末には「この版から後に変わった記録だけ」を渡す
         private readonly List<KeyValuePair<long, string>> _changeLog = new List<KeyValuePair<long, string>>();
@@ -2076,15 +2155,9 @@ namespace CarePortal
         private const int ChangeLogMax = 500;
 
         // _fileLock の中で呼ぶ。describable=false（パスワードなどサーバーが補った保存）のときは途切れたことにする
-        private void RecordChange(long prevRev, long newRev, List<object> ops, bool describable)
+        // 端末に渡す形の変更（パスワードは伏せ字）
+        private static string DescribeOps(List<object> ops)
         {
-            if (!describable || prevRev != _changeLogLastRev)
-            {
-                _changeLog.Clear();
-                _changeLogBaseRev = describable ? prevRev : newRev;
-            }
-            if (describable)
-            {
                 StringBuilder sb = new StringBuilder("[");
                 bool first = true;
                 foreach (object o in ops)
@@ -2100,7 +2173,41 @@ namespace CarePortal
                     sb.Append(MiniJson.Serialize(c));
                 }
                 sb.Append(']');
-                _changeLog.Add(new KeyValuePair<long, string>(newRev, MaskPasswords(sb.ToString())));
+                return MaskPasswords(sb.ToString());
+        }
+
+        // 変更の記録を途切れたことにする（全体を書き込んだとき。端末は次に全体を取りに来る）
+        private void ResetChangeLog()
+        {
+            _changeLog.Clear();
+            _changeLogBaseRev = -1;
+            _changeLogLastRev = -1;
+        }
+
+        // [第3段階] 起動時: データベースに残っている変更の記録を読み込む
+        private void LoadChangeLog()
+        {
+            ResetChangeLog();
+            if (_store == null) return;
+            long baseRev;
+            List<KeyValuePair<long, string>> rows = _store.LoadChanges(out baseRev);
+            if (rows.Count == 0) return;
+            _changeLog.AddRange(rows);
+            _changeLogBaseRev = baseRev;
+            _changeLogLastRev = rows[rows.Count - 1].Key;
+        }
+
+        private void RecordChange(long prevRev, long newRev, string change)
+        {
+            bool describable = change != null;
+            if (!describable || prevRev != _changeLogLastRev)
+            {
+                _changeLog.Clear();
+                _changeLogBaseRev = describable ? prevRev : newRev;
+            }
+            if (describable)
+            {
+                _changeLog.Add(new KeyValuePair<long, string>(newRev, change));
                 while (_changeLog.Count > ChangeLogMax)
                 {
                     _changeLog.RemoveAt(0);
@@ -2308,6 +2415,7 @@ namespace CarePortal
                             long newRev = prevRev + 1;
                             db.Set("_rev", new JNum(newRev.ToString(System.Globalization.CultureInfo.InvariantCulture)));
                             string outJson = null;
+                            string change = null;
                             if (slow)
                             {
                                 outJson = MergeAccountSecrets(MiniJson.Serialize(db), beforeJson);
@@ -2318,14 +2426,16 @@ namespace CarePortal
                             else if (_store != null)
                             {
                                 // [第2段階] データベースには、変わった記録と版番号だけを書く（全体を組み立て直さない）
-                                _store.WriteDelta(db, ops);
+                                change = DescribeOps(ops);
+                                _store.WriteDelta(db, ops, prevRev, newRev, change);
                             }
                             else
                             {
                                 outJson = MiniJson.Serialize(db);
-                                DbWriteText(outJson);
+                                File.WriteAllText(_dbFile, outJson, Encoding.UTF8); // JSON だけで動くとき（変更の記録は続ける）
+                                change = DescribeOps(ops);
                             }
-                            RecordChange(prevRev, newRev, ops, !slow);
+                            RecordChange(prevRev, newRev, change);
                             long stampAfter = DbStamp();
                             _dbCacheStamp = stampAfter;
                             _revCacheVal = newRev; _revCacheStamp = stampAfter;
@@ -2426,7 +2536,7 @@ namespace CarePortal
                 _storeWhy = why;
                 if (_store != null)
                 {
-                    try { lock (_fileLock) { SyncJsonFile(); } }
+                    try { lock (_fileLock) { SyncJsonFile(); LoadChangeLog(); } }
                     catch (Exception ex)
                     {
                         // 取り込みに失敗したら、データベースは使わず JSON ファイルで動く（データを失わないことを優先）
@@ -2718,6 +2828,23 @@ namespace CarePortal
                                 }
                             }
                         }
+                        // [第3段階] ブラウザには縮めて渡す（gzip。記録が増えても受け取りが軽い。ブラウザがそのまま元に戻す）
+                        string ae = GetHeader(lines, "Accept-Encoding") ?? "";
+                        if (!string.IsNullOrEmpty(dataJson) && dataJson.Length > 8192 && ae.IndexOf("gzip", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            byte[] gz = null;
+                            lock (_fileLock)
+                            {
+                                if (_maskedGz != null && object.ReferenceEquals(_maskedGzSrc, dataJson)) gz = _maskedGz;
+                            }
+                            if (gz == null)
+                            {
+                                gz = Gzip(Encoding.UTF8.GetBytes(dataJson));
+                                lock (_fileLock) { _maskedGz = gz; _maskedGzSrc = dataJson; }
+                            }
+                            SendCorsResponse(stream, 200, "OK", "application/json; charset=utf-8", gz, null, "Content-Encoding: gzip\r\nVary: Accept-Encoding\r\n");
+                            return;
+                        }
                         if (string.IsNullOrEmpty(dataJson))
                         {
                             SendJsonResponse(stream, 200, "{}");
@@ -2885,8 +3012,14 @@ namespace CarePortal
 
         private static void SendCorsResponse(NetworkStream stream, int statusCode, string statusMsg, string contentType, byte[] body, string setCookie)
         {
+            SendCorsResponse(stream, statusCode, statusMsg, contentType, body, setCookie, null);
+        }
+
+        private static void SendCorsResponse(NetworkStream stream, int statusCode, string statusMsg, string contentType, byte[] body, string setCookie, string extraHeaders)
+        {
             string headers = "HTTP/1.1 " + statusCode + " " + statusMsg + "\r\n" +
                              (string.IsNullOrEmpty(setCookie) ? "" : "Set-Cookie: " + setCookie + "\r\n") +
+                             (extraHeaders ?? "") +
                              "Content-Type: " + contentType + "\r\n" +
                              "Content-Length: " + body.Length + "\r\n" +
                              "Cache-Control: no-cache, no-store, must-revalidate\r\n" +
