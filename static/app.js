@@ -4407,7 +4407,7 @@ function renderResidentDetail() {
  <div>
  <span class="room-badge" style="font-size:13px;">${r.room_no}号室</span>
  <h2 style="font-size:20px; font-weight:bold; margin-top:4px;">${r.name} 様</h2>
- <span style="font-size:13px; color:var(--text-muted);">${r.care_level} / 生年月日: ${r.birth_date || "-"}</span>
+ <span style="font-size:13px; color:var(--text-muted);">${r.care_level} / 生年月日: ${r.birth_date || "-"} / 入居日: ${r.admission_date || "-"}</span>
  </div>
  <div style="text-align:right;">
  <div class="policy-stamp ${stampClass}" style="font-size:14px; padding:4px 10px;">［ ${r.policy_stamp} ］</div>
@@ -10810,6 +10810,11 @@ const CP_DRUG_GUIDE = [
  watch: ["吐き気・吐く", "食欲が落ちる", "下痢", "脈が遅い・めまい・気を失う"],
  how: [],
  sources: [["患者向医薬品ガイド（ドネペジル塩酸塩錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/460028_1190012F1107_1_00G.pdf"], ["厚生労働省 検討会資料「スイッチOTC医薬品の候補となる成分の成分情報等」", "https://www.mhlw.go.jp/content/11121000/000429048.pdf"], ["長寿科学振興財団「ケアの立場からみた薬物療法の選択」（中村祐）", "https://www.tyojyu.or.jp/kankoubutsu/gyoseki/pdf/h30-5-2.pdf"]] },
+ { name: "レボドパ・カルビドパ", aliases: ["レボドパ", "カルビドパ", "メネシット", "ネオドパストン"], kind: "飲み薬",
+ what: "パーキンソン病の薬。脳の中で足りなくなったドパミンを補い、ふるえ・こわばり・動きの遅さ・歩きにくさをやわらげる。",
+ watch: ["高い熱・体のこわばり・ふるえ・飲み込みにくい・意識がぼんやりする（悪性症候群）", "ないものが見える・聞こえる、混乱する", "前ぶれなく急に眠り込む", "気分の落ち込み・眠れない", "吐き気・お腹の痛み・黒い便", "急に動けなくなる・症状が急に変わる（長く飲んでいる方）"],
+ how: ["自分の判断でやめたり量を変えたりしない（急にやめると悪くなることがある）。看護師・主治医の指示に従う", "飲み忘れても2回分を一度に飲ませない。どうするかは看護師に聞く"],
+ sources: [["患者向医薬品ガイド（レボドパ・カルビドパ水和物錠）", "https://www.info.pmda.go.jp/downfiles/ph/GUI/672173_1169101F1154_2_01G.pdf"], ["国立病院機構 熊本医療センター「パーキンソン病の薬」", "https://kumamoto.hosp.go.jp/files/000208191.pdf"]] },
  { name: "メマンチン", aliases: ["メマンチン", "メマリー"], kind: "飲み薬",
  what: "認知症の症状の進行を抑える薬。",
  watch: ["めまい・ふらつき・眠気（転びやすくなる）", "けいれん", "興奮する・落ち着かない", "便秘"],
@@ -10968,7 +10973,7 @@ const CP_DRUG_BASIS = {
  "ピレノキシン（目薬）": "カタリン点眼用0.005%（千寿製薬株式会社）の添付文書",
  "レボフロキサシン（目薬）": "クラビット点眼液1.5%（参天製薬株式会社）の添付文書"
 };
-const CP_DRUG_GUIDE_CHECKED = "2026-10-09（追記 2026-10-15）";
+const CP_DRUG_GUIDE_CHECKED = "2026-10-09（追記 2026-10-15・2026-10-18）";
 
 function cpNormDrugName(s) {
  return String(s || "").replace(/[\s　]/g, "").replace(/[（(][^）)]*[）)]/g, "").toLowerCase();
@@ -16101,6 +16106,7 @@ function openAddResidentModal() {
  document.getElementById("resCareLevel").value = ""; // [Claude修正] 未選択のまま「要介護3」で登録されないように
  document.getElementById("resStatus").value = "在所";
  document.getElementById("resBirthDate").value = "";
+ document.getElementById("resAdmissionDate").value = "";
  document.getElementById("resPolicyStamp").value = ""; // [Claude修正] 未選択のまま「緊急搬送」で登録されないように
  document.getElementById("resDietType").value = ""; // [Claude修正] 未選択のまま「普通食 (一口大)」で登録されないように
  document.getElementById("resAllergies").value = "";
@@ -16138,6 +16144,7 @@ function openEditResidentModal(id) {
  document.getElementById("resCareLevel").value = r.care_level || "要介護3";
  document.getElementById("resStatus").value = r.status || "在所";
  document.getElementById("resBirthDate").value = r.birth_date || "";
+ document.getElementById("resAdmissionDate").value = r.admission_date || "";
  document.getElementById("resPolicyStamp").value = r.policy_stamp || "緊急搬送";
  document.getElementById("resDietType").value = r.diet_type || "";
  document.getElementById("resAllergies").value = r.allergies || "";
@@ -16187,6 +16194,15 @@ function submitResidentForm() {
  }
 
  const editId = document.getElementById("resEditId").value;
+ // [Claude追加 2026-10-18] 入居日: 新しく登録するときは必須。これから先の日付・退所日より後は入れられない
+ {
+ const ad = document.getElementById("resAdmissionDate").value;
+ const curR = editId ? gState.residents.find(x => x.id === parseInt(editId)) : null;
+ if (!editId && !ad) { alert("入居日を入れてください。"); return; }
+ if (curR && curR.admission_date && !ad) { alert("入居日は消せません。直すときは正しい日付を入れてください。"); return; }
+ if (ad && ad > toLocalDateStr(new Date())) { alert("入居日に、これから先の日付は入れられません。"); return; }
+ if (ad && curR && curR.discharge_date && ad > curR.discharge_date) { alert("入居日が退所日より後になっています。"); return; }
+ }
  // [Claude追加] 退所は「退所の手続き」から（退所日・理由を残すため）。退所の取り消しも専用のボタンから
  let cpUnitAfterMove;
  {
@@ -16214,6 +16230,7 @@ function submitResidentForm() {
  care_level: document.getElementById("resCareLevel").value,
  status: document.getElementById("resStatus").value,
  birth_date: document.getElementById("resBirthDate").value,
+ admission_date: document.getElementById("resAdmissionDate").value,
  policy_stamp: document.getElementById("resPolicyStamp").value,
  diet_type: document.getElementById("resDietType").value,
  allergies: document.getElementById("resAllergies").value.trim(),
@@ -16246,7 +16263,7 @@ function submitResidentForm() {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
 
- cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();
@@ -16418,7 +16435,7 @@ function submitCarePlanModal() {
  r.temp_max = document.getElementById("quickTempMax").value ? parseFloat(document.getElementById("quickTempMax").value) : null;
  r.spo2_min = document.getElementById("quickSpo2Min").value ? parseInt(document.getElementById("quickSpo2Min").value, 10) : null;
 
- cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
+ cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
  db.save();
  closeModal("carePlanModal");
  renderResidentDetail();
@@ -16516,7 +16533,7 @@ function submitBodyConditionModal() {
  if (algEl) r.allergies = algEl.value.trim();
  if (dietEl) r.diet_type = dietEl.value;
  if (oralEl) r.oral_state = oralEl.value.trim();
- cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
+ cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
 
  db.save();
  closeModal("bodyConditionModal");
@@ -17734,10 +17751,10 @@ function renderResidentsStrip() {
 const CP_DISCHARGE_REASONS = ["死亡退所", "入院による退所", "他施設へ", "自宅へ", "その他"];
 function cpIsDischarged(r) { return !!r && r.status === "退所"; }
 function cpCurrentResidents() { return (gState.residents || []).filter(r => r && !cpIsDischarged(r)); }
-// その日にホームにいた利用者（退所した方は、退所日まで出す）
+// その日にホームにいた利用者（退所した方は、退所日まで出す。[Claude追加 2026-10-18] 入居日より前の日には出さない）
 function cpResidentsOn(dateStr) {
  const d = dateStr || gState.selectedDate || toLocalDateStr(new Date());
- return (gState.residents || []).filter(r => r && (!cpIsDischarged(r) || (r.discharge_date && d <= r.discharge_date)));
+ return (gState.residents || []).filter(r => r && (!r.admission_date || d >= r.admission_date) && (!cpIsDischarged(r) || (r.discharge_date && d <= r.discharge_date)));
 }
 function cpRoomOccupant(room, exceptId) {
  const k = String(room || "").trim();
