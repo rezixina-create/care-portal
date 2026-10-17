@@ -2440,7 +2440,7 @@ namespace CarePortal
                             _dbCacheStamp = stampAfter;
                             _revCacheVal = newRev; _revCacheStamp = stampAfter;
                             if (outJson != null) WriteMinuteBackup(outJson);
-                            else WriteMinuteBackupIfDue(db);
+                            else QueueMinuteBackup();
                             resp = "{\"success\":true,\"rev\":" + newRev + ",\"prev_rev\":" + prevRev + ",\"saved_at\":\"" + DateTime.Now.ToString("HH:mm") + "\"}";
                         }
                     }
@@ -2471,6 +2471,31 @@ namespace CarePortal
 
         // [第2段階] データベースのとき: 控え（その分の最初の1つと backup_latest.json）は1分に1回だけ作る。
         // データベースは書きかけが残らないので、保存のたびに全体を書く必要がない（保存を速くするため）
+        // [Claude修正 2026-10-18] データベースのときの分ごとの控えは、保存の返事を待たせないよう別の作業で書く
+        //（記録が1年分あると、控え1つの書き込みに1秒近くかかり、その分だけ保存が遅れていた）
+        private string _minuteBackupQueued;
+        private void QueueMinuteBackup()
+        {
+            string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
+            if (_minuteBackupQueued == ts) return;
+            string backupPath = Path.Combine(_backupDir, "backup_" + ts + ".json");
+            if (File.Exists(backupPath)) { _minuteBackupQueued = ts; return; }
+            _minuteBackupQueued = ts;
+            ThreadPool.QueueUserWorkItem(delegate(object st)
+            {
+                try
+                {
+                    string json;
+                    lock (_fileLock) { json = DbReadText(); }
+                    if (string.IsNullOrEmpty(json)) return;
+                    File.WriteAllText(backupPath, json, Encoding.UTF8);
+                    File.WriteAllText(Path.Combine(_backupDir, "backup_latest.json"), json, Encoding.UTF8);
+                }
+                catch { }
+                try { lock (_fileLock) { CleanupMinuteBackups(); } } catch { }
+            });
+        }
+
         private void WriteMinuteBackupIfDue(JObj db)
         {
             try

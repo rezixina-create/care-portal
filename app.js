@@ -404,7 +404,76 @@ function handleSessionExpired() {
 // ・一方が削除し、もう一方が編集した記録は、記録を残す (消失を防ぐ)
 // ======================================================================
 function cpSame(a, b) {
- return JSON.stringify(a) === JSON.stringify(b);
+ return cpJEq(a, b);
+}
+
+// [Claude修正 2026-10-18] 「JSON にしたとき同じ中身か」を、文字にせずに比べる
+// （以前は比べるたびに JSON の文字にしていて、記録が1年分あると保存1件に数秒かかっていた）
+// JSON と同じく、undefined・関数の項目は無いものとして扱い、NaN・Infinity は null と同じとする（項目の順番は問わない）
+function cpJNorm(v) {
+ if (v === undefined || typeof v === "function" || typeof v === "symbol") return undefined;
+ if (typeof v === "number" && !isFinite(v)) return null;
+ return v;
+}
+function cpJEq(a, b) {
+ if (a === b) return true;
+ // ふつうの場合（undefined の項目がない記録どうし）を先に速く比べる。合わなければ下の正確な比べ方で確かめる
+ if (a !== null && b !== null && typeof a === "object" && typeof b === "object") {
+  if (Array.isArray(a)) {
+   if (Array.isArray(b) && a.length === b.length) {
+    let ok = true;
+    for (let i = 0; i < a.length; i++) { const x = a[i], y = b[i]; if (x !== y && !cpJEq(x, y)) { ok = false; break; } }
+    if (ok) return true;
+   }
+  } else if (!Array.isArray(b) && typeof a.toJSON !== "function" && typeof b.toJSON !== "function") {
+   const ka = Object.keys(a);
+   if (ka.length === Object.keys(b).length) {
+    let ok = true;
+    for (let i = 0; i < ka.length; i++) {
+     const k = ka[i], x = a[k], y = b[k];
+     if (x === y && (y !== undefined || Object.prototype.hasOwnProperty.call(b, k))) continue;
+     if (!Object.prototype.hasOwnProperty.call(b, k) || !cpJEq(x, y)) { ok = false; break; }
+    }
+    if (ok) return true;
+   }
+  }
+ }
+ return cpJEqSlow(a, b);
+}
+function cpJEqSlow(a, b) {
+ if (a === b) return true;
+ a = cpJNorm(a); b = cpJNorm(b);
+ if (a === b) return true;
+ if (a === null || b === null || typeof a !== "object" || typeof b !== "object") return false;
+ if (typeof a.toJSON === "function" || typeof b.toJSON === "function") return JSON.stringify(a) === JSON.stringify(b);
+ const aa = Array.isArray(a), ba = Array.isArray(b);
+ if (aa !== ba) return false;
+ if (aa) {
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i++) {
+   const x = cpJNorm(a[i]), y = cpJNorm(b[i]);
+   if (!cpJEq(x === undefined ? null : x, y === undefined ? null : y)) return false;
+  }
+  return true;
+ }
+ let na = 0, nb = 0;
+ for (const k in a) {
+  if (!Object.prototype.hasOwnProperty.call(a, k)) continue;
+  const x = cpJNorm(a[k]);
+  if (x === undefined) continue;
+  na++;
+  if (!Object.prototype.hasOwnProperty.call(b, k)) return false;
+  if (!cpJEq(x, b[k])) return false;
+ }
+ for (const k in b) {
+  if (!Object.prototype.hasOwnProperty.call(b, k)) continue;
+  if (cpJNorm(b[k]) !== undefined) nb++;
+ }
+ return na === nb;
+}
+function cpClone(v) {
+ if (v === undefined) return undefined;
+ return JSON.parse(JSON.stringify(v));
 }
 
 function cpIdKeys(arr) {
@@ -533,21 +602,19 @@ function cpComputeDiff(base, cur) {
      if (!B.has(id)) {
       let before = null;
       for (let j = i + 1; j < ck.length; j++) { if (B.has(ck[j])) { before = ck[j]; break; } }
-      ops.push({ k: k, t: "up", id: id, v: v, b: null, before: before });
-     } else if (JSON.stringify(v) !== JSON.stringify(B.get(id))) {
-      ops.push({ k: k, t: "up", id: id, v: v, b: B.get(id) });
+      ops.push({ k: k, t: "up", id: id, v: cpClone(v), b: null, before: before });
+     } else if (!cpJEq(v, B.get(id))) {
+      ops.push({ k: k, t: "up", id: id, v: cpClone(v), b: B.get(id) });
      }
     });
     bk.forEach((id, i) => { if (!C.has(id)) ops.push({ k: k, t: "rm", id: id, b: b[i] }); });
     return;
    }
   }
-  const sc = hasC ? JSON.stringify(c) : undefined;
-  const sb = hasB ? JSON.stringify(b) : undefined;
-  if (sc === sb) return;
+  if (hasC === hasB && (!hasC || cpJEq(c, b))) return;
   const op = { k: k, t: "set", had: hasB };
   if (hasB) op.b = b;
-  if (hasC) op.v = c; else op.del = true;
+  if (hasC) op.v = cpClone(c); else op.del = true;
   ops.push(op);
  });
  return ops;
@@ -586,8 +653,7 @@ class LocalDB {
  this.serverIPs = [];
  this.serverPort = window.location.port || 8888;
  this.hasSyncedWithServer = !this.isServerMode;
- this.lastSavedJson = JSON.stringify(this.data);
- this.setBase(this.lastSavedJson);
+ this.setBase(JSON.stringify(this.data));
 
  // [Claude修正] サーバーのデータはログイン後に取得する (ログイン前はサーバーが渡さないため)
  if (this.isServerMode && cpGetToken()) {
@@ -843,8 +909,9 @@ class LocalDB {
  }
 
  save() {
+ this._localDirty = true; // [Claude修正 2026-10-18] まだ送っていない変更がある（受け取りのときの判断に使う）
  // 1. 単体起動時はブラウザに保存 ([Claude修正] サーバー接続時は端末に控えを残さない)
- this.storeLocalCopy(JSON.stringify(this.data));
+ this.storeLocalCopy();
 
  // 2. サーバーモードなら親機へ即時送信 (初回同期完了後のみ)
  if (this.isServerMode && this.hasSyncedWithServer) {
@@ -855,7 +922,7 @@ class LocalDB {
  // [Claude修正] 端末(ブラウザ)への控えは単体起動時だけ書く
  storeLocalCopy(json) {
  if (this.isServerMode) return;
- try { localStorage.setItem(this.key, json); } catch (e) {}
+ try { localStorage.setItem(this.key, json || JSON.stringify(this.data)); } catch (e) {}
  }
 
  clearLocalCopy() {
@@ -865,7 +932,7 @@ class LocalDB {
  // [Claude修正] まだ親機へ送れていない変更があるか (サーバー接続時のみ)
  hasUnsentChanges() {
  if (!this.isServerMode) return false;
- try { return JSON.stringify(this.data) !== this.lastSavedJson; } catch (e) { return true; }
+ try { return cpComputeDiff(this.baseObj || {}, this.data).length > 0; } catch (e) { return true; }
  }
 
  // [Claude修正] ログアウトの前に、未送信の変更を親機へ送り切る。
@@ -896,11 +963,73 @@ class LocalDB {
  }
 
  // [Claude追加 2026-10-16] 前回サーバーと同期した時点の中身（base）と版番号をそろえて持つ
+ // base は画面のデータ（this.data）とは別の写しで、中の記録を画面側と共有しない（共有すると変更に気づけない）
  setBase(json, obj) {
- this.baseJson = json;
  if (obj) this.baseObj = obj;
  else { try { this.baseObj = JSON.parse(json || "{}"); } catch (e) { this.baseObj = {}; } }
  this.baseRev = Number(this.baseObj && this.baseObj._rev) || 0;
+ }
+
+ // [Claude修正 2026-10-18] 保存できた変更を base に当てはめる（全体を文字にして写し直さない）
+ applyOpsToBase(ops, rev) {
+ if (!this.baseObj) this.baseObj = {};
+ ops.forEach(op => cpApplyOp(this.baseObj, op));
+ this.baseObj._rev = rev;
+ this.baseRev = Number(rev) || 0;
+ }
+
+ // [Claude修正 2026-10-18] ほかの端末の変更（1件ずつ）を、この端末のデータと base に合流する。
+ // 合流の決まりは以前の全体の合流（mergeRemoteData / cpMergeIdArray）と同じ:
+ // ・この端末で変えていない記録は、届いた中身にする
+ // ・両方で同じ記録を直したときは、項目ごとに合流する（同じ項目はこの端末の内容）
+ // ・この端末で直した記録が、ほかの端末で消されていたら残す（消失を防ぐ）
+ // ・この端末で消した記録が、ほかの端末で直されていたら戻す
+ mergeRemoteOps(ops, rev) {
+ if (!this.baseObj) this.baseObj = {};
+ const base = this.baseObj;
+ const sameId = (x, id) => x && typeof x === "object" && String(x.id) === id;
+ ops.forEach(op => {
+  const k = op.k;
+  if (!k || k === "_rev") return;
+  if (op.t === "set") {
+   const sv = op.del ? undefined : op.v;
+   const cur = this.data[k], b = base[k];
+   const merged = cpJEq(cur, b) ? sv : cpMergeValue(cur, b, sv);
+   this.assignMergedKey(k, cpClone(merged));
+   if (op.del) delete base[k]; else base[k] = op.v;
+   return;
+  }
+  if (op.t !== "up" && op.t !== "rm") return;
+  const id = String(op.id);
+  if (!Array.isArray(this.data[k])) {
+   if (this.data[k] !== undefined && !cpJEq(this.data[k], base[k])) { cpApplyOp(base, op); return; } // この端末で別の形に変えていた
+   this.data[k] = [];
+  }
+  const arr = this.data[k];
+  const li = arr.findIndex(x => sameId(x, id));
+  const lv = li >= 0 ? arr[li] : undefined;
+  const bv = Array.isArray(base[k]) ? base[k].find(x => sameId(x, id)) : undefined;
+  if (op.t === "rm") {
+   if (lv !== undefined && bv !== undefined && cpJEq(lv, bv)) arr.splice(li, 1);
+  } else {
+   const sv = op.v;
+   if (lv === undefined) {
+    if (bv === undefined || !cpJEq(sv, bv)) {
+     const at = (op.before !== undefined && op.before !== null) ? arr.findIndex(x => sameId(x, String(op.before))) : -1;
+     if (at >= 0) arr.splice(at, 0, cpClone(sv)); else arr.push(cpClone(sv));
+    }
+   } else if (bv === undefined) {
+    if (!cpJEq(lv, sv)) arr.splice(li, 0, cpClone(sv)); // 両方の端末で同じIDの記録を追加: どちらも残す
+   } else if (cpJEq(lv, bv)) {
+    arr[li] = cpClone(sv);
+   } else if (!cpJEq(sv, bv) && cpIsPlainObject(lv) && cpIsPlainObject(sv)) {
+    arr[li] = cpClone(cpMergeValue(lv, bv, sv));
+   }
+  }
+  cpApplyOp(base, op);
+ });
+ base._rev = rev;
+ this.baseRev = Number(rev) || 0;
  }
 
  // [Claude修正 2026-10-16] ② 差分保存。以前は保存のたびに全データを取得・合流し、全データを送っていた
@@ -915,11 +1044,10 @@ class LocalDB {
  let fallback = false;
  try {
  for (let attempt = 1; attempt <= 5; attempt++) {
- const snapshotJson = JSON.stringify(this.data);
- const snapshot = JSON.parse(snapshotJson);
- const ops = cpComputeDiff(this.baseObj || {}, snapshot);
+ // [Claude修正 2026-10-18] 全データを文字にして写すのをやめ、base と今のデータを直接比べる（変わった記録だけ写す）
+ this._localDirty = false;
+ const ops = cpComputeDiff(this.baseObj || {}, this.data);
  if (ops.length === 0) {
- this.lastSavedJson = snapshotJson;
  this.updateSyncBadge(true);
  if (this._remoteMergedDuringSave) this.refreshViewAfterRemoteMerge();
  return true;
@@ -939,16 +1067,13 @@ class LocalDB {
  }
  if (!res.ok) { fallback = true; break; }
  const resp = await res.json();
- snapshot._rev = resp.rev;
  this.data._rev = resp.rev;
- const savedJson = JSON.stringify(snapshot);
  const othersSavedBetween = Number(resp.prev_rev) !== Number(this.baseRev);
  const revBeforeSave = this.baseRev;
- this.setBase(savedJson, snapshot);
+ this.applyOpsToBase(ops, resp.rev);
  // ほかの端末の保存が間にあったときは、前の版から後の変更を受け取り直す（自分の変更は同じ中身なので重ねても変わらない）
  if (othersSavedBetween) this.baseRev = revBeforeSave;
- this.lastSavedJson = savedJson;
- this.storeLocalCopy(savedJson);
+ this.storeLocalCopy();
  this.updateSyncBadge(true);
  this.updateBackupBadge(resp.saved_at || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
  if (othersSavedBetween) {
@@ -959,7 +1084,7 @@ class LocalDB {
  }
  if (this._remoteMergedDuringSave) this.refreshViewAfterRemoteMerge();
  // 送っている間に画面で変更された分があれば、続けて送る
- if (JSON.stringify(this.data) !== this.lastSavedJson && attempt < 5) continue;
+ // 送っている間に画面で保存された分は、save() が続けて送る（ここで全体を比べ直さない）
  return true;
  }
  if (!fallback) fallback = true;
@@ -969,43 +1094,50 @@ class LocalDB {
  } finally {
  this._saving = false;
  }
+ this._localDirty = true; // 送れなかった。次の受け取りのときにもう一度送る
  if (fallback) return this._fullSyncAndSave();
  return false;
  }
 
  // [Claude追加 2026-10-16] 受け取りも差分: 前回同期した版から後に変わった記録だけをサーバーから受け取り、
  // 前回の中身（base）に当てはめて「今のサーバーの中身」を作る。サーバーが変更を覚えていないときなどは null（全データを取る）
+ // [Claude修正 2026-10-18] 届いた変更の一覧 { rev, ops } を返す（base の全体を写し直さない）
  async _fetchChanges() {
  const res = await cpApiFetch('/api/changes?since=' + encodeURIComponent(this.baseRev), { cache: 'no-store' });
  if (!res.ok) return null;
  const j = await res.json();
  if (!j || j.full || !Array.isArray(j.changes)) return null;
- const server = JSON.parse(this.baseJson || "{}");
- j.changes.forEach(ch => (ch.ops || []).forEach(op => cpApplyOp(server, op)));
- server._rev = j.rev;
- return this.ensureDefaultArrays(server);
+ const ops = [];
+ j.changes.forEach(ch => (ch.ops || []).forEach(op => ops.push(op)));
+ return { rev: j.rev, ops: ops };
+ }
+
+ // サーバーの全データ（文字）を受け取り、この端末のデータと合流して base にする（変更の一覧が使えないとき）
+ _mergeFullText(text) {
+ const serverData = this.ensureDefaultArrays(JSON.parse(text));
+ const changed = !cpJEq(serverData, this.baseObj || {});
+ if (changed) this.mergeRemoteData(serverData);
+ // base は画面のデータと共有しないよう、もう一度読み直して別に持つ
+ this.setBase(null, this.ensureDefaultArrays(JSON.parse(text)));
+ return changed;
  }
 
  // 最新を取得し（変わった記録だけ、できなければ全データ）、この端末の変更と合流する（保存中の競合のときに使う）
  async _pullForSave() {
  try {
- let serverData = null;
- try { serverData = await this._fetchChanges(); } catch (e) { serverData = null; }
- if (!serverData) {
+ let ch = null;
+ try { ch = await this._fetchChanges(); } catch (e) { ch = null; }
+ if (ch) {
+ if (ch.ops.length > 0) { this.mergeRemoteOps(ch.ops, ch.rev); this._remoteMergedDuringSave = true; }
+ else { this.baseObj._rev = ch.rev; this.baseRev = Number(ch.rev) || 0; }
+ } else {
  const res = await cpApiFetch('/api/data', { cache: 'no-store' });
  if (!res.ok) return false;
  const text = await res.text();
  if (!text || text.trim() === "" || text.trim() === "{}") return false;
- serverData = this.ensureDefaultArrays(JSON.parse(text));
+ if (this._mergeFullText(text)) this._remoteMergedDuringSave = true;
  }
- const serverJson = JSON.stringify(serverData);
- if (serverJson !== this.baseJson) {
- this.mergeRemoteData(serverData);
- this._remoteMergedDuringSave = true;
- }
- this.setBase(serverJson);
- this.lastSavedJson = serverJson;
- this.storeLocalCopy(JSON.stringify(this.data));
+ this.storeLocalCopy();
  return true;
  } catch (e) {
  return false;
@@ -1026,8 +1158,7 @@ class LocalDB {
  if (text && text.trim() !== "" && text.trim() !== "{}") {
  const serverData = this.ensureDefaultArrays(JSON.parse(text));
  serverRev = Number(serverData._rev) || 0;
- const serverJson = JSON.stringify(serverData);
- if (serverJson !== this.baseJson) {
+ if (!cpJEq(serverData, this.baseObj || {})) {
  this.mergeRemoteData(serverData);
  remoteChanged = true;
  }
@@ -1047,7 +1178,6 @@ class LocalDB {
  }
  if (res.ok) {
  this.setBase(payload);
- this.lastSavedJson = payload;
  this.storeLocalCopy(payload);
  this.updateSyncBadge(true);
  try {
@@ -1081,19 +1211,25 @@ class LocalDB {
  const keys = new Set([...Object.keys(this.data), ...Object.keys(serverData)]);
  keys.forEach(k => {
  if (k === "_rev") return;
- const merged = cpMergeValue(this.data[k], base[k], serverData[k]);
+ this.assignMergedKey(k, cpMergeValue(this.data[k], base[k], serverData[k]));
+ });
+ }
+
+ // 合流した値を、このページが持つ配列・オブジェクトを置き換えずに (参照を保ったまま) 入れる
+ assignMergedKey(k, merged) {
  const cur = this.data[k];
  if (merged === undefined) {
  delete this.data[k];
  } else if (Array.isArray(cur) && Array.isArray(merged)) {
- cur.splice(0, cur.length, ...merged);
+ // 多いとき（1年分の記録など）に引数の数の上限を超えないよう、分けて入れる
+ if (merged.length < 30000) cur.splice(0, cur.length, ...merged);
+ else { cur.length = 0; for (let i = 0; i < merged.length; i++) cur.push(merged[i]); }
  } else if (cur && merged && typeof cur === "object" && typeof merged === "object" && !Array.isArray(cur) && !Array.isArray(merged)) {
  Object.keys(cur).forEach(x => { if (!(x in merged)) delete cur[x]; });
  Object.assign(cur, merged);
  } else {
  this.data[k] = merged;
  }
- });
  }
 
  refreshViewAfterRemoteMerge() {
@@ -1142,9 +1278,9 @@ class LocalDB {
  // (以前は利用者が0人のとき、端末の控えを残してサーバーへ送っていた)
  if (serverData && typeof serverData === "object" && !Array.isArray(serverData)) {
  this.data = this.ensureDefaultArrays(serverData);
- this.lastSavedJson = JSON.stringify(this.data);
- this.setBase(this.lastSavedJson);
- this.storeLocalCopy(this.lastSavedJson);
+ // base は別に読み直して持つ（画面のデータと記録を共有しない）
+ this.setBase(null, this.ensureDefaultArrays(JSON.parse(text)));
+ this.storeLocalCopy();
  // 画面を再初期化して最新データを表示
  setTimeout(() => {
  if (typeof reloadStateFromDb === 'function') {
@@ -1229,13 +1365,32 @@ class LocalDB {
  }
  if (this._saving || this._syncEpoch !== epochAtFetch) return;
  // [Claude追加 2026-10-16] 受け取りも差分: 変わった記録だけを受け取る。できないとき・続けて60回使ったあとは全データ（念のための照合）
- let serverData = null;
+ // [Claude修正 2026-10-18] 変わった記録だけを、この端末のデータに1件ずつ合流する（以前は全データを写し直して比べていた）
+ let ch = null;
  this._changesStreak = this._changesStreak || 0;
  if (this._changesStreak < 60) {
- try { serverData = await this._fetchChanges(); } catch (e) { serverData = null; }
+ try { ch = await this._fetchChanges(); } catch (e) { ch = null; }
  }
- if (serverData) {
+ // [Claude修正] 保存中、または取得中に保存が行われた場合は取り込まない
+ // (取得した内容が保存より古いと、削除した記録が復活するなどの不整合が起きるため)
+ if (this._saving || this._syncEpoch !== epochAtFetch) return;
+ const baseRev = Number(this.baseRev) || 0;
+ if (ch) {
  this._changesStreak++;
+ if ((Number(ch.rev) || 0) < baseRev) return; // 古い版は無視
+ if (ch.ops.length === 0) {
+ this.baseObj._rev = ch.rev; this.baseRev = Number(ch.rev) || 0;
+ this._forcePull = false;
+ this.updateSyncBadge(true);
+ return;
+ }
+ const hadLocal = this._localDirty || !!this._saving;
+ this.mergeRemoteOps(ch.ops, ch.rev);
+ this._forcePull = false;
+ this.storeLocalCopy();
+ this.updateSyncBadge(true);
+ // 未送信の自分の変更がある場合は保存する
+ if (hadLocal) this.saveToServer();
  } else {
  this._changesStreak = 0;
  const res = await cpApiFetch('/api/data', { cache: 'no-store' });
@@ -1245,35 +1400,24 @@ class LocalDB {
  if (this._saving || this._syncEpoch !== epochAtFetch) return;
  const parsed = JSON.parse(text);
  if (!parsed || !parsed.residents) return;
- serverData = this.ensureDefaultArrays(parsed);
- }
-
- // [Claude修正] 保存中、または取得中に保存が行われた場合は取り込まない
- // (取得した内容が保存より古いと、削除した記録が復活するなどの不整合が起きるため)
- if (this._saving || this._syncEpoch !== epochAtFetch) return;
- let baseRev = 0;
- baseRev = Number(this.baseRev) || 0;
- if ((Number(serverData._rev) || 0) < baseRev) return; // 古い版は無視
- const normalizedJson = JSON.stringify(serverData);
- if (normalizedJson === this.baseJson) {
+ if ((Number(parsed._rev) || 0) < baseRev) return; // 古い版は無視
+ const serverData = this.ensureDefaultArrays(parsed);
+ if (cpJEq(serverData, this.baseObj || {})) {
  this._forcePull = false;
  this.updateSyncBadge(true);
  return;
  }
-
  // [Claude修正] 以前は this.data を丸ごと差し替えていたため、入力中で画面を更新しなかった場合に
  // 画面側が古いデータを持ち続け、次の保存で他端末の記録を消すことがあった。
  // 配列の参照を保ったまま、他端末の変更だけを合流する。
- const localJsonBefore = JSON.stringify(this.data);
+ const hadLocal = this._localDirty || !!this._saving;
  this.mergeRemoteData(serverData);
- this.setBase(normalizedJson);
+ this.setBase(null, this.ensureDefaultArrays(JSON.parse(text)));
  this._forcePull = false;
- this.lastSavedJson = normalizedJson;
- this.storeLocalCopy(JSON.stringify(this.data));
+ this.storeLocalCopy();
  this.updateSyncBadge(true);
  // 合流後もサーバーと異なる (未送信の自分の変更がある) 場合は保存する
- if (JSON.stringify(this.data) !== normalizedJson && localJsonBefore !== this.baseJson) {
- this.saveToServer();
+ if (hadLocal) this.saveToServer();
  }
 
  // 職員が編集中でない場合に限りビューを更新
@@ -3502,12 +3646,21 @@ function findMojibakeTables() {
  const parts = [];
  Object.keys(db.data).forEach(k => {
  if (k === "dismissed_alerts") return;
- let json = "";
- try { json = JSON.stringify(db.data[k]); } catch (e) { return; }
- const m = json.match(/\?{3,}/g);
- if (m && m.length > 0) {
- result.total += m.length;
- parts.push(`${k}: ${m.length}か所`);
+ // [Claude修正 2026-10-18] 文字にせず、中の文字だけを調べる（記録が多いと、通知を出すたびに重かった）
+ let n = 0;
+ const stack = [db.data[k]];
+ while (stack.length) {
+ const x = stack.pop();
+ if (typeof x === "string") {
+ if (x.indexOf("???") >= 0) { const m = x.match(/\?{3,}/g); if (m) n += m.length; }
+ } else if (x && typeof x === "object") {
+ if (Array.isArray(x)) { for (let i = 0; i < x.length; i++) stack.push(x[i]); }
+ else { for (const kk in x) stack.push(x[kk]); }
+ }
+ }
+ if (n > 0) {
+ result.total += n;
+ parts.push(`${k}: ${n}か所`);
  }
  });
  result.list = parts.join(" / ");
