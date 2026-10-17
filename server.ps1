@@ -54,6 +54,7 @@ using System.Text;
 using System.Threading;
 using System.Collections.Generic;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
 
 namespace CarePortal
 {
@@ -286,6 +287,469 @@ namespace CarePortal
         }
     }
 
+    // ======================================================================
+    // [Claude追加 2026-10-17] データベース（SQLite）
+    // - SQLite はインストールのいらないデータベース。Windows 10/11 に最初から入っている winsqlite3.dll を使う。
+    //   ない場合は、SQLite 公式の sqlite3.dll をポータルのフォルダに置けば使える。どちらもなければ今までどおり JSON ファイルで動く。
+    // - 保存先は data/portal.db。記録（id のある一覧の1件ずつ）を1行ずつ持ち、保存のときは変わった行だけを書き換える。
+    //   書き込みは「全部書けたか、何も書かないか」のどちらか（途中で電源が落ちても、書きかけが残らない）。
+    // - data/portal_database.json は、データベースの中身の書き出し（GitHub での受け渡し・見本データ・バックアップ用）。
+    //   外から書き換えられたとき（git で取り込んだ・控えから戻した）は、データベースに取り込む。
+    // - 値は必ず命令と分けて渡す（入力された文字が命令として動かないように）。
+    // ======================================================================
+    public abstract class SqApi
+    {
+        public const int SQ_OK = 0, SQ_ROW = 100, SQ_DONE = 101;
+        public string Name;
+        public abstract string LibVersion();
+        public abstract int Open(string path, out IntPtr db);
+        public abstract int Close(IntPtr db);
+        public abstract int Prepare(IntPtr db, string sql, out IntPtr stmt);
+        public abstract int BindText(IntPtr stmt, int idx, string val);
+        public abstract int BindInt64(IntPtr stmt, int idx, long val);
+        public abstract int Step(IntPtr stmt);
+        public abstract string ColumnText(IntPtr stmt, int col);
+        public abstract long ColumnInt64(IntPtr stmt, int col);
+        public abstract int Reset(IntPtr stmt);
+        public abstract int FinalizeStmt(IntPtr stmt);
+        public abstract string ErrMsg(IntPtr db);
+
+        protected static byte[] Utf8z(string s)
+        {
+            byte[] b = Encoding.UTF8.GetBytes(s ?? "");
+            byte[] z = new byte[b.Length + 1];
+            Buffer.BlockCopy(b, 0, z, 0, b.Length);
+            return z;
+        }
+        protected static string FromUtf8(IntPtr p, int len)
+        {
+            if (p == IntPtr.Zero) return null;
+            if (len <= 0) return "";
+            byte[] b = new byte[len];
+            Marshal.Copy(p, b, 0, len);
+            return Encoding.UTF8.GetString(b);
+        }
+        protected static string FromUtf8z(IntPtr p)
+        {
+            if (p == IntPtr.Zero) return null;
+            int n = 0;
+            while (Marshal.ReadByte(p, n) != 0) n++;
+            return FromUtf8(p, n);
+        }
+    }
+
+    // Windows 10/11 に最初から入っている SQLite（winsqlite3.dll）。インストール不要
+    public class SqWin : SqApi
+    {
+        private const string L = "winsqlite3.dll";
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern IntPtr sqlite3_libversion();
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_open_v2(byte[] filename, out IntPtr db, int flags, IntPtr vfs);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_close(IntPtr db);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_prepare_v2(IntPtr db, byte[] sql, int nByte, out IntPtr stmt, IntPtr tail);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_bind_text(IntPtr stmt, int idx, byte[] val, int n, IntPtr destructor);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_bind_int64(IntPtr stmt, int idx, long val);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_step(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern IntPtr sqlite3_column_text(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_column_bytes(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern long sqlite3_column_int64(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_reset(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern int sqlite3_finalize(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.StdCall)] private static extern IntPtr sqlite3_errmsg(IntPtr db);
+        public SqWin() { Name = "winsqlite3.dll"; }
+        public override string LibVersion() { return FromUtf8z(sqlite3_libversion()); }
+        public override int Open(string path, out IntPtr db) { return sqlite3_open_v2(Utf8z(path), out db, 0x02 | 0x04 | 0x10000, IntPtr.Zero); }
+        public override int Close(IntPtr db) { return sqlite3_close(db); }
+        public override int Prepare(IntPtr db, string sql, out IntPtr stmt) { return sqlite3_prepare_v2(db, Utf8z(sql), -1, out stmt, IntPtr.Zero); }
+        public override int BindText(IntPtr stmt, int idx, string val) { byte[] b = Encoding.UTF8.GetBytes(val ?? ""); return sqlite3_bind_text(stmt, idx, b, b.Length, new IntPtr(-1)); }
+        public override int BindInt64(IntPtr stmt, int idx, long val) { return sqlite3_bind_int64(stmt, idx, val); }
+        public override int Step(IntPtr stmt) { return sqlite3_step(stmt); }
+        public override string ColumnText(IntPtr stmt, int col) { IntPtr p = sqlite3_column_text(stmt, col); return p == IntPtr.Zero ? null : FromUtf8(p, sqlite3_column_bytes(stmt, col)); }
+        public override long ColumnInt64(IntPtr stmt, int col) { return sqlite3_column_int64(stmt, col); }
+        public override int Reset(IntPtr stmt) { return sqlite3_reset(stmt); }
+        public override int FinalizeStmt(IntPtr stmt) { return sqlite3_finalize(stmt); }
+        public override string ErrMsg(IntPtr db) { return FromUtf8z(sqlite3_errmsg(db)); }
+    }
+
+    // SQLite 公式の部品（sqlite3.dll をポータルのフォルダに置いたとき。Linux の検証環境では libsqlite3）
+    public class SqStd : SqApi
+    {
+        private const string L = "sqlite3";
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr sqlite3_libversion();
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_open_v2(byte[] filename, out IntPtr db, int flags, IntPtr vfs);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_close(IntPtr db);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_prepare_v2(IntPtr db, byte[] sql, int nByte, out IntPtr stmt, IntPtr tail);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_bind_text(IntPtr stmt, int idx, byte[] val, int n, IntPtr destructor);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_bind_int64(IntPtr stmt, int idx, long val);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_step(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr sqlite3_column_text(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_column_bytes(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern long sqlite3_column_int64(IntPtr stmt, int col);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_reset(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern int sqlite3_finalize(IntPtr stmt);
+        [DllImport(L, CallingConvention = CallingConvention.Cdecl)] private static extern IntPtr sqlite3_errmsg(IntPtr db);
+        public SqStd() { Name = "sqlite3"; }
+        public override string LibVersion() { return FromUtf8z(sqlite3_libversion()); }
+        public override int Open(string path, out IntPtr db) { return sqlite3_open_v2(Utf8z(path), out db, 0x02 | 0x04 | 0x10000, IntPtr.Zero); }
+        public override int Close(IntPtr db) { return sqlite3_close(db); }
+        public override int Prepare(IntPtr db, string sql, out IntPtr stmt) { return sqlite3_prepare_v2(db, Utf8z(sql), -1, out stmt, IntPtr.Zero); }
+        public override int BindText(IntPtr stmt, int idx, string val) { byte[] b = Encoding.UTF8.GetBytes(val ?? ""); return sqlite3_bind_text(stmt, idx, b, b.Length, new IntPtr(-1)); }
+        public override int BindInt64(IntPtr stmt, int idx, long val) { return sqlite3_bind_int64(stmt, idx, val); }
+        public override int Step(IntPtr stmt) { return sqlite3_step(stmt); }
+        public override string ColumnText(IntPtr stmt, int col) { IntPtr p = sqlite3_column_text(stmt, col); return p == IntPtr.Zero ? null : FromUtf8(p, sqlite3_column_bytes(stmt, col)); }
+        public override long ColumnInt64(IntPtr stmt, int col) { return sqlite3_column_int64(stmt, col); }
+        public override int Reset(IntPtr stmt) { return sqlite3_reset(stmt); }
+        public override int FinalizeStmt(IntPtr stmt) { return sqlite3_finalize(stmt); }
+        public override string ErrMsg(IntPtr db) { return FromUtf8z(sqlite3_errmsg(db)); }
+    }
+
+    public class PortalStore
+    {
+        [DllImport("kernel32.dll", CharSet = CharSet.Unicode, SetLastError = true)]
+        private static extern IntPtr LoadLibraryW(string path);
+
+        private SqApi _api;
+        private IntPtr _db = IntPtr.Zero;
+        private readonly object _lock = new object();
+        // データベースの中身を、そのまま手元にも持つ（読み出しを速くし、変わった行だけを見つけるため）
+        private List<string> _keys = new List<string>();                                   // 上から順の項目名
+        private Dictionary<string, string> _whole = new Dictionary<string, string>();       // 丸ごと1行で持つ項目
+        private Dictionary<string, List<string>> _order = new Dictionary<string, List<string>>(); // 記録ごとに持つ項目の並び
+        private Dictionary<string, Dictionary<string, string>> _recs = new Dictionary<string, Dictionary<string, string>>();
+        private string _text;
+        private long _stamp = 1;
+        public string Path;
+
+        public string Info { get { return _api.Name + "（SQLite " + _api.LibVersion() + "）"; } }
+        public long Stamp { get { lock (_lock) { return _stamp; } } }
+        public bool IsEmpty { get { lock (_lock) { return _keys.Count == 0; } } }
+
+        // 使える SQLite を探して開く。開けなければ null（理由は why）
+        public static PortalStore TryOpen(string dbPath, string baseDir, out string why)
+        {
+            why = null;
+            bool isWin = Environment.OSVersion.Platform == PlatformID.Win32NT;
+            if (isWin)
+            {
+                // フォルダに置いた sqlite3.dll を先に読み込んでおく（置いていれば、そちらを使えるように）
+                try { string own = System.IO.Path.Combine(baseDir, "sqlite3.dll"); if (File.Exists(own)) LoadLibraryW(own); } catch { }
+            }
+            SqApi[] apis = isWin ? new SqApi[] { new SqWin(), new SqStd() } : new SqApi[] { new SqStd() };
+            List<string> reasons = new List<string>();
+            foreach (SqApi api in apis)
+            {
+                try { api.LibVersion(); }
+                catch (DllNotFoundException) { reasons.Add(api.Name + " なし"); continue; }
+                catch (EntryPointNotFoundException) { reasons.Add(api.Name + " が使えない"); continue; }
+                catch (BadImageFormatException) { reasons.Add(api.Name + " の種類が合わない"); continue; }
+                PortalStore st = new PortalStore();
+                st._api = api;
+                st.Path = dbPath;
+                try
+                {
+                    st.OpenAndLoad();
+                    return st;
+                }
+                catch (Exception ex)
+                {
+                    try { st.Close(); } catch { }
+                    why = "データベースを開けませんでした: " + ex.Message;
+                    return null;
+                }
+            }
+            why = "SQLite が見つかりません（" + string.Join("・", reasons.ToArray()) + "）";
+            return null;
+        }
+
+        private void Check(int rc, string what)
+        {
+            if (rc != SqApi.SQ_OK && rc != SqApi.SQ_ROW && rc != SqApi.SQ_DONE)
+                throw new Exception(what + ": " + _api.ErrMsg(_db) + " (" + rc + ")");
+        }
+
+        private void Exec(string sql)
+        {
+            IntPtr st;
+            Check(_api.Prepare(_db, sql, out st), "命令の準備");
+            try
+            {
+                int rc;
+                while ((rc = _api.Step(st)) == SqApi.SQ_ROW) { }
+                Check(rc, sql);
+            }
+            finally { _api.FinalizeStmt(st); }
+        }
+
+        private void OpenAndLoad()
+        {
+            Check(_api.Open(Path, out _db), "開く");
+            Exec("PRAGMA journal_mode=WAL");
+            Exec("PRAGMA synchronous=FULL");
+            Exec("PRAGMA busy_timeout=5000");
+            Exec("CREATE TABLE IF NOT EXISTS items(key TEXT PRIMARY KEY, pos INTEGER NOT NULL, kind INTEGER NOT NULL, json TEXT NOT NULL)");
+            Exec("CREATE TABLE IF NOT EXISTS records(coll TEXT NOT NULL, id TEXT NOT NULL, json TEXT NOT NULL, PRIMARY KEY(coll, id))");
+            Exec("CREATE TABLE IF NOT EXISTS sysinfo(key TEXT PRIMARY KEY, value TEXT)");
+            // 読み込み
+            List<string> keys = new List<string>();
+            Dictionary<string, string> whole = new Dictionary<string, string>();
+            Dictionary<string, List<string>> order = new Dictionary<string, List<string>>();
+            Dictionary<string, Dictionary<string, string>> recs = new Dictionary<string, Dictionary<string, string>>();
+            IntPtr st;
+            Check(_api.Prepare(_db, "SELECT key, kind, json FROM items ORDER BY pos", out st), "読み込み");
+            try
+            {
+                int rc;
+                while ((rc = _api.Step(st)) == SqApi.SQ_ROW)
+                {
+                    string key = _api.ColumnText(st, 0);
+                    long kind = _api.ColumnInt64(st, 1);
+                    string json = _api.ColumnText(st, 2);
+                    keys.Add(key);
+                    if (kind == 1)
+                    {
+                        List<object> ids = MiniJson.Parse(json) as List<object>;
+                        if (ids == null) throw new Exception("並びが読めません: " + key);
+                        List<string> idl = new List<string>();
+                        foreach (object o in ids) idl.Add((string)o);
+                        order[key] = idl;
+                        recs[key] = new Dictionary<string, string>();
+                    }
+                    else whole[key] = json;
+                }
+                Check(rc, "読み込み");
+            }
+            finally { _api.FinalizeStmt(st); }
+            Check(_api.Prepare(_db, "SELECT coll, id, json FROM records", out st), "記録の読み込み");
+            try
+            {
+                int rc;
+                while ((rc = _api.Step(st)) == SqApi.SQ_ROW)
+                {
+                    string coll = _api.ColumnText(st, 0);
+                    Dictionary<string, string> m;
+                    if (!recs.TryGetValue(coll, out m)) continue; // 並びにない記録は使わない
+                    m[_api.ColumnText(st, 1)] = _api.ColumnText(st, 2);
+                }
+                Check(rc, "記録の読み込み");
+            }
+            finally { _api.FinalizeStmt(st); }
+            foreach (KeyValuePair<string, List<string>> kv in order)
+            {
+                foreach (string id in kv.Value)
+                {
+                    if (!recs[kv.Key].ContainsKey(id)) throw new Exception("データベースの中身が合いません（" + kv.Key + " の記録が足りない）");
+                }
+            }
+            _keys = keys; _whole = whole; _order = order; _recs = recs; _text = null;
+        }
+
+        public void Close()
+        {
+            lock (_lock)
+            {
+                if (_db != IntPtr.Zero) { try { _api.Close(_db); } catch { } _db = IntPtr.Zero; }
+            }
+        }
+
+        // 記録ごとに持てる一覧か（全部が id のある項目で、id が重ならない）。持てるなら id の並びを返す
+        private static List<string> RecordIds(object v)
+        {
+            List<object> list = v as List<object>;
+            if (list == null) return null;
+            List<string> ids = new List<string>(list.Count);
+            Dictionary<string, bool> seen = new Dictionary<string, bool>();
+            foreach (object o in list)
+            {
+                JObj j = o as JObj;
+                if (j == null) return null;
+                object idv = j.Get("id");
+                string id = null;
+                if (idv is string) id = "s:" + (string)idv;           // 文字の id と数字の id を区別する
+                else if (idv is JNum) id = "n:" + ((JNum)idv).Raw;
+                if (id == null || seen.ContainsKey(id)) return null;
+                seen[id] = true;
+                ids.Add(id);
+            }
+            return ids;
+        }
+
+        private static string OrderJson(List<string> ids)
+        {
+            StringBuilder sb = new StringBuilder("[");
+            for (int i = 0; i < ids.Count; i++) { if (i > 0) sb.Append(','); sb.Append(MiniJson.Quote(ids[i])); }
+            sb.Append(']');
+            return sb.ToString();
+        }
+
+        public string Read()
+        {
+            lock (_lock)
+            {
+                if (_text != null) return _text;
+                StringBuilder sb = new StringBuilder("{");
+                for (int i = 0; i < _keys.Count; i++)
+                {
+                    string k = _keys[i];
+                    if (i > 0) sb.Append(',');
+                    sb.Append(MiniJson.Quote(k)).Append(':');
+                    string w;
+                    if (_whole.TryGetValue(k, out w)) { sb.Append(w); continue; }
+                    List<string> ids = _order[k];
+                    Dictionary<string, string> m = _recs[k];
+                    sb.Append('[');
+                    for (int j = 0; j < ids.Count; j++) { if (j > 0) sb.Append(','); sb.Append(m[ids[j]]); }
+                    sb.Append(']');
+                }
+                sb.Append('}');
+                _text = sb.ToString();
+                return _text;
+            }
+        }
+
+        private void Run(IntPtr st)
+        {
+            int rc = _api.Step(st);
+            _api.Reset(st);
+            Check(rc, "書き込み");
+        }
+
+        // 全体の JSON を受け取り、前と変わった行だけをデータベースに書く。全部書けたときだけ反映する
+        public void Write(string json)
+        {
+            JObj root = MiniJson.Parse(json) as JObj;
+            if (root == null) throw new Exception("保存する内容が読めません");
+            lock (_lock)
+            {
+                List<string> newKeys = new List<string>(root.Keys);
+                Dictionary<string, string> newWhole = new Dictionary<string, string>();
+                Dictionary<string, List<string>> newOrder = new Dictionary<string, List<string>>();
+                Dictionary<string, Dictionary<string, string>> newRecs = new Dictionary<string, Dictionary<string, string>>();
+                Dictionary<string, int> oldPos = new Dictionary<string, int>();
+                for (int i = 0; i < _keys.Count; i++) oldPos[_keys[i]] = i;
+
+                IntPtr upItem = IntPtr.Zero, delItem = IntPtr.Zero, upRec = IntPtr.Zero, delRec = IntPtr.Zero, delColl = IntPtr.Zero;
+                bool began = false;
+                try
+                {
+                    Check(_api.Prepare(_db, "INSERT OR REPLACE INTO items(key, pos, kind, json) VALUES(?, ?, ?, ?)", out upItem), "準備");
+                    Check(_api.Prepare(_db, "DELETE FROM items WHERE key = ?", out delItem), "準備");
+                    Check(_api.Prepare(_db, "INSERT OR REPLACE INTO records(coll, id, json) VALUES(?, ?, ?)", out upRec), "準備");
+                    Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ? AND id = ?", out delRec), "準備");
+                    Check(_api.Prepare(_db, "DELETE FROM records WHERE coll = ?", out delColl), "準備");
+                    Exec("BEGIN IMMEDIATE");
+                    began = true;
+
+                    for (int i = 0; i < newKeys.Count; i++)
+                    {
+                        string k = newKeys[i];
+                        object v = root.Map[k];
+                        int op;
+                        bool posChanged = !oldPos.TryGetValue(k, out op) || op != i;
+                        List<string> ids = RecordIds(v);
+                        if (ids != null)
+                        {
+                            List<object> list = (List<object>)v;
+                            Dictionary<string, string> oldRecs;
+                            bool wasColl = _recs.TryGetValue(k, out oldRecs);
+                            if (!wasColl) { oldRecs = new Dictionary<string, string>(); _api.BindText(delColl, 1, k); Run(delColl); }
+                            Dictionary<string, string> nr = new Dictionary<string, string>();
+                            for (int j = 0; j < list.Count; j++)
+                            {
+                                string t = MiniJson.Serialize(list[j]);
+                                nr[ids[j]] = t;
+                                string ot;
+                                if (!oldRecs.TryGetValue(ids[j], out ot) || ot != t)
+                                {
+                                    _api.BindText(upRec, 1, k); _api.BindText(upRec, 2, ids[j]); _api.BindText(upRec, 3, t);
+                                    Run(upRec);
+                                }
+                            }
+                            foreach (string oid in oldRecs.Keys)
+                            {
+                                if (!nr.ContainsKey(oid)) { _api.BindText(delRec, 1, k); _api.BindText(delRec, 2, oid); Run(delRec); }
+                            }
+                            string newOrderJson = OrderJson(ids);
+                            List<string> oldIds;
+                            bool orderSame = wasColl && _order.TryGetValue(k, out oldIds) && OrderJson(oldIds) == newOrderJson;
+                            if (!orderSame || posChanged)
+                            {
+                                _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 1); _api.BindText(upItem, 4, newOrderJson);
+                                Run(upItem);
+                            }
+                            newOrder[k] = ids;
+                            newRecs[k] = nr;
+                        }
+                        else
+                        {
+                            string t = MiniJson.Serialize(v);
+                            if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
+                            string ow;
+                            if (!_whole.TryGetValue(k, out ow) || ow != t || posChanged)
+                            {
+                                _api.BindText(upItem, 1, k); _api.BindInt64(upItem, 2, i); _api.BindInt64(upItem, 3, 0); _api.BindText(upItem, 4, t);
+                                Run(upItem);
+                            }
+                            newWhole[k] = t;
+                        }
+                    }
+                    // なくなった項目を消す
+                    Dictionary<string, bool> keep = new Dictionary<string, bool>();
+                    foreach (string k in newKeys) keep[k] = true;
+                    foreach (string k in _keys)
+                    {
+                        if (keep.ContainsKey(k)) continue;
+                        _api.BindText(delItem, 1, k); Run(delItem);
+                        if (_recs.ContainsKey(k)) { _api.BindText(delColl, 1, k); Run(delColl); }
+                    }
+                    Exec("COMMIT");
+                    began = false;
+                    _keys = newKeys; _whole = newWhole; _order = newOrder; _recs = newRecs;
+                    _text = null;
+                    _stamp++;
+                }
+                catch
+                {
+                    if (began) { try { Exec("ROLLBACK"); } catch { } }
+                    throw;
+                }
+                finally
+                {
+                    foreach (IntPtr p in new IntPtr[] { upItem, delItem, upRec, delRec, delColl }) { if (p != IntPtr.Zero) _api.FinalizeStmt(p); }
+                }
+            }
+        }
+
+        public string GetSys(string key)
+        {
+            lock (_lock)
+            {
+                IntPtr st;
+                Check(_api.Prepare(_db, "SELECT value FROM sysinfo WHERE key = ?", out st), "準備");
+                try
+                {
+                    _api.BindText(st, 1, key);
+                    return _api.Step(st) == SqApi.SQ_ROW ? _api.ColumnText(st, 0) : null;
+                }
+                finally { _api.FinalizeStmt(st); }
+            }
+        }
+
+        public void SetSys(string key, string value)
+        {
+            lock (_lock)
+            {
+                IntPtr st;
+                Check(_api.Prepare(_db, "INSERT OR REPLACE INTO sysinfo(key, value) VALUES(?, ?)", out st), "準備");
+                try
+                {
+                    _api.BindText(st, 1, key);
+                    _api.BindText(st, 2, value);
+                    Check(_api.Step(st), "書き込み");
+                }
+                finally { _api.FinalizeStmt(st); }
+            }
+        }
+    }
+
     public class SimpleServer
     {
         private int _port;
@@ -296,6 +760,118 @@ namespace CarePortal
         private TcpListener _listener;
         private readonly object _fileLock = new object();
         private readonly object _extBackupLock = new object();
+
+        // [Claude追加 2026-10-17] データの読み書きは、ここを通す（データベースがあればデータベース、なければ今までどおり JSON ファイル）
+        private PortalStore _store;
+        private string _storeWhy;
+        private System.Threading.Timer _jsonSyncTimer;
+        private long _exportedStamp = -1;
+        private string _exportedHash;
+        private bool _warnedBadJson;
+        public string StorageInfo
+        {
+            get
+            {
+                if (_store != null) return "データベース " + _store.Info + " data\\portal.db";
+                return "JSON ファイル data\\portal_database.json（" + (_storeWhy ?? "") + "）";
+            }
+        }
+        // _fileLock の中で呼ぶ
+        private bool DbExists() { return _store != null ? !_store.IsEmpty : File.Exists(_dbFile); }
+        private string DbReadText()
+        {
+            if (_store != null) return _store.IsEmpty ? null : _store.Read();
+            return File.Exists(_dbFile) ? File.ReadAllText(_dbFile, Encoding.UTF8) : null;
+        }
+        private void DbWriteText(string json)
+        {
+            if (_store != null) { _store.Write(json); return; }
+            File.WriteAllText(_dbFile, json, Encoding.UTF8);
+        }
+        // 中身が変わったら変わる番号（読み込み済みの内容を使い回してよいかの判定に使う）
+        private long DbStamp()
+        {
+            if (_store != null) return _store.Stamp;
+            if (!File.Exists(_dbFile)) return 0;
+            FileInfo fi = new FileInfo(_dbFile);
+            return unchecked(fi.LastWriteTimeUtc.Ticks * 31 + fi.Length);
+        }
+        private static string HashBytes(byte[] b)
+        {
+            using (System.Security.Cryptography.SHA256 h = System.Security.Cryptography.SHA256.Create())
+            {
+                return BitConverter.ToString(h.ComputeHash(b)).Replace("-", "");
+            }
+        }
+        // _fileLock の中で呼ぶ。portal_database.json が外から書き換えられていれば取り込み（git で取り込んだ・控えから戻した など）、
+        // そうでなければデータベースの中身を書き出す（GitHub での受け渡し・バックアップ用）
+        private void SyncJsonFile()
+        {
+            if (_store == null) return;
+            byte[] fileBytes = File.Exists(_dbFile) ? File.ReadAllBytes(_dbFile) : null;
+            string fileHash = fileBytes != null ? HashBytes(fileBytes) : null;
+            if (_exportedHash == null) _exportedHash = _store.GetSys("json_export_hash");
+            if (fileHash != null && fileHash != _exportedHash)
+            {
+                string txt = Encoding.UTF8.GetString(fileBytes);
+                if (txt.Length > 0 && txt[0] == '\uFEFF') txt = txt.Substring(1);
+                JObj parsed = null;
+                try { parsed = MiniJson.Parse(txt) as JObj; } catch { parsed = null; }
+                if (parsed == null)
+                {
+                    // 読めないファイルは取り込まず、上書きもしない（書き換えの途中かもしれないため）
+                    if (!_warnedBadJson) Console.WriteLine("[データ] portal_database.json が読めないため、取り込みと書き出しを止めています。");
+                    _warnedBadJson = true;
+                    return;
+                }
+                _warnedBadJson = false;
+                bool first = _store.IsEmpty;
+                if (!first)
+                {
+                    // 取り込む前の中身を控えに残す（取り込みで消える変更があっても戻せるように）
+                    try { File.WriteAllText(Path.Combine(_backupDir, "before_import_" + DateTime.Now.ToString("yyyyMMdd_HHmmss") + ".json"), _store.Read(), Encoding.UTF8); } catch { }
+                }
+                _store.Write(txt);
+                _exportedStamp = -1;
+                Console.WriteLine(first
+                    ? "[データ] portal_database.json をデータベースに取り込みました（初めての起動）"
+                    : "[データ] portal_database.json が外から変わったので、データベースに取り込みました（" + DateTime.Now.ToString("HH:mm:ss") + "）。前の中身は data\\backup\\before_import_*.json");
+            }
+            if (_store.IsEmpty) return;
+            long st = _store.Stamp;
+            if (st == _exportedStamp && fileHash != null && fileHash == _exportedHash) return;
+            string outTxt = _store.Read();
+            byte[] pre = Encoding.UTF8.GetPreamble();
+            byte[] body = Encoding.UTF8.GetBytes(outTxt);
+            byte[] all = new byte[pre.Length + body.Length];
+            Buffer.BlockCopy(pre, 0, all, 0, pre.Length);
+            Buffer.BlockCopy(body, 0, all, pre.Length, body.Length);
+            string h = HashBytes(all);
+            if (h != fileHash)
+            {
+                // 書き出せないとき（ほかのソフトで開いている など）は、データベースはそのまま使い、次の機会にもう一度試す
+                try
+                {
+                    string tmp = _dbFile + ".writing";
+                    File.WriteAllBytes(tmp, all);
+                    File.Copy(tmp, _dbFile, true);
+                    File.Delete(tmp);
+                }
+                catch (Exception ex)
+                {
+                    Console.WriteLine("[データ] portal_database.json に書き出せませんでした。30秒後にもう一度試します（" + ex.Message + "）");
+                    return;
+                }
+            }
+            _exportedHash = h;
+            _store.SetSys("json_export_hash", h);
+            _exportedStamp = st;
+        }
+        private void OnJsonSyncTick(object state)
+        {
+            try { lock (_fileLock) { SyncJsonFile(); } }
+            catch (Exception ex) { Console.WriteLine("[データ] 書き出しに失敗しました: " + ex.Message); }
+        }
         private System.Threading.Timer _extBackupTimer;
 
         // [Claude修正] ログインの照合とセッション管理 (サーバー側)。
@@ -374,7 +950,7 @@ namespace CarePortal
             string txt = null;
             lock (_fileLock)
             {
-                if (File.Exists(_dbFile)) txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+                txt = DbReadText();
             }
             if (string.IsNullOrEmpty(txt)) return null;
             return MiniJson.Parse(txt) as JObj;
@@ -620,7 +1196,7 @@ namespace CarePortal
             bool approved = false;
             lock (_fileLock)
             {
-                string txt = File.Exists(_dbFile) ? File.ReadAllText(_dbFile, Encoding.UTF8) : null;
+                string txt = DbReadText();
                 JObj db = null;
                 try { db = string.IsNullOrEmpty(txt) ? null : MiniJson.Parse(txt) as JObj; } catch { db = null; }
                 if (db != null)
@@ -662,7 +1238,7 @@ namespace CarePortal
                         if (rn != null) long.TryParse(rn.Raw, out rev);
                         db.Set("_rev", new JNum((rev + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
                         string outTxt = MiniJson.Serialize(db);
-                        File.WriteAllText(_dbFile, outTxt, Encoding.UTF8);
+                        DbWriteText(outTxt);
                         try
                         {
                             string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
@@ -703,8 +1279,8 @@ namespace CarePortal
         {
             lock (_fileLock)
             {
-                if (!File.Exists(_dbFile)) return false;
-                string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+                if (!DbExists()) return false;
+                string txt = DbReadText();
                 JObj db = null;
                 try { db = MiniJson.Parse(txt) as JObj; } catch { db = null; }
                 if (db == null) return false;
@@ -714,7 +1290,7 @@ namespace CarePortal
                 if (rn != null) long.TryParse(rn.Raw, out rev);
                 db.Set("_rev", new JNum((rev + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
                 string outTxt = MiniJson.Serialize(db);
-                File.WriteAllText(_dbFile, outTxt, Encoding.UTF8);
+                DbWriteText(outTxt);
                 try
                 {
                     string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
@@ -1081,12 +1657,13 @@ namespace CarePortal
                     string targetFolder = Path.Combine(destPath, tsFolder);
                     Directory.CreateDirectory(targetFolder);
 
-                    // 1. data/portal_database.json の保存
+                    // 1. データ（portal_database.json の形）の保存。データベースのときは中身を書き出す
                     lock (_fileLock)
                     {
-                        if (File.Exists(_dbFile))
+                        string allTxt = DbReadText();
+                        if (!string.IsNullOrEmpty(allTxt))
                         {
-                            File.Copy(_dbFile, Path.Combine(targetFolder, "portal_database.json"), true);
+                            File.WriteAllText(Path.Combine(targetFolder, "portal_database.json"), allTxt, Encoding.UTF8);
                             res.FilesCount++;
                         }
                     }
@@ -1378,15 +1955,12 @@ namespace CarePortal
         // 控えファイル: 24時間分は全部残し、それより前は1日1つ（その日の最後）を30日分だけ残す
         // ======================================================================
         private long _revCacheVal = -1;
-        private DateTime _revCacheTime;
-        private long _revCacheLen = -1;
+        private long _revCacheStamp = -1;
         private JObj _dbCache;
-        private DateTime _dbCacheTime;
-        private long _dbCacheLen = -1;
+        private long _dbCacheStamp = -1;
         private DateTime _lastBackupCleanup = DateTime.MinValue;
         private string _maskedCache;
-        private DateTime _maskedCacheTime;
-        private long _maskedCacheLen = -1;
+        private long _maskedCacheStamp = -1;
         // 受け取りも差分: 差分保存で当てはめた変更を覚えておき、端末には「この版から後に変わった記録だけ」を渡す
         private readonly List<KeyValuePair<long, string>> _changeLog = new List<KeyValuePair<long, string>>();
         private long _changeLogBaseRev = -1; // この版から後の変更を、途切れずに持っている
@@ -1464,27 +2038,25 @@ namespace CarePortal
         // _fileLock の中で呼ぶ
         private long GetCurrentRev()
         {
-            if (!File.Exists(_dbFile)) return -1;
-            FileInfo fi = new FileInfo(_dbFile);
-            if (_revCacheVal >= 0 && fi.LastWriteTimeUtc == _revCacheTime && fi.Length == _revCacheLen) return _revCacheVal;
-            string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
-            var m = System.Text.RegularExpressions.Regex.Match(txt, "\"_rev\":(\\d+)");
+            if (!DbExists()) return -1;
+            long stamp = DbStamp();
+            if (_revCacheVal >= 0 && stamp == _revCacheStamp) return _revCacheVal;
+            string txt = DbReadText();
+            var m = System.Text.RegularExpressions.Regex.Match(txt ?? "", "\"_rev\":(\\d+)");
             _revCacheVal = m.Success ? long.Parse(m.Groups[1].Value) : 0;
-            _revCacheTime = fi.LastWriteTimeUtc;
-            _revCacheLen = fi.Length;
+            _revCacheStamp = stamp;
             return _revCacheVal;
         }
 
         // _fileLock の中で呼ぶ。ファイルが変わっていなければ、読み込み済みのデータを使う
         private JObj GetDbCached()
         {
-            if (!File.Exists(_dbFile)) return null;
-            FileInfo fi = new FileInfo(_dbFile);
-            if (_dbCache != null && fi.LastWriteTimeUtc == _dbCacheTime && fi.Length == _dbCacheLen) return _dbCache;
-            string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+            if (!DbExists()) return null;
+            long stamp = DbStamp();
+            if (_dbCache != null && stamp == _dbCacheStamp) return _dbCache;
+            string txt = DbReadText();
             _dbCache = string.IsNullOrEmpty(txt) ? null : (MiniJson.Parse(txt) as JObj);
-            _dbCacheTime = fi.LastWriteTimeUtc;
-            _dbCacheLen = fi.Length;
+            _dbCacheStamp = stamp;
             return _dbCache;
         }
 
@@ -1579,7 +2151,7 @@ namespace CarePortal
                         }
                         else
                         {
-                            string beforeJson = slow ? File.ReadAllText(_dbFile, Encoding.UTF8) : null;
+                            string beforeJson = slow ? DbReadText() : null;
                             // 2. 当てはめる
                             foreach (object o in ops)
                             {
@@ -1634,11 +2206,11 @@ namespace CarePortal
                                 _dbCache = MiniJson.Parse(outJson) as JObj;
                                 sessionsJson = outJson;
                             }
-                            File.WriteAllText(_dbFile, outJson, Encoding.UTF8);
+                            DbWriteText(outJson);
                             RecordChange(prevRev, newRev, ops, !slow);
-                            FileInfo fi = new FileInfo(_dbFile);
-                            _dbCacheTime = fi.LastWriteTimeUtc; _dbCacheLen = fi.Length;
-                            _revCacheVal = newRev; _revCacheTime = fi.LastWriteTimeUtc; _revCacheLen = fi.Length;
+                            long stampAfter = DbStamp();
+                            _dbCacheStamp = stampAfter;
+                            _revCacheVal = newRev; _revCacheStamp = stampAfter;
                             WriteMinuteBackup(outJson);
                             resp = "{\"success\":true,\"rev\":" + newRev + ",\"prev_rev\":" + prevRev + ",\"saved_at\":\"" + DateTime.Now.ToString("HH:mm") + "\"}";
                         }
@@ -1708,6 +2280,27 @@ namespace CarePortal
 
             if (!Directory.Exists(_dataDir)) Directory.CreateDirectory(_dataDir);
             if (!Directory.Exists(_backupDir)) Directory.CreateDirectory(_backupDir);
+
+            // [Claude追加 2026-10-17] データベース（data/portal.db）を開く。初めてのときは portal_database.json から取り込む。
+            // 使える SQLite がなければ、今までどおり JSON ファイルで動く
+            if (Environment.GetEnvironmentVariable("CARE_PORTAL_NO_DB") != "1")
+            {
+                string why;
+                _store = PortalStore.TryOpen(Path.Combine(_dataDir, "portal.db"), _baseDir, out why);
+                _storeWhy = why;
+                if (_store != null)
+                {
+                    try { lock (_fileLock) { SyncJsonFile(); } }
+                    catch (Exception ex)
+                    {
+                        // 取り込みに失敗したら、データベースは使わず JSON ファイルで動く（データを失わないことを優先）
+                        _storeWhy = "取り込みに失敗: " + ex.Message;
+                        try { _store.Close(); } catch { }
+                        _store = null;
+                    }
+                }
+            }
+            else _storeWhy = "CARE_PORTAL_NO_DB=1 のため使わない";
         }
 
         public void Start()
@@ -1724,6 +2317,11 @@ namespace CarePortal
                 _extBackupTimer = new System.Threading.Timer(OnExtBackupTimerTick, null, 5000, 30 * 60 * 1000);
             }
             catch { }
+            // [Claude追加 2026-10-17] 30秒ごとに、データベースの中身を portal_database.json に書き出す（外から変わっていれば取り込む）
+            if (_store != null)
+            {
+                try { _jsonSyncTimer = new System.Threading.Timer(OnJsonSyncTick, null, 30000, 30000); } catch { }
+            }
 
             while (true)
             {
@@ -1749,6 +2347,13 @@ namespace CarePortal
 
         public void Stop()
         {
+            // [Claude追加 2026-10-17] 止めるときに、最後の中身を書き出してからデータベースを閉じる
+            try { if (_jsonSyncTimer != null) { _jsonSyncTimer.Dispose(); _jsonSyncTimer = null; } } catch { }
+            if (_store != null)
+            {
+                try { lock (_fileLock) { SyncJsonFile(); } } catch { }
+                try { _store.Close(); } catch { }
+            }
             try
             {
                 if (_extBackupTimer != null)
@@ -1958,23 +2563,22 @@ namespace CarePortal
                         string dataJson = "";
                         lock (_fileLock)
                         {
-                            if (File.Exists(_dbFile))
+                            if (DbExists())
                             {
-                                // [Claude修正 2026-10-16] 伏せ字にした全データを覚えておき、ファイルが変わるまで使い回す
+                                // [Claude修正 2026-10-16] 伏せ字にした全データを覚えておき、中身が変わるまで使い回す
                                 // （以前は端末が取りに来るたびに読み込み・伏せ字の処理をし、その間ほかの要求を待たせていた）
-                                FileInfo fi = new FileInfo(_dbFile);
-                                if (_maskedCache != null && fi.LastWriteTimeUtc == _maskedCacheTime && fi.Length == _maskedCacheLen)
+                                long stamp = DbStamp();
+                                if (_maskedCache != null && stamp == _maskedCacheStamp)
                                 {
                                     dataJson = _maskedCache;
                                 }
                                 else
                                 {
-                                    string txt = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                    string txt = DbReadText();
                                     // [Claude修正] パスワードは端末に渡さない (伏せ字にする)
                                     dataJson = string.IsNullOrEmpty(txt) ? "" : MaskPasswords(txt);
                                     _maskedCache = dataJson;
-                                    _maskedCacheTime = fi.LastWriteTimeUtc;
-                                    _maskedCacheLen = fi.Length;
+                                    _maskedCacheStamp = stamp;
                                 }
                             }
                         }
@@ -2020,9 +2624,9 @@ namespace CarePortal
                                 // 取得後に他端末が保存して版が進んでいれば 409 を返し、端末側で合流をやり直させる。
                                 long currentRev = -1;
                                 string currentJson = null;
-                                if (File.Exists(_dbFile))
+                                if (DbExists())
                                 {
-                                    currentJson = File.ReadAllText(_dbFile, Encoding.UTF8);
+                                    currentJson = DbReadText();
                                     var mc = System.Text.RegularExpressions.Regex.Match(currentJson, "\"_rev\":(\\d+)");
                                     if (mc.Success) currentRev = long.Parse(mc.Groups[1].Value);
                                 }
@@ -2035,7 +2639,7 @@ namespace CarePortal
                                 {
                                 // [Claude修正] 伏せ字で届いたパスワードを、サーバー側の本物で補う
                                 try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
-                                File.WriteAllText(_dbFile, postData, Encoding.UTF8);
+                                DbWriteText(postData);
                                 try { DropSuspendedSessions(postData); } catch { }
                                 // [Claude修正 2026-10-16] 控えは差分保存と同じ手順（分ごとに1つ・古いものは整理）
                                 WriteMinuteBackup(postData);
@@ -2307,6 +2911,8 @@ if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
 # 5. サーバー待機
 try {
     $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
+    Write-Host (" [データの保存先]: " + $server.StorageInfo) -ForegroundColor White
+    Write-Host ""
     $server.Start()
 } finally {
     if ($server) {

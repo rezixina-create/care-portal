@@ -23,3 +23,9 @@ cloudflared.exe
 tunnel_url.txt
 data/backup/
 scratch/
+
+# [Claude追加 2026-10-17] データベース本体（GitHub には中身の書き出し data/portal_database.json だけを上げる）
+data/portal.db
+data/portal.db-wal
+data/portal.db-shm
+data/portal_database.json.writing
