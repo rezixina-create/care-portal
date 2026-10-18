@@ -92,6 +92,8 @@ for x in d["residents"]:
 ms = d.get("monthly_shifts") or {}
 for ym, v in gen_daily.monthly_shifts().items(): ms[ym] = v
 d["monthly_shifts"] = ms
+import accounts
+accounts.apply(d)
 d["_rev"] = int(d.get("_rev", 0)) + 1000
 json.dump(d, open(DST, "w", encoding="utf-8"), ensure_ascii=False, separators=(",", ":"))
 print("written", DST, os.path.getsize(DST) // 1024, "KB")

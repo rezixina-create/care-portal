@@ -1174,6 +1174,30 @@ namespace CarePortal
         }
 
         // [0]=ID, [1]=パスワード, [2]=個別設定済み。職員マスタに居ない (退職等) 職員は null
+        // [Claude追加 2026-10-18] 職員IDとパスワードから職員を探す。見つかれば職員名、なければ null。
+        // 同じIDが重なっているとき（以前の初期値のまま など）は、職員アカウントの並びで先の方とする（画面側の振り直しと同じ決まり）
+        private static string FindLoginStaff(JObj db, string sid, string pw, out bool isCustom)
+        {
+            isCustom = false;
+            if (db == null || string.IsNullOrEmpty(sid)) return null;
+            Dictionary<string, bool> inStamps = new Dictionary<string, bool>();
+            foreach (object st in GetList(db, "stamps")) { string nm = StaffName(st); if (!string.IsNullOrEmpty(nm)) inStamps[nm] = true; }
+            foreach (object o in GetList(db, "staff_accounts"))
+            {
+                JObj acc = o as JObj;
+                if (acc == null) continue;
+                string nm = acc.GetStr("staff_name");
+                if (string.IsNullOrEmpty(nm) || !inStamps.ContainsKey(nm)) continue;
+                string sidV = acc.GetStr("staff_id") ?? "";
+                if (!string.Equals(sidV, sid, StringComparison.OrdinalIgnoreCase)) continue;
+                string pwV = acc.GetStr("password"); if (string.IsNullOrEmpty(pwV)) pwV = "0000";
+                if (pwV != pw) return null; // 同じIDの最初のアカウントでパスワードを確かめる
+                isCustom = IsTrue(acc.Get("is_custom"));
+                return nm;
+            }
+            return null;
+        }
+
         private static string[] GetCredentials(JObj db, string name)
         {
             if (string.IsNullOrEmpty(name)) return null;
@@ -1269,26 +1293,8 @@ namespace CarePortal
             try { db = LoadDb(); } catch { db = null; }
             StringBuilder sb = new StringBuilder();
             string fac = db != null ? db.GetStr("facility_name") : null;
-            sb.Append("{\"has_data\":" + (db != null ? "true" : "false") + ",\"facility_name\":" + MiniJson.Quote(fac ?? "") + ",\"staff\":[");
-            List<object> accs = GetList(db, "staff_accounts");
-            List<string> seen = new List<string>();
-            bool first = true;
-            foreach (object st in GetList(db, "stamps"))
-            {
-                string nm = StaffName(st);
-                if (string.IsNullOrEmpty(nm) || seen.Contains(nm)) continue;
-                seen.Add(nm);
-                JObj sj = st as JObj;
-                string role = sj != null ? (sj.GetStr("role") ?? "") : "";
-                JObj acc = FindByField(accs, "staff_name", nm);
-                string status = IsSuspended(db, nm) ? "休止中" : "正常";
-                if (status == "休止中") continue;
-                bool custom = acc != null && IsTrue(acc.Get("is_custom"));
-                if (!first) sb.Append(',');
-                first = false;
-                sb.Append("{\"name\":" + MiniJson.Quote(nm) + ",\"role\":" + MiniJson.Quote(role) + ",\"status\":" + MiniJson.Quote(status) + ",\"is_custom\":" + (custom ? "true" : "false") + "}");
-            }
-            sb.Append("]}");
+            // [Claude修正 2026-10-18] ログイン前には職員の名前の一覧を渡さない（ログインは職員IDとパスワードだけで行う）
+            sb.Append("{\"has_data\":" + (db != null ? "true" : "false") + ",\"facility_name\":" + MiniJson.Quote(fac ?? "") + ",\"staff\":[]}");
             SendJsonResponse(stream, 200, sb.ToString());
         }
 
@@ -1297,11 +1303,12 @@ namespace CarePortal
             JObj req = null;
             try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
             if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
-            string name = req.GetStr("staff_name") ?? "";
-            string sid = req.GetStr("staff_id") ?? "";
+            string sid = (req.GetStr("staff_id") ?? "").Trim();
             string pw = req.GetStr("password") ?? "";
+            // ロックは職員IDごと（大文字・小文字は区別しない）
+            string lockKey = "id:" + sid.ToLowerInvariant();
 
-            int remain = LockRemaining(name);
+            int remain = LockRemaining(lockKey);
             if (remain > 0)
             {
                 SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + remain + "}");
@@ -1310,19 +1317,21 @@ namespace CarePortal
 
             JObj db = null;
             try { db = LoadDb(); } catch { db = null; }
+            bool isCustom;
+            string name = FindLoginStaff(db, sid, pw, out isCustom);
+            if (name == null)
+            {
+                // IDとパスワードのどちらが違うかは返さない
+                int left = RegisterFail(lockKey);
+                SendJsonResponse(stream, 401, "{\"error\":\"invalid\",\"remaining\":" + left + "}");
+                return;
+            }
             if (IsSuspended(db, name))
             {
                 SendJsonResponse(stream, 403, "{\"error\":\"suspended\"}");
                 return;
             }
-            string[] cred = GetCredentials(db, name);
-            if (cred == null || cred[0] != sid || cred[1] != pw)
-            {
-                int left = RegisterFail(name);
-                SendJsonResponse(stream, 401, "{\"error\":\"invalid\",\"remaining\":" + left + "}");
-                return;
-            }
-            ClearFail(name);
+            ClearFail(lockKey);
 
             string token = NewToken();
             lock (_authLock)
@@ -1332,7 +1341,7 @@ namespace CarePortal
                 si.LastSeen = DateTime.Now;
                 _sessions[token] = si;
             }
-            string json = "{\"token\":\"" + token + "\",\"staff_name\":" + MiniJson.Quote(name) + ",\"is_custom\":" + cred[2] + "}";
+            string json = "{\"token\":\"" + token + "\",\"staff_name\":" + MiniJson.Quote(name) + ",\"staff_id\":" + MiniJson.Quote(sid) + ",\"is_custom\":" + (isCustom ? "true" : "false") + "}";
             SendJsonResponse(stream, 200, json, "cp_session=" + token + "; Path=/; HttpOnly; SameSite=Strict");
         }
 
@@ -1372,6 +1381,7 @@ namespace CarePortal
             }
 
             bool approved = false;
+            string targetLoginId = null;
             lock (_fileLock)
             {
                 string txt = DbReadText();
@@ -1407,8 +1417,9 @@ namespace CarePortal
                             acc.Set("staff_name", target);
                             accs.Add(acc);
                         }
-                        acc.Set("staff_id", "aaaa");
+                        // [Claude修正 2026-10-18] IDはそのまま（職員ごとに別のIDのため）。パスワードだけ初期値に戻す
                         acc.Set("password", "0000");
+                        targetLoginId = acc.GetStr("staff_id");
                         acc.Set("is_custom", false);
                         acc.Set("updated_at", DateTime.Now.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture));
                         long rev = 0;
@@ -1436,6 +1447,7 @@ namespace CarePortal
             }
             ClearFail(lockKey);
             ClearFail(target);
+            if (!string.IsNullOrEmpty(targetLoginId)) ClearFail("id:" + targetLoginId.ToLowerInvariant());
             lock (_authLock)
             {
                 List<string> remove = new List<string>();
@@ -2781,18 +2793,18 @@ namespace CarePortal
                         HandleLogout(stream, lines);
                         return;
                     }
-                    if (urlPath == "/api/account-reset" && method == "POST")
-                    {
-                        HandleAccountReset(stream, Encoding.UTF8.GetString(bodyBytes));
-                        return;
-                    }
-
                     // [Claude修正] これより下の API と写真は、ログイン済み (有効なセッション) の場合だけ応答する
                     bool needsAuth = urlPath.StartsWith("/api/") || urlPath.StartsWith("/data/photos/");
                     string sessStaff = needsAuth ? CheckSession(lines) : null;
                     if (needsAuth && sessStaff == null)
                     {
                         SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}");
+                        return;
+                    }
+                    // [Claude修正 2026-10-18] ID・パスワードの初期化は、ログインしてから（職員の一覧はログイン前に出さないため）
+                    if (urlPath == "/api/account-reset" && method == "POST")
+                    {
+                        HandleAccountReset(stream, Encoding.UTF8.GetString(bodyBytes));
                         return;
                     }
 

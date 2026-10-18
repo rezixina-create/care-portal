@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_a6">
+ <link rel="stylesheet" href="style.css?v=20261018_a7">
 </head>
 <body>
 
@@ -17,43 +17,20 @@
         <p>職員ログイン</p>
       </div>
 
-      <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">職員名を選択 <span style="color:#dc2626;">*</span>:</label>
-        <select id="loginStaffSelect" class="form-control" style="width:100%; font-size:14px; padding:8px 10px;" onchange="onLoginStaffSelectChange(this.value)">
-          <option value="木村 健一">木村 健一 様 (初期設定)</option>
-          <option value="鈴木 美智子">鈴木 美智子 様 (初期設定)</option>
-          <option value="加藤 由美">加藤 由美 様 (初期設定)</option>
-          <option value="山田 孝之">山田 孝之 様 (初期設定)</option>
-          <option value="伊藤 翔太">伊藤 翔太 様 (初期設定)</option>
-          <option value="井上 蓮">井上 蓮 様 (初期設定)</option>
-          <option value="吉田 誠">吉田 誠 様 (初期設定)</option>
-          <option value="高橋 直樹">高橋 直樹 様 (初期設定)</option>
-          <option value="佐藤 健太">佐藤 健太 様 (初期設定)</option>
-          <option value="小林 亮">小林 亮 様 (初期設定)</option>
-          <option value="松田 健二">松田 健二 様 (初期設定)</option>
-          <option value="清水 翔平">清水 翔平 様 (初期設定)</option>
-          <option value="斉藤 翼">斉藤 翼 様 (初期設定)</option>
-          <option value="石川 太陽">石川 太陽 様 (初期設定)</option>
-          <option value="中村 大輔">中村 大輔 様 (初期設定)</option>
-          <option value="渡辺 拓也">渡辺 拓也 様 (初期設定)</option>
-          <option value="野村 拓海">野村 拓海 様 (初期設定)</option>
-          <option value="松本 陽子">松本 陽子 様 (初期設定)</option>
-          <option value="田中 慎一">田中 慎一 様 (初期設定)</option>
-        </select>
-      </div>
+      <!-- [Claude修正 2026-10-18] 職員名の一覧を出さず、職員IDとパスワードだけでログインする -->
 
       <div style="margin-bottom:16px;">
-        <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">職員ID (半角英字4文字以上) <span style="color:#dc2626;">*</span>:</label>
+        <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">職員ID <span style="color:#dc2626;">*</span>:</label>
         <!-- [Claude修正 2026-10-16] 伏せ字の欄にすると Chrome・Edge では自動で半角入力になる。「表示」で打った文字を確かめられる -->
         <div class="cp-pw-wrap">
-          <input type="password" id="loginStaffIdInput" class="form-control"placeholder="職員ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
+          <input type="password" id="loginStaffIdInput" class="form-control" placeholder="職員ID" style="width:100%; font-size:15px; padding:10px 12px;" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" autocomplete="off">
           <button type="button" class="cp-pw-toggle" aria-pressed="false" aria-label="職員IDを表示" onclick="cpToggleLoginIdVisible(this)">表示</button>
         </div>
       </div>
 
       <div style="margin-bottom:20px;">
         <label style="display:block; font-size:13px; font-weight:bold; color:#36443e; margin-bottom:6px;">パスワード (半角数字4桁) <span style="color:#dc2626;">*</span>:</label>
-        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control"placeholder="数字4桁" style="width:100%; font-size:18px; padding:10px 12px; letter-spacing:6px;" inputmode="numeric" pattern="[0-9]*">
+        <input type="password" id="loginPasswordInput" maxlength="4" class="form-control" placeholder="数字4桁" style="width:100%; font-size:18px; padding:10px 12px; letter-spacing:6px;" inputmode="numeric" pattern="[0-9]*">
       </div>
 
       <button type="button" class="btn btn-primary login-submit" onclick="handleLoginSubmit()">ログイン</button>
@@ -64,7 +41,7 @@
       </div>
 
       <div class="login-reset">
-        <a href="javascript:void(0)" onclick="openAccountResetModal()">IDやパスワードを忘れたとき（2名の承認で初期化）</a>
+        <a href="javascript:void(0)" onclick="cpForgotLoginInfo()">IDやパスワードを忘れたとき</a>
       </div>
     </div>
   </div>
@@ -253,7 +230,7 @@
  <span> 全文文字検索 (発熱、転倒、血圧、ふらつき等)</span>
  </div>
  <div style="display:flex; gap:8px; flex-wrap:wrap;">
- <input type="text" id="searchInput" class="form-control" style="flex:1; min-width:180px;"placeholder="検索キーワードを入力" onkeypress="if(event.key==='Enter') doSearch()">
+ <input type="text" id="searchInput" class="form-control" style="flex:1; min-width:180px;" placeholder="検索キーワードを入力" onkeypress="if(event.key==='Enter') doSearch()">
  <button class="btn btn-primary" onclick="doSearch()">検索</button>
  <button class="btn btn-secondary" onclick="clearSearch()">クリア</button>
  </div>
@@ -1401,11 +1378,12 @@
    <table class="data-table" id="staffAuthTable">
    <thead>
     <tr>
-     <th style="width:20%;">職員名</th>
-     <th style="width:15%;">役職</th>
-     <th style="width:18%;">アカウント状態</th>
-     <th style="width:18%;">暗証番号設定</th>
-     <th style="width:29%;">操作 (ロック切替 / 初期化)</th>
+     <th style="width:17%;">職員名</th>
+     <th style="width:10%;">ログインID</th>
+     <th style="width:13%;">役職</th>
+     <th style="width:15%;">アカウント状態</th>
+     <th style="width:15%;">暗証番号設定</th>
+     <th style="width:30%;">操作 (ロック切替 / 初期化)</th>
     </tr>
    </thead>
    <tbody></tbody>
@@ -2974,7 +2952,7 @@
  <select id="shiftNgStaff2" class="form-control" style="flex:1; min-width:120px; font-size:13px;"></select>
  </div>
  <div style="display:flex; gap:8px; align-items:center;">
- <input type="text" id="shiftNgReason" class="form-control" style="flex:1; font-size:13px;"placeholder="理由・配慮メモ">
+ <input type="text" id="shiftNgReason" class="form-control" style="flex:1; font-size:13px;" placeholder="理由・配慮メモ">
  <button class="btn btn-primary" style="padding:6px 14px; font-size:13px;" onclick="submitShiftNgPair()">登録</button>
  </div>
  </div>
@@ -3708,7 +3686,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_a6"></script>
+ <script src="app.js?v=20261018_a7"></script>
   
 
   <!-- ============================================================ -->
@@ -3812,16 +3790,17 @@
   <div class="modal-overlay" id="accountResetModal" style="display:none; z-index:1000000;">
     <div class="modal-card" style="max-width:500px;">
       <div class="modal-header">
-        <h3 style="color:#b91c1c;">ID・パスワード初期化（2名承認）</h3>
+        <h3 style="color:#b91c1c;">パスワードの初期化（2名承認）</h3>
         <button type="button" class="modal-close-btn" onclick="closeModal('accountResetModal')">&times;</button>
       </div>
       <div style="padding:10px 0;">
         <p style="font-size:13px; color:#4a5852; margin:0 0 12px 0;">
-          初期化を行うと、対象職員のIDとパスワードが初期値に戻ります（初期値は取扱説明書）。管理者と事務員の2名による承認が必要です。
+          初期化を行うと、対象職員のパスワードが初期値に戻ります（IDはそのまま。初期値は取扱説明書）。管理者と事務員の2名による承認が必要です。
         </p>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:13px; font-weight:bold; color:#36443e;">初期化する対象職員 <span style="color:#dc2626;">*</span>:</label>
-          <select id="resetTargetStaffSelect" class="form-control" style="font-size:13px;"></select>
+          <div id="resetTargetStaffName" style="font-size:15px; font-weight:bold; padding:6px 0;"></div>
+          <input type="hidden" id="resetTargetStaffSelect">
         </div>
 
         <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px; margin-bottom:10px;">

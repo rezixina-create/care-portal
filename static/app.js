@@ -717,9 +717,11 @@ class LocalDB {
  const nm = (st && st.name) ? st.name : st;
  if (!nm || typeof nm !== "string") return;
  if (!d.staff_accounts.some(a => a && a.staff_name === nm)) {
- d.staff_accounts.push({ id: nm, staff_name: nm, staff_id: "aaaa", password: "0000", is_custom: false, updated_at: "" });
+ // [Claude修正 2026-10-18] ログインは職員IDとパスワードだけで行うので、職員ごとに別のIDを振る（aaaa, bbbb, … の順で空いているもの）
+ d.staff_accounts.push({ id: nm, staff_name: nm, staff_id: cpNextFreeLoginId(d.staff_accounts), password: "0000", is_custom: false, updated_at: "" });
  }
  });
+ cpDedupeLoginIds(d.staff_accounts);
  if (!d.night_turn_templates || typeof d.night_turn_templates !== "object") {
  d.night_turn_templates = Object.assign({}, DEFAULT_NIGHT_TURN_TEMPLATES);
  }
@@ -19984,8 +19986,10 @@ function renderOfficeStaffAuth() {
       ? "background:#dcfce7; color:#166534; border-color:#86efac;"
       : "background:#fee2e2; color:#991b1b; border-color:#fca5a5;";
 
+    const loginAcc = (db.data.staff_accounts || []).find(a => a && a.staff_name === s.name);
     tr.innerHTML = `
       <td><strong>${escapeHtml(s.name)}</strong></td>
+      <td><code style="font-size:13px;">${escapeHtml((loginAcc && loginAcc.staff_id) || "-")}</code></td>
       <td><span style="font-size:12px; color:#4a5852;">${escapeHtml(s.role || "職員")}</span></td>
       <td>${statusBadge}</td>
       <td>${pinBadge}</td>
@@ -19993,6 +19997,7 @@ function renderOfficeStaffAuth() {
         <div style="display:inline-flex; gap:6px; flex-wrap:wrap;">
           <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; ${lockBtnStyle}" onclick="toggleStaffAccountStatus('${escapeHtml(s.name)}')">${lockBtnLabel}</button>
           <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; background:#f6f8f6;" onclick="openResetStaffPinModal('${escapeHtml(s.name)}')">暗証番号を初期化</button>
+          <button type="button" class="btn btn-secondary" style="font-size:11.5px; padding:3px 8px; background:#f6f8f6;" onclick="openAccountResetModal('${escapeHtml(s.name)}')">パスワードを初期化</button>
         </div>
       </td>
     `;
@@ -20500,7 +20505,31 @@ function resetAutoLogoutTimer() {
   window.addEventListener(evt, () => resetAutoLogoutTimer(), { passive: true });
 });
 
-// 職員アカウントデータの初期化 (初期値: aaaa / 0000)
+// [Claude追加 2026-10-18] 空いているログインID（aaaa, bbbb, … zzzz, aaaaa, …）
+function cpNextFreeLoginId(accounts) {
+ const used = new Set((accounts || []).map(a => String((a && a.staff_id) || "").toLowerCase()));
+ for (let len = 4; len < 10; len++) {
+  for (let c = 0; c < 26; c++) {
+   const id = String.fromCharCode(97 + c).repeat(len);
+   if (!used.has(id)) return id;
+  }
+ }
+ return "staff" + Date.now().toString(36).replace(/[0-9]/g, x => String.fromCharCode(97 + Number(x)));
+}
+// 同じIDが重なっていたら（以前の初期値 aaaa のまま など）、並びで先の方を残し、後の方に空いているIDを振る。
+// どの端末でも同じ結果になる（サーバーのログインも、重なっているときは先の方で照合する）
+function cpDedupeLoginIds(accounts) {
+ if (!Array.isArray(accounts)) return;
+ const seen = new Set();
+ accounts.forEach(a => {
+  if (!a) return;
+  const k = String(a.staff_id || "").toLowerCase();
+  if (!k || seen.has(k)) { a.staff_id = cpNextFreeLoginId(accounts.filter(x => x !== a)); }
+  seen.add(String(a.staff_id).toLowerCase());
+ });
+}
+
+// 職員アカウントデータの初期化
 function initStaffAccounts() {
   if (!Array.isArray(db.data.staff_accounts) || db.data.staff_accounts.length === 0) {
     const staffList = (db.data.stamps || []).map(s => s.name || s);
@@ -20509,10 +20538,11 @@ function initStaffAccounts() {
       "高橋 直樹", "伊藤 翔太", "渡辺 拓也", "中村 大輔", "小林 亮",
       "斉藤 翼", "吉田 誠", "清水 翔平", "田中 慎一", "松本 陽子"
     ];
-    db.data.staff_accounts = defaults.map(name => ({
+    db.data.staff_accounts = [];
+    defaults.forEach(name => db.data.staff_accounts.push({
       id: name,
       staff_name: name,
-      staff_id: "aaaa",
+      staff_id: cpNextFreeLoginId(db.data.staff_accounts),
       password: "0000",
       is_custom: false,
       updated_at: toLocalDateTimeStr(new Date())
@@ -20522,80 +20552,24 @@ function initStaffAccounts() {
 
 // ログイン画面の職員セレクトボックス描画
 
+// [Claude修正 2026-10-18] ログイン画面に職員の名前の一覧は出さない（職員IDとパスワードだけでログイン）。施設名だけ出す
 function renderLoginStaffSelect() {
-  const sel = document.getElementById("loginStaffSelect");
-  if (!sel) return;
-
-  const prevVal = sel.value;
-  let staffList = [];
-
-  if (typeof gState !== "undefined" && Array.isArray(gState.stamps) && gState.stamps.length > 0) {
-    staffList = gState.stamps.map(s => ({
-      name: s.name || s,
-      role: s.role || "職員",
-      status: s.status || "正常",
-      is_custom: typeof cpIsInitialPin === "function" ? !cpIsInitialPin(s) : false
-    }));
-  } else if (typeof db !== "undefined" && db.data && Array.isArray(db.data.staff_accounts) && db.data.staff_accounts.length > 0) {
-    staffList = db.data.staff_accounts.map(a => ({
-      name: a.staff_name,
-      role: "職員",
-      status: a.status || "正常",
-      is_custom: a.is_custom || false
-    }));
-  } else {
-    const defaults = [
-      "木村 健一", "鈴木 美智子", "加藤 由美", "山田 孝之", "伊藤 翔太",
-      "井上 蓮", "吉田 誠", "高橋 直樹", "佐藤 健太", "小林 亮",
-      "松田 健二", "清水 翔平", "斉藤 翼", "石川 太陽", "中村 大輔",
-      "渡辺 拓也", "野村 拓海", "松本 陽子", "田中 慎一"
-    ];
-    staffList = defaults.map(name => ({ name, role: "職員", status: "正常", is_custom: false }));
-  }
-
-  sel.innerHTML = "";
-  staffList.forEach(st => {
-    if (st.status === "休止中") return; // 休止中アカウントはログイン選択肢から除外
-    const opt = document.createElement("option");
-    opt.value = st.name;
-    opt.textContent = `${st.name} 様` + (st.is_custom ? "" : " (初期設定)");
-    sel.appendChild(opt);
-  });
-
-  if (prevVal && [...sel.options].some(o => o.value === prevVal)) {
-    sel.value = prevVal;
-  }
-
-  // サーバーモード時はバックグラウンドで最新情報を取得
+  const facEl = document.getElementById("loginFacilityNameDisplay");
+  if (!facEl) return;
   if (typeof db !== "undefined" && db.isServerMode && typeof cpApiFetch === "function") {
     cpApiFetch('/api/login-info', { cache: 'no-store' }).then(r => r.ok ? r.json() : null).then(info => {
-      if (!info || !Array.isArray(info.staff)) return;
-      gState.loginStaffInfo = info.staff;
-      const currentVal = sel.value;
-      sel.innerHTML = "";
-      info.staff.forEach(st => {
-        if (st.status === "休止中") return;
-        const opt = document.createElement("option");
-        opt.value = st.name;
-        opt.textContent = `${st.name} 様` + (st.is_custom ? "" : " (初期設定)");
-        sel.appendChild(opt);
-      });
-      if (currentVal && info.staff.some(st => st.name === currentVal)) sel.value = currentVal;
+      if (info && info.facility_name) facEl.textContent = info.facility_name;
     }).catch(() => {});
+  } else if (typeof db !== "undefined" && db.data && db.data.facility_name) {
+    facEl.textContent = db.data.facility_name;
   }
 }
 
-
-function onLoginStaffSelectChange(staffName) {
-  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
-  const idInput = document.getElementById("loginStaffIdInput");
-  const pwInput = document.getElementById("loginPasswordInput");
-  if (idInput) idInput.value = "";
-  if (pwInput) pwInput.value = "";
-  if (acc && !acc.is_custom && idInput) {
-    // [Claude修正 2026-10-18] 初期のIDは画面に出さない（取扱説明書に書く）
-  }
+// IDやパスワードを忘れたとき
+function cpForgotLoginInfo() {
+  alert("IDやパスワードを忘れたときは、管理者か事務員に伝えてください。\n\n管理者（または事務員）がログインして「職員アカウント・暗証番号管理」を開くと、IDを確かめたり、2名の承認でパスワードを初期値に戻したりできます。");
 }
+window.cpForgotLoginInfo = cpForgotLoginInfo;
 
 // [Claude修正] サーバー稼働時は、ID・パスワードをサーバーで照合する
 // (旧実装は端末内のデータで照合していたため、画面を通さずにデータを取得できた)
@@ -20668,14 +20642,9 @@ window.cpToggleLoginIdVisible = cpToggleLoginIdVisible;
 async function handleLoginSubmit() {
   cpHalfwidthAll();
   if (!db || !db.isServerMode) return handleLoginSubmitLocal();
-  const staffName = document.getElementById("loginStaffSelect").value;
   const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
   const password = (document.getElementById("loginPasswordInput").value || "").trim();
-  if (!staffName) { alert("職員名を選択してください。"); return; }
-  if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
-    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。");
-    return;
-  }
+  if (!staffId) { alert("職員IDを入力してください。"); return; }
   if (!password || !/^\d{4}$/.test(password)) {
     alert("パスワードは半角数字4桁で入力してください。");
     return;
@@ -20686,7 +20655,7 @@ async function handleLoginSubmit() {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       credentials: 'same-origin',
-      body: JSON.stringify({ staff_name: staffName, staff_id: staffId, password: password })
+      body: JSON.stringify({ staff_id: staffId, password: password })
     });
   } catch (e) {
     alert("サーバーに接続できませんでした。親機PCのサーバーが起動しているか確認してください。");
@@ -20705,13 +20674,13 @@ async function handleLoginSubmit() {
   }
   if (!res.ok || !info.token) {
     const left = (typeof info.remaining === "number") ? `\n（あと${info.remaining}回失敗すると、5分間ログインできなくなります）` : "";
-    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は「ID・パスワード初期化申請」をご利用ください。" + left);
+    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は、管理者か事務員に伝えてください。" + left);
     return;
   }
   cpSetToken(info.token);
   await db.initServerSync();
   if (typeof reloadStateFromDb === "function") reloadStateFromDb();
-  finishLoginUi(staffName, staffId, !!info.is_custom);
+  finishLoginUi(info.staff_name, staffId, !!info.is_custom);
 }
 
 // ログイン成功後の画面切り替え (サーバー照合・端末照合で共通)
@@ -20745,18 +20714,11 @@ function finishLoginUi(staffName, staffId, isCustom) {
 // ログイン実行 (サーバーを使わない単体動作時)
 function handleLoginSubmitLocal() {
   cpHalfwidthAll(); // [Claude修正 2026-10-16]
-  const staffName = document.getElementById("loginStaffSelect").value;
   const staffId = (document.getElementById("loginStaffIdInput").value || "").trim();
   const password = (document.getElementById("loginPasswordInput").value || "").trim();
 
-  if (!staffName) {
-    alert("職員名を選択してください。");
-    return;
-  }
-
-  // ローマ字4文字以上チェック
-  if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
-    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。");
+  if (!staffId) {
+    alert("職員IDを入力してください。");
     return;
   }
 
@@ -20767,16 +20729,12 @@ function handleLoginSubmitLocal() {
   }
 
   initStaffAccounts();
-  const acc = (db.data.staff_accounts || []).find(a => a.staff_name === staffName);
+  // [Claude修正 2026-10-18] 職員IDで本人を探す（同じIDが重なっていれば先の方）
+  const acc = (db.data.staff_accounts || []).find(a => String(a.staff_id || "").toLowerCase() === staffId.toLowerCase());
 
-  if (!acc) {
-    alert("職員情報が見つかりません。");
-    return;
-  }
-
-  // IDとパスワードの照合
-  if (acc.staff_id !== staffId || acc.password !== password) {
-    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は「ID・パスワード初期化申請」をご利用ください。");
+  // IDとパスワードの照合（どちらが違うかは出さない）
+  if (!acc || (acc.password || "0000") !== password || !(db.data.stamps || []).some(st => (st.name || st) === acc.staff_name)) {
+    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は、管理者か事務員に伝えてください。");
     return;
   }
 
@@ -20805,7 +20763,7 @@ function handleLoginSubmitLocal() {
   // 初期値の時のみ「ID・PW設定」ボタンを表示
   const btnSettings = document.getElementById("btnHeaderAccountSettings");
   if (btnSettings) {
-    btnSettings.style.display = (!acc.is_custom || (acc.staff_id === "aaaa" && acc.password === "0000")) ? "inline-block" : "none";
+    btnSettings.style.display = !acc.is_custom ? "inline-block" : "none";
   }
 
   // 画面切り替え: ログイン画面を非表示、本体ラッパーを表示
@@ -21081,6 +21039,11 @@ function submitAccountSettings() {
     alert("パスワードが確認用と一致しません。再度ご確認ください。");
     return;
   }
+  // [Claude追加 2026-10-18] ほかの職員と同じIDは使えない（IDで本人を決めるため）
+  if ((db.data.staff_accounts || []).some(a => a && a.staff_name !== staffName && String(a.staff_id || "").toLowerCase() === newId.toLowerCase())) {
+    alert("そのIDは、ほかの職員が使っています。別のIDにしてください。");
+    return;
+  }
 
   // 確認ダイアログ
   const confirmMsg = `【確認】\n職員名: ${staffName}\n新しいID: ${newId}\n新しいパスワード: ****\n\nこの内容で設定します。よろしいですか？\n※設定完了後は画面上の変更ボタンが非表示になります。`;
@@ -21121,19 +21084,12 @@ function renderResetStaffSelects() {
   const officeSel = document.getElementById("resetApproverOffice");
   if (!targetSel || !adminSel || !officeSel) return;
 
-  targetSel.innerHTML = "";
-  adminSel.innerHTML = "";
-  officeSel.innerHTML = "";
+  adminSel.innerHTML = "<option value=\"\">選んでください</option>";
+  officeSel.innerHTML = "<option value=\"\">選んでください</option>";
 
-  // [Claude修正] サーバー稼働時は、サーバーから取得した職員一覧 (名前と役職) を使う
-  const useServerList = db && db.isServerMode && Array.isArray(gState.loginStaffInfo);
-  const accounts = useServerList ? gState.loginStaffInfo.map(x => ({ staff_name: x.name })) : (db.data.staff_accounts || []);
-  accounts.forEach(a => {
-    const opt1 = document.createElement("option");
-    opt1.value = a.staff_name;
-    opt1.textContent = a.staff_name;
-    targetSel.appendChild(opt1);
-  });
+  // [Claude修正 2026-10-18] ログインしてから使う（職員の一覧はログイン前に出さない）
+  const useServerList = false;
+  const accounts = db.data.staff_accounts || [];
 
   // [Claude修正] 承認者は職員マスタの役職で絞り込む (旧実装は全職員が「管理者」「事務員」として表示されていた)
   const roleOf = (name) => {
@@ -21161,9 +21117,15 @@ function renderResetStaffSelects() {
   });
 }
 
-function openAccountResetModal() {
+function openAccountResetModal(targetName) {
+  if (!gState.session) { cpForgotLoginInfo(); return; }
+  if (!targetName) return;
   initStaffAccounts();
   renderResetStaffSelects();
+  const tSel = document.getElementById("resetTargetStaffSelect");
+  if (tSel) tSel.value = targetName;
+  const tName = document.getElementById("resetTargetStaffName");
+  if (tName) tName.textContent = `${targetName} 様`;
   const p1 = document.getElementById("resetAdminPin");
   const p2 = document.getElementById("resetOfficePin");
   if (p1) p1.value = "";
@@ -21189,6 +21151,10 @@ function executeAccountReset() {
     return;
   }
 
+  if (!adminStaff || !officeStaff) {
+    alert("承認者（管理者・事務員）を選んでください。");
+    return;
+  }
   if (adminStaff === officeStaff) {
     alert("承認者1と承認者2には別の職員を選択してください（2名による承認が必要です）。");
     return;
@@ -21217,14 +21183,13 @@ function executeAccountReset() {
     return;
   }
 
-  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後は、初期のID・パスワードに戻ります（取扱説明書を参照）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のパスワードを初期値に戻します（IDはそのまま）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
   if (!confirm(confirmMsg)) return;
 
   initStaffAccounts();
   const acc = (db.data.staff_accounts || []).find(a => a.staff_name === targetStaff);
   if (acc) {
-    acc.staff_id = "aaaa";
-    acc.password = "0000";
+    acc.password = "0000"; // [Claude修正 2026-10-18] IDはそのまま、パスワードだけ初期値に
     acc.is_custom = false;
     acc.updated_at = toLocalDateTimeStr(new Date());
   }
@@ -21232,19 +21197,18 @@ function executeAccountReset() {
   // もし現在ログイン中ならボタンを再表示
   if (gState.session && gState.session.staffName === targetStaff) {
     gState.session.is_custom = false;
-    gState.session.staffId = "aaaa";
     const btnSettings = document.getElementById("btnHeaderAccountSettings");
     if (btnSettings) btnSettings.style.display = "inline-block";
   }
 
   db.save();
   closeModal("accountResetModal");
-  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期のID・パスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
+  alert(`「${targetStaff}」様のパスワードを初期値に戻しました。\nIDはそのままです。初期のパスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
   renderLoginStaffSelect();
 }
 
 async function executeAccountResetOnServer(targetStaff, adminStaff, adminPin, officeStaff, officePin) {
-  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後は、初期のID・パスワードに戻ります（取扱説明書を参照）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のパスワードを初期値に戻します（IDはそのまま）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
   if (!confirm(confirmMsg)) return;
   let res;
   try {
@@ -21266,7 +21230,7 @@ async function executeAccountResetOnServer(targetStaff, adminStaff, adminPin, of
     return;
   }
   closeModal("accountResetModal");
-  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期のID・パスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
+  alert(`「${targetStaff}」様のパスワードを初期値に戻しました。\nIDはそのままです。初期のパスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
   renderLoginStaffSelect();
 }
 
@@ -21475,7 +21439,7 @@ window.requestDismissAlert = requestDismissAlert;
 window.executeDismissAlert = executeDismissAlert;
 window.openAlertLogModal = openAlertLogModal;
 window.restoreAlert = restoreAlert;
-window.onLoginStaffSelectChange = onLoginStaffSelectChange;
+// （職員名の選択はなくなった 2026-10-18）
 // 第2段階 グローバル公開
 window.openFacilityNameModal = openFacilityNameModal;
 window.executeFacilityNameChange = executeFacilityNameChange;
@@ -22098,11 +22062,11 @@ function cpRenderSingleWriteScreenInner(container) {
         </div>
         <div>
           <label class="cp-sw-label">血圧 上 (mmHg)</label>
-          <input type="number" id="swVitalBpHigh" class="form-control" value=""placeholder="上">
+          <input type="number" id="swVitalBpHigh" class="form-control" value="" placeholder="上">
         </div>
         <div>
           <label class="cp-sw-label">血圧 下 (mmHg)</label>
-          <input type="number" id="swVitalBpLow" class="form-control" value=""placeholder="下">
+          <input type="number" id="swVitalBpLow" class="form-control" value="" placeholder="下">
         </div>
         <div>
           <label class="cp-sw-label">脈拍 (bpm)</label>
