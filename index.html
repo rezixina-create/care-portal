@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_b1">
+ <link rel="stylesheet" href="style.css?v=20261018_b2">
 </head>
 <body>
 
@@ -1666,6 +1666,7 @@
  <option value="">選んでください</option>
  <option value="緊急搬送">緊急搬送</option>
  <option value="看取り">看取り</option>
+ <option value="医療連携">医療連携</option>
  </select>
  </div>
  <div class="form-group">
@@ -1705,7 +1706,7 @@
  <input type="text" id="resSensorAlert" class="form-control">
  </div>
  <div class="form-group">
- <label>ケアプラン目標・配慮事項:</label>
+ <label>ケアプラン目標（カルテの欄から計画作成担当者が変えます）:</label>
  <input type="text" id="resCarePlanGoal" class="form-control">
  </div>
  <div class="form-group">
@@ -1753,11 +1754,11 @@
  <input type="number" id="resSpo2Min" class="form-control">
  </div>
  <div class="form-group">
- <label style="font-size:13px;">脈拍上限 (bpm):</label>
+ <label style="font-size:13px;">脈拍上限 (回/分):</label>
  <input type="number" id="resPulseMax" class="form-control">
  </div>
  <div class="form-group">
- <label style="font-size:13px;">脈拍下限 (bpm):</label>
+ <label style="font-size:13px;">脈拍下限 (回/分):</label>
  <input type="number" id="resPulseMin" class="form-control">
  </div>
  </div>
@@ -2607,50 +2608,56 @@
  </div>
  </div>
 
- <!-- 15. 基本方針・見守り注意 項目別クイック編集モーダル -->
+ <!-- 15. 基本方針・ケアプラン目標・見守り注意・バイタルの注意の目安（項目ごと／まとめて） -->
  <div class="modal-overlay" id="carePlanModal" style="display:none;">
- <div class="modal-card" style="max-width:540px;">
+ <div class="modal-card" style="max-width:560px;">
  <div class="modal-header">
- <h3 id="carePlanModalTitle"> 基本方針 ＆ ケアプラン目標の変更</h3>
+ <h3 id="carePlanModalTitle">基本方針・ケアプラン目標・見守り注意の変更</h3>
  <button class="modal-close-btn" onclick="closeModal('carePlanModal')">&times;</button>
  </div>
  <input type="hidden" id="carePlanResidentId">
+ <input type="hidden" id="carePlanParts">
+ <div id="cpmNotAllowed" class="cp-part-sub" style="display:none; margin-bottom:8px;"></div>
 
- <div class="form-group">
- <label> ケアプラン目標・注意事項:</label>
- <textarea id="quickCarePlanGoal" class="form-control" rows="2"></textarea>
+ <div class="form-group" id="cpmPart_policy">
+ <label for="quickPolicyStamp">基本方針 *</label>
+ <select id="quickPolicyStamp" class="form-control">
+ <option value="">選んでください</option>
+ <option value="看取り">［ 看取り ］(穏やかな終末期ケア)</option>
+ <option value="緊急搬送">［ 緊急搬送 ］(急変時即時救急要請)</option>
+ <option value="医療連携">［ 医療連携 ］(嘱託医・協力病院相談)</option>
+ </select>
+ <div class="cp-part-sub">本人・家族・主治医と話し合って決めたことを入れます。</div>
  </div>
 
- <div class="form-group" style="margin-top:10px;">
- <label> 離床センサー・見守り注意:</label>
+ <div class="form-group" id="cpmPart_goal">
+ <label for="quickCarePlanGoal">ケアプラン目標</label>
+ <textarea id="quickCarePlanGoal" class="form-control" rows="3"></textarea>
+ <label for="quickCarePlanConsentDate" style="margin-top:8px;">本人・家族に説明して同意をもらった日（目標を変えるときは必ず）</label>
+ <input type="date" id="quickCarePlanConsentDate" class="form-control">
+ <div id="quickCarePlanConsentLast" class="cp-part-sub"></div>
+ </div>
+
+ <div class="form-group" id="cpmPart_sensor">
+ <label for="quickSensorAlert">見守りの注意（離床センサーなど）</label>
  <input type="text" id="quickSensorAlert" class="form-control">
  </div>
 
- <div style="margin-top:12px; border-top:1px solid #dfe5e1; padding-top:10px;">
- <label style="font-weight:bold; font-size:13px; color:#22302b;">個別バイタル注意基準値:</label>
+ <div id="cpmPart_vital" style="border-top:1px solid var(--line); padding-top:10px;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink);">バイタルの注意の目安（主治医の指示を入れます。空欄は「未設定」）</label>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:6px;">
- <div>
- <label style="font-size:13px;">最高血圧 上限 (mmHg):</label>
- <input type="number" id="quickBpHMax" class="form-control">
- </div>
- <div>
- <label style="font-size:13px;">最高血圧 下限 (mmHg):</label>
- <input type="number" id="quickBpHMin" class="form-control">
- </div>
- <div>
- <label style="font-size:13px;">体温 上限 (℃):</label>
- <input type="number" step="0.1" id="quickTempMax" class="form-control">
- </div>
- <div>
- <label style="font-size:13px;">SpO2 下限 (%):</label>
- <input type="number" id="quickSpo2Min" class="form-control">
- </div>
+ <div><label for="quickBpHMax" style="font-size:13px;">最高血圧 上限 (mmHg)</label><input type="number" id="quickBpHMax" class="form-control"></div>
+ <div><label for="quickBpHMin" style="font-size:13px;">最高血圧 下限 (mmHg)</label><input type="number" id="quickBpHMin" class="form-control"></div>
+ <div><label for="quickTempMax" style="font-size:13px;">体温 上限 (℃)</label><input type="number" step="0.1" id="quickTempMax" class="form-control"></div>
+ <div><label for="quickSpo2Min" style="font-size:13px;">SpO2 下限 (%)</label><input type="number" id="quickSpo2Min" class="form-control"></div>
+ <div><label for="quickPulseMax" style="font-size:13px;">脈拍 上限 (回/分)</label><input type="number" id="quickPulseMax" class="form-control"></div>
+ <div><label for="quickPulseMin" style="font-size:13px;">脈拍 下限 (回/分)</label><input type="number" id="quickPulseMin" class="form-control"></div>
  </div>
  </div>
 
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('carePlanModal')">キャンセル</button>
- <button class="btn btn-primary" onclick="submitCarePlanModal()">基本方針を保存</button>
+ <button class="btn btn-primary" onclick="submitCarePlanModal()">保存</button>
  </div>
  </div>
  </div>
@@ -3686,7 +3693,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_b1"></script>
+ <script src="app.js?v=20261018_b2"></script>
   
 
   <!-- ============================================================ -->

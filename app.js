@@ -4468,42 +4468,8 @@ function renderResidentDetail() {
  </div>
  </div>
 
- <!-- 1. 基本方針・見守り注意・ケアプラン目標 (アコーディオン) -->
- <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
- <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
- <span> 基本方針 ＆ ケアプラン目標・見守り注意</span>
- <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;"> 変更</button>
- <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
- </div>
- </summary>
- <div style="padding:12px;">
- ${r.sensor_alert ? `
- <div style="background:#fee2e2; border-left:4px solid #ef4444; padding:8px 12px; border-radius:6px; margin-bottom:10px; font-weight:bold; color:#991b1b; font-size:13px; display:flex; justify-content:space-between; align-items:center;">
- <span>${escapeHtml(r.sensor_alert)}</span>
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px; color:#dc2626;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}, 'sensor'); return false;">変更</button>
- </div>
- ` : ''}
- <div style="background:#f0fdf4; border-left:4px solid #16a34a; padding:10px; border-radius:6px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:flex-start;">
- <div>
- <div style="font-size:12px; font-weight:bold; color:#15803d;"> ケアプラン目標・注意事項:</div>
- <div style="font-size:13px; margin-top:2px;">${escapeHtml(r.care_plan_goal || "安全な日常生活の維持・転倒予防")}</div>
- </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">変更</button>
- </div>
- ${(r.bp_high_max || r.temp_max || r.spo2_min) ? `
- <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; font-size:12px; color:#92400e; display:flex; justify-content:space-between; align-items:center;">
- <div>
- <strong> 設定済バイタル注意基準:</strong>
- ${r.bp_high_max ? `最高血圧: ${r.bp_high_min || 90}〜${r.bp_high_max}mmHg ` : ''}
- ${r.temp_max ? `体温上限: ${r.temp_max}℃ ` : ''}
- ${r.spo2_min ? `SpO2下限: ${r.spo2_min}% ` : ''}
- </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:10px;" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}); return false;">基準値変更</button>
- </div>
- ` : ''}
- </div>
- </details>
+ <!-- 1. 基本方針・ケアプラン目標・見守り注意・バイタルの注意の目安 (アコーディオン) -->
+ ${cpCarePlanSectionHtml(r)}
 
  <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
  <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
@@ -16072,6 +16038,7 @@ function openFamilyHistoryModal(residentId) {
  document.getElementById("fhResidentId").value = r.id;
  document.getElementById("fhEmergencyContact").value = r.emergency_contact || "";
  document.getElementById("fhPolicyStamp").value = r.policy_stamp || "";
+ { const ps = document.getElementById("fhPolicyStamp"); if (ps) { ps.disabled = !cpCanEditPolicy(); ps.title = ps.disabled ? "基本方針を変えられるのは管理者・計画作成担当者・看護師です" : ""; } }
  document.getElementById("fhSensorAlert").value = r.sensor_alert || "";
  document.getElementById("fhFamilyWishes").value = r.family_wishes || "";
  document.getElementById("fhLifeHistory").value = r.life_history || "";
@@ -16089,8 +16056,8 @@ function submitFamilyHistory() {
  const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
  const newContact = document.getElementById("fhEmergencyContact").value.trim();
- if (!cpRequireSelect("fhPolicyStamp", "基本方針")) return;
- const newStamp = document.getElementById("fhPolicyStamp").value;
+ const newStamp = cpCanEditPolicy() ? document.getElementById("fhPolicyStamp").value : (r.policy_stamp || "");
+ if (cpCanEditPolicy() && !cpRequireSelect("fhPolicyStamp", "基本方針")) return;
  const newSensor = document.getElementById("fhSensorAlert").value.trim();
  const newWishes = document.getElementById("fhFamilyWishes").value.trim();
  const newHistory = document.getElementById("fhLifeHistory").value.trim();
@@ -16169,6 +16136,7 @@ function openAddResidentModal() {
  document.getElementById("resPulseMax").value = "";
  document.getElementById("resPulseMin").value = "";
 
+ cpLockResidentPlanFields();
  document.getElementById("residentModal").style.display = "flex";
 }
 
@@ -16207,9 +16175,17 @@ function openEditResidentModal(id) {
  document.getElementById("resPulseMax").value = r.pulse_max || "";
  document.getElementById("resPulseMin").value = r.pulse_min || "";
 
+ cpLockResidentPlanFields();
  document.getElementById("residentModal").style.display = "flex";
 }
 
+// [Claude追加 2026-10-18] 利用者の登録・編集の画面で、変える権限のない欄を押せなくする
+function cpLockResidentPlanFields() {
+ const lock = (ids, can, why) => ids.forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = !can; el.title = can ? "" : why; } });
+ lock(["resCarePlanGoal"], false, "ケアプラン目標は、カルテの「基本方針・ケアプラン目標・見守り注意」から計画作成担当者が変えます");
+ lock(["resPolicyStamp"], cpCanEditPolicy(), "基本方針を変えられるのは管理者・計画作成担当者・看護師です");
+ lock(["resBpHighMax", "resBpHighMin", "resTempMax", "resSpo2Min", "resPulseMax", "resPulseMin"], cpCanEditVitalLimits(), "バイタルの注意の目安を変えられるのは看護師です");
+}
 function submitResidentForm() {
  const roomNo = document.getElementById("resRoomNo").value.trim();
  const name = document.getElementById("resName").value.trim();
@@ -16222,7 +16198,7 @@ function submitResidentForm() {
  alert("要介護度を選んでください。");
  return;
  }
- if (!document.getElementById("resPolicyStamp").value) {
+ if (cpCanEditPolicy() && !document.getElementById("resPolicyStamp").value) {
  alert("基本方針（緊急搬送・看取りなど）を選んでください。");
  return;
  }
@@ -16293,6 +16269,12 @@ function submitResidentForm() {
  pulse_max: document.getElementById("resPulseMax").value ? parseInt(document.getElementById("resPulseMax").value, 10) : null,
  pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null
  };
+ // [Claude修正 2026-10-18] 変える権限のない欄は、前の値のまま（新しく登録するときは空）にする。ケアプラン目標はカルテの欄から（説明と同意の日を入れるため）
+ { const prev = editId ? (gState.residents.find(x => x.id === parseInt(editId)) || {}) : {};
+  const keep = ks => ks.forEach(k2 => { residentData[k2] = (prev[k2] === undefined ? (k2 === "policy_stamp" || k2 === "care_plan_goal" ? "" : null) : prev[k2]); });
+  keep(["care_plan_goal"]);
+  if (!cpCanEditPolicy()) keep(["policy_stamp"]);
+  if (!cpCanEditVitalLimits()) keep(["bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); }
  if (cpUnitAfterMove !== undefined) residentData.unit_id = cpUnitAfterMove;
 
  let targetId;
@@ -16419,67 +16401,151 @@ function submitClinicInstructions() {
 // ==========================================
 // 基本方針・見守り注意 クイック編集機能
 // ==========================================
-function openCarePlanModal(resId, focusField = '') {
+// [Claude修正 2026-10-18] 欄ごとに変えられる人を分ける（ユーザーと決定）
+// ・ケアプラン目標: 計画作成担当者（ケアマネ）だけ。本人・家族に説明して同意をもらった日を必ず入れる
+//   （根拠: 指定地域密着型サービス基準。計画作成担当者が作成し、利用者または家族に説明して同意を得て交付する。変更も同じ）
+// ・バイタルの注意の目安: 看護師だけ（主治医の指示を入れる）
+// ・基本方針（急変時・看取り）: 管理者・計画作成担当者・看護師
+// ・見守りの注意: 全員
+// 変えた内容は利用者の変更履歴に残す
+function cpRoleFlags(name) {
+ const role = cpStaffRoleOf(name || cpLoginStaffName());
+ return {
+  director: /施設長|管理者/.test(role),
+  caremanager: /計画作成|介護支援専門員|ケアマネ/.test(role),
+  nurse: role.includes("看護")
+ };
+}
+function cpCanEditCarePlanGoal() { return cpRoleFlags().caremanager; }
+function cpCanEditVitalLimits() { return cpRoleFlags().nurse; }
+function cpCanEditPolicy() { const f = cpRoleFlags(); return f.director || f.caremanager || f.nurse; }
+const CP_CAREPLAN_PARTS = {
+ policy: { label: "基本方針", who: "管理者・計画作成担当者・看護師", can: () => cpCanEditPolicy() },
+ goal: { label: "ケアプラン目標", who: "計画作成担当者（ケアマネ）", can: () => cpCanEditCarePlanGoal() },
+ sensor: { label: "見守りの注意", who: "全員", can: () => true },
+ vital: { label: "バイタルの注意の目安", who: "看護師", can: () => cpCanEditVitalLimits() }
+};
+function cpVitalLimitsText(r) {
+ const v = (x, unit) => (x === null || x === undefined || x === "") ? "未設定" : `${x}${unit}`;
+ return [
+  `最高血圧 上限 ${v(r.bp_high_max, "mmHg")}・下限 ${v(r.bp_high_min, "mmHg")}`,
+  `体温 上限 ${v(r.temp_max, "℃")}`,
+  `SpO2 下限 ${v(r.spo2_min, "%")}`,
+  `脈拍 上限 ${v(r.pulse_max, "回/分")}・下限 ${v(r.pulse_min, "回/分")}`
+ ];
+}
+function cpCarePlanSectionHtml(r) {
+ const btn = (part) => CP_CAREPLAN_PARTS[part].can()
+  ? `<button type="button" class="btn btn-secondary cp-part-btn" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}, '${part}'); return false;">変更</button>`
+  : `<span class="cp-part-who">変更は${CP_CAREPLAN_PARTS[part].who}</span>`;
+ const val = (x) => x ? escapeHtml(String(x)) : `<span class="cp-unset">未設定</span>`;
+ const consent = r.care_plan_goal ? (r.care_plan_consent_date ? `<div class="cp-part-sub">本人・家族への説明と同意: ${escapeHtml(r.care_plan_consent_date)}</div>` : `<div class="cp-part-sub">本人・家族への説明と同意: 未記入</div>`) : "";
+ const vitalLines = cpVitalLimitsText(r);
+ const vitalSet = [r.bp_high_max, r.bp_high_min, r.temp_max, r.spo2_min, r.pulse_max, r.pulse_min].some(x => x !== null && x !== undefined && x !== "");
+ return `<details class="care-accordion cp-part-acc" open>
+ <summary class="cp-part-summary">
+ <span>基本方針・ケアプラン目標・見守り注意</span>
+ <span class="cp-part-summary-vital">バイタルの注意の目安: ${vitalSet ? escapeHtml(vitalLines.join(" ／ ")) : "未設定"}</span>
+ <span style="display:flex; align-items:center; gap:8px;">
+ <button type="button" class="btn btn-secondary cp-part-btn" onclick="event.preventDefault(); event.stopPropagation(); openCarePlanModal(${r.id}, 'all'); return false;">まとめて変更</button>
+ <span class="cp-part-who">(開閉)</span>
+ </span>
+ </summary>
+ <div class="cp-part-body">
+ <div class="cp-part-row"><div><div class="cp-part-label">基本方針</div><div class="cp-part-val">${val(r.policy_stamp)}</div></div>${btn("policy")}</div>
+ <div class="cp-part-row"><div><div class="cp-part-label">ケアプラン目標</div><div class="cp-part-val">${val(r.care_plan_goal)}</div>${consent}</div>${btn("goal")}</div>
+ <div class="cp-part-row${(r.sensor_alert && !/^(なし|無し|特になし)$/.test(String(r.sensor_alert).trim())) ? " cp-part-row-alert" : ""}"><div><div class="cp-part-label">見守りの注意（離床センサーなど）</div><div class="cp-part-val">${val(r.sensor_alert)}</div></div>${btn("sensor")}</div>
+ <div class="cp-part-row"><div><div class="cp-part-label">バイタルの注意の目安</div><div class="cp-part-val">${vitalLines.map(escapeHtml).join("<br>")}</div></div>${btn("vital")}</div>
+ </div>
+ </details>`;
+}
+
+function openCarePlanModal(resId, part = 'all') {
  const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
  const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
- if (!r) {
- console.warn("[openCarePlanModal] Resident not found:", resId, gState.selectedResidentId);
- return;
+ if (!r) return;
+ if (part === 'sensor_focus') part = 'sensor';
+ const parts = (part === 'all' ? Object.keys(CP_CAREPLAN_PARTS) : [part]).filter(p => CP_CAREPLAN_PARTS[p] && CP_CAREPLAN_PARTS[p].can());
+ if (!parts.length) {
+  alert(`${CP_CAREPLAN_PARTS[part] ? CP_CAREPLAN_PARTS[part].label + "を変えられるのは" + CP_CAREPLAN_PARTS[part].who + "です。" : "変えられる項目がありません。"}`);
+  return;
  }
-
  const titleEl = document.getElementById("carePlanModalTitle");
- if (titleEl) titleEl.textContent = ` 基本方針 ＆ ケアプラン目標の変更 (${r.name} 様)`;
- const idEl = document.getElementById("carePlanResidentId");
- if (idEl) idEl.value = r.id;
- const goalEl = document.getElementById("quickCarePlanGoal");
- if (goalEl) goalEl.value = r.care_plan_goal || "";
- const sensorEl = document.getElementById("quickSensorAlert");
- if (sensorEl) sensorEl.value = r.sensor_alert || "";
- const bphMaxEl = document.getElementById("quickBpHMax");
- if (bphMaxEl) bphMaxEl.value = r.bp_high_max || "";
- const bphMinEl = document.getElementById("quickBpHMin");
- if (bphMinEl) bphMinEl.value = r.bp_high_min || "";
- const tempEl = document.getElementById("quickTempMax");
- if (tempEl) tempEl.value = r.temp_max || "";
- const spo2El = document.getElementById("quickSpo2Min");
- if (spo2El) spo2El.value = r.spo2_min || "";
-
+ if (titleEl) titleEl.textContent = `${parts.length === 1 ? CP_CAREPLAN_PARTS[parts[0]].label : "基本方針・ケアプラン目標・見守り注意"}の変更（${r.name} 様）`;
+ document.getElementById("carePlanResidentId").value = r.id;
+ document.getElementById("carePlanParts").value = parts.join(",");
+ Object.keys(CP_CAREPLAN_PARTS).forEach(p => {
+  const box = document.getElementById("cpmPart_" + p);
+  if (box) box.style.display = parts.includes(p) ? "" : "none";
+ });
+ const note = document.getElementById("cpmNotAllowed");
+ if (note) {
+  const hidden = part === 'all' ? Object.keys(CP_CAREPLAN_PARTS).filter(p => !parts.includes(p)) : [];
+  note.textContent = hidden.length ? hidden.map(p => `${CP_CAREPLAN_PARTS[p].label}は${CP_CAREPLAN_PARTS[p].who}が変えます。`).join("") : "";
+  note.style.display = hidden.length ? "" : "none";
+ }
+ const set = (id, v) => { const el = document.getElementById(id); if (el) el.value = (v === null || v === undefined) ? "" : v; };
+ set("quickPolicyStamp", r.policy_stamp || "");
+ set("quickCarePlanGoal", r.care_plan_goal || "");
+ set("quickCarePlanConsentDate", "");
+ const lastConsent = document.getElementById("quickCarePlanConsentLast");
+ if (lastConsent) lastConsent.textContent = r.care_plan_consent_date ? `前回の説明と同意: ${r.care_plan_consent_date}` : "";
+ set("quickSensorAlert", r.sensor_alert || "");
+ set("quickBpHMax", r.bp_high_max); set("quickBpHMin", r.bp_high_min);
+ set("quickTempMax", r.temp_max); set("quickSpo2Min", r.spo2_min);
+ set("quickPulseMax", r.pulse_max); set("quickPulseMin", r.pulse_min);
  const modal = document.getElementById("carePlanModal");
- if (modal) {
- modal.style.display = "flex";
- modal.style.zIndex = "2500";
- }
-
+ if (modal) { modal.style.display = "flex"; modal.style.zIndex = "2500"; }
  setTimeout(() => {
- if (focusField === 'sensor' && sensorEl) {
- sensorEl.focus();
- sensorEl.select?.();
- } else if (goalEl) {
- goalEl.focus();
- }
+  const first = { policy: "quickPolicyStamp", goal: "quickCarePlanGoal", sensor: "quickSensorAlert", vital: "quickBpHMax" }[parts[0]];
+  const el = document.getElementById(first); if (el) el.focus();
  }, 100);
 }
 
 function submitCarePlanModal() {
- const idEl = document.getElementById("carePlanResidentId");
- if (!idEl) return;
- const id = parseInt(idEl.value, 10);
+ const id = parseInt(document.getElementById("carePlanResidentId").value, 10);
  const r = gState.residents ? gState.residents.find(x => Number(x.id) === id) : null;
  if (!r) return;
-
- const cpOld = Object.assign({}, r); // [Claude修正] 変更前の内容を利用者の変更履歴に残す
- r.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
- r.sensor_alert = document.getElementById("quickSensorAlert").value.trim();
- r.bp_high_max = document.getElementById("quickBpHMax").value ? parseInt(document.getElementById("quickBpHMax").value, 10) : null;
- r.bp_high_min = document.getElementById("quickBpHMin").value ? parseInt(document.getElementById("quickBpHMin").value, 10) : null;
- r.temp_max = document.getElementById("quickTempMax").value ? parseFloat(document.getElementById("quickTempMax").value) : null;
- r.spo2_min = document.getElementById("quickSpo2Min").value ? parseInt(document.getElementById("quickSpo2Min").value, 10) : null;
-
- cpAppendEditHistory(r, cpOld, ["name", "room_no", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
+ const parts = (document.getElementById("carePlanParts").value || "").split(",").filter(p => CP_CAREPLAN_PARTS[p]);
+ // 開いたあとで変える権限がなくなった項目は保存しない
+ for (const p of parts) {
+  if (!CP_CAREPLAN_PARTS[p].can()) { alert(`${CP_CAREPLAN_PARTS[p].label}を変えられるのは${CP_CAREPLAN_PARTS[p].who}です。`); return; }
+ }
+ const num = (elId, isFloat) => { const v = document.getElementById(elId).value.trim(); if (v === "") return null; const n = isFloat ? parseFloat(v) : parseInt(v, 10); return isNaN(n) ? NaN : n; };
+ const next = {};
+ if (parts.includes("policy")) {
+  if (!cpRequireSelect("quickPolicyStamp", "基本方針")) return;
+  next.policy_stamp = document.getElementById("quickPolicyStamp").value;
+ }
+ if (parts.includes("goal")) {
+  next.care_plan_goal = document.getElementById("quickCarePlanGoal").value.trim();
+  if (next.care_plan_goal !== (r.care_plan_goal || "")) {
+   const cd = document.getElementById("quickCarePlanConsentDate").value;
+   if (!cd) { alert("ケアプラン目標を変えるときは、本人・家族に説明して同意をもらった日を入れてください。"); document.getElementById("quickCarePlanConsentDate").focus(); return; }
+   if (cd > toLocalDateStr(new Date())) { alert("説明と同意の日に、先の日付は入れられません。"); return; }
+   next.care_plan_consent_date = cd;
+  }
+ }
+ if (parts.includes("sensor")) next.sensor_alert = document.getElementById("quickSensorAlert").value.trim();
+ if (parts.includes("vital")) {
+  next.bp_high_max = num("quickBpHMax"); next.bp_high_min = num("quickBpHMin");
+  next.temp_max = num("quickTempMax", true); next.spo2_min = num("quickSpo2Min");
+  next.pulse_max = num("quickPulseMax"); next.pulse_min = num("quickPulseMin");
+  if (["bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"].some(k => Number.isNaN(next[k]))) { alert("バイタルの注意の目安には数字を入れてください。"); return; }
+  if (next.bp_high_max !== null && next.bp_high_min !== null && next.bp_high_min >= next.bp_high_max) { alert("最高血圧の下限は、上限より小さい数字にしてください。"); return; }
+  if (next.pulse_max !== null && next.pulse_min !== null && next.pulse_min >= next.pulse_max) { alert("脈拍の下限は、上限より小さい数字にしてください。"); return; }
+ }
+ const norm = v => (v === undefined || v === "" ? null : v);
+ const changedKeys = Object.keys(next).filter(k => norm(r[k]) !== norm(next[k]));
+ if (!changedKeys.length) { closeModal("carePlanModal"); alert("変わったところはありません。"); return; }
+ const cpOld = Object.assign({}, r);
+ changedKeys.forEach(k => { r[k] = next[k]; });
+ cpAppendEditHistory(r, cpOld, ["policy_stamp", "care_plan_goal", "care_plan_consent_date", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
  db.save();
  closeModal("carePlanModal");
  renderResidentDetail();
- alert(`${r.name} 様の基本方針・ケアプラン目標・バイタル基準値を更新しました！`);
+ const labels = [...new Set(changedKeys.map(k => k === "policy_stamp" ? "基本方針" : (k === "care_plan_goal" || k === "care_plan_consent_date") ? "ケアプラン目標" : k === "sensor_alert" ? "見守りの注意" : "バイタルの注意の目安"))];
+ alert(`${r.name} 様の${labels.join("・")}を保存しました。`);
 }
 
 // ==========================================
