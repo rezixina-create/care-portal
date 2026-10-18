@@ -1056,7 +1056,9 @@ namespace CarePortal
             public DateTime LastSeen;
         }
         private readonly Dictionary<string, SessionInfo> _sessions = new Dictionary<string, SessionInfo>();
-        private readonly Dictionary<string, int> _failCount = new Dictionary<string, int>();
+        // [Claude修正 2026-10-18] 失敗した時刻を覚え、10分以内の失敗だけを数える
+        private readonly Dictionary<string, List<DateTime>> _failTimes = new Dictionary<string, List<DateTime>>();
+        private const int FailWindowMinutes = 10;
         private readonly Dictionary<string, DateTime> _lockUntil = new Dictionary<string, DateTime>();
         private readonly object _authLock = new object();
         private static readonly TimeSpan SessionIdle = TimeSpan.FromMinutes(60);
@@ -1226,7 +1228,7 @@ namespace CarePortal
                     double s = (until - DateTime.Now).TotalSeconds;
                     if (s > 0) return (int)Math.Ceiling(s);
                     _lockUntil.Remove(key);
-                    _failCount.Remove(key);
+                    _failTimes.Remove(key);
                 }
                 return 0;
             }
@@ -1237,17 +1239,19 @@ namespace CarePortal
         {
             lock (_authLock)
             {
-                int n;
-                _failCount.TryGetValue(key, out n);
-                n++;
-                if (n >= MaxFails)
+                DateTime now = DateTime.Now;
+                List<DateTime> l;
+                if (!_failTimes.TryGetValue(key, out l)) { l = new List<DateTime>(); _failTimes[key] = l; }
+                l.RemoveAll(delegate(DateTime t) { return (now - t).TotalMinutes > FailWindowMinutes; });
+                l.Add(now);
+                if (l.Count >= MaxFails)
                 {
-                    _lockUntil[key] = DateTime.Now.AddMinutes(LockMinutes);
-                    _failCount[key] = 0;
+                    _lockUntil[key] = now.AddMinutes(LockMinutes);
+                    _failTimes.Remove(key);
+                    if (key.StartsWith("id:")) Console.WriteLine("[ログイン] 職員ID「" + key.Substring(3) + "」で10分以内に" + MaxFails + "回まちがえたため、" + LockMinutes + "分間止めました（" + now.ToString("HH:mm") + "）");
                     return 0;
                 }
-                _failCount[key] = n;
-                return MaxFails - n;
+                return MaxFails - l.Count;
             }
         }
 
@@ -1255,7 +1259,7 @@ namespace CarePortal
         {
             lock (_authLock)
             {
-                _failCount.Remove(key);
+                _failTimes.Remove(key);
                 _lockUntil.Remove(key);
             }
         }

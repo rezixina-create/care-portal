@@ -20664,7 +20664,7 @@ async function handleLoginSubmit() {
   let info = {};
   try { info = await res.json(); } catch (e) {}
   if (res.status === 423) {
-    alert(`ログインに続けて失敗したため、一時的にロックしています。\n約${Math.ceil((info.retry_after || 300) / 60)}分後にもう一度お試しください。`);
+    alert(`このIDは、10分のうちに5回まちがえたため、一時的に止めています。\n約${Math.ceil((info.retry_after || 300) / 60)}分後にもう一度お試しください。\n\n自分でまちがえた覚えがないときは、ほかの人が試した可能性があります。管理者に伝えてください。`);
     return;
   }
   // [Claude修正] 休止中 (ロック中) のアカウント
@@ -20673,7 +20673,7 @@ async function handleLoginSubmit() {
     return;
   }
   if (!res.ok || !info.token) {
-    const left = (typeof info.remaining === "number") ? `\n（あと${info.remaining}回失敗すると、5分間ログインできなくなります）` : "";
+    const left = (typeof info.remaining === "number") ? `\n（10分のうちにあと${info.remaining}回まちがえると、このIDは5分間ログインできなくなります）` : "";
     alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は、管理者か事務員に伝えてください。" + left);
     return;
   }
