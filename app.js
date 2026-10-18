@@ -3738,7 +3738,7 @@ function checkGlobalAlerts() {
         <div class="alert-banner alert-warning notice-card-warning" style="background:#fef2f2; border-left:5px solid #dc2626; color:#991b1b;">
           <div style="width:100%;">
             <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
-              <span><strong>【セキュリティ設定警告】</strong> 初期暗証番号(0000)のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
+              <span><strong>【セキュリティ設定警告】</strong> 初期の暗証番号のままの職員が<strong>${unconfigured.length}名</strong>います（対象: ${staffNames}）。安全管理のため、事務所ポータルの「暗証番号管理」より変更を行ってください。</span>
               <div style="display:flex; gap:6px; align-items:center;">
                 <button class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="switchPortal('office'); switchOfficeTab('staff_auth');">暗証番号管理を開く</button>
                 <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${pinWarnKey}')">閉じる</button>
@@ -19573,7 +19573,7 @@ function openStaffPinAuthModal(targetStaff) {
  const title = document.getElementById("staffPinAuthTitle");
  if (title) title.textContent = `職員認証: 【${targetStaff}】`;
  const desc = document.getElementById("staffPinAuthDesc");
- if (desc) desc.textContent = "暗証番号（数字4桁）を入力してください (初期値: 0000)";
+ if (desc) desc.textContent = "暗証番号（数字4桁）を入力してください";
  const err = document.getElementById("staffPinError");
  if (err) err.textContent = "";
 
@@ -19675,7 +19675,7 @@ async function verifyStaffPin() {
  gEnteredPin = "";
  } else {
  const err = document.getElementById("staffPinError");
- if (err) err.textContent = "暗証番号が一致しません (初期値: 0000)";
+ if (err) err.textContent = "暗証番号が一致しません";
  gEnteredPin = "";
  updatePinDots();
  renderRandomKeypad();
@@ -19976,7 +19976,7 @@ function renderOfficeStaffAuth() {
       : `<span class="badge" style="background:#dcfce7; color:#166534; border:1px solid #bbf7d0; padding:3px 8px; font-size:12px;">正常 (利用可能)</span>`;
 
     const pinBadge = isInit
-      ? `<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:3px 8px; font-size:12px;">初期値(0000)</span>`
+      ? `<span class="badge" style="background:#fef3c7; color:#92400e; border:1px solid #fde68a; padding:3px 8px; font-size:12px;">初期値のまま</span>`
       : `<span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:3px 8px; font-size:12px;">設定変更済み</span>`;
 
     const lockBtnLabel = isSuspended ? "ロック解除 (正常へ)" : "ロック (休止中へ)";
@@ -20079,7 +20079,7 @@ function submitTwoPersonReset() {
   // (端末で照合すると、暗証番号を変更済みの職員は一致せず、初期化もサーバーに反映されなかった)
   if (db && db.isServerMode) {
     if (currentStaff === app2Name) { alert("操作者と立ち会い承認者は別の2名にしてください。"); return; }
-    if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？`)) return;
+    if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を初期値に戻しますか？`)) return;
     cpPostJson('/api/pin-reset', { target: targetName, approver1: currentStaff, approver1_pin: app1Pin, approver2: app2Name, approver2_pin: app2Pin }).then(r => {
       if (r.status === 423) { alert("失敗が続いたため、5分間ロックしています。"); return; }
       if (r.info && r.info.error === "pin_mismatch_2") { alert("立ち会い承認者（承認者2）の暗証番号が正しくありません。"); return; }
@@ -20091,7 +20091,7 @@ function submitTwoPersonReset() {
       renderOfficeStaffAuth();
       if (typeof updateStaffRoleUI === "function") updateStaffRoleUI();
       if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
-      alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を「0000」に初期化しました。`);
+      alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を初期値に戻しました。`);
     });
     return;
   }
@@ -20110,7 +20110,7 @@ function submitTwoPersonReset() {
     return;
   }
 
-  if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を「0000」にリセットしますか？`)) {
+  if (!confirm(`【2名承認の確認】\n操作者: ${currentStaff}\n立ち会い承認者: ${app2Name}\n\n対象職員「${targetName}」の暗証番号を初期値に戻しますか？`)) {
     return;
   }
 
@@ -20127,7 +20127,7 @@ function submitTwoPersonReset() {
   if (typeof updateStaffRoleUI === "function") updateStaffRoleUI();
   if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
 
-  alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を「0000」に初期化しました。\n対象職員本人が次回ログイン時に新しい暗証番号を設定できるようになりました。`);
+  alert(`【2名承認リセット完了】\n【${targetName}】様の暗証番号を初期値に戻しました。\n対象職員本人が次回ログイン時に新しい暗証番号を設定できるようになりました。`);
 }
 
 
@@ -20593,7 +20593,7 @@ function onLoginStaffSelectChange(staffName) {
   if (idInput) idInput.value = "";
   if (pwInput) pwInput.value = "";
   if (acc && !acc.is_custom && idInput) {
-    idInput.placeholder = "初期ID: aaaa";
+    // [Claude修正 2026-10-18] 初期のIDは画面に出さない（取扱説明書に書く）
   }
 }
 
@@ -20673,11 +20673,11 @@ async function handleLoginSubmit() {
   const password = (document.getElementById("loginPasswordInput").value || "").trim();
   if (!staffName) { alert("職員名を選択してください。"); return; }
   if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
-    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。（初期IDは aaaa です）");
+    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。");
     return;
   }
   if (!password || !/^\d{4}$/.test(password)) {
-    alert("パスワードは半角数字4桁で入力してください。（初期パスワードは 0000 です）");
+    alert("パスワードは半角数字4桁で入力してください。");
     return;
   }
   let res;
@@ -20756,13 +20756,13 @@ function handleLoginSubmitLocal() {
 
   // ローマ字4文字以上チェック
   if (!staffId || !/^[a-zA-Z]{4,}$/.test(staffId)) {
-    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。（初期IDは aaaa です）");
+    alert("職員IDは半角英字（ローマ字）4文字以上で入力してください。");
     return;
   }
 
   // 数字4文字チェック
   if (!password || !/^\d{4}$/.test(password)) {
-    alert("パスワードは半角数字4桁で入力してください。（初期パスワードは 0000 です）");
+    alert("パスワードは半角数字4桁で入力してください。");
     return;
   }
 
@@ -21217,7 +21217,7 @@ function executeAccountReset() {
     return;
   }
 
-  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後: ID「aaaa」/ パスワード「0000」\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後は、初期のID・パスワードに戻ります（取扱説明書を参照）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
   if (!confirm(confirmMsg)) return;
 
   initStaffAccounts();
@@ -21239,12 +21239,12 @@ function executeAccountReset() {
 
   db.save();
   closeModal("accountResetModal");
-  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期ID「aaaa」/ 初期パスワード「0000」でログイン後、再設定を行ってください。`);
+  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期のID・パスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
   renderLoginStaffSelect();
 }
 
 async function executeAccountResetOnServer(targetStaff, adminStaff, adminPin, officeStaff, officePin) {
-  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後: ID「aaaa」/ パスワード「0000」\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
+  const confirmMsg = `【重大確認】\n対象職員「${targetStaff}」様のIDおよびパスワードを初期化します。\n初期化後は、初期のID・パスワードに戻ります（取扱説明書を参照）。\n\n承認者1: ${adminStaff}\n承認者2: ${officeStaff}\n\n実行してよろしいですか？`;
   if (!confirm(confirmMsg)) return;
   let res;
   try {
@@ -21266,7 +21266,7 @@ async function executeAccountResetOnServer(targetStaff, adminStaff, adminPin, of
     return;
   }
   closeModal("accountResetModal");
-  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期ID「aaaa」/ 初期パスワード「0000」でログイン後、再設定を行ってください。`);
+  alert(`「${targetStaff}」様のIDおよびパスワードを初期化しました。\n初期のID・パスワード（取扱説明書を参照）でログインしたあと、新しく設定してもらってください。`);
   renderLoginStaffSelect();
 }
 

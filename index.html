@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_a5">
+ <link rel="stylesheet" href="style.css?v=20261018_a6">
 </head>
 <body>
 
@@ -60,7 +60,7 @@
 
       <div class="login-note">
         <div><strong>はじめてログインするとき</strong></div>
-        <div>職員ID <code>aaaa</code>、パスワード <code>0000</code> で入れます。ログイン後、画面上の「ID・PW設定」から自分のIDとパスワードに変えてください。</div>
+        <div>初めて使うときのIDとパスワードは、取扱説明書をご覧ください。ログイン後、画面上の「ID・PW設定」から自分のIDとパスワードに変えてください。</div>
       </div>
 
       <div class="login-reset">
@@ -82,7 +82,7 @@
   <div class="header-controls">
    <button type="button" class="hdr-btn" onclick="goToHome()">ホーム</button>
    <span id="headerStaffName" class="hdr-staff">担当者</span>
-   <button type="button" class="hdr-btn hdr-btn-attn" id="btnHeaderAccountSettings" style="display:none;" onclick="openAccountSettingsModal()" title="初期アカウント(aaaa/0000)を変更">ID・PW設定</button>
+   <button type="button" class="hdr-btn hdr-btn-attn" id="btnHeaderAccountSettings" style="display:none;" onclick="openAccountSettingsModal()" title="初期のIDとパスワードを自分のものに変える">ID・PW設定</button>
    <button type="button" class="hdr-btn" id="btnHeaderStaffManage" style="display:none;" onclick="openStaffModal()">職員の登録</button>
    <button type="button" class="hdr-btn hdr-btn-quiet" onclick="handleLogout()">ログアウト</button>
    <!-- 内部互換用 (hidden) -->
@@ -1391,7 +1391,7 @@
  <span> 職員アカウント・暗証番号管理（管理者・事務専用）</span>
  </div>
  <p style="font-size:13px; color:#4a5852; margin:8px 0 14px 0;">
- 職員が暗証番号を忘れた場合、不正や誤操作を防ぐため<strong>2名（管理者・事務員）の承認</strong>を経て初期値(0000)へリセットします。<br>
+ 職員が暗証番号を忘れた場合、不正や誤操作を防ぐため<strong>2名（管理者・事務員）の承認</strong>を経て初期値へ戻します。<br>
  リセット後は、対象職員本人が新しい暗証番号を設定します。
  </p>
 
@@ -1446,7 +1446,7 @@
  <div class="modal-overlay" id="resetStaffPinModal" style="display:none;">
   <div class="modal-card" style="max-width:540px;">
    <div class="modal-header" style="background:#fee2e2; border-bottom:1px solid #fca5a5;">
-    <h3 style="margin:0; font-size:15px; color:#991b1b;">【2名承認制】暗証番号の初期化 (0000リセット)</h3>
+    <h3 style="margin:0; font-size:15px; color:#991b1b;">【2名承認制】暗証番号の初期化</h3>
     <button type="button" class="close-btn" onclick="closeModal('resetStaffPinModal')">×</button>
    </div>
    <div class="modal-body" style="padding:16px;">
@@ -1488,7 +1488,7 @@
    </div>
    <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end; gap:8px;">
     <button type="button" class="btn btn-secondary" onclick="closeModal('resetStaffPinModal')">キャンセル</button>
-    <button type="button" class="btn btn-danger" style="background:#dc2626; border-color:#b91c1c;" onclick="submitTwoPersonReset()">2名承認で「0000」にリセット実行</button>
+    <button type="button" class="btn btn-danger" style="background:#dc2626; border-color:#b91c1c;" onclick="submitTwoPersonReset()">2名承認で初期値に戻す</button>
    </div>
   </div>
  </div>
@@ -2995,7 +2995,7 @@
  <div class="modal-overlay" id="staffPinAuthModal" style="display:none; z-index:99999;">
  <div class="modal-card" style="max-width:380px; text-align:center; padding:24px 20px;">
  <div style="font-size:16px; font-weight:bold; color:#173f33; margin-bottom:4px;" id="staffPinAuthTitle">職員切り替え認証</div>
- <div style="font-size:13px; color:#5f6d66; margin-bottom:14px;" id="staffPinAuthDesc">暗証番号（数字4桁）を入力してください (初期値: 0000)</div>
+ <div style="font-size:13px; color:#5f6d66; margin-bottom:14px;" id="staffPinAuthDesc">暗証番号（数字4桁）を入力してください</div>
 
  <!-- PIN Mask Dots -->
  <div id="staffPinDisplay" style="display:flex; justify-content:center; gap:12px; margin-bottom:14px;">
@@ -3029,7 +3029,7 @@
  <div style="padding:14px 0;">
  <p style="font-size:13px; color:#4a5852; margin-bottom:14px; line-height:1.5;">
  現在選択中の職員の暗証番号を設定・変更します。<br>
- 初期値(0000)の場合は、本人のみで新しい4桁暗証番号を登録できます。
+ 初期値のままの場合は、本人のみで新しい4桁暗証番号を登録できます。
  </p>
  <div style="display:flex; flex-direction:column; gap:12px;">
  <div>
@@ -3037,7 +3037,7 @@
  <input type="text" id="initialPinStaffName" class="form-control" style="width:100%; font-size:13px; background:#f6f8f6;" readonly>
  </div>
  <div>
- <label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:4px;">現在の暗証番号 (初期値: 0000):</label>
+ <label style="font-size:13px; font-weight:bold; color:#36443e; display:block; margin-bottom:4px;">現在の暗証番号:</label>
  <input type="password" id="initialPinCurrent" class="form-control" style="width:140px; font-size:14px; letter-spacing:3px;" maxlength="4" placeholder="••••">
  </div>
  <div style="display:flex; gap:10px; flex-wrap:wrap;">
@@ -3708,7 +3708,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_a5"></script>
+ <script src="app.js?v=20261018_a6"></script>
   
 
   <!-- ============================================================ -->
@@ -3817,7 +3817,7 @@
       </div>
       <div style="padding:10px 0;">
         <p style="font-size:13px; color:#4a5852; margin:0 0 12px 0;">
-          初期化を行うと、対象職員のIDが <code>aaaa</code>、パスワードが <code>0000</code> にリセットされます。管理者と事務員の2名による承認が必要です。
+          初期化を行うと、対象職員のIDとパスワードが初期値に戻ります（初期値は取扱説明書）。管理者と事務員の2名による承認が必要です。
         </p>
         <div class="form-group" style="margin-bottom:14px;">
           <label style="font-size:13px; font-weight:bold; color:#36443e;">初期化する対象職員 <span style="color:#dc2626;">*</span>:</label>
