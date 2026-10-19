@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261019_c1">
+ <link rel="stylesheet" href="style.css?v=20261019_a2">
 </head>
 <body>
 
@@ -1615,6 +1615,51 @@
    </div>
   </div>
 
+  <!-- [Antigravity実装 2026-10-19] 入院の登録・変更モーダル ＆ 退院の手続きモーダル -->
+  <div class="modal-overlay" id="hospitalModal" style="display:none;">
+   <div class="modal-card" style="max-width:540px;">
+    <div class="modal-header">
+     <h3 id="hospitalModalTitle" style="margin:0; font-size:16px;">入院の登録</h3>
+     <button type="button" class="modal-close-btn" onclick="closeModal('hospitalModal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:12px 4px;">
+     <input type="hidden" id="hospResidentId" value="">
+     <input type="hidden" id="hospRecordId" value="">
+     <div class="form-group"><label>入院日 <span style="color:var(--alert);">*</span></label><input type="date" id="hospAdmissionDate" class="form-control"></div>
+     <div class="form-group" id="hospDischargeDateWrap"><label>退院日（現在も入院中のときは空欄。過去の入院を登録・訂正するときは入力）</label><input type="date" id="hospDischargeDate" class="form-control"></div>
+     <div class="form-group"><label>入院先（病院名） <span style="color:var(--alert);">*</span></label><input type="text" id="hospName" class="form-control" maxlength="100"></div>
+     <div class="form-group"><label>入院の理由・病状 <span style="color:var(--alert);">*</span></label><input type="text" id="hospReason" class="form-control" maxlength="160"></div>
+     <div class="form-group" id="hospEditReasonWrap" style="display:none;"><label>変更・訂正の理由 <span style="color:var(--alert);">*</span></label><input type="text" id="hospEditReason" class="form-control" maxlength="120"></div>
+     <p class="panel-note">入院の記録は利用者ごとの一覧に残ります。退院のときは消さずに退院日を入れて閉じます。過去の入院期間も日付ごとの表で「入院中」として表示されます。</p>
+     <div class="rx-form-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('hospitalModal')">やめる</button>
+      <button type="button" class="btn btn-primary" onclick="submitHospitalModal()">保存する</button>
+     </div>
+    </div>
+   </div>
+  </div>
+
+  <div class="modal-overlay" id="hospitalDischargeModal" style="display:none;">
+   <div class="modal-card" style="max-width:520px;">
+    <div class="modal-header">
+     <h3 id="hospitalDischargeTitle" style="margin:0; font-size:16px;">退院の手続き（退院日の入力）</h3>
+     <button type="button" class="modal-close-btn" onclick="closeModal('hospitalDischargeModal')">&times;</button>
+    </div>
+    <div class="modal-body" style="padding:12px 4px;">
+     <input type="hidden" id="hospDisResidentId" value="">
+     <input type="hidden" id="hospDisRecordId" value="">
+     <div id="hospDischargeCurrentInfo" class="panel-note" style="margin-bottom:10px;"></div>
+     <div class="form-group"><label>退院日 <span style="color:var(--alert);">*</span></label><input type="date" id="hospDischargeInputDate" class="form-control"></div>
+     <div class="form-group"><label>退院時の申し送り・備考（任意）</label><input type="text" id="hospDischargeNote" class="form-control" maxlength="160"></div>
+     <p class="panel-note">退院日を入れて入院の期間を閉じ、在所に戻します。入院していた期間の記録は消えずにカルテの「入院の歴」に残り、入院日〜退院日の日付の表では「入院中」と表示されます。</p>
+     <div class="rx-form-actions">
+      <button type="button" class="btn btn-secondary" onclick="closeModal('hospitalDischargeModal')">やめる</button>
+      <button type="button" class="btn btn-primary" onclick="submitHospitalDischarge()">退院を保存する</button>
+     </div>
+    </div>
+   </div>
+  </div>
+
  <div class="modal-overlay" id="residentModal" style="display:none;">
  <div class="modal-card" style="max-width:680px; max-height:90vh; overflow-y:auto;">
  <div class="modal-header">
@@ -1653,7 +1698,7 @@
  <label>在所状況:</label>
  <select id="resStatus" class="form-control">
  <option value="在所" selected>在所</option>
- <option value="入院中">入院中</option>
+ <option value="入院中">入院中（カルテの「入院の歴」から）</option>
  <option value="外泊中">外泊中</option>
  <option value="ショート利用">ショート利用</option>
  <option value="退所" disabled>退所（カルテの「退所の手続き」から）</option>
@@ -3489,51 +3534,59 @@
  </div>
  </div>
 
- <!-- 点眼指示の登録・変更モーダル -->
+ <!-- 点眼指示の登録・変更モーダル [Antigravity実装 2026-10-19] 1人に複数の点眼指示を持てるように対応 -->
  <div class="modal-overlay" id="eyedropOrderModal" style="display:none; z-index:9999;">
- <div class="modal-card" style="max-width:620px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
- <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #dfe5e1; padding-bottom:10px; margin-bottom:16px;">
- <h3 id="eyedropOrderModalTitle" style="margin:0; font-size:17px; font-weight:bold; color:#22302b;">点眼指示の登録 ＆ 処方変更</h3>
+ <div class="modal-card" style="max-width:660px; width:92%; max-height:92vh; overflow-y:auto; padding:22px;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid var(--line); padding-bottom:10px; margin-bottom:16px;">
+ <h3 id="eyedropOrderModalTitle" style="margin:0; font-size:17px; font-weight:bold; color:var(--ink);">点眼指示の登録・変更・終了</h3>
  <button class="modal-close-btn" onclick="closeModal('eyedropOrderModal')">&times;</button>
  </div>
 
  <div style="margin-bottom:14px;">
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">対象利用者</label>
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">対象利用者</label>
  <select id="eoResidentSelect" class="form-control" style="width:100%; font-size:13px; font-weight:bold;" onchange="onEyedropResidentChange()">
  </select>
  </div>
 
+ <!-- 登録済みの点眼指示一覧（指示ごとに変更・終了） -->
+ <div id="eoOrdersListArea" style="margin-bottom:14px;"></div>
+
+ <div id="eoRoleLockedNotice" class="rx-locked" style="display:none; margin-bottom:12px;">点眼指示の追加・変更・終了は看護師・管理者だけができます。追加・変更したいときは看護師に依頼してください。</div>
+
+ <div id="eoFormBox" style="border:1px solid var(--line); border-radius:8px; padding:14px; background:var(--surface);">
+ <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:6px;">
+  <h4 id="eoFormTitle" style="margin:0; font-size:15px; color:var(--pine-dark);">新しい点眼指示を追加する</h4>
+  <button type="button" id="btnEoCancelEdit" class="btn btn-secondary" style="font-size:13px; padding:3px 10px; display:none;" onclick="startNewEyedropOrderForm()">変更をやめて新規追加に戻す</button>
+ </div>
+ <input type="hidden" id="eoOrderId" value="">
+
  <!-- 眼の指定 (右のみ / 左のみ / 両眼) -->
- <div style="background:#eef2ef; border:1px solid #cdd6d0; border-radius:6px; padding:12px; margin-bottom:14px;">
- <label style="font-weight:bold; font-size:13px; color:#1c2622; display:block; margin-bottom:6px;">
- 点眼する眼の指定 (高コントラスト明示・誤認防止)
+ <div style="background:var(--ground); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:6px;">
+ 点眼する眼の指定 <span style="color:var(--alert);">*</span>（選んでください）
  </label>
  <div style="display:flex; gap:16px; flex-wrap:wrap; font-size:13px;">
  <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
- <input type="radio" name="eoEyeSide" id="eoEyeRight" value="右のみ" checked>
- <span class="badge" style="background:#173f33; color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[右のみ]</span>
+ <input type="radio" name="eoEyeSide" id="eoEyeRight" value="右のみ">
+ <span class="badge" style="background:var(--pine-dark); color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[右のみ]</span>
  </label>
  <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
  <input type="radio" name="eoEyeSide" id="eoEyeLeft" value="左のみ">
- <span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[左のみ]</span>
+ <span class="badge" style="background:var(--pine); color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[左のみ]</span>
  </label>
  <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
  <input type="radio" name="eoEyeSide" id="eoEyeBoth" value="両眼">
- <span class="badge" style="background:#36443e; color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[両眼]</span>
- </label>
- <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
- <input type="radio" name="eoEyeSide" id="eoEyeNone" value="指示なし">
- <span style="color:#5f6d66; font-size:13px;">指示なし (点眼不要/休薬)</span>
+ <span class="badge" style="background:var(--ink-2); color:#ffffff; font-weight:bold; font-size:13px; padding:3px 8px;">[両眼]</span>
  </label>
  </div>
  </div>
 
  <!-- 点眼薬名 -->
  <div style="margin-bottom:14px;">
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">点眼薬の薬品名・規格</label>
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">点眼薬の薬品名・規格 <span style="color:var(--alert);">*</span></label>
  <input type="text" id="eoMedicineName" class="form-control" style="width:100%; font-size:13px; margin-bottom:6px;">
  <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
- <span style="font-size:13px; color:#5f6d66;">よく使う点眼薬:</span>
+ <span style="font-size:13px; color:var(--ink-3);">よく使う点眼薬:</span>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="quickFillEyedropMed('キサラタン点眼液 0.005%')">キサラタン (緑内障)</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="quickFillEyedropMed('ヒアレイン点眼液 0.1%')">ヒアレイン (角膜保護)</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="quickFillEyedropMed('サンコバ点眼液 0.02%')">サンコバ (眼精疲労)</button>
@@ -3544,9 +3597,9 @@
  </div>
 
  <!-- 投与時間帯 (朝 / 昼 / 夕 / 眠前) -->
- <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:12px; margin-bottom:14px;">
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:6px;">
- 投与タイミング・時間帯 (複数選択可)
+ <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:6px;">
+ 投与タイミング・時間帯 <span style="color:var(--alert);">*</span> (複数選択可)
  </label>
  <div style="display:flex; gap:18px; flex-wrap:wrap; font-size:13px;">
  <label style="display:inline-flex; align-items:center; gap:6px; cursor:pointer;">
@@ -3568,36 +3621,41 @@
  </div>
  </div>
 
- <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
+ <div class="cp-eo-grid" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:14px;">
  <div>
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">1回用量・滴数</label>
- <input type="text" id="eoDosage" class="form-control" value="1回1滴" style="width:100%; font-size:13px;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">1回用量・滴数 <span style="color:var(--alert);">*</span></label>
+ <input type="text" id="eoDosage" class="form-control" value="" style="width:100%; font-size:13px;">
  </div>
  <div>
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">処方医療機関・医師</label>
- <input type="text" id="eoDoctor" class="form-control" style="width:100%; font-size:13px;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">処方医療機関・医師</label>
+ <input type="text" id="eoDoctor" class="form-control" value="" style="width:100%; font-size:13px;">
  </div>
  </div>
 
  <div style="margin-bottom:14px;">
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">注意事項・点眼方法</label>
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">注意事項・点眼方法</label>
  <textarea id="eoNotes" class="form-control" rows="2" style="width:100%; font-size:13px;"></textarea>
  </div>
 
- <div style="margin-bottom:16px;">
- <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">処方ステータス</label>
+ <div id="eoStatusWrap" style="margin-bottom:14px; display:none;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">処方ステータス</label>
  <select id="eoStatus" class="form-control" style="font-size:13px;">
  <option value="継続中">継続中 (定期実施)</option>
  <option value="休薬中">休薬中 (一時中止)</option>
- <option value="終了">処方終了</option>
  </select>
  </div>
 
- <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #dfe5e1; padding-top:12px;">
- <button type="button" id="btnDeleteEyedropOrder" class="btn btn-secondary" style="color:#dc2626; border-color:#fca5a5; font-size:13px;" onclick="deleteEyedropOrder()">点眼指示を解除 (指示なしにする)</button>
- <div style="display:flex; gap:8px;">
- <button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeModal('eyedropOrderModal')">キャンセル</button>
- <button type="button" id="btnSubmitEyedropOrder" class="btn btn-primary" style="font-size:13px;" onclick="submitEyedropOrder()">点眼指示を保存</button>
+ <div id="eoEditReasonWrap" style="margin-bottom:14px; display:none;">
+ <label style="font-weight:bold; font-size:13px; color:var(--ink-2); display:block; margin-bottom:4px;">変更の理由 <span style="color:var(--alert);">*</span></label>
+ <input type="text" id="eoEditReason" class="form-control" style="width:100%; font-size:13px;" maxlength="120">
+ </div>
+
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px solid var(--line); padding-top:12px;">
+ <button type="button" id="btnDeleteEyedropOrder" class="btn btn-secondary" style="color:var(--alert); border-color:var(--alert); font-size:13px; display:none;" onclick="deleteEyedropOrder()">この指示を終了する</button>
+ <div style="display:flex; gap:8px; margin-left:auto;">
+ <button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeModal('eyedropOrderModal')">閉じる</button>
+ <button type="button" id="btnSubmitEyedropOrder" class="btn btn-primary" style="font-size:13px;" onclick="submitEyedropOrder()">点眼指示を追加</button>
+ </div>
  </div>
  </div>
  </div>
@@ -3700,7 +3758,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261019_c1"></script>
+ <script src="app.js?v=20261019_a2"></script>
   
 
   <!-- ============================================================ -->

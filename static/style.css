@@ -2557,3 +2557,89 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
   }
 }
 
+/* [Antigravity実装 2026-10-19] 毎日ではない薬・複数の点眼指示・入院の歴 */
+.rx-freq-box {
+  background: var(--pine-tint-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px 12px;
+  margin-bottom: 10px;
+}
+.rx-freq-sub {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+  margin-top: 8px;
+}
+.rx-freq-badge {
+  display: inline-block;
+  font-size: 13px;
+  font-weight: bold;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--pine-tint);
+  color: var(--pine-dark);
+  border: 1px solid var(--pine-light);
+  margin-right: 6px;
+}
+.rx-freq-badge.is-nondaily {
+  background: var(--caution-tint);
+  color: var(--caution);
+  border-color: var(--sun);
+}
+.med-bag-sched {
+  font-size: 13px;
+  color: var(--caution);
+  background: var(--caution-tint);
+  border: 1px solid var(--sun);
+  border-radius: 4px;
+  padding: 1px 6px;
+  margin-left: 6px;
+  display: inline-block;
+}
+.cp-eo-check-row {
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--surface);
+  margin-bottom: 6px;
+}
+.cp-eo-check-row:last-child {
+  margin-bottom: 0;
+}
+.cp-eo-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ground);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.cp-eo-card.is-editing {
+  border: 2px solid var(--pine);
+  background: var(--pine-tint-2);
+}
+.cp-eo-card.is-ended {
+  background: var(--surface);
+  color: var(--ink-3);
+}
+.cp-hosp-item {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--ground);
+  margin-bottom: 8px;
+  font-size: 13px;
+}
+.cp-hosp-item.is-active {
+  background: var(--caution-tint);
+  border: 2px solid var(--sun);
+}
+@media (max-width: 600px) {
+  .cp-eo-grid,
+  .rx-freq-sub {
+    grid-template-columns: 1fr !important;
+  }
+}
+
+

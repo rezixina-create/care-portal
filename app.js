@@ -909,6 +909,26 @@ class LocalDB {
  // [Claude修正] 空のときに見本データ（架空の記録・指示）を本番のデータへ書き込んでいたのをやめる
  if (!Array.isArray(d.eyedrop_orders)) d.eyedrop_orders = [];
 
+ // [Antigravity実装 2026-10-19] 入院の期間リスト (r.hospitalizations) の互換読み込み（今の r.hospital_date 等を1件目として扱う）
+ if (Array.isArray(d.residents)) {
+ d.residents.forEach(r => {
+ if (!r || typeof r !== "object") return;
+ if (!Array.isArray(r.hospitalizations)) r.hospitalizations = [];
+ if (r.hospital_date && r.hospitalizations.length === 0) {
+ r.hospitalizations.push({
+ id: Number(r.id) * 10000 + 1,
+ resident_id: r.id,
+ admission_date: r.hospital_date,
+ discharge_date: "",
+ hospital_name: r.hospital_name || "",
+ reason: r.hospital_reason || "",
+ created_by: r.updated_by || "",
+ created_at: r.hospital_date
+ });
+ }
+ });
+ }
+
  return d;
  }
 
@@ -4519,6 +4539,9 @@ function renderResidentDetail() {
  <!-- 1. 基本方針・ケアプラン目標・見守り注意・バイタルの注意の目安 (アコーディオン) -->
  ${cpCarePlanSectionHtml(r)}
 
+ <!-- [Antigravity実装 2026-10-19] 入院の歴（期間の一覧） -->
+ ${cpHospitalHistorySectionHtml(r)}
+
  <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
  <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
@@ -4558,7 +4581,7 @@ function renderResidentDetail() {
  <strong>点眼処方指示:</strong> ${eyedropSummaryHtml}
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f6f3; color:#1e5b47; border-color:#a9cfbf; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
- 点眼指示を変更
+ 点眼指示を管理（追加・変更・終了）
  </button>
  </div>
  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cdd6d0; padding-top:8px;">
@@ -5847,7 +5870,7 @@ const CP_AUDIT_SOURCES = [
  { key: "care_records", label: "介護記録", summary: r => `[${r.category || ""}] ${r.recorded_at || ""} ${r.content || ""}` },
  { key: "meds", label: "服薬・点眼", summary: r => `${r.date || ""} ${r.timing_key || r.slot || ""} ${r.status || ""}${r.given_time ? ` 飲んだ${r.given_time}` : ""}${r.recorded_at ? ` 記録${r.recorded_at}` : ""}` },
  { key: "prescriptions", label: "処方箋の画像", summary: r => `${r.issued_date || ""} の処方箋 (登録 ${r.uploaded_by || ""})` },
- { key: "resident_medications", label: "処方薬の一覧", summary: r => `${r.name || ""} ${(r.timings || []).map(t => t.key + t.count).join("・")}${r.status === "中止" ? " 中止" : ""}` },
+ { key: "resident_medications", label: "処方薬の一覧", summary: r => `${r.name || ""} ${(typeof cpRxScheduleText === "function" ? cpRxScheduleText(r) + " " : "")}${(r.timings || []).map(t => t.key + t.count).join("・")}${r.status === "中止" ? " 中止" : ""}` }, // [Antigravity実装 2026-10-19]
  { key: "vitals", label: "バイタル", summary: r => `${r.date || ""} 体温${r.temperature ?? "-"} 血圧${r.bp_high ?? "-"}/${r.bp_low ?? "-"} 脈${r.pulse ?? "-"} SpO2 ${r.spo2 ?? "-"}` },
  { key: "weight_records", label: "体重", summary: r => `${r.date || r.month || ""} ${r.weight ?? "-"}kg` },
  { key: "topical_records", label: "塗布薬・湿布", summary: r => `${r.date || ""} ${r.timing || ""} ${r.item_name || ""} (${r.site_name || ""})` },
@@ -5909,7 +5932,15 @@ function cpCollectAuditEntries() {
  (rec.confirm_log || []).forEach(h => {
  out.push(Object.assign({}, base, { at: h.at, type: h.action === "確認" ? "確認" : "確認を取消", by: h.staff, detail: "" }));
  });
- if (src.key === "eyedrop_orders" && rec.ended_at) out.push(Object.assign({}, base, { at: rec.ended_at, type: "終了", by: rec.ended_by, detail: "点眼指示を終了" }));
+ if (src.key === "eyedrop_orders" && rec.ended_at) out.push(Object.assign({}, base, { at: rec.ended_at, type: "終了", by: rec.ended_by, detail: `点眼指示を終了${rec.end_reason ? "（理由: " + rec.end_reason + "）" : ""}` })); // [Antigravity実装 2026-10-19]
+ if (src.key === "residents" && Array.isArray(rec.hospitalizations)) {
+ // [Antigravity実装 2026-10-19] 入院の期間リストの訂正履歴も監査一覧に出す
+ rec.hospitalizations.forEach(hp => {
+ (hp.edit_history || []).forEach(h => {
+ out.push({ kind: "入院の歴", resident: rn, residentId: rec.id, summary: `${hp.admission_date || ""}〜${hp.discharge_date || "入院中"} ${hp.hospital_name || ""}`, at: h.edited_at, type: "訂正・変更", by: h.edited_by, detail: `${h.reason ? "理由: " + h.reason + " / " : ""}訂正前: ${cpAuditBeforeText(h.before)}` });
+ });
+ });
+ }
  if (src.key === "recreations" && rec.updated_at && !(rec.edit_history || []).length) out.push(Object.assign({}, base, { at: rec.updated_at, type: "訂正・変更", by: rec.updated_by, detail: "（訂正前の内容は記録されていない古い訂正）" }));
  });
  });
@@ -5953,7 +5984,7 @@ function cpFilteredAuditEntries() {
 function openAuditLogModal() {
  const kSel = document.getElementById("auditFilterKind");
  if (kSel && kSel.options.length <= 1) {
- CP_AUDIT_SOURCES.map(s => s.label).concat(["アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所", "契約・同意書類の種類", "請求の設定"]).forEach(l => {
+ CP_AUDIT_SOURCES.map(s => s.label).concat(["入院の歴", "アラート対応", "職員名簿", "区分の設定", "勤務の最低人数", "利用者の移動・退所", "契約・同意書類の種類", "請求の設定"]).forEach(l => {
  const o = document.createElement("option"); o.value = l; o.textContent = l; kSel.appendChild(o);
  });
  }
@@ -6071,10 +6102,21 @@ function printPeriodRecords() {
  ${vs.map(v => `<tr><td ${td}>${escapeHtml(v.date || "")}</td><td ${td}>${escapeHtml(v.time || "")}</td><td ${td}>${v.temperature ?? "-"}</td><td ${td}>${v.bp_high ?? "-"}/${v.bp_low ?? "-"}</td><td ${td}>${v.pulse ?? "-"}</td><td ${td}>${v.spo2 ?? "-"}</td><td ${td}>${v.is_unusual ? "○" : ""}</td><td ${td}>${escapeHtml(v.staff_name || "")}</td><td ${td}>${(v.edit_history || []).length ? `${v.edit_history.length}回（最終 ${escapeHtml(v.edit_history[v.edit_history.length - 1].edited_at)} ${escapeHtml(v.edit_history[v.edit_history.length - 1].edited_by)}）` : ""}</td></tr>`).join("") || `<tr><td ${td} colspan="9">記録なし</td></tr>`}</table>`;
  }
  if (document.getElementById("ppMeds")?.checked) {
+ // [Antigravity実装 2026-10-19] 印刷時もその日に飲む日の薬・目薬の内容を表示
  const ms = (db.data.meds || []).filter(m => Number(m.resident_id) === rid && inRange(m.date) && keep(m)).sort((a, b) => `${a.date} ${a.slot}`.localeCompare(`${b.date} ${b.slot}`));
  body += `<h2 style="font-size:14px; margin:12px 0 4px 0;">服薬・点眼 ${ms.length}件</h2>
- <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態</th><th ${th}>飲んだ時刻</th><th ${th}>記録した時刻</th><th ${th}>記録者</th></tr>
- ${ms.map(m => `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(m.timing_key || m.slot || "")}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}${m.bag ? `（袋の中 ${escapeHtml(m.bag)}）` : ""}</td><td ${td}>${escapeHtml(m.given_time || "")}${m.given_on_time ? "（時間どおり）" : ""}</td><td ${td}>${escapeHtml(m.recorded_at || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`).join("") || `<tr><td ${td} colspan="6">記録なし</td></tr>`}</table>`;
+ <table style="width:100%; border-collapse:collapse; font-size:11px;"><tr><th ${th}>日付</th><th ${th}>時間帯</th><th ${th}>状態・内容</th><th ${th}>飲んだ時刻</th><th ${th}>記録した時刻</th><th ${th}>記録者</th></tr>
+ ${ms.map(m => {
+ const tk = m.timing_key || m.slot || "";
+ let detailStr = m.bag ? `（袋の中 ${m.bag}）` : "";
+ if (!detailStr && m.medicine_name) {
+ detailStr = `（${m.eye ? "[" + m.eye + "] " : ""}${m.medicine_name}）`;
+ } else if (!detailStr && typeof cpBagText === "function" && m.date && tk) {
+ const bt = cpBagText(rid, tk, m.date);
+ if (bt) detailStr = `（袋の中 ${bt}）`;
+ }
+ return `<tr style="${m.voided ? 'color:#777;' : ''}"><td ${td}>${escapeHtml(m.date || "")}</td><td ${td}>${escapeHtml(tk)}</td><td ${td}>${vmark(m)}${escapeHtml(m.status || "")}${escapeHtml(detailStr)}</td><td ${td}>${escapeHtml(m.given_time || "")}${m.given_on_time ? "（時間どおり）" : ""}</td><td ${td}>${escapeHtml(m.recorded_at || "")}</td><td ${td}>${escapeHtml(m.staff_name || "")}</td></tr>`;
+ }).join("") || `<tr><td ${td} colspan="6">記録なし</td></tr>`}</table>`;
  }
  if (document.getElementById("ppTopical")?.checked) {
  const tps = (db.data.topical_records || []).filter(t => Number(t.resident_id) === rid && inRange(t.date) && keep(t)).sort((a, b) => String(a.done_at || "").localeCompare(String(b.done_at || "")));
@@ -7376,7 +7418,8 @@ function renderPersonalCalendar() {
  const dayRecs = (db.data.care_records || []).filter(cr => !cr.voided && cr.resident_id === res.id && (cr.recorded_at || cr.record_time || "").startsWith(curDateStr));
  const recCount = dayRecs.length;
  const hasTokukan = dayRecs.some(cr => cr.category === "特変");
- const isHospitalized = (res.status === "入院中" && (!res.hospital_date || curDateStr >= res.hospital_date)); // [Claude修正] 入院日が未登録のとき仮の日付 2026-08-25 を使っていた
+ // [Antigravity実装 2026-10-19] 過去の入院期間もカレンダー上で入院中として判定
+ const isHospitalized = (typeof cpStatusOn === "function" ? cpStatusOn(res, curDateStr) === "入院中" : (res.status === "入院中" && (!res.hospital_date || curDateStr >= res.hospital_date)));
 
  let cellBg = isSelected ? "#dcebe3" : "#ffffff";
  let cellBorder = isSelected ? "2px solid #1e5b47" : "1px solid #dfe5e1";
@@ -7475,22 +7518,28 @@ function renderPersonalDailySummary(res, dateStr) {
  return;
  }
 
- const isHospitalized = (res.status === "入院中" && (!res.hospital_date || dateStr >= res.hospital_date));
+ // [Antigravity実装 2026-10-19] 過去の入院期間もその日の入院情報で表示
+ const hospInfo = typeof cpHospitalizationOn === "function" ? cpHospitalizationOn(res, dateStr) : null;
+ const isHospitalized = hospInfo !== null || (typeof cpStatusOn === "function" ? cpStatusOn(res, dateStr) === "入院中" : (res.status === "入院中" && (!res.hospital_date || dateStr >= res.hospital_date)));
 
  if (isHospitalized) {
+ const hName = (hospInfo && hospInfo.hospital_name) || res.hospital_name || "入院先未登録";
+ const hReason = (hospInfo && hospInfo.reason) || res.hospital_reason || "未登録";
+ const hFrom = (hospInfo && hospInfo.admission_date) || res.hospital_date || "未登録";
+ const hTo = (hospInfo && hospInfo.discharge_date) ? ` 〜 退院: ${escapeHtml(hospInfo.discharge_date)}` : "";
  area.innerHTML = `
  <div style="background:#fef3c7; border:2px solid #f59e0b; border-radius:8px; padding:12px 16px; margin-bottom:12px;">
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
  <div style="display:flex; align-items:center; gap:8px;">
  <span style="font-size:22px;"></span>
  <div>
- <strong style="font-size:14.5px; color:#92400e;">【入院加療中】 ${escapeHtml(res.hospital_name || '入院先未登録')}</strong>
+ <strong style="font-size:14.5px; color:#92400e;">【入院加療中】 ${escapeHtml(hName)}</strong>
  <div style="font-size:12px; color:#b45309; margin-top:2px;">
- 理由: <strong>${escapeHtml(res.hospital_reason || '未登録')}</strong> (入院開始: ${escapeHtml(res.hospital_date || '未登録')})
+ 理由: <strong>${escapeHtml(hReason)}</strong> (入院開始: ${escapeHtml(hFrom)}${hTo})
  </div>
  </div>
  </div>
- <span style="font-size:12px; background:#fff; border:1px solid #d97706; color:#b45309; padding:4px 12px; border-radius:12px; font-weight:bold;">施設外 入院継続</span>
+ <span style="font-size:12px; background:#fff; border:1px solid #d97706; color:#b45309; padding:4px 12px; border-radius:12px; font-weight:bold;">${hospInfo && hospInfo.discharge_date ? '入院期間（退院済）' : '施設外 入院継続'}</span>
  </div>
  <div style="font-size:12px; color:#78350f; margin-top:8px; line-height:1.5; background:rgba(255,255,255,0.7); padding:8px 12px; border-radius:6px;">
  ※病院にて加療中のため施設内での直接ケアは休止中です。病院連携・病状確認・リハビリ進捗・家族面談・退院受入調整は下記の個別カルテ記録に集約されています。
@@ -7983,11 +8032,21 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
  });
 
  // 7. 服薬 (meds)
+ // [Antigravity実装 2026-10-19] 飲む日の表記や目薬の薬名・左右も統合記録に出す
  (db.data.meds || []).forEach(m => {
   if (m.resident_id !== resId || m.voided) return;
   if (!matchDate(m.date)) return;
   const label = m.timing_key || m.slot || "服薬";
   const tm = m.actual_time || m.recorded_time || (typeof cpRxSlotTime === "function" ? cpRxSlotTime(label) : "08:00");
+  let detail = "";
+  if (m.medicine_name) {
+   detail = ` (${m.eye ? "[" + m.eye + "] " : ""}${m.medicine_name})`;
+  } else if (m.bag) {
+   detail = ` (${m.bag})`;
+  } else if (typeof cpBagText === "function" && m.date && label) {
+   const bt = cpBagText(resId, label, m.date);
+   if (bt) detail = ` (${bt})`;
+  }
   items.push({
    uid: `med_${m.id}`,
    raw_id: m.id,
@@ -7995,7 +8054,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    recorded_at: `${m.date} ${tm}`,
    date: m.date,
    category: "服薬",
-   content: `【${label}】${m.status || "済"}${m.medicine_name ? " (" + m.medicine_name + ")" : ""}${m.note ? " " + m.note : ""}`,
+   content: `【${label}】${m.status || "済"}${detail}${m.note ? " " + m.note : ""}`,
    staff_name: m.staff_name || "未記録",
    edit_history: m.edit_history,
    raw: m
@@ -9067,12 +9126,50 @@ function doSearch() {
  // [Claude修正 2026-10-16] 検索結果は「記録を見る・検索」側に出るので切り替える（カルテの病名ガイドから検索したときなど）
  if (typeof cpSwitchRecordPane === "function") cpSwitchRecordPane("log");
 
- const results = (db.data.care_records || []).filter(r => {
+ const results = (db.data.care_records || []).filter(r => !r.voided).filter(r => {
  const res = gState.residents.find(x => x.id === r.resident_id);
  const resName = res ? res.name.toLowerCase() : "";
  const content = (r.content || "").toLowerCase();
  const cat = (r.category || "").toLowerCase();
  return content.includes(q) || cat.includes(q) || resName.includes(q);
+ }).map(r => Object.assign({}, r));
+
+ // [Antigravity実装 2026-10-19] 処方薬の一覧（飲む日の表記「週1回（月曜）」などを含む）や服薬・点眼記録も検索対象にする
+ (db.data.resident_medications || []).forEach(rm => {
+ if (!rm || rm.voided) return;
+ const res = gState.residents.find(x => x.id === rm.resident_id);
+ const resName = res ? res.name.toLowerCase() : "";
+ const sched = typeof cpRxScheduleText === "function" ? cpRxScheduleText(rm) : "毎日";
+ const timingsStr = (rm.timings || []).map(t => `${t.key}${t.count}${rm.unit || "錠"}`).join("・");
+ const text = `【処方薬】${rm.name || ""} / 飲む日: ${sched} / 用法: ${timingsStr}${rm.effect ? " / 効能: " + rm.effect : ""}${rm.start_date ? " / 開始: " + rm.start_date : ""}${rm.status === "中止" ? " (中止: " + (rm.stop_reason || "") + ")" : ""}`;
+ if (text.toLowerCase().includes(q) || resName.includes(q)) {
+ results.push({
+ resident_id: rm.resident_id,
+ recorded_at: rm.start_date || rm.added_at || gState.selectedDate || "",
+ category: "処方薬",
+ content: text,
+ staff_name: rm.added_by || "処方登録"
+ });
+ }
+ });
+ (db.data.meds || []).forEach(m => {
+ if (!m || m.voided) return;
+ const res = gState.residents.find(x => x.id === m.resident_id);
+ const resName = res ? res.name.toLowerCase() : "";
+ const tk = m.timing_key || m.slot || "服薬";
+ let detail = m.bag || "";
+ if (!detail && m.medicine_name) detail = `${m.eye ? "[" + m.eye + "] " : ""}${m.medicine_name}`;
+ else if (!detail && typeof cpBagText === "function" && m.date && tk) detail = cpBagText(m.resident_id, tk, m.date);
+ const text = `【${tk}】${m.status || ""}${detail ? " (" + detail + ")" : ""}${m.given_time ? " 服用時刻:" + m.given_time : ""}`;
+ if (text.toLowerCase().includes(q) || resName.includes(q)) {
+ results.push({
+ resident_id: m.resident_id,
+ recorded_at: `${m.date || ""} ${m.given_time || ""}`.trim(),
+ category: "服薬・点眼",
+ content: text,
+ staff_name: m.staff_name || "未設定"
+ });
+ }
  });
 
  const container = document.getElementById("searchResults");
@@ -9973,6 +10070,7 @@ function setMedTimingFilter(slot) {
 
 function renderMedTable() {
  // [Claude修正] 飲み薬は renderMedOral（時間帯ごとにまとめて記録）。この表は点眼だけ
+ // [Antigravity実装 2026-10-19] 1人に複数の目薬指示がある場合も、それぞれの薬・左右・時間帯ごとに記録できるように対応
  if (typeof renderMedOral === "function") renderMedOral();
  const tbody = document.querySelector("#medTable tbody");
  if (!tbody) return;
@@ -9982,51 +10080,70 @@ function renderMedTable() {
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
  const tr = document.createElement("tr");
- // 点眼欄生成 (絵ではなく「右のみ」「左のみ」「両眼」を高コントラストバッジ明示、時間帯別切り替え対応)
- const order = eyedropOrders.find(e => e.resident_id === r.id && e.status !== "終了");
+ const activeOrders = eyedropOrders.filter(e => e && Number(e.resident_id) === Number(r.id) && e.status !== "終了" && e.eye !== "指示なし");
  let eyedropCellHtml = "";
 
- if (!order || order.eye === "指示なし") {
+ if (activeOrders.length === 0) {
  eyedropCellHtml = `
- <div style="display:flex; justify-content:space-between; align-items:center;">
- <span style="color:#94a19a; font-size:12px;">指示なし</span>
- <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})">指示追加</button>
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <span style="color:var(--text-muted); font-size:13px;">指示なし</span>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openEyedropOrderModal(${r.id}, null)">指示追加</button>
  </div>
  `;
  } else {
+ const rowsHtml = activeOrders.map((order, idx) => {
  const eyeBadge = order.eye === "右のみ"
- ? `<span class="badge" style="background:#173f33; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[右のみ]</span>`
+ ? `<span class="badge" style="background:var(--pine-dark); color:#ffffff; font-weight:bold; font-size:13px; padding:2px 6px;">[右のみ]</span>`
  : (order.eye === "左のみ"
- ? `<span class="badge" style="background:#065f46; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[左のみ]</span>`
- : `<span class="badge" style="background:#36443e; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 6px;">[両眼]</span>`);
+ ? `<span class="badge" style="background:var(--pine); color:#ffffff; font-weight:bold; font-size:13px; padding:2px 6px;">[左のみ]</span>`
+ : `<span class="badge" style="background:var(--ink-soft); color:#ffffff; font-weight:bold; font-size:13px; padding:2px 6px;">[両眼]</span>`);
 
  const medTitle = cpDrugLink(order.medicine_name, "drug-link-inline drug-link-strong", "目薬");
-
-
- {
- // すべて表示時: 指示されている時間帯のボタンを並べて表示
+ const doseText = order.dosage ? `<span style="font-size:13px; color:var(--text-muted); margin-left:4px;">(${escapeHtml(order.dosage)})</span>` : "";
+ const isPaused = order.status === "一時休止";
  const targetSlots = order.timing_slots && order.timing_slots.length > 0 ? order.timing_slots : ["眠前"];
- const slotButtonsHtml = targetSlots.map(slot => {
- const done = meds.find(m => m.resident_id === r.id && (m.slot === `点眼(${slot})` || m.slot === `点眼_${slot}` || (m.slot === "点眼" && slot === "眠前")));
+
+ const slotButtonsHtml = isPaused
+ ? `<span style="font-size:13px; color:var(--warn); font-weight:bold;">一時休止中</span>`
+ : targetSlots.map(slot => {
+ const done = meds.find(m => {
+ if (Number(m.resident_id) !== Number(r.id)) return false;
+ const slotMatch = (m.slot === `点眼(${slot})` || m.slot === `点眼_${slot}` || (m.slot === "点眼" && slot === "眠前"));
+ if (!slotMatch) return false;
+ if (m.order_id !== undefined && m.order_id !== null) return Number(m.order_id) === Number(order.id);
+ if (m.medicine_name && order.medicine_name) return m.medicine_name === order.medicine_name && (!m.eye || m.eye === order.eye);
+ return idx === 0;
+ });
  if (done) {
- return `<button class="btn" style="background:#dcfce7; color:#15803d; border:1px solid #86efac; font-weight:bold; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')" title="クリックで解除">済 ${slot} (${done.staff_name || '済'})</button>`;
+ return `<button type="button" class="btn" style="background:var(--ok-bg); color:var(--ok); border:1px solid var(--pine-light); font-weight:bold; font-size:13px; padding:3px 8px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${escapeHtml(slot)}', ${order.id})" title="クリックで取消">済 ${escapeHtml(slot)} (${escapeHtml(done.staff_name || '済')})</button>`;
  }
- return `<button class="btn btn-outline" style="border-color:#1e5b47; color:#1a4f3d; font-size:11px; padding:2px 6px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${slot}')">未 ${slot}</button>`;
+ return `<button type="button" class="btn btn-outline" style="border-color:var(--pine); color:var(--pine); font-size:13px; padding:3px 8px; margin:2px;" onclick="toggleEyedrop(${r.id}, '${escapeHtml(slot)}', ${order.id})">未 ${escapeHtml(slot)}</button>`;
+ }).join("");
+
+ return `
+ <div class="cp-eo-check-row">
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px; margin-bottom:4px;">
+ <div>${eyeBadge} ${medTitle}${doseText}</div>
+ <div style="display:flex; gap:4px;">
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 8px;" onclick="openEyedropOrderModal(${r.id}, ${order.id})" title="この点眼指示を変更">変更</button>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 8px;" onclick="endEyedropOrder(${order.id})" title="この点眼指示を終了">終了</button>
+ </div>
+ </div>
+ <div style="display:flex; gap:4px; flex-wrap:wrap; align-items:center;">
+ <span style="font-size:13px; color:var(--text-muted); margin-right:2px;">実施:</span>
+ ${slotButtonsHtml}
+ </div>
+ </div>`;
  }).join("");
 
  eyedropCellHtml = `
  <div>
- <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:3px;">
- <div>${eyeBadge} ${medTitle}</div>
- <button class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openEyedropOrderModal(${r.id})" title="点眼処方指示を変更">変更</button>
- </div>
- <div style="display:flex; gap:2px; flex-wrap:wrap; align-items:center;">
- <span style="font-size:11px; color:#5f6d66; margin-right:2px;">実施:</span>
- ${slotButtonsHtml}
+ ${rowsHtml}
+ <div style="margin-top:6px; text-align:right;">
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 8px;" onclick="openEyedropOrderModal(${r.id}, null)">+ 指示追加</button>
  </div>
  </div>
  `;
- }
  }
 
  tr.innerHTML = `
@@ -10117,17 +10234,32 @@ function toggleMed(resId, slot) {
  saveMed(resId, slot);
 }
 
-function toggleEyedrop(resId, slot) {
- const r = gState.residents.find(x => x.id === resId);
+// [Antigravity実装 2026-10-19] 複数の目薬がある場合も、それぞれの指示 (orderId) ごとに実施・取消を記録する
+function toggleEyedrop(resId, slot, orderId) {
+ const r = gState.residents.find(x => Number(x.id) === Number(resId));
  const staff = document.getElementById("currentStaff")?.value || "職員";
  const meds = db.data.meds || [];
  const targetSlotKey = `点眼(${slot})`;
  const altKey = `点眼_${slot}`;
- const idx = meds.findIndex(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && (m.slot === targetSlotKey || m.slot === altKey || (m.slot === "点眼" && slot === "眠前")));
+ const activeOrders = (db.data.eyedrop_orders || []).filter(e => e && Number(e.resident_id) === Number(resId) && e.status !== "終了" && e.eye !== "指示なし");
+ const order = orderId ? (db.data.eyedrop_orders || []).find(e => e && Number(e.id) === Number(orderId)) : activeOrders[0];
+
+ const idx = meds.findIndex(m => {
+ if (m.voided || m.date !== gState.selectedDate || Number(m.resident_id) !== Number(resId)) return false;
+ const slotMatch = (m.slot === targetSlotKey || m.slot === altKey || (m.slot === "点眼" && slot === "眠前"));
+ if (!slotMatch) return false;
+ if (order) {
+ if (m.order_id !== undefined && m.order_id !== null) return Number(m.order_id) === Number(order.id);
+ if (m.medicine_name && order.medicine_name) return m.medicine_name === order.medicine_name && (!m.eye || m.eye === order.eye);
+ return activeOrders.indexOf(order) <= 0;
+ }
+ return true;
+ });
 
  if (idx >= 0) {
- // [Claude修正] 点眼記録は消さずに「取消」にする（理由必須・記録は残る）
- if (cpVoidMedRecord(meds[idx], `${r ? r.name : '利用者'}様の【${slot}】点眼実施記録`)) {
+ const rec = meds[idx];
+ const labelMed = rec.medicine_name ? `（${rec.eye ? rec.eye + "・" : ""}${rec.medicine_name}）` : "";
+ if (cpVoidMedRecord(rec, `${r ? r.name : '利用者'}様の【${slot}】点眼実施記録${labelMed}`)) {
  db.save();
  renderMedTable();
  loadDateRecords(gState.selectedDate);
@@ -10135,15 +10267,30 @@ function toggleEyedrop(resId, slot) {
  return;
  }
 
- const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId && e.status !== '終了');
- const eyeSide = order ? order.eye : "指示";
- const medName = order ? order.medicine_name : "点眼薬";
+ if (!order) {
+ alert("有効な点眼指示が見つかりません。");
+ return;
+ }
+ if (order.status === "終了") {
+ alert("終了した点眼指示には実施記録を付けられません。");
+ return;
+ }
+ if (order.status === "一時休止") {
+ alert("一時休止中の点眼指示には実施記録を付けられません。");
+ return;
+ }
 
+ const eyeSide = order.eye || "両眼";
+ const medName = order.medicine_name || "点眼薬";
+
+ let newMedId = Date.now();
+ while (meds.some(x => x && Number(x.id) === newMedId)) newMedId++;
  db.data.meds.push({
- id: Date.now(),
+ id: newMedId,
  date: gState.selectedDate,
  slot: targetSlotKey,
- resident_id: resId,
+ resident_id: Number(resId),
+ order_id: order.id,
  status: "済",
  staff_name: staff,
  eye: eyeSide,
@@ -10202,12 +10349,57 @@ function cpIsNurseStaff(name) { return cpStaffRoleOf(name).includes("看護"); }
 function cpIsCurrentNurse() { return cpIsNurseStaff(cpLoginStaffName()); }
 // [Claude修正 2026-10-18] その日の在所状況。以前は今の状況（status）だけで決めていたため、
 // 過去の日付の表でも、いま入院中の方が「入院中」になったり、入居前・退所後の方が出たりしていた
+// [Antigravity実装 2026-10-19] 入院の期間リスト (r.hospitalizations) を見て、過去の入院期間もその日は「入院中」、退院後は「在所」と判定する
+function cpGetHospitalizations(r) {
+ if (!r || typeof r !== "object") return [];
+ if (!Array.isArray(r.hospitalizations)) r.hospitalizations = [];
+ if (r.hospital_date && r.hospitalizations.length === 0) {
+ r.hospitalizations.push({
+ id: Number(r.id) * 10000 + 1,
+ resident_id: r.id,
+ admission_date: r.hospital_date,
+ discharge_date: "",
+ hospital_name: r.hospital_name || "",
+ reason: r.hospital_reason || "",
+ created_by: r.updated_by || "",
+ created_at: r.hospital_date
+ });
+ }
+ return r.hospitalizations.filter(h => h && !h.voided);
+}
+
+function cpHospitalizationOn(r, dateStr) {
+ if (!r) return null;
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
+ const list = cpGetHospitalizations(r);
+ for (let i = list.length - 1; i >= 0; i--) {
+ const h = list[i];
+ if (!h || !h.admission_date) continue;
+ if (d >= h.admission_date && (!h.discharge_date || d <= h.discharge_date)) return h;
+ }
+ return null;
+}
+
 function cpStatusOn(r, dateStr) {
  if (!r) return "";
- const d = dateStr || gState.selectedDate || toLocalDateStr(new Date());
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
  if (r.admission_date && d < r.admission_date) return "入居前";
- if (r.status === "退所") return (r.discharge_date && d <= r.discharge_date) ? (r.status_before_discharge && r.status_before_discharge !== "退所" ? r.status_before_discharge : "在所") : "退所";
- if (r.status === "入院中") return (r.hospital_date && d < r.hospital_date) ? "在所" : "入院中";
+ if (r.status === "退所" && r.discharge_date && d > r.discharge_date) return "退所";
+ const hosp = cpHospitalizationOn(r, d);
+ if (hosp) return "入院中";
+ const hasHospList = cpGetHospitalizations(r).length > 0;
+ if (r.status === "退所") {
+ if (r.discharge_date && d <= r.discharge_date) {
+ const before = r.status_before_discharge && r.status_before_discharge !== "退所" ? r.status_before_discharge : "在所";
+ if (before === "入院中" && hasHospList) return "在所";
+ return before;
+ }
+ return "退所";
+ }
+ if (r.status === "入院中") {
+ if (hasHospList) return "在所";
+ return (r.hospital_date && d < r.hospital_date) ? "在所" : "入院中";
+ }
  return r.status || "在所";
 }
 // [Claude追加 2026-10-18] 選ぶ欄は「選んでください」から始め、選ばずには保存できないようにする
@@ -10221,30 +10413,103 @@ function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
 function cpMinutes(hhmm) { const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
 
 // ---------- 処方薬の一覧 ----------
+// [Antigravity実装 2026-10-19] 週1回・月1回・〇日ごとの薬の「飲む日」判定と表記
+const CP_RX_WEEKDAYS = ["日曜", "月曜", "火曜", "水曜", "木曜", "金曜", "土曜"];
+
+function cpRxScheduleText(m) {
+ if (!m || !m.freq_type || m.freq_type === "daily") return "毎日";
+ if (m.freq_type === "weekly") {
+ const w = Number(m.freq_weekday);
+ const wName = (w >= 0 && w <= 6) ? CP_RX_WEEKDAYS[w] : "";
+ return `週1回（${wName || "曜日未設定"}）`;
+ }
+ if (m.freq_type === "monthly") {
+ const day = Number(m.freq_day);
+ const suffix = day >= 29 ? "・ない月は月末" : "";
+ return `月1回（${day}日${suffix}）`;
+ }
+ if (m.freq_type === "interval") {
+ const days = Number(m.freq_interval);
+ const st = m.freq_start || m.start_date || "";
+ return `${days}日ごと（${st ? st + "から" : "開始日未設定"}）`;
+ }
+ return "毎日";
+}
+
+function cpIsMedScheduledOnDate(m, dateStr) {
+ if (!m) return false;
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(d)) return true;
+ const startLim = m.start_date || (m.freq_type === "interval" ? m.freq_start : "");
+ if (startLim && /^\d{4}-\d{2}-\d{2}$/.test(startLim) && d < startLim) return false;
+ if (!m.freq_type || m.freq_type === "daily") return true;
+ const [yStr, mStr, dStr] = d.split("-");
+ const yr = Number(yStr), mo = Number(mStr), dy = Number(dStr);
+ if (m.freq_type === "weekly") {
+ const dt = new Date(yr, mo - 1, dy);
+ return dt.getDay() === Number(m.freq_weekday);
+ }
+ if (m.freq_type === "monthly") {
+ const targetDay = Number(m.freq_day);
+ if (!(targetDay >= 1 && targetDay <= 31)) return false;
+ const lastDayOfMonth = new Date(yr, mo, 0).getDate();
+ const effectiveDay = Math.min(targetDay, lastDayOfMonth);
+ return dy === effectiveDay;
+ }
+ if (m.freq_type === "interval") {
+ const interval = Number(m.freq_interval);
+ const baseStr = m.freq_start || m.start_date || "";
+ if (!(interval >= 2) || !/^\d{4}-\d{2}-\d{2}$/.test(baseStr)) return false;
+ if (d < baseStr) return false;
+ const [by, bm, bd] = baseStr.split("-").map(Number);
+ const utcTarget = Date.UTC(yr, mo - 1, dy);
+ const utcBase = Date.UTC(by, bm - 1, bd);
+ const diffDays = Math.round((utcTarget - utcBase) / 86400000);
+ return diffDays >= 0 && (diffDays % interval === 0);
+ }
+ return true;
+}
+
 function cpActiveRxMeds(resId) {
  return (db.data.resident_medications || []).filter(m => m && !m.voided && m.status !== "中止" && Number(m.resident_id) === Number(resId));
 }
-// 時間の決まった薬（頓服だけの薬は服薬チェック表に出さない）
-function cpScheduledRxMeds(resId) {
+// 登録されているすべての時間の決まった薬（曜日・日付を問わず、処方薬一覧が登録されているかの判定用）
+function cpAllScheduledRxMeds(resId) {
  return cpActiveRxMeds(resId).filter(m => (m.timings || []).some(t => t && Number(t.count) > 0));
 }
-function cpResidentHasRxList(resId) { return cpScheduledRxMeds(resId).length > 0; }
-function cpResidentTimings(resId) {
- const meds = cpScheduledRxMeds(resId);
- if (!meds.length) return CP_RX_FALLBACK_TIMINGS.slice();
+// その日に飲む予定の時間の決まった薬（頓服だけの薬や、その日に飲まない週1回・月1回・〇日ごとの薬は服薬チェック表に出さない）
+function cpScheduledRxMeds(resId, dateStr) {
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
+ return cpAllScheduledRxMeds(resId).filter(m => cpIsMedScheduledOnDate(m, d));
+}
+function cpResidentHasRxList(resId) { return cpAllScheduledRxMeds(resId).length > 0; }
+function cpResidentTimings(resId, dateStr) {
+ if (!cpResidentHasRxList(resId)) return CP_RX_FALLBACK_TIMINGS.slice();
+ const meds = cpScheduledRxMeds(resId, dateStr);
+ if (!meds.length) return [];
  const used = new Set();
  meds.forEach(m => (m.timings || []).forEach(t => { if (t && Number(t.count) > 0) used.add(t.key); }));
  return CP_RX_TIMINGS.map(t => t.key).filter(k => used.has(k));
 }
-// 袋の中の合計（単位ごと）。例: 「3錠・1包」
-function cpBagText(resId, timingKey) {
+// 袋の中の合計（単位ごと・その日に飲む薬だけを計算）。例: 「3錠・1包」
+function cpBagText(resId, timingKey, dateStr) {
  const sum = {};
- cpActiveRxMeds(resId).forEach(m => (m.timings || []).forEach(t => {
+ cpScheduledRxMeds(resId, dateStr).forEach(m => (m.timings || []).forEach(t => {
  if (t.key === timingKey && Number(t.count) > 0) { const u = m.unit || "錠"; sum[u] = (sum[u] || 0) + Number(t.count); }
  }));
  const parts = CP_RX_UNITS.filter(u => sum[u]).map(u => `${sum[u]}${u}`);
  Object.keys(sum).filter(u => !CP_RX_UNITS.includes(u)).forEach(u => parts.push(`${sum[u]}${u}`));
  return parts.join("・");
+}
+// その日のその時間帯に飲む「毎日ではない薬」の案内表示用
+function cpScheduledNonDailyText(resId, timingKey, dateStr) {
+ const notes = [];
+ cpScheduledRxMeds(resId, dateStr).forEach(m => {
+ if (!m.freq_type || m.freq_type === "daily") return;
+ const hasSlot = (m.timings || []).some(t => t.key === timingKey && Number(t.count) > 0);
+ if (hasSlot) notes.push(`${m.name}（${cpRxScheduleText(m)}）`);
+ });
+ return notes.join("、");
 }
 
 // ---------- 処方箋と処方薬 モーダル ----------
@@ -10412,39 +10677,125 @@ function cpRenderRxMeds() {
  const stopped = all.filter(m => m.status === "中止");
  const timingText = m => (m.timings || []).filter(t => Number(t.count) > 0).map(t => `${t.key} ${t.count}${m.unit || "錠"}`)
  .concat(m.prn && Number(m.prn.count) > 0 ? [`頓服 1回${m.prn.count}${m.unit || "錠"}（${m.prn.when || "指示のとき"}）`] : []).join("、");
- const row = (m, isActive) => `
+ // [Antigravity実装 2026-10-19] 処方薬の一覧に「飲む日」（毎日／週1回（月曜）／月1回（31日・ない月は月末）など）を表示
+ const row = (m, isActive) => {
+ const sched = cpRxScheduleText(m);
+ const isNonDaily = m.freq_type && m.freq_type !== "daily";
+ return `
  <div class="rx-med ${isActive ? "" : "is-stopped"}">
  <div class="rx-med-main">
+ <div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px;">
  ${cpDrugLink(m.name, "rx-med-name")}
+ <span class="rx-freq-badge ${isNonDaily ? "is-special" : ""}">飲む日: ${escapeHtml(sched)}</span>
+ </div>
  <div class="rx-sub">${escapeHtml(timingText(m))}</div>
- ${m.purpose ? `<div>何のため: ${escapeHtml(m.purpose)}</div>` : ""}
+ ${(m.purpose || m.effect) ? `<div>何のため: ${escapeHtml(m.purpose || m.effect)}</div>` : ""}
  ${m.prn && Number(m.prn.count) > 0 ? `<div class="rx-prn-note">頓服は服薬チェック表には出ません。使うときは看護師・主治医の指示に従ってください。</div>` : ""}
- <div class="rx-sub">資料: ${escapeHtml(m.source_type || "")}${m.source_detail ? `（${escapeHtml(m.source_detail)}）` : ""} ／ 追加 ${escapeHtml(m.added_at || "")} ${escapeHtml(m.added_by || "")}${(m.edit_history || []).length ? ` ／ 変更 ${m.edit_history.length}回` : ""}</div>
+ <div class="rx-sub">資料: ${escapeHtml(m.source_type || "")}${m.source_detail ? `（${escapeHtml(m.source_detail)}）` : ""} ／ 追加 ${escapeHtml(m.added_at || m.start_date || "")} ${escapeHtml(m.added_by || "")}${(m.edit_history || []).length ? ` ／ 変更 ${m.edit_history.length}回` : ""}</div>
  ${isActive ? "" : `<div class="rx-sub">中止 ${escapeHtml(m.stopped_at || "")} ${escapeHtml(m.stopped_by || "")}（理由: ${escapeHtml(m.stop_reason || "-")}）</div>`}
  </div>
  ${nurse && isActive ? `<div class="rx-med-actions"><button type="button" class="btn btn-secondary rx-small" onclick="editRxMed(${m.id})">変更</button><button type="button" class="btn btn-secondary rx-small" onclick="stopRxMed(${m.id})">中止</button></div>` : ""}
  </div>`;
+ };
  const editing = nurse && cpRxState.editId !== null ? all.find(m => Number(m.id) === Number(cpRxState.editId)) : null;
  return `
  ${nurse ? "" : `<div class="rx-locked">処方薬の追加・変更は看護師だけができます。追加・変更したいときは看護師に依頼してください。</div>`}
  <section class="rx-section">
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
  <h4>飲んでいる薬（${active.length}）</h4>
+ ${active.length ? `<button type="button" class="btn btn-secondary rx-small" onclick="printRxMedList(${cpRxState.resId})">処方薬・指定日の服薬予定を印刷</button>` : ""}
+ </div>
  ${active.map(m => row(m, true)).join("") || `<p class="panel-note">まだ登録されていません。登録されるまで、服薬チェック表は「朝食後・昼食後・夕食後・眠前」で記録します。</p>`}
  </section>
  ${nurse ? cpRenderRxMedForm(editing) : ""}
  ${stopped.length ? `<details class="rx-section"><summary>中止した薬（${stopped.length}）</summary>${stopped.map(m => row(m, false)).join("")}</details>` : ""}`;
 }
 
+// [Antigravity実装 2026-10-19] 処方薬一覧と指定日に飲む薬の印刷（その日に飲む日の薬だけを対象に袋の中の錠数を計算）
+function printRxMedList(resId) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || cpRxState.resId));
+ if (!r) return;
+ const targetDate = gState.selectedDate || toLocalDateStr(new Date());
+ const active = cpActiveRxMeds(r.id);
+ const scheduledToday = cpScheduledRxMeds(r.id, targetDate);
+ const th = 'style="background:#eee; border:1px solid #999; padding:4px; text-align:left;"';
+ const td = 'style="border:1px solid #999; padding:4px; vertical-align:top;"';
+ const rows = active.map(m => {
+ const isToday = cpIsMedScheduledOnDate(m, targetDate);
+ const tStr = (m.timings || []).filter(t => Number(t.count) > 0).map(t => `${t.key} ${t.count}${m.unit || "錠"}`).join("・") || (m.prn && Number(m.prn.count) > 0 ? `頓服 1回${m.prn.count}${m.unit || "錠"}（${m.prn.when || ""}）` : "-");
+ return `<tr><td ${td}><strong>${escapeHtml(m.name || "")}</strong></td><td ${td}>${escapeHtml(cpRxScheduleText(m))}</td><td ${td}>${escapeHtml(tStr)}</td><td ${td}>${isToday ? "○（飲む日）" : "―（休薬日）"}</td><td ${td}>${escapeHtml(m.purpose || m.effect || "")}</td></tr>`;
+ }).join("");
+ const slotSummary = CP_RX_TIMINGS.map(t => {
+ const bt = cpBagText(r.id, t.key, targetDate);
+ return bt ? `${t.key}: ${bt}` : "";
+ }).filter(Boolean).join(" ／ ") || "予定なし";
+ const html = `<div style="font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color:#000; font-size:12px;">
+ <h1 style="font-size:16px; margin:0 0 6px 0;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様 処方薬一覧・${escapeHtml(targetDate)}の服薬予定</h1>
+ <div style="margin-bottom:8px;"><strong>${escapeHtml(targetDate)} に飲む薬（${scheduledToday.length}剤）の袋の中合計:</strong> ${escapeHtml(slotSummary)}</div>
+ <table style="width:100%; border-collapse:collapse; font-size:11px;">
+ <thead><tr><th ${th}>薬の名前</th><th ${th}>飲む日</th><th ${th}>用法・用量</th><th ${th}>${escapeHtml(targetDate)}の予定</th><th ${th}>目的・効能</th></tr></thead>
+ <tbody>${rows || `<tr><td ${td} colspan="5">登録なし</td></tr>`}</tbody>
+ </table>
+ </div>`;
+ runPrintJob(html, { page: "A4 portrait", fitOnePage: false });
+}
+
+// [Antigravity実装 2026-10-19] 「飲む日」の選択肢の切り替え表示
+function onRxFreqTypeChange() {
+ const type = (document.getElementById("rxMedFreqType") || {}).value || "";
+ const wBox = document.getElementById("rxFreqWeeklyBox");
+ const mBox = document.getElementById("rxFreqMonthlyBox");
+ const iBox = document.getElementById("rxFreqIntervalBox");
+ if (wBox) wBox.style.display = type === "weekly" ? "block" : "none";
+ if (mBox) mBox.style.display = type === "monthly" ? "block" : "none";
+ if (iBox) iBox.style.display = type === "interval" ? "block" : "none";
+}
+
 function cpRenderRxMedForm(m) {
  const rxDates = cpRxList(cpRxState.resId).map(p => p.issued_date);
  const cnt = key => { const t = m && (m.timings || []).find(x => x.key === key); return t ? t.count : ""; };
- const src = m ? m.source_type : "処方箋";
+ // [Antigravity実装 2026-10-19] 選ぶ欄は「選んでください」から始め、既存データは未設定なら daily として初期表示
+ const freqType = m ? (m.freq_type || "daily") : "";
+ const freqWeekday = (m && m.freq_weekday !== undefined && m.freq_weekday !== null && m.freq_weekday !== "") ? String(m.freq_weekday) : "";
+ const freqDay = (m && m.freq_day !== undefined && m.freq_day !== null && m.freq_day !== "") ? String(m.freq_day) : "";
+ const freqStart = (m && m.freq_start) ? String(m.freq_start) : (m && m.start_date ? String(m.start_date) : "");
+ const freqInterval = (m && m.freq_interval) ? String(m.freq_interval) : "";
+ const src = m ? (m.source_type || "") : "";
  return `
  <section class="rx-section rx-form">
  <h4>${m ? "薬の内容を変える" : "薬を追加する"}</h4>
  <div class="rx-form-grid">
  <label>薬の名前（処方箋のとおり） <input type="text" id="rxMedName" class="form-control" maxlength="80" value="${m ? escapeHtml(m.name) : ""}"></label>
- <label>単位 <select id="rxMedUnit" class="form-control">${CP_RX_UNITS.map(u => `<option ${m && m.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+ <label>単位 <select id="rxMedUnit" class="form-control"><option value="">選んでください</option>${CP_RX_UNITS.map(u => `<option value="${u}" ${m && m.unit === u ? "selected" : ""}>${u}</option>`).join("")}</select></label>
+ </div>
+ <!-- [Antigravity実装 2026-10-19] 飲む日（毎日／週1回／月1回／〇日ごと） -->
+ <div class="rx-freq-box">
+ <label class="rx-block">飲む日 <select id="rxMedFreqType" class="form-control" onchange="onRxFreqTypeChange()">
+ <option value="">選んでください</option>
+ <option value="daily" ${freqType === "daily" ? "selected" : ""}>毎日</option>
+ <option value="weekly" ${freqType === "weekly" ? "selected" : ""}>週1回（曜日を選ぶ）</option>
+ <option value="monthly" ${freqType === "monthly" ? "selected" : ""}>月1回（日を選ぶ）</option>
+ <option value="interval" ${freqType === "interval" ? "selected" : ""}>〇日ごと（始める日と日数）</option>
+ </select></label>
+ <div id="rxFreqWeeklyBox" class="rx-freq-sub" style="display:${freqType === "weekly" ? "block" : "none"};">
+ <label>飲む曜日 <select id="rxMedFreqWeekday" class="form-control">
+ <option value="">選んでください</option>
+ ${CP_RX_WEEKDAYS.map((w, idx) => `<option value="${idx}" ${freqWeekday === String(idx) ? "selected" : ""}>${w}</option>`).join("")}
+ </select></label>
+ </div>
+ <div id="rxFreqMonthlyBox" class="rx-freq-sub" style="display:${freqType === "monthly" ? "block" : "none"};">
+ <label>毎月何日に飲むか <select id="rxMedFreqDay" class="form-control">
+ <option value="">選んでください</option>
+ ${Array.from({ length: 31 }, (_, i) => i + 1).map(d => `<option value="${d}" ${freqDay === String(d) ? "selected" : ""}>毎月 ${d}日</option>`).join("")}
+ </select></label>
+ <p class="panel-note" style="margin-top:4px; color:var(--text-main);">※29日・30日・31日を選んだ場合、その日がない月（2月や30日までの月）は<strong>その月の末日（最終日）</strong>が飲む日になります（その月だけ飛ばされることはありません）。</p>
+ </div>
+ <div id="rxFreqIntervalBox" class="rx-freq-sub" style="display:${freqType === "interval" ? "block" : "none"};">
+ <div class="rx-form-grid">
+ <label>始める日 <input type="date" id="rxMedFreqStart" class="form-control" value="${escapeHtml(freqStart)}"></label>
+ <label>何日ごとか（2以上） <input type="number" id="rxMedFreqInterval" class="form-control" min="2" max="365" step="1" inputmode="numeric" value="${escapeHtml(freqInterval)}"></label>
+ </div>
+ </div>
  </div>
  <div class="rx-timing-grid">
  ${CP_RX_TIMINGS.map(t => `<label>${t.key}<input type="number" min="0" max="20" step="0.5" inputmode="decimal" id="rxMedCnt_${t.key}" class="form-control" value="${escapeHtml(String(cnt(t.key)))}"></label>`).join("")}
@@ -10455,9 +10806,9 @@ function cpRenderRxMedForm(m) {
  <label>頓服を使うとき（処方箋のとおり） <input type="text" id="rxMedPrnWhen" class="form-control" maxlength="60" value="${m && m.prn ? escapeHtml(m.prn.when || "") : ""}"></label>
  </div>
  <p class="panel-note">頓服（決まった時間ではなく、必要なときに使う薬）は、服薬チェック表には出ません。</p>
- <label class="rx-block">何のため（処方箋や薬の説明書きのとおり） <input type="text" id="rxMedPurpose" class="form-control" maxlength="120" value="${m ? escapeHtml(m.purpose || "") : ""}"></label>
+ <label class="rx-block">何のため（処方箋や薬の説明書きのとおり） <input type="text" id="rxMedPurpose" class="form-control" maxlength="120" value="${m ? escapeHtml(m.purpose || m.effect || "") : ""}"></label>
  <div class="rx-form-grid">
- <label>何を見て書いたか <select id="rxMedSource" class="form-control">${CP_RX_SOURCES.map(s => `<option ${src === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
+ <label>何を見て書いたか <select id="rxMedSource" class="form-control"><option value="">選んでください</option>${CP_RX_SOURCES.map(s => `<option value="${s}" ${src === s ? "selected" : ""}>${s}</option>`).join("")}</select></label>
  <label>資料の詳しい内容（処方日など） <input type="text" id="rxMedSourceDetail" class="form-control" list="rxMedSourceDates" maxlength="80" value="${m ? escapeHtml(m.source_detail || "") : (rxDates[0] ? `${rxDates[0]} の処方箋` : "")}">
  <datalist id="rxMedSourceDates">${rxDates.map(d => `<option value="${escapeHtml(d)} の処方箋">`).join("")}</datalist></label>
  </div>
@@ -10471,6 +10822,8 @@ function cpRenderRxMedForm(m) {
 
 function editRxMed(id) {
  if (!cpIsCurrentNurse()) { alert("処方薬の変更は看護師だけができます。看護師に依頼してください。"); return; }
+ const target = (db.data.resident_medications || []).find(m => Number(m.id) === Number(id));
+ if (target && target.status === "中止") { alert("中止した薬は変更できません。再開・変更するときは新しく追加してください。"); return; }
  cpRxState.editId = id;
  renderRxModal();
  const f = document.querySelector("#rxModalBody .rx-form");
@@ -10483,6 +10836,29 @@ function saveRxMed() {
  const val = id => ((document.getElementById(id) || {}).value || "").trim();
  const name = val("rxMedName");
  if (!name) { alert("薬の名前を入れてください。"); return; }
+ const unit = val("rxMedUnit");
+ if (!unit) { alert("単位を選んでください。"); return; }
+ // [Antigravity実装 2026-10-19] 「飲む日」の検証
+ const freqType = val("rxMedFreqType");
+ if (!freqType) { alert("飲む日を選んでください。"); return; }
+ let freqWeekday = null, freqDay = null, freqStart = "", freqInterval = null;
+ if (freqType === "weekly") {
+ const wRaw = val("rxMedFreqWeekday");
+ if (wRaw === "") { alert("週1回の薬は、飲む曜日を選んでください。"); return; }
+ freqWeekday = Number(wRaw);
+ if (!(freqWeekday >= 0 && freqWeekday <= 6)) { alert("飲む曜日を正しく選んでください。"); return; }
+ } else if (freqType === "monthly") {
+ const dRaw = val("rxMedFreqDay");
+ if (dRaw === "") { alert("月1回の薬は、毎月何日に飲むかを選んでください。"); return; }
+ freqDay = Number(dRaw);
+ if (!(freqDay >= 1 && freqDay <= 31)) { alert("飲む日を1日〜31日から選んでください。"); return; }
+ } else if (freqType === "interval") {
+ freqStart = val("rxMedFreqStart");
+ const iRaw = val("rxMedFreqInterval");
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(freqStart)) { alert("〇日ごとの薬は、始める日を入れてください。"); return; }
+ freqInterval = Number(iRaw);
+ if (!Number.isInteger(freqInterval) || freqInterval < 2 || freqInterval > 365) { alert("〇日ごとの日数は、2以上の整数（2〜365）を入れてください。"); return; }
+ }
  const timings = [];
  for (const t of CP_RX_TIMINGS) {
  const raw = val(`rxMedCnt_${t.key}`);
@@ -10497,7 +10873,7 @@ function saveRxMed() {
  if (prnRaw) {
  const pc = Number(prnRaw);
  if (!(pc > 0) || pc > 20) { alert("頓服の1回の数を正しく入れてください（0より大きい数）。"); return; }
- if (!prnWhen) { alert("頓服を使うとき（例: 処方箋に書かれた「〇〇のとき」）を入れてください。"); return; }
+ if (!prnWhen) { alert("頓服を使うとき（処方箋に書かれた条件）を入れてください。"); return; }
  prn = { count: pc, when: prnWhen };
  } else if (prnWhen) { alert("頓服の1回の数を入れてください。頓服でなければ「使うとき」を空欄にしてください。"); return; }
  if (!timings.length && !prn) { alert("飲む時間帯と1回の数、または頓服を、少なくとも1つ入れてください。"); return; }
@@ -10505,23 +10881,41 @@ function saveRxMed() {
  const sourceDetail = val("rxMedSourceDetail");
  if (!sourceType) { alert("何を見て書いたかを選んでください。"); return; }
  if (!Array.isArray(db.data.resident_medications)) db.data.resident_medications = [];
+ // 二重登録の防止（同じ方に同じ薬名で服用中のものがすでにある場合）
+ const dup = db.data.resident_medications.find(m => m && !m.voided && m.status !== "中止" && Number(m.resident_id) === Number(cpRxState.resId) && m.name === name && (cpRxState.editId === null || Number(m.id) !== Number(cpRxState.editId)));
+ if (dup) { alert(`「${name}」はすでに飲んでいる薬に登録されています。内容を変えるときは既存の薬の「変更」から行ってください。`); return; }
  const now = toLocalDateTimeStr(new Date());
  const who = cpLoginStaffName();
- const fields = { name: name, unit: val("rxMedUnit") || "錠", timings: timings, prn: prn, purpose: val("rxMedPurpose"), source_type: sourceType, source_detail: sourceDetail };
+ const fields = {
+ name: name,
+ unit: unit,
+ freq_type: freqType,
+ freq_weekday: freqWeekday,
+ freq_day: freqDay,
+ freq_start: freqStart,
+ freq_interval: freqInterval,
+ timings: timings,
+ prn: prn,
+ purpose: val("rxMedPurpose"),
+ source_type: sourceType,
+ source_detail: sourceDetail
+ };
  if (cpRxState.editId !== null) {
  const target = db.data.resident_medications.find(m => Number(m.id) === Number(cpRxState.editId));
  if (!target) { alert("変更する薬が見つかりません。画面を開き直してください。"); return; }
+ if (target.status === "中止") { alert("中止した薬は変更できません。"); return; }
  const reason = val("rxMedEditReason");
- if (!reason) { alert("変更の理由を入れてください（例: 処方変更 10/9）。"); return; }
+ if (!reason) { alert("変更の理由を入れてください。"); return; }
  const old = JSON.parse(JSON.stringify(target));
  const before = (target.edit_history || []).length;
  Object.assign(target, fields);
- cpAppendEditHistory(target, old, Object.keys(fields));
- if ((target.edit_history || []).length > before) target.edit_history[target.edit_history.length - 1].reason = reason;
- else { alert("内容が変わっていません。"); return; }
+ cpAppendEditHistory(target, old, Object.keys(fields), reason);
+ if ((target.edit_history || []).length <= before) { alert("内容が変わっていません。"); return; }
  cpRxState.editId = null;
  } else {
- db.data.resident_medications.push(Object.assign({ id: Date.now(), resident_id: cpRxState.resId, status: "服用中", added_at: now, added_by: who }, fields));
+ let newRxId = Date.now();
+ while (db.data.resident_medications.some(x => x && Number(x.id) === newRxId)) newRxId++;
+ db.data.resident_medications.push(Object.assign({ id: newRxId, resident_id: cpRxState.resId, status: "服用中", added_at: now, added_by: who }, fields));
  }
  db.save();
  renderRxModal();
@@ -10532,7 +10926,8 @@ function stopRxMed(id) {
  if (!cpIsCurrentNurse()) { alert("処方薬の中止は看護師だけができます。看護師に依頼してください。"); return; }
  const m = (db.data.resident_medications || []).find(x => Number(x.id) === Number(id));
  if (!m) return;
- const reason = prompt(`「${m.name}」を中止にします。記録は消えずに「中止した薬」に残ります。\n\n中止の理由を入れてください（例: 処方終了 10/9）`, "");
+ if (m.status === "中止") { alert("すでに中止されています。"); return; }
+ const reason = prompt(`「${m.name}」を中止にします。記録は消えずに「中止した薬」に残ります。\n\n中止の理由を入れてください`, "");
  if (reason === null) return;
  if (!reason.trim()) { alert("中止の理由を入れてください。何も変えていません。"); return; }
  m.status = "中止"; m.stopped_at = toLocalDateTimeStr(new Date()); m.stopped_by = cpLoginStaffName(); m.stop_reason = reason.trim();
@@ -10559,9 +10954,10 @@ function cpMedIsLate(date, timingKey) {
  const sched = cpMinutes(cpRxSlotTime(timingKey));
  return sched !== null && cpMinutes(cpNowHHMM()) > sched + CP_MED_LATE_MINUTES;
 }
-function cpMedTimingsInUse() {
+function cpMedTimingsInUse(dateStr) {
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
  const used = new Set();
- (gState.residents || []).filter(cpResidentIsHere).forEach(r => cpResidentTimings(r.id).forEach(k => used.add(k)));
+ (gState.residents || []).filter(r => cpResidentIsHere(r, d)).forEach(r => cpResidentTimings(r.id, d).forEach(k => used.add(k)));
  return CP_RX_TIMINGS.map(t => t.key).filter(k => used.has(k));
 }
 function cpMedDefaultTiming(keys) {
@@ -10576,18 +10972,18 @@ function renderMedOral() {
  const area = document.getElementById("medOralArea");
  if (!area) return;
  const date = gState.selectedDate;
- const keys = cpMedTimingsInUse();
+ const keys = cpMedTimingsInUse(date);
  if (!keys.includes(gState.medTiming)) gState.medTiming = cpMedDefaultTiming(keys);
  const cur = gState.medTiming;
- const here = (gState.residents || []).filter(cpResidentIsHere);
- const away = (gState.residents || []).filter(r => !cpResidentIsHere(r) && !cpIsDischarged(r));
+ const here = (gState.residents || []).filter(r => cpResidentIsHere(r, date));
+ const away = (gState.residents || []).filter(r => !cpResidentIsHere(r, date) && cpStatusOn(r, date) !== "退所" && cpStatusOn(r, date) !== "入居前");
  const chips = keys.map(k => {
- const targets = here.filter(r => cpResidentTimings(r.id).includes(k));
+ const targets = here.filter(r => cpResidentTimings(r.id, date).includes(k));
  const done = targets.filter(r => cpMedSavedRecord(date, r.id, k)).length;
  return `<button type="button" class="med-slot ${k === cur ? "active" : ""}" onclick="cpSelectMedTiming('${k}')">${k}<span class="med-slot-sub">${cpRxSlotTime(k)}・記録 ${done}/${targets.length}</span></button>`;
  }).join("");
  const late = cur ? cpMedIsLate(date, cur) : false;
- const rows = cur ? here.filter(r => cpResidentTimings(r.id).includes(cur)).map(r => cpMedRowHtml(r, cur, date, late)).join("") : "";
+ const rows = cur ? here.filter(r => cpResidentTimings(r.id, date).includes(cur)).map(r => cpMedRowHtml(r, cur, date, late)).join("") : "";
  const pending = cpMedPendingCount();
  area.innerHTML = `
  <div class="med-slots" role="tablist" aria-label="時間帯">${chips}</div>
@@ -10597,7 +10993,7 @@ function renderMedOral() {
  <button type="button" class="btn btn-secondary" onclick="cpMedMarkAll()">まだ付けていない方に「済」を付ける</button>
  </div>
  <div class="med-rows">${rows || `<p class="panel-note">この時間帯に飲む方はいません。</p>`}</div>
- ${away.length ? `<p class="panel-note">入院中・退所の方（${away.map(r => escapeHtml(r.name)).join("、")}）は表示していません。</p>` : ""}
+ ${away.length ? `<p class="panel-note">入院中・外泊中の方（${away.map(r => escapeHtml(r.name)).join("、")}）は表示していません。</p>` : ""}
  <p class="panel-note">袋の中の数を数えて、合っていれば「済」。押しただけではまだ保存されません。最後に「保存する」を押してください。数が足りないときは「数が合わない」（すぐに看護師への報告として記録されます）。</p>`
  : `<p class="panel-note">記録する時間帯がありません。</p>`}
  <div class="med-savebar ${pending ? "has-pending" : ""}">
@@ -10611,8 +11007,11 @@ function renderMedOral() {
 
 function cpMedRowHtml(r, k, date, late) {
  const hasList = cpResidentHasRxList(r.id);
- const bag = hasList ? cpBagText(r.id, k) : "";
- const bagHtml = hasList ? `<span class="med-bag">袋の中 <strong>${escapeHtml(bag)}</strong></span>` : `<span class="med-bag is-none">処方薬の一覧が未登録</span>`;
+ const bag = hasList ? cpBagText(r.id, k, date) : "";
+ const nonDaily = hasList ? cpScheduledNonDailyText(r.id, k, date) : "";
+ const bagHtml = hasList
+ ? `<span class="med-bag">袋の中 <strong>${escapeHtml(bag)}</strong>${nonDaily ? ` <span class="med-bag-sched">（本日: ${escapeHtml(nonDaily)}）</span>` : ""}</span>`
+ : `<span class="med-bag is-none">処方薬の一覧が未登録</span>`;
  const saved = cpMedSavedRecord(date, r.id, k);
  let action = "";
  if (saved) {
@@ -10652,7 +11051,7 @@ function cpMedSetTime(key, v) { const p = gState.medPending[key]; if (p) p.time 
 function cpMedMarkAll() {
  const date = gState.selectedDate, k = gState.medTiming;
  if (!k) return;
- (gState.residents || []).filter(cpResidentIsHere).filter(r => cpResidentTimings(r.id).includes(k)).forEach(r => {
+ (gState.residents || []).filter(r => cpResidentIsHere(r, date)).filter(r => cpResidentTimings(r.id, date).includes(k)).forEach(r => {
  const key = cpMedKey(date, r.id, k);
  if (!cpMedSavedRecord(date, r.id, k) && !gState.medPending[key]) gState.medPending[key] = { status: "済", time: "" };
  });
@@ -10685,7 +11084,7 @@ function saveMedPending() {
  const t = cpRxTiming(k);
  const id = Date.now() + n * 10;
  const rec = { id: id, date: date, slot: t ? t.slot : k, timing_key: k, resident_id: Number(rid), status: p.status, staff_name: who, recorded_at: now };
- const bag = cpResidentHasRxList(rid) ? cpBagText(rid, k) : "";
+ const bag = cpResidentHasRxList(rid) ? cpBagText(rid, k, date) : "";
  if (bag) rec.bag = bag;
  if (p.status === "済") {
  rec.given_time = p.time || cpRxSlotTime(k);
@@ -10708,7 +11107,7 @@ function reportMedCountMismatch(resId, k) {
  const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
  const date = gState.selectedDate;
  if (cpMedSavedRecord(date, resId, k)) { alert("この時間帯はすでに記録があります。直すときは、記録を押して取消にしてから付け直してください。"); return; }
- const bag = cpResidentHasRxList(resId) ? cpBagText(resId, k) : "";
+ const bag = cpResidentHasRxList(resId) ? cpBagText(resId, k, date) : "";
  if (!confirm(`${r ? r.name : "利用者"}様の【${k}】の袋の中の数が合わないことを、看護師への報告として記録します。よろしいですか？\n${bag ? `（予定: ${bag}）\n` : ""}何が足りないかの確認と、その後の対応は看護師が行います。`)) return;
  const t = cpRxTiming(k);
  const id = Date.now();
@@ -10751,14 +11150,14 @@ function cpMedPendingGuard() {
  gState.medPending = {};
 }
 
-// 予定時刻を1時間過ぎても記録がない方（今日の分・処方薬の一覧がある方だけ）
-function cpMedMissingList() {
- const today = toLocalDateStr(new Date());
- const now = cpMinutes(cpNowHHMM());
+// 予定時刻を1時間過ぎても記録がない方（今日の分・処方薬の一覧がある方・かつ今日が飲む日の薬だけを対象にする）
+function cpMedMissingList(dateOpt, nowHHMMOpt) {
+ const today = (typeof dateOpt === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateOpt)) ? dateOpt : toLocalDateStr(new Date());
+ const now = cpMinutes((typeof nowHHMMOpt === "string" && /^\d{1,2}:\d{2}$/.test(nowHHMMOpt)) ? nowHHMMOpt : cpNowHHMM());
  const out = [];
  CP_RX_TIMINGS.forEach(t => {
  if (cpMinutes(cpRxSlotTime(t.key)) + CP_MED_MISSING_MINUTES > now) return;
- const who = (gState.residents || []).filter(cpResidentIsHere).filter(r => cpResidentHasRxList(r.id) && cpResidentTimings(r.id).includes(t.key) && !cpMedSavedRecord(today, r.id, t.key));
+ const who = (gState.residents || []).filter(r => cpResidentIsHere(r, today)).filter(r => cpResidentHasRxList(r.id) && cpResidentTimings(r.id, today).includes(t.key) && !cpMedSavedRecord(today, r.id, t.key));
  if (who.length) out.push({ key: t.key, residents: who });
  });
  return out;
@@ -11081,48 +11480,139 @@ function openDrugInfo(name, kindHint) {
  if (typeof cpShowDrugGuide === "function") cpShowDrugGuide(g, name);
 }
 
-// 点眼指示モーダル制御
-function openEyedropOrderModal(residentId) {
+// [Antigravity実装 2026-10-19] 点眼指示モーダル制御（1人に複数の目薬指示を追加・変更・終了できる）
+function cpCanManageEyedropOrder() {
+ const f = typeof cpRoleFlags === "function" ? cpRoleFlags() : {};
+ return !!(f.nurse || f.director);
+}
+
+function openEyedropOrderModal(residentId, orderId) {
  const modal = document.getElementById("eyedropOrderModal");
  if (!modal) return;
 
  const resSelect = document.getElementById("eoResidentSelect");
+ const targetId = Number(residentId || gState.selectedResidentId || (resSelect ? resSelect.value : 0));
  if (resSelect) {
  resSelect.innerHTML = cpCurrentResidents().map(r => `
- <option value="${r.id}" ${r.id === (residentId || gState.selectedResidentId) ? 'selected' : ''}>${r.room_no}号室: ${r.name} 様</option>
+ <option value="${r.id}" ${Number(r.id) === targetId ? 'selected' : ''}>${r.room_no}号室: ${r.name} 様</option>
  `).join("");
  }
 
- const targetId = residentId || (resSelect ? parseInt(resSelect.value, 10) : gState.selectedResidentId);
- loadEyedropOrderFormData(targetId);
-
+ renderEyedropOrdersModalList(targetId, orderId !== undefined ? orderId : null);
  modal.style.display = "flex";
 }
 
 function onEyedropResidentChange() {
  const sel = document.getElementById("eoResidentSelect");
  if (sel) {
- loadEyedropOrderFormData(parseInt(sel.value, 10));
+ renderEyedropOrdersModalList(parseInt(sel.value, 10), null);
  }
 }
 
-function loadEyedropOrderFormData(resId) {
- const order = (db.data.eyedrop_orders || []).find(e => e.resident_id === resId && e.status !== '終了') || {};
+function renderEyedropOrdersModalList(resId, editOrderId) {
+ const area = document.getElementById("eoOrdersListArea");
+ const all = (db.data.eyedrop_orders || []).filter(e => e && Number(e.resident_id) === Number(resId) && e.eye !== "指示なし");
+ const active = all.filter(e => e.status !== "終了");
+ const ended = all.filter(e => e.status === "終了");
+ const canManage = cpCanManageEyedropOrder();
 
- const eye = order.eye || "右のみ";
+ if (area) {
+ const cardHtml = (e, isEnded) => {
+ const tStr = (e.timing_slots || []).join("・") || "-";
+ const histLen = (e.edit_history || []).length;
+ return `<div class="cp-eo-card ${isEnded ? "is-ended" : ""}">
+ <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
+ <div>
+ <span class="badge" style="background:${isEnded ? "var(--ink-soft)" : "var(--pine-dark)"}; color:#fff; font-size:13px; padding:2px 6px;">[${escapeHtml(e.eye || "")}]</span>
+ <strong style="font-size:14px; margin-left:4px;">${escapeHtml(e.medicine_name || "")}</strong>
+ <span style="font-size:13px; color:var(--text-muted); margin-left:6px;">（${escapeHtml(tStr)} ／ ${escapeHtml(e.dosage || "")}${e.status === "一時休止" ? " ／ 一時休止中" : ""}）</span>
+ ${e.doctor_name ? `<div style="font-size:13px; color:var(--text-muted); margin-top:2px;">処方元: ${escapeHtml(e.doctor_name)}${e.notes ? " ／ 注意: " + escapeHtml(e.notes) : ""}${histLen ? ` ／ 変更 ${histLen}回` : ""}</div>` : (e.notes || histLen ? `<div style="font-size:13px; color:var(--text-muted); margin-top:2px;">${e.notes ? "注意: " + escapeHtml(e.notes) : ""}${histLen ? ` ／ 変更 ${histLen}回` : ""}</div>` : "")}
+ ${isEnded ? `<div style="font-size:13px; color:var(--danger); margin-top:2px;">終了: ${escapeHtml(e.ended_at || "")} ${escapeHtml(e.ended_by || "")}（理由: ${escapeHtml(e.end_reason || "-")}）</div>` : ""}
+ </div>
+ ${!isEnded && canManage ? `<div style="display:flex; gap:6px;">
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="startEditEyedropOrder(${e.id})">変更</button>
+ <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="endEyedropOrder(${e.id})">終了</button>
+ </div>` : ""}
+ </div>
+ </div>`;
+ };
+
+ area.innerHTML = `
+ ${canManage ? "" : `<div class="rx-locked" style="margin-bottom:8px;">点眼指示の追加・変更・終了は看護師・管理者だけができます。</div>`}
+ <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:6px;">
+ <strong style="font-size:14px; color:var(--pine-dark);">現在の点眼指示（${active.length}件）</strong>
+ ${canManage ? `<button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="startNewEyedropOrder()">+ 新しい目薬を追加</button>` : ""}
+ </div>
+ ${active.length ? active.map(e => cardHtml(e, false)).join("") : `<div style="font-size:13px; color:var(--text-muted); padding:6px 0;">現在、継続中の点眼指示はありません。下の欄から追加できます。</div>`}
+ ${ended.length ? `<details style="margin-top:8px;"><summary style="font-size:13px; cursor:pointer; color:var(--text-muted);">終了した点眼指示（${ended.length}件）</summary><div style="margin-top:6px;">${ended.map(e => cardHtml(e, true)).join("")}</div></details>` : ""}
+ `;
+ }
+
+ loadEyedropOrderFormData(resId, editOrderId);
+}
+
+function startNewEyedropOrder() {
+ const sel = document.getElementById("eoResidentSelect");
+ const resId = sel ? parseInt(sel.value, 10) : gState.selectedResidentId;
+ loadEyedropOrderFormData(resId, null);
+}
+
+function startEditEyedropOrder(orderId) {
+ if (!cpCanManageEyedropOrder()) {
+ alert("点眼指示の変更は看護師・管理者だけができます。");
+ return;
+ }
+ const order = (db.data.eyedrop_orders || []).find(e => e && Number(e.id) === Number(orderId));
+ if (!order) return;
+ if (order.status === "終了") {
+ alert("終了した点眼指示は変更できません。再開・変更するときは新しく追加してください。");
+ return;
+ }
+ const sel = document.getElementById("eoResidentSelect");
+ const resId = sel ? parseInt(sel.value, 10) : order.resident_id;
+ loadEyedropOrderFormData(resId, order.id);
+}
+
+function loadEyedropOrderFormData(resId, orderId) {
+ const order = (orderId !== null && orderId !== undefined && orderId !== "")
+ ? (db.data.eyedrop_orders || []).find(e => e && Number(e.id) === Number(orderId) && Number(e.resident_id) === Number(resId))
+ : null;
+
+ if (order && order.status === "終了") {
+ alert("終了した点眼指示は変更できません。");
+ return loadEyedropOrderFormData(resId, null);
+ }
+
+ const idEl = document.getElementById("eoOrderId");
+ if (idEl) idEl.value = order ? String(order.id) : "";
+
+ const titleEl = document.getElementById("eoFormModeTitle");
+ if (titleEl) titleEl.textContent = order ? `点眼指示の変更（${order.medicine_name || ""}）` : "新しい点眼指示を追加";
+
+ const cancelBtn = document.getElementById("eoCancelEditBtn");
+ if (cancelBtn) cancelBtn.style.display = order ? "inline-block" : "none";
+
+ const endBtn = document.getElementById("eoEndCurrentBtn");
+ if (endBtn) endBtn.style.display = order ? "inline-block" : "none";
+
+ const reasonWrap = document.getElementById("eoEditReasonWrap");
+ const reasonEl = document.getElementById("eoEditReason");
+ if (reasonWrap) reasonWrap.style.display = order ? "block" : "none";
+ if (reasonEl) reasonEl.value = "";
+
+ // 入力が空のときに勝手に「右のみ」「1回1滴」「眼科クリニック」などを入れない
+ const eye = order ? (order.eye || "") : "";
  const rRight = document.getElementById("eoEyeRight");
  const rLeft = document.getElementById("eoEyeLeft");
  const rBoth = document.getElementById("eoEyeBoth");
- const rNone = document.getElementById("eoEyeNone");
  if (rRight) rRight.checked = (eye === "右のみ");
  if (rLeft) rLeft.checked = (eye === "左のみ");
  if (rBoth) rBoth.checked = (eye === "両眼");
- if (rNone) rNone.checked = (eye === "指示なし");
 
  const medEl = document.getElementById("eoMedicineName");
- if (medEl) medEl.value = order.medicine_name || "";
+ if (medEl) medEl.value = order ? (order.medicine_name || "") : "";
 
- const slots = order.timing_slots || [];
+ const slots = order ? (order.timing_slots || []) : [];
  const cbMorn = document.getElementById("eoSlotMorning");
  const cbNoon = document.getElementById("eoSlotNoon");
  const cbEve = document.getElementById("eoSlotEvening");
@@ -11133,13 +11623,24 @@ function loadEyedropOrderFormData(resId) {
  if (cbBed) cbBed.checked = slots.includes("眠前");
 
  const doseEl = document.getElementById("eoDosage");
- if (doseEl) doseEl.value = order.dosage || "1回1滴";
+ if (doseEl) doseEl.value = order ? (order.dosage || "") : "";
  const docEl = document.getElementById("eoDoctor");
- if (docEl) docEl.value = order.doctor_name || "眼科クリニック";
+ if (docEl) docEl.value = order ? (order.doctor_name || "") : "";
  const noteEl = document.getElementById("eoNotes");
- if (noteEl) noteEl.value = order.notes || "";
+ if (noteEl) noteEl.value = order ? (order.notes || "") : "";
  const stEl = document.getElementById("eoStatus");
- if (stEl) stEl.value = order.status || "継続中";
+ if (stEl) stEl.value = order ? (order.status || "継続中") : "継続中";
+
+ const formBox = document.getElementById("eoFormBox");
+ if (formBox) {
+ const canManage = cpCanManageEyedropOrder();
+ formBox.style.display = canManage ? "block" : "none";
+ }
+ const submitBtn = document.getElementById("eoSubmitBtn");
+ if (submitBtn) {
+ submitBtn.style.display = cpCanManageEyedropOrder() ? "inline-block" : "none";
+ submitBtn.textContent = order ? "変更を保存" : "点眼指示を追加";
+ }
 }
 
 function quickFillEyedropMed(medName) {
@@ -11148,19 +11649,29 @@ function quickFillEyedropMed(medName) {
 }
 
 function submitEyedropOrder() {
+ if (!cpCanManageEyedropOrder()) {
+ alert("点眼指示の追加・変更は看護師・管理者だけができます。");
+ return;
+ }
  const sel = document.getElementById("eoResidentSelect");
  if (!sel) return;
  const resId = parseInt(sel.value, 10);
- const r = gState.residents.find(x => x.id === resId);
+ const r = gState.residents.find(x => Number(x.id) === resId);
+ const orderIdRaw = (document.getElementById("eoOrderId")?.value || "").trim();
+ const editingId = orderIdRaw ? Number(orderIdRaw) : null;
 
- let eyeSide = "右のみ";
- if (document.getElementById("eoEyeLeft")?.checked) eyeSide = "左のみ";
+ let eyeSide = "";
+ if (document.getElementById("eoEyeRight")?.checked) eyeSide = "右のみ";
+ else if (document.getElementById("eoEyeLeft")?.checked) eyeSide = "左のみ";
  else if (document.getElementById("eoEyeBoth")?.checked) eyeSide = "両眼";
- else if (document.getElementById("eoEyeNone")?.checked) eyeSide = "指示なし";
+ if (!eyeSide) {
+ alert("点眼する目（右のみ・左のみ・両眼）を選んでください。");
+ return;
+ }
 
  const medName = document.getElementById("eoMedicineName")?.value.trim() || "";
- if (eyeSide !== "指示なし" && !medName) {
- alert("点眼薬の薬品名を入力してください（または『指示なし』を選択してください）。");
+ if (!medName) {
+ alert("点眼薬の薬品名を入力してください。");
  return;
  }
 
@@ -11170,22 +11681,52 @@ function submitEyedropOrder() {
  if (document.getElementById("eoSlotEvening")?.checked) timingSlots.push("夕");
  if (document.getElementById("eoSlotBed")?.checked) timingSlots.push("眠前");
 
- if (eyeSide !== "指示なし" && timingSlots.length === 0) {
- alert("投与する時間帯（朝・昼・夕・就寝前）を1つ以上選択してください。");
+ if (timingSlots.length === 0) {
+ alert("点眼する時間帯（朝・昼・夕・眠前）を1つ以上選んでください。");
  return;
  }
 
- const dosage = document.getElementById("eoDosage")?.value.trim() || "1回1滴";
+ // 入力が空のときに勝手に「1回1滴」などを入れない
+ const dosage = document.getElementById("eoDosage")?.value.trim() || "";
+ if (!dosage) {
+ alert("1回あたりの点眼量（処方箋のとおりの滴数など）を入力してください。");
+ return;
+ }
+
  const doctor = document.getElementById("eoDoctor")?.value.trim() || "";
  const notes = document.getElementById("eoNotes")?.value.trim() || "";
- const status = document.getElementById("eoStatus")?.value || "継続中";
+ const status = document.getElementById("eoStatus")?.value || "";
+ if (!status) {
+ alert("指示ステータスを選んでください。");
+ return;
+ }
 
- if (!db.data.eyedrop_orders) db.data.eyedrop_orders = [];
- const existingIdx = db.data.eyedrop_orders.findIndex(e => e.resident_id === resId && e.status !== '終了');
+ if (!Array.isArray(db.data.eyedrop_orders)) db.data.eyedrop_orders = [];
 
- const newOrder = {
- id: existingIdx >= 0 ? db.data.eyedrop_orders[existingIdx].id : Date.now(),
- resident_id: resId,
+ // 同じ方に同じ薬名で継続中・一時休止の指示がすでにある場合の二重登録防止
+ const dup = db.data.eyedrop_orders.find(e => e && Number(e.resident_id) === resId && e.status !== "終了" && e.medicine_name === medName && e.eye === eyeSide && (editingId === null || Number(e.id) !== editingId));
+ if (dup) {
+ alert(`「${medName}（${eyeSide}）」はすでに登録されています。内容を変えるときは一覧の「変更」から行ってください。`);
+ return;
+ }
+
+ if (editingId !== null) {
+ const idx = db.data.eyedrop_orders.findIndex(e => e && Number(e.id) === editingId && Number(e.resident_id) === resId);
+ if (idx < 0) {
+ alert("変更する点眼指示が見つかりません。画面を開き直してください。");
+ return;
+ }
+ const oldOrder = db.data.eyedrop_orders[idx];
+ if (oldOrder.status === "終了") {
+ alert("終了した点眼指示は変更できません。");
+ return;
+ }
+ const editReason = (document.getElementById("eoEditReason")?.value || "").trim();
+ if (!editReason) {
+ alert("変更の理由を入力してください。");
+ return;
+ }
+ const updatedOrder = Object.assign({}, oldOrder, {
  eye: eyeSide,
  medicine_name: medName,
  timing_slots: timingSlots,
@@ -11194,44 +11735,85 @@ function submitEyedropOrder() {
  notes: notes,
  status: status,
  updated_at: toLocalDateStr(new Date())
- };
-
- if (existingIdx >= 0) {
- cpAppendEditHistory(newOrder, db.data.eyedrop_orders[existingIdx], ["eye", "medicine_name", "timing_slots", "dosage", "notes", "doctor_name", "status"]); // [Claude修正] 変更前の指示を残す
- db.data.eyedrop_orders[existingIdx] = newOrder;
+ });
+ const beforeLen = (oldOrder.edit_history || []).length;
+ cpAppendEditHistory(updatedOrder, oldOrder, ["eye", "medicine_name", "timing_slots", "dosage", "notes", "doctor_name", "status"], editReason);
+ if ((updatedOrder.edit_history || []).length <= beforeLen) {
+ alert("内容が変わっていません。");
+ return;
+ }
+ db.data.eyedrop_orders[idx] = updatedOrder;
  } else {
- db.data.eyedrop_orders.push(newOrder);
+ let newId = Date.now();
+ while (db.data.eyedrop_orders.some(e => e && Number(e.id) === newId)) newId++;
+ db.data.eyedrop_orders.push({
+ id: newId,
+ resident_id: resId,
+ eye: eyeSide,
+ medicine_name: medName,
+ timing_slots: timingSlots,
+ dosage: dosage,
+ doctor_name: doctor,
+ notes: notes,
+ status: status,
+ added_at: toLocalDateTimeStr(new Date()),
+ added_by: cpLoginStaffName(),
+ updated_at: toLocalDateStr(new Date())
+ });
  }
 
  db.save();
- closeModal("eyedropOrderModal");
+ renderEyedropOrdersModalList(resId, null);
  renderMedTable();
- if (typeof renderResidentDetail === "function" && gState.selectedResidentId === resId) {
+ if (typeof renderResidentDetail === "function" && Number(gState.selectedResidentId) === resId) {
  renderResidentDetail();
  }
- alert(`${r ? r.name : '利用者'}様の点眼指示（${eyeSide}・${medName || '指示なし'}）を保存しました！`);
+ alert(`${r ? r.name : '利用者'}様の点眼指示（${eyeSide}・${medName}）を保存しました。`);
+}
+
+function endEyedropOrder(orderId) {
+ if (!cpCanManageEyedropOrder()) {
+ alert("点眼指示の終了は看護師・管理者だけができます。");
+ return;
+ }
+ const targetId = orderId !== undefined && orderId !== null
+ ? Number(orderId)
+ : Number((document.getElementById("eoOrderId") || {}).value || 0);
+ const order = (db.data.eyedrop_orders || []).find(e => e && Number(e.id) === targetId);
+ if (!order) {
+ alert("終了する点眼指示が見つかりません。");
+ return;
+ }
+ if (order.status === "終了") {
+ alert("この点眼指示はすでに終了しています。");
+ return;
+ }
+ const r = gState.residents.find(x => Number(x.id) === Number(order.resident_id));
+ const reason = prompt(`${r ? r.name : '利用者'}様の点眼指示「[${order.eye}] ${order.medicine_name}」を終了にします。\n記録は消えずに、終了した指示として残ります。\n\n終了の理由を入力してください`, "");
+ if (reason === null) return;
+ if (!reason.trim()) {
+ alert("終了の理由を入力してください。何も変更していません。");
+ return;
+ }
+ order.status = "終了";
+ order.ended_at = toLocalDateTimeStr(new Date());
+ order.ended_by = cpLedgerStaff();
+ order.end_reason = reason.trim();
+ db.save();
+ const modal = document.getElementById("eyedropOrderModal");
+ if (modal && modal.style.display === "flex") {
+ renderEyedropOrdersModalList(order.resident_id, null);
+ }
+ renderMedTable();
+ if (typeof renderResidentDetail === "function" && Number(gState.selectedResidentId) === Number(order.resident_id)) {
+ renderResidentDetail();
+ }
+ alert(`点眼指示「${order.medicine_name}」を終了しました。`);
 }
 
 function deleteEyedropOrder() {
- const sel = document.getElementById("eoResidentSelect");
- if (!sel) return;
- const resId = parseInt(sel.value, 10);
- const r = gState.residents.find(x => x.id === resId);
-
- if (!confirm(`${r ? r.name : '利用者'}様の点眼指示を解除（指示なし）にしますか？`)) return;
-
- // [Claude修正] 点眼指示は消さずに「終了」として、日時・職員を残す
- const nowStr = toLocalDateTimeStr(new Date());
- (db.data.eyedrop_orders || []).forEach(e => {
- if (e.resident_id === resId && e.status !== '終了') { e.status = '終了'; e.ended_at = nowStr; e.ended_by = cpLedgerStaff(); }
- });
- db.save();
- closeModal("eyedropOrderModal");
- renderMedTable();
- if (typeof renderResidentDetail === "function" && gState.selectedResidentId === resId) {
- renderResidentDetail();
- }
- alert(`${r ? r.name : '利用者'}様の点眼指示を解除しました。`);
+ const idRaw = (document.getElementById("eoOrderId") || {}).value || "";
+ if (idRaw) return endEyedropOrder(Number(idRaw));
 }
 
 // 7. 夜勤体位変換 トグル解除 ＆ 一括確定 (個人記録自動転記)
@@ -16269,12 +16851,15 @@ function submitResidentForm() {
  if (ad && curR && curR.discharge_date && ad > curR.discharge_date) { alert("入居日が退所日より後になっています。"); return; }
  }
  // [Claude追加] 退所は「退所の手続き」から（退所日・理由を残すため）。退所の取り消しも専用のボタンから
+ // [Antigravity実装 2026-10-19] 入院・退院もカルテの「入院の歴」または在籍状況欄から入院日・退院日を入れて行う
  let cpUnitAfterMove;
  {
  const stVal = document.getElementById("resStatus").value;
  const cur = editId ? gState.residents.find(x => x.id === parseInt(editId)) : null;
  if (cur && cpIsDischarged(cur) && stVal !== "退所") { alert("退所した方を戻すときは、カルテの「退所を取り消す」から行ってください。"); return; }
  if ((!cur || !cpIsDischarged(cur)) && stVal === "退所") { alert("退所は、カルテの「退所の手続き」から行ってください（退所日と理由を残すため）。"); return; }
+ if ((!cur || cur.status !== "入院中") && stVal === "入院中") { alert("入院の登録は、カルテの「入院の歴」または在籍状況の切り替えから行ってください（入院日・入院先・理由を残すため）。"); return; }
+ if (cur && cur.status === "入院中" && stVal !== "入院中") { alert("入院中の方の退院手続きは、カルテの「入院の歴」の「退院日を入れる」または在籍状況の切り替えから行ってください（退院日を残すため）。"); return; }
  // 新しく登録する方の部屋に、すでに別の方がいないか
  if (!cur) {
  const occ = cpRoomOccupant(roomNo, null);
@@ -17041,20 +17626,395 @@ function submitOrderApply() {
  alert("発注申請を提出しました（上司承認待ちへ）！要発注アラートを発注手配済みに更新し、管理者の認証アラートへ通知しました。");
 }
 
+// ==========================================
+// [Antigravity実装 2026-10-19] 入院の期間リスト (r.hospitalizations) の管理・カルテ表示・入退院手続き
+// ==========================================
+function cpSyncResidentHospitalFields(r) {
+ if (!r) return;
+ const list = cpGetHospitalizations(r).slice().sort((a, b) => String(a.admission_date || "").localeCompare(String(b.admission_date || "")));
+ const ongoing = list.find(h => !h.discharge_date);
+ if (ongoing) {
+ if (!cpIsDischarged(r)) r.status = "入院中";
+ r.hospital_date = ongoing.admission_date || "";
+ r.hospital_name = ongoing.hospital_name || "";
+ r.hospital_reason = ongoing.reason || "";
+ } else {
+ if (r.status === "入院中") r.status = "在所";
+ const latest = list[list.length - 1];
+ if (latest) {
+ r.hospital_date = latest.admission_date || "";
+ r.hospital_name = latest.hospital_name || "";
+ r.hospital_reason = latest.reason || "";
+ } else {
+ r.hospital_date = "";
+ r.hospital_name = "";
+ r.hospital_reason = "";
+ }
+ }
+}
+
+function cpCanEditHospitalRecord(hosp) {
+ const me = cpLoginStaffName();
+ const f = typeof cpRoleFlags === "function" ? cpRoleFlags(me) : {};
+ if (f.director || f.nurse || f.caremanager) return true;
+ if (hosp && hosp.created_by && hosp.created_by === me) return true;
+ return false;
+}
+
+function cpHospitalHistorySectionHtml(r) {
+ if (!r) return "";
+ const list = cpGetHospitalizations(r).slice().sort((a, b) => String(b.admission_date || "").localeCompare(String(a.admission_date || "")));
+ const ongoing = list.find(h => !h.discharge_date);
+ const summaryText = ongoing
+ ? `現在入院中（${escapeHtml(ongoing.admission_date)}〜 ／ ${escapeHtml(ongoing.hospital_name || "入院先未登録")}）`
+ : (list.length ? `過去 ${list.length}回` : "記録なし");
+
+ const rowsHtml = list.length === 0
+ ? `<div style="font-size:13px; color:var(--text-muted); padding:4px 0;">入院の記録はありません。</div>`
+ : `<div class="cp-hosp-list">` + list.map(h => {
+ const isOngoing = !h.discharge_date;
+ const periodStr = `${escapeHtml(h.admission_date || "未登録")} 〜 ${isOngoing ? "<strong>入院中（継続）</strong>" : escapeHtml(h.discharge_date)}`;
+ const histCount = (h.edit_history || []).length;
+ const canEdit = cpCanEditHospitalRecord(h);
+ return `<div class="cp-hosp-item ${isOngoing ? "is-ongoing" : ""}">
+ <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
+ <div>
+ <div style="font-size:14px;">
+ <span class="badge" style="background:${isOngoing ? "var(--warn)" : "var(--pine-dark)"}; color:#fff; font-size:13px; padding:2px 8px; margin-right:6px;">${isOngoing ? "入院中" : "退院済"}</span>
+ <span>期間: ${periodStr}</span>
+ </div>
+ <div style="font-size:13px; margin-top:4px; color:var(--text-main);">
+ <strong>入院先:</strong> ${escapeHtml(h.hospital_name || "未登録")} ／ <strong>理由:</strong> ${escapeHtml(h.reason || "未登録")}
+ </div>
+ ${(h.created_by || histCount) ? `<div style="font-size:13px; color:var(--text-muted); margin-top:2px;">${h.created_by ? "記録: " + escapeHtml(h.created_by) : ""}${h.discharged_by ? " ／ 退院手続き: " + escapeHtml(h.discharged_by) : ""}${histCount ? ` ／ 訂正 ${histCount}回` : ""}</div>` : ""}
+ </div>
+ <div style="display:flex; gap:6px; flex-wrap:wrap;">
+ ${isOngoing && !cpIsDischarged(r) ? `<button type="button" class="btn btn-primary" style="font-size:13px; padding:3px 10px;" onclick="event.preventDefault(); event.stopPropagation(); openHospitalDischargeModal(${r.id}, ${h.id}); return false;">退院日を入れる（在所へ戻す）</button>` : ""}
+ ${canEdit ? `<button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="event.preventDefault(); event.stopPropagation(); openHospitalModal(${r.id}, ${h.id}); return false;">内容・期間を訂正</button>` : `<span style="font-size:13px; color:var(--text-muted);">訂正は記録者・看護師・管理者</span>`}
+ </div>
+ </div>
+ </div>`;
+ }).join("") + `</div>`;
+
+ return `<details class="care-accordion" ${ongoing || list.length ? "open" : ""} style="margin-bottom:10px; border:1px solid var(--border-color); border-radius:8px; background:var(--card-bg); overflow:hidden;">
+ <summary style="padding:10px 14px; background:var(--bg-color); font-weight:bold; cursor:pointer; font-size:13px; color:var(--pine-dark); border-bottom:1px solid var(--border-color); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+ <span>入院の歴（期間の一覧） <span style="font-weight:normal; color:var(--text-muted); margin-left:6px;">${summaryText}</span></span>
+ <div style="display:flex; align-items:center; gap:6px;">
+ ${!ongoing && !cpIsDischarged(r) ? `<button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:13px;" onclick="event.preventDefault(); event.stopPropagation(); openHospitalModal(${r.id}, null); return false;">+ 入院を登録</button>` : ""}
+ <span style="font-size:13px; color:var(--text-muted);">(開閉)</span>
+ </div>
+ </summary>
+ <div style="padding:12px;">
+ ${rowsHtml}
+ </div>
+ </details>`;
+}
+
+function openHospitalModal(resId, hospId) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || gState.selectedResidentId));
+ if (!r) return;
+ if (cpIsDischarged(r) && !hospId) {
+ alert("退所した方に新しい入院は登録できません。");
+ return;
+ }
+ const list = cpGetHospitalizations(r);
+ const editing = (hospId !== null && hospId !== undefined && hospId !== "")
+ ? list.find(h => Number(h.id) === Number(hospId))
+ : null;
+
+ if (!editing) {
+ const ongoing = list.find(h => !h.discharge_date);
+ if (ongoing || r.status === "入院中") {
+ alert("すでに入院中の記録があります。新しく入院を登録する前に、現在の入院に退院日を入れてください（内容を直すときは「内容・期間を訂正」を使ってください）。");
+ renderResidentDetail();
+ return;
+ }
+ } else {
+ if (!cpCanEditHospitalRecord(editing)) {
+ alert("ほかの職員が登録した入院記録を訂正できるのは、記録した本人または管理者・看護師・計画作成担当者だけです。");
+ return;
+ }
+ }
+
+ document.getElementById("hospResidentId").value = String(r.id);
+ document.getElementById("hospRecordId").value = editing ? String(editing.id) : "";
+ const titleEl = document.getElementById("hospitalModalTitle");
+ if (titleEl) titleEl.textContent = editing ? `入院の期間・内容の訂正（${r.name} 様）` : `入院の登録（${r.name} 様）`;
+
+ const today = gState.selectedDate || toLocalDateStr(new Date());
+ document.getElementById("hospAdmissionDate").value = editing ? (editing.admission_date || "") : today;
+ document.getElementById("hospDischargeDate").value = editing ? (editing.discharge_date || "") : "";
+ document.getElementById("hospName").value = editing ? (editing.hospital_name || "") : "";
+ document.getElementById("hospReason").value = editing ? (editing.reason || "") : "";
+
+ const disWrap = document.getElementById("hospDischargeDateWrap");
+ if (disWrap) disWrap.style.display = editing ? "block" : "none";
+
+ const reasonWrap = document.getElementById("hospEditReasonWrap");
+ const reasonEl = document.getElementById("hospEditReason");
+ if (reasonWrap) reasonWrap.style.display = editing ? "block" : "none";
+ if (reasonEl) reasonEl.value = "";
+
+ openModal("hospitalModal");
+}
+
+function submitHospitalModal() {
+ const resId = Number((document.getElementById("hospResidentId") || {}).value);
+ const recIdRaw = ((document.getElementById("hospRecordId") || {}).value || "").trim();
+ const editingId = recIdRaw ? Number(recIdRaw) : null;
+ const r = (gState.residents || []).find(x => Number(x.id) === resId);
+ if (!r) return;
+
+ const admDate = ((document.getElementById("hospAdmissionDate") || {}).value || "").trim();
+ const disDate = editingId !== null ? ((document.getElementById("hospDischargeDate") || {}).value || "").trim() : "";
+ const hName = ((document.getElementById("hospName") || {}).value || "").trim();
+ const hReason = ((document.getElementById("hospReason") || {}).value || "").trim();
+ const editReason = ((document.getElementById("hospEditReason") || {}).value || "").trim();
+ const today = toLocalDateStr(new Date());
+
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(admDate)) {
+ alert("入院日を入力してください。");
+ return;
+ }
+ if (admDate > today) {
+ alert("入院日に先の日付は入れられません。");
+ return;
+ }
+ if (r.admission_date && admDate < r.admission_date) {
+ alert(`入院日が施設の入居日（${r.admission_date}）より前になっています。`);
+ return;
+ }
+ if (disDate) {
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(disDate)) {
+ alert("退院日を正しく入力してください。");
+ return;
+ }
+ if (disDate > today) {
+ alert("退院日に先の日付は入れられません。");
+ return;
+ }
+ if (disDate < admDate) {
+ alert("退院日が入院日より前になっています。入院日以降の日付を入れてください。");
+ return;
+ }
+ }
+ if (!hName) {
+ alert("入院先（病院名）を入力してください。");
+ return;
+ }
+ if (!hReason) {
+ alert("入院の理由を入力してください。");
+ return;
+ }
+
+ const list = cpGetHospitalizations(r);
+ // ほかの入院期間との重なりを確かめる
+ const effEnd = disDate || "9999-12-31";
+ const overlap = list.find(h => {
+ if (editingId !== null && Number(h.id) === editingId) return false;
+ const oStart = h.admission_date || "";
+ const oEnd = h.discharge_date || "9999-12-31";
+ return admDate <= oEnd && oStart <= effEnd;
+ });
+ if (overlap) {
+ alert(`別の入院期間（${overlap.admission_date}〜${overlap.discharge_date || "入院中"}）と日付が重なっています。日付を確かめてください。`);
+ return;
+ }
+
+ const who = cpLoginStaffName();
+ const nowStr = toLocalDateTimeStr(new Date());
+
+ if (editingId !== null) {
+ const target = r.hospitalizations.find(h => h && Number(h.id) === editingId);
+ if (!target) {
+ alert("訂正する入院記録が見つかりません。");
+ return;
+ }
+ if (!cpCanEditHospitalRecord(target)) {
+ alert("ほかの職員が登録した入院記録を訂正できるのは、記録した本人または管理者・看護師・計画作成担当者だけです。");
+ return;
+ }
+ if (!editReason) {
+ alert("訂正の理由を入力してください。");
+ return;
+ }
+ const oldRec = JSON.parse(JSON.stringify(target));
+ const beforeLen = (target.edit_history || []).length;
+ target.admission_date = admDate;
+ target.discharge_date = disDate;
+ target.hospital_name = hName;
+ target.reason = hReason;
+ cpAppendEditHistory(target, oldRec, ["admission_date", "discharge_date", "hospital_name", "reason"], editReason);
+ if ((target.edit_history || []).length <= beforeLen) {
+ alert("内容が変わっていません。");
+ return;
+ }
+ } else {
+ const ongoing = list.find(h => !h.discharge_date);
+ if (ongoing) {
+ alert("すでに入院中の記録があります。二重に登録はできません。");
+ return;
+ }
+ let newId = Date.now();
+ while (r.hospitalizations.some(h => h && Number(h.id) === newId)) newId++;
+ r.hospitalizations.push({
+ id: newId,
+ resident_id: r.id,
+ admission_date: admDate,
+ discharge_date: "",
+ hospital_name: hName,
+ reason: hReason,
+ created_by: who,
+ created_at: nowStr
+ });
+ if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+ db.data.care_records.unshift({
+ id: Date.now() + 1,
+ resident_id: r.id,
+ category: "受診",
+ recorded_at: `${admDate} ${cpNowHHMM()}`,
+ content: `【入院】入院先: ${hName} ／ 理由: ${hReason}（入院日: ${admDate}）`,
+ staff_name: who
+ });
+ }
+
+ cpSyncResidentHospitalFields(r);
+ db.data.residents = gState.residents;
+ db.save();
+ closeModal("hospitalModal");
+ renderResidentsStrip();
+ initGlobalTimeSync();
+ renderResidentDetail();
+ renderPersonalCalendar();
+ loadDateRecords(gState.selectedDate);
+ if (gState.activeCareTab === "vitals") renderVitalsTable();
+ if (gState.activeCareTab === "meal") renderMealsTable();
+ if (gState.activeCareTab === "med") renderMedTable();
+ alert(editingId !== null ? `${r.name} 様の入院記録を訂正しました。` : `${r.name} 様の入院（${admDate}〜・${hName}）を登録しました。`);
+}
+
+function openHospitalDischargeModal(resId, hospId) {
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || gState.selectedResidentId));
+ if (!r) return;
+ const list = cpGetHospitalizations(r);
+ const target = hospId ? list.find(h => Number(h.id) === Number(hospId)) : list.find(h => !h.discharge_date);
+ if (!target) {
+ alert("現在入院中の記録が見つかりません。");
+ return;
+ }
+ document.getElementById("hospDisResidentId").value = String(r.id);
+ document.getElementById("hospDisRecordId").value = String(target.id);
+ const infoEl = document.getElementById("hospDischargeCurrentInfo");
+ if (infoEl) {
+ infoEl.innerHTML = `<strong>${escapeHtml(r.name)} 様</strong><br>入院日: <strong>${escapeHtml(target.admission_date || "-")}</strong> ／ 入院先: <strong>${escapeHtml(target.hospital_name || "未登録")}</strong><br>理由: ${escapeHtml(target.reason || "未登録")}`;
+ }
+ const today = gState.selectedDate || toLocalDateStr(new Date());
+ document.getElementById("hospDischargeInputDate").value = today >= (target.admission_date || "") ? today : (target.admission_date || today);
+ document.getElementById("hospDischargeNote").value = "";
+ openModal("hospitalDischargeModal");
+}
+
+function submitHospitalDischarge() {
+ const resId = Number((document.getElementById("hospDisResidentId") || {}).value);
+ const recId = Number((document.getElementById("hospDisRecordId") || {}).value);
+ const r = (gState.residents || []).find(x => Number(x.id) === resId);
+ if (!r) return;
+ cpGetHospitalizations(r);
+ const target = (r.hospitalizations || []).find(h => h && Number(h.id) === recId);
+ if (!target) {
+ alert("対象の入院記録が見つかりません。");
+ return;
+ }
+ if (target.discharge_date) {
+ alert("すでに退院日が登録されています。");
+ return;
+ }
+ const disDate = ((document.getElementById("hospDischargeInputDate") || {}).value || "").trim();
+ const note = ((document.getElementById("hospDischargeNote") || {}).value || "").trim();
+ const today = toLocalDateStr(new Date());
+ if (!/^\d{4}-\d{2}-\d{2}$/.test(disDate)) {
+ alert("退院日を入力してください。");
+ return;
+ }
+ if (disDate > today) {
+ alert("退院日に先の日付は入れられません。");
+ return;
+ }
+ if (target.admission_date && disDate < target.admission_date) {
+ alert(`退院日（${disDate}）が入院日（${target.admission_date}）より前になっています。入院日以降の日付を入れてください。`);
+ return;
+ }
+ const who = cpLoginStaffName();
+ const nowStr = toLocalDateTimeStr(new Date());
+ target.discharge_date = disDate;
+ target.discharged_by = who;
+ target.discharged_at = nowStr;
+ if (note) target.discharge_note = note;
+
+ cpSyncResidentHospitalFields(r);
+ r.status = "在所";
+
+ if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+ db.data.care_records.unshift({
+ id: Date.now() + 1,
+ resident_id: r.id,
+ category: "受診",
+ recorded_at: `${disDate} ${cpNowHHMM()}`,
+ content: `【退院】${target.hospital_name || "病院"}より退院（入院期間: ${target.admission_date}〜${disDate}）${note ? " ／ " + note : ""}`,
+ staff_name: who
+ });
+
+ db.data.residents = gState.residents;
+ db.save();
+ closeModal("hospitalDischargeModal");
+ renderResidentsStrip();
+ initGlobalTimeSync();
+ renderResidentDetail();
+ renderPersonalCalendar();
+ loadDateRecords(gState.selectedDate);
+ if (gState.activeCareTab === "vitals") renderVitalsTable();
+ if (gState.activeCareTab === "meal") renderMealsTable();
+ if (gState.activeCareTab === "med") renderMedTable();
+ alert(`${r.name} 様の退院（${disDate}）を記録し、在所へ戻しました。入院期間（${target.admission_date}〜${disDate}）は履歴に残ります。`);
+}
+
 function updateResidentStatus(resId, status) {
  const r = gState.residents.find(x => x.id === resId);
  if (r && cpIsDischarged(r)) { alert("退所した方を戻すときは「退所を取り消す」から行ってください。"); renderResidentDetail(); return; }
- if (r) {
+ if (!r) return;
+ // [Antigravity実装 2026-10-19] 入院中への切り替え・入院中からの復帰は、入院日・退院日を残すため専用モーダルを開く
+ if (status === "入院中") {
+ const ongoing = cpGetHospitalizations(r).find(h => !h.discharge_date);
+ if (ongoing) {
+ alert("すでに入院中です。");
+ renderResidentDetail();
+ return;
+ }
+ renderResidentDetail();
+ openHospitalModal(r.id, null);
+ return;
+ }
+ if (r.status === "入院中" && status === "在所") {
+ const ongoing = cpGetHospitalizations(r).find(h => !h.discharge_date);
+ if (ongoing) {
+ renderResidentDetail();
+ openHospitalDischargeModal(r.id, ongoing.id);
+ return;
+ }
+ }
+ if (r.status === "入院中" && status === "外泊中") {
+ alert("入院中の方を外泊中に変えるときは、先に退院の手続き（退院日の入力）を行ってください。");
+ renderResidentDetail();
+ return;
+ }
  r.status = status;
  db.save();
  renderResidentsStrip();
-	initGlobalTimeSync();
-	
+ initGlobalTimeSync();
  renderResidentDetail();
  if (gState.activeCareTab === "vitals") renderVitalsTable();
  if (gState.activeCareTab === "meal") renderMealsTable();
  alert(`在籍ステータスを「${status}」に更新しました`);
- }
 }
 
 function renderCareExpiryNotes() {
