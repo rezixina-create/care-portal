@@ -24,11 +24,19 @@
 - **作業ルート**: `C:\Users\Owner\.gemini\antigravity\scratch\care_portal`
 - **主要ファイル一覧**:
   - `index.html`: 全機能を集約したSPAメイン画面（全モーダル、入力フォーム、帳票レイアウトを含む）。
-  - `app.js`: 状態管理（`gState`）、データベース同期（`LocalDB`）、全DOMレンダリング、ビジネスロジックを含むコアスクリプト（約12,000行）。
+  - `js/`（2026-10-19 に app.js を役割ごとに分けた。index.html が 01〜16 を番号の順に読み込む。順番を変えない。新しいファイルを足すときは index.html・test_suite.html の両方に足す）:
+    - `01_core.js` データの保存・同期（`LocalDB`）・ログインの通信・初期データ・`db` と `gState` の生成
+    - `02_terms.js` 用語の解説・病気の現場ケアガイド ／ `03_common.js` 共通の道具・起動・職員の権限・アラート
+    - `04_care_record.js` カレンダー・カルテ表示・記録の入力 ／ `05_summary_print_audit.js` 介護サマリー・印刷・監査・緊急搬送
+    - `06_schema_history.js` シェーマ図・記録の一覧 ／ `07_daily_tables.js` 業務日誌・検索・バイタル等の表 ／ `08_meds.js` 処方薬・目薬
+    - `09_night_misc.js` 夜間巡視・体重・リネン・レク・連絡帳 ／ `10_office.js` 事務所（請求設定・在庫・発注・預り金・ヒヤリハット・ワクチン・利用者の登録）
+    - `11_karte_staff.js` カルテの欄・職員と資格 ／ `12_hospital_photos.js` 入院・小窓の共通・写真 ／ `13_shift_units.js` 勤務表・区分・退所・バックアップ
+    - `14_auth_home.js` ログイン・ホーム・ID/パスワード ／ `15_single_write.js` 1人分をまとめて書く画面 ／ `16_careplan.js` ケアプラン
+    - 読み込みの途中で、後ろのファイルの関数・定数を使わない（関数の中から使うのはよい）。詳しくはプロジェクトの claude/js_file_map.md
   - `style.css`: 医療・介護現場向け高視認性スタイルシート（白黒印刷対応、レスポンシブ、B5プレビュー最適化）。
   - `server.ps1`: ポート8888で稼働するローカルHTTPサーバー ＋ Cloudflareトンネル統合スクリプト。
   - `data/portal_database.json`: 全テーブル（39マスター配列・オブジェクト）を保持するJSONデータベース。
-  - `static/`: サーバー配信用の完全同期ミラーディレクトリ（`index.html`, `app.js`, `style.css` 等）。
+  - `static/`: サーバー配信用の完全同期ミラーディレクトリ（`index.html`, `js/`, `style.css` 等）。
   - `tests/`: 厳格な自動テスト群（構文、DOM ID整合性、onclickハンドラ整合性、実機EdgeヘッドレスE2E、リロード永続化、絵文字ゼロ検証、ダブルサイクル検証）。
 
 ---
@@ -178,9 +186,9 @@
    - UI、コード、コメント、テストログ、コミットメッセージすべてにおいて**絵文字は絶対に使用禁止（0件厳守）**。
    - `tests/check_emojis.ps1` で全主要ファイルの絵文字含有数が0であることを常に担保してください。
 2. **HTMLとJavaScriptの整合性**:
-   - `app.js` 内の `document.getElementById` は、`index.html` および `test_suite.html` の `#sandbox` に定義されている必要があります（`tests/check_ids.ps1` で検証）。
-   - 静的および動的な `onclick` ハンドラはすべて `app.js` に実体関数が存在する必要があります（`tests/check_onclick.ps1`, `tests/check_dynamic_onclick.ps1` で検証）。
+   - `js/*.js` 内の `document.getElementById` は、`index.html` および `test_suite.html` の `#sandbox` に定義されている必要があります（`tests/check_ids.ps1` で検証）。
+   - 静的および動的な `onclick` ハンドラはすべて `js/*.js` に実体関数が存在する必要があります（`tests/check_onclick.ps1`, `tests/check_dynamic_onclick.ps1` で検証）。
 3. **同期の徹底**:
-   - ルートの `index.html`, `app.js`, `style.css`, `test_suite.html`, `modal_test_runner.html` を修正した際は、必ず `static/` フォルダ配下の同名ファイルへ上書きコピーして同期してください。
+   - ルートの `index.html`, `js/*.js`, `style.css`, `test_suite.html`, `modal_test_runner.html` を修正した際は、必ず `static/` フォルダ配下の同名ファイル（`static/js/` を含む）へ上書きコピーして同期してください。
 4. **Windows環境の注意点**:
    - 日本語を含む `.ps1` スクリプトは、PowerShell 5.1での文字化け・パースエラーを防ぐため**UTF-8 BOM**を付与してください（`tests/add_bom.ps1` を使用）。

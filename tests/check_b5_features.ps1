@@ -2,7 +2,7 @@
 $ErrorActionPreference = "Stop"
 $dir = (Get-Item "$PSScriptRoot\..").FullName
 $html = [System.IO.File]::ReadAllText("$dir\index.html", [System.Text.Encoding]::UTF8)
-$js = [System.IO.File]::ReadAllText("$dir\app.js", [System.Text.Encoding]::UTF8)
+$js = ((Get-ChildItem "$dir\js\*.js" | Sort-Object Name | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8) }) -join "`n")
 $css = [System.IO.File]::ReadAllText("$dir\style.css", [System.Text.Encoding]::UTF8)
 
 $errors = @()

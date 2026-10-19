@@ -3021,7 +3021,9 @@ namespace CarePortal
             // [Claude修正] 配信してよいファイルだけを返す。データ・設定・.git・スクリプト等は配信しない。
             // 旧実装はフォルダ内の全ファイル (全利用者のデータを含む) と、「..」でフォルダ外のファイルまで返していた。
             string lowerPath = urlPath.ToLowerInvariant();
+            // [Claude整理 2026-10-19] 画面のプログラムは js/ に分けたので、js/ の .js も渡す
             bool allowedPath = lowerPath == "/index.html" || lowerPath == "/app.js" || lowerPath == "/style.css"
+                || (lowerPath.StartsWith("/js/") && lowerPath.EndsWith(".js") && lowerPath.IndexOf('/', 4) < 0)
                 || lowerPath == "/favicon.ico" || lowerPath.StartsWith("/assets/") || lowerPath.StartsWith("/data/photos/");
             if (!allowedPath || urlPath.Contains("..") || urlPath.Contains("\\") || urlPath.Contains(":"))
             {

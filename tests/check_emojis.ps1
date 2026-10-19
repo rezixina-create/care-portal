@@ -1,18 +1,18 @@
 ﻿$portalDir = (Get-Item "$PSScriptRoot\..").FullName
 $files = @(
     "index.html",
-    "app.js",
     "style.css",
     "data/portal_database.json",
     "test_suite.html",
     "modal_test_runner.html",
     "static/index.html",
-    "static/app.js",
     "static/style.css",
     "static/test_suite.html",
     "static/modal_test_runner.html"
 )
 
+# [Claude整理 2026-10-19] app.js は js/ に分けた
+$files = @($files) + @(Get-ChildItem (Join-Path $portalDir "js\*.js") | ForEach-Object { "js/" + $_.Name }) + @(Get-ChildItem (Join-Path $portalDir "static\js\*.js") -ErrorAction SilentlyContinue | ForEach-Object { "static/js/" + $_.Name })
 $found = 0
 $regex = New-Object System.Text.RegularExpressions.Regex "[\uD83C-\uDBFF][\uDC00-\uDFFF]|[\u2600-\u26FF]|[\u2700-\u27BF]"
 

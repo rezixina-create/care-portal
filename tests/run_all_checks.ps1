@@ -16,7 +16,8 @@ Write-Host "==========================================================" -Foregro
 # Test 1: Bracket balance in app.js (State-machine parser)
 # --------------------------------------------------------------
 Write-Host "`n[Test 1] Bracket Balance Check (app.js)..." -ForegroundColor Yellow
-$appJsCode = [System.IO.File]::ReadAllText($appJsPath, [System.Text.Encoding]::UTF8)
+# [Claude整理 2026-10-19] app.js は js/ に分けた。js/ の全部を名前の順につないで調べる
+$appJsCode = ((Get-ChildItem (Join-Path $carePortalDir "js\*.js") | Sort-Object Name | ForEach-Object { [System.IO.File]::ReadAllText($_.FullName, [System.Text.Encoding]::UTF8) }) -join "`n")
 
 # Accurate token scan ignoring comments, single/double quotes, and template literals
 $len = $appJsCode.Length
