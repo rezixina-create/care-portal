@@ -22835,6 +22835,33 @@ function cpOnCarePlanResidentChange(val) {
   selectResident(id);
 }
 
+// [Claude修正 2026-10-19] 実施中・終了の版の中身（アセスメント・方針・課題・サービス）は変えない。
+// 本人・家族に説明して同意をもらった内容が、あとから黙って変わらないようにするため。変えるときは「見直して新しい版を作る」
+function cpCarePlanContentEditable(plan) {
+  return !!plan && (plan.status === "作成中" || plan.status === "同意待ち" || !plan.status);
+}
+function cpCarePlanLockedMsg(plan) {
+  return plan && plan.status === "実施中"
+    ? "実施中の計画の中身は変えられません（説明・同意をもらった内容のため）。変えるときは「見直して新しい版を作る」から新しい版を作ってください。"
+    : "終了した版は変えられません。";
+}
+// [Claude修正 2026-10-19] 説明・同意の前にそろっていないといけないもの（アセスメント・方針・課題と目標・サービス・話し合いの記録）
+function cpCarePlanMissingForConsent(plan) {
+  const miss = [];
+  const a = (plan && plan.assessment) || {};
+  if (!a.person_wish || !a.family_wish || !a.strengths || !a.issues) miss.push("① アセスメント");
+  if (!plan.policy) miss.push("② 総合的な援助の方針");
+  const needs = Array.isArray(plan.needs) ? plan.needs : [];
+  if (!needs.length) miss.push("③ 課題（ニーズ）と目標");
+  else if (needs.some(n => !Array.isArray(n.services) || !n.services.length)) miss.push("③ それぞれの課題のサービス内容");
+  if (!Array.isArray(plan.meetings) || !plan.meetings.length) miss.push("④ ほかの職員との話し合いの記録");
+  return miss;
+}
+// [Claude修正 2026-10-19] まだ実施中になっていない新しい版（作成中・同意待ち）があるか
+function cpCarePlanHasDraft(resId) {
+  return cpGetPlansForResident(resId).some(p => p.status === "作成中" || p.status === "同意待ち");
+}
+
 // 1. 新しいケアプラン（第1版など）を作成
 function cpCreateInitialCarePlan() {
   if (!cpCanEditCarePlanGoal()) {
@@ -22848,7 +22875,11 @@ function cpCreateInitialCarePlan() {
     return;
   }
   const existing = cpGetPlansForResident(resId);
-  const nextVer = existing.length ? Math.max(...existing.map(p => Number(p.version) || 0)) + 1 : 1;
+  if (existing.length) { // [Claude修正 2026-10-19] 2つ目からは「見直して新しい版を作る」で（前の版から写し、理由を残す）
+    alert("この方にはすでにケアプランがあります。新しい版は「見直して新しい版を作る」から作ってください。");
+    return;
+  }
+  const nextVer = 1;
   const nowStr = toLocalDateStr(new Date());
   const staff = cpLedgerStaff();
   const newPlan = {
@@ -22898,6 +22929,15 @@ function cpReviewAndCreateNextVersion(planId) {
   const list = cpEnsureCarePlansArray();
   const src = list.find(p => Number(p.id) === Number(planId));
   if (!src) return;
+  // [Claude修正 2026-10-19] 見直しは、実施中か終了の版から。まだ実施中になっていない新しい版があるときは、そちらを仕上げる（作成中の版が2つにならないように）
+  if (cpCarePlanHasDraft(src.resident_id)) {
+    alert("まだ実施中になっていない新しい版（作成中・同意待ち）があります。先にその版を仕上げるか、終了にしてください。");
+    return;
+  }
+  if (src.status !== "実施中" && src.status !== "終了") {
+    alert("見直しは、実施中か終了の版から行ってください。");
+    return;
+  }
   const r = (gState.residents || []).find(x => Number(x.id) === Number(src.resident_id));
   const reason = prompt(`第${src.version}版を見直して、新しい版（作成中）を作ります。\n（※新しい版が「実施中」になった時点で、前の版は自動で「終了」になります）\n\n見直しの理由を入力してください（必須）：`, "");
   if (reason === null) return;
@@ -23005,6 +23045,7 @@ function cpQuoteCareSummaryToAssessment(planId) {
   if (!cpCanEditCarePlanGoal()) return;
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan) return;
+  if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   const selEl = document.getElementById("cpQuoteSummarySelect");
   const summaries = (db.data.care_summaries || []).filter(s => !s.voided && Number(s.resident_id) === Number(plan.resident_id));
   if (!summaries.length) {
@@ -23022,18 +23063,19 @@ function cpQuoteCareSummaryToAssessment(planId) {
   const issuesEl = document.getElementById("cpAssessIssues");
   const sumIdEl = document.getElementById("cpAssessSummaryId");
 
-  const personParts = [targetSummary.future_goals, targetSummary.care_notes].map(x => (x || "").trim()).filter(Boolean);
-  const familyParts = [targetSummary.family_info].map(x => (x || "").trim()).filter(Boolean);
-  const strengthParts = [targetSummary.adl, targetSummary.background].map(x => (x || "").trim()).filter(Boolean);
-  const issueParts = [targetSummary.physical_cognitive, targetSummary.meals_hydration, targetSummary.excretion, targetSummary.sleep, targetSummary.dementia_behavior, targetSummary.medical_care].map(x => (x || "").trim()).filter(Boolean);
+  // [Claude修正 2026-10-19] 介護サマリーには「本人の意向」の欄がないので、本人の意向は写さない（目標やケアの注意を本人の言葉として残さないため）。
+  // 写すときは、どの欄から写したかを【　】で付ける
+  const lbl = (name, v) => { const t = (v || "").trim(); return t ? `【介護サマリー：${name}】${t}` : ""; };
+  const familyParts = [lbl("家族の状況・要望", targetSummary.family_info)].filter(Boolean);
+  const strengthParts = [lbl("生活歴", targetSummary.background), lbl("ADL", targetSummary.adl)].filter(Boolean);
+  const issueParts = [lbl("身体・認知", targetSummary.physical_cognitive), lbl("食事・水分", targetSummary.meals_hydration), lbl("排泄", targetSummary.excretion), lbl("睡眠", targetSummary.sleep), lbl("認知症の様子", targetSummary.dementia_behavior), lbl("医療・看護", targetSummary.medical_care)].filter(Boolean);
 
-  if (personEl && personParts.length) personEl.value = personParts.join("\n");
   if (familyEl && familyParts.length) familyEl.value = familyParts.join("\n");
   if (strengthsEl && strengthParts.length) strengthsEl.value = strengthParts.join("\n");
   if (issuesEl && issueParts.length) issuesEl.value = issueParts.join("\n");
   if (sumIdEl) sumIdEl.value = String(targetSummary.id);
 
-  alert(`介護サマリー（${targetSummary.created_at || ""} ${targetSummary.summary_type || ""}）からアセスメント欄へ写しました。内容を書き直してから「アセスメントを保存」を押してください。`);
+  alert(`介護サマリー（${targetSummary.created_at || ""} ${targetSummary.summary_type || ""}）から、家族の意向・できること・困っていることの欄へ写しました（どの欄から写したかを【　】で付けています）。\n本人の意向は介護サマリーに欄がないため写していません。本人から聞き取って書いてください。\n内容を書き直してから「アセスメントを保存」を押してください。`);
 }
 
 // ① アセスメント保存
@@ -23044,6 +23086,7 @@ function cpSaveCarePlanAssessment(planId) {
   }
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan) return;
+  if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   const personWish = (document.getElementById("cpAssessPersonWish")?.value || "").trim();
   const familyWish = (document.getElementById("cpAssessFamilyWish")?.value || "").trim();
   const strengths = (document.getElementById("cpAssessStrengths")?.value || "").trim();
@@ -23102,6 +23145,7 @@ function cpSaveCarePlanPolicy(planId) {
   }
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan) return;
+  if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   const val = (document.getElementById("cpPolicyInput")?.value || "").trim();
   if (!val) {
     alert("「総合的な援助の方針」が空です。入力してから保存してください。");
@@ -23136,6 +23180,7 @@ function cpSaveCarePlanNeed(planId, needId) {
   }
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan) return;
+  if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   if (!Array.isArray(plan.needs)) plan.needs = [];
 
   const prefix = needId ? `cpNeedEdit_${needId}_` : `cpNeedNew_`;
@@ -23228,6 +23273,7 @@ function cpSaveCarePlanService(planId, needId, serviceId) {
   }
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan || !Array.isArray(plan.needs)) return;
+  if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   const targetNeed = plan.needs.find(n => Number(n.id) === Number(needId));
   if (!targetNeed) return;
   if (!Array.isArray(targetNeed.services)) targetNeed.services = [];
@@ -23290,6 +23336,8 @@ function cpAddCarePlanMeeting(planId) {
   const attendeesVal = (document.getElementById("cpMeetAttendees")?.value || "").trim();
   const opinionsVal = (document.getElementById("cpMeetOpinions")?.value || "").trim();
 
+  if (plan.status === "終了") { alert("終了した版には足せません。"); return; } // [Claude修正 2026-10-19]
+  if (dateVal && dateVal > toLocalDateStr(new Date())) { alert("話し合いの日に、先の日付は入れられません。"); return; } // [Claude修正 2026-10-19]
   const missing = [];
   if (!dateVal) missing.push("話し合いの日");
   if (!attendeesVal) missing.push("参加した職員");
@@ -23325,13 +23373,12 @@ function cpAppendOpinionToMeeting(planId, meetingId) {
     if (inputEl) inputEl.focus();
     return;
   }
+  if (plan.status === "終了") { alert("終了した版には足せません。"); return; } // [Claude修正 2026-10-19]
   const staff = cpLedgerStaff();
   const oldCopy = JSON.parse(JSON.stringify(plan));
-  const line = `[${staff}] ${addText}`;
+  // [Claude修正 2026-10-19] あとから意見を足した人を「参加した職員」に足さない（その場にいなかった人を参加者として残さないため）。足した日時を付ける
+  const line = `[${toLocalDateTimeStr(new Date())} ${staff}（あとから追記）] ${addText}`;
   mt.opinions = mt.opinions ? `${mt.opinions}\n${line}` : line;
-  if (mt.attendees && !mt.attendees.includes(staff)) {
-    mt.attendees = `${mt.attendees}、${staff}`;
-  }
   cpAppendEditHistory(plan, oldCopy, ["meetings"], `${staff}が話し合いの意見を追記`);
   db.save();
   renderCarePlanTab();
@@ -23343,6 +23390,12 @@ function cpEditCarePlanMeeting(planId, meetingId) {
   if (!plan || !Array.isArray(plan.meetings)) return;
   const mt = plan.meetings.find(m => Number(m.id) === Number(meetingId));
   if (!mt) return;
+  // [Claude修正 2026-10-19] 話し合いの記録の書き直しは、記録した本人か計画作成担当者だけ（ほかの人の書いた意見を書き換えられないように）
+  if (plan.status === "終了") { alert("終了した版は変えられません。"); return; }
+  if (!(cpCanEditCarePlanGoal() || (mt.recorded_by && mt.recorded_by === cpLedgerStaff()))) {
+    alert("話し合いの記録を訂正できるのは、記録した本人か計画作成担当者です。意見は「意見を追加」から足してください。");
+    return;
+  }
   const newOpinions = prompt(`話し合いの記録（${mt.date}）の「出た意見」を訂正します。\n訂正後の内容を入力してください：`, mt.opinions || "");
   if (newOpinions === null) return;
   if (!newOpinions.trim()) {
@@ -23393,6 +23446,24 @@ function cpSaveCarePlanConsent(planId) {
   }
 
   const todayStr = toLocalDateStr(new Date());
+  if (plan.status === "終了") { alert("終了した版は変えられません。"); return; } // [Claude修正 2026-10-19]
+  // [Claude修正 2026-10-19] 日付の順番: 計画を作った日 ≦ 説明した日 ≦ 同意の日 ≦ 交付日
+  const createdDay = String(plan.created_at || "").slice(0, 10);
+  if (explainedOn && createdDay && explainedOn < createdDay) { alert(`説明した日は、この版を作った日（${createdDay}）より前にはできません。`); return; }
+  if (consentedOn && !explainedOn) { alert("同意の日を入れるときは、先に説明した日を入れてください。"); return; }
+  if (deliveredOn && !consentedOn) { alert("交付日を入れるときは、先に同意の日を入れてください。"); return; }
+  if (consentedOn && explainedOn && consentedOn < explainedOn) { alert("同意の日は、説明した日より前にはできません。"); return; }
+  if (deliveredOn && consentedOn && deliveredOn < consentedOn) { alert("交付日は、同意の日より前にはできません。"); return; }
+  // [Claude修正 2026-10-19] 同意をもらう前に、計画の中身がそろっていること
+  if (consentedOn && plan.status !== "実施中") {
+    const miss = cpCarePlanMissingForConsent(plan);
+    if (miss.length) { alert(`同意の日を入れる前に、次のものをそろえてください：\n・${miss.join("\n・")}`); return; }
+  }
+  // [Claude修正 2026-10-19] 実施中の版は、日付の訂正だけ（3つとも入れたまま・理由が必要）。状態は実施中のまま
+  if (plan.status === "実施中" && !(explainedOn && consentedOn && deliveredOn)) {
+    alert("実施中の版では、説明した日・同意の日・交付日を空にはできません（日付の訂正だけできます）。");
+    return;
+  }
   if (explainedOn && explainedOn > todayStr) {
     alert("説明した日に、先の日付は入れられません。");
     return;
@@ -23419,7 +23490,9 @@ function cpSaveCarePlanConsent(planId) {
   }
 
   let reason = "";
-  if (hadPrev && (prevC.consented_on || prevC.delivered_on)) {
+  // [Claude修正 2026-10-19] 理由を聞くのは、すでに入っていた日付・相手を変える（消す）ときだけ。空の欄を埋めていくときは聞かない
+  const changedFilled = ["explained_on", "explained_to", "relation", "consented_on", "delivered_on"].some(k => (prevC[k] || "") !== "" && (prevC[k] || "") !== ({ explained_on: explainedOn, explained_to: explainedTo, relation: relation, consented_on: consentedOn, delivered_on: deliveredOn })[k]);
+  if (hadPrev && changedFilled) {
     const rInput = cpPromptEditReason("説明・同意・交付の記録", `説明:${prevC.explained_on || "未"} / 同意:${prevC.consented_on || "未"} / 交付:${prevC.delivered_on || "未"}`);
     if (rInput === null) return;
     reason = rInput;
@@ -23434,7 +23507,7 @@ function cpSaveCarePlanConsent(planId) {
   plan.consent.delivered_on = deliveredOn;
 
   const endedPrevVersions = [];
-  if (plan.status !== "終了") {
+  if (plan.status !== "終了" && plan.status !== "実施中") {
     if (explainedOn && consentedOn && deliveredOn) {
       plan.status = "実施中";
       // 新しい版が実施中になったら、前の実施中の版は自動で「終了」（終了日と理由を残す）
@@ -23450,8 +23523,8 @@ function cpSaveCarePlanConsent(planId) {
           endedPrevVersions.push(other.version);
         }
       });
-    } else if (explainedOn && !consentedOn) {
-      plan.status = "同意待ち";
+    } else if (explainedOn) {
+      plan.status = "同意待ち"; // [Claude修正 2026-10-19] 説明したあと、同意・交付がそろうまでは「同意待ち」
     } else {
       plan.status = "作成中";
     }
@@ -23480,6 +23553,7 @@ function cpSaveCarePlanMonitoring(planId, monitoringId) {
   }
   const plan = cpEnsureCarePlansArray().find(p => Number(p.id) === Number(planId));
   if (!plan) return;
+  if (plan.status !== "実施中") { alert("モニタリングは、実施中の版で記録します。"); return; } // [Claude修正 2026-10-19]
   if (!Array.isArray(plan.monitorings)) plan.monitorings = [];
   const needs = Array.isArray(plan.needs) ? plan.needs : [];
   if (!needs.length) {
@@ -23492,6 +23566,7 @@ function cpSaveCarePlanMonitoring(planId, monitoringId) {
   const reviewNeeded = (document.getElementById(prefix + "review_needed")?.value || "").trim();
   const overallNote = (document.getElementById(prefix + "note")?.value || "").trim();
 
+  if (dateVal && dateVal > toLocalDateStr(new Date())) { alert("モニタリングの日に、先の日付は入れられません。"); return; } // [Claude修正 2026-10-19]
   const missing = [];
   if (!dateVal) missing.push("モニタリング実施日");
   if (!reviewNeeded) missing.push("見直しが必要か");
@@ -23594,7 +23669,7 @@ function printCarePlanDocument(planId) {
       <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:6px; margin-bottom:8px;">
         <div>
           <div style="font-size:11px; color:#4a5852;">${escapeHtml(facName)}</div>
-          <h2 style="font-size:18px; margin:2px 0 0 0; color:#173f33;">施設サービス計画書（ケアプラン）</h2>
+          <h2 style="font-size:18px; margin:2px 0 0 0; color:#173f33;">${(cpGetBillingSettings().facility_type === "public") ? "施設サービス計画書" : "介護計画書"}（ケアプラン）</h2>
         </div>
         <div style="text-align:right; font-size:12px;">
           <div><strong>第${Number(plan.version) || 1}版</strong>（状態: ${escapeHtml(plan.status || "作成中")}）</div>
@@ -23674,7 +23749,7 @@ function printCarePlanDocument(planId) {
       </div>
     </div>
   `;
-  runPrintJob(html, { page: "A4 portrait", fitOnePage: true });
+  runPrintJob(html, { page: "A4 portrait", fitOnePage: true, minScale: 0.8 }); // [Claude修正 2026-10-19] 小さくしすぎない（入らなければ2枚に続ける）
 }
 
 // ケアプランタブの描画本体
@@ -23751,7 +23826,11 @@ function renderCarePlanTab() {
     const summaries = (db.data.care_summaries || []).filter(s => !s.voided && Number(s.resident_id) === Number(r.id));
     const quotedSummary = assess.summary_id ? summaries.find(s => Number(s.id) === Number(assess.summary_id)) : null;
     const isPlanEnded = curPlan.status === "終了";
-    const canModifyThisPlan = canEdit && !isPlanEnded;
+    // [Claude修正 2026-10-19] 中身（①②③）は作成中・同意待ちの版だけ書ける。⑤は終了以外、⑥モニタリングは実施中の版だけ
+    const canModifyThisPlan = canEdit && cpCarePlanContentEditable(curPlan);
+    const canEditConsent = canEdit && !isPlanEnded;
+    const canMonitor = canEdit && curPlan.status === "実施中";
+    const lockNote = (canEdit && !canModifyThisPlan) ? `<div class="cp-plan-readonly-msg">${escapeHtml(cpCarePlanLockedMsg(curPlan))}</div>` : "";
 
     // ① アセスメント
     let sec1Body = "";
@@ -23994,7 +24073,7 @@ function renderCarePlanTab() {
       <div class="cp-plan-meet-card">
         <div class="cp-plan-need-head">
           <div><strong>第${idx + 1}回 話し合い</strong>（${escapeHtml(m.date || "")} ／ 記録: ${escapeHtml(m.recorded_by || "")}）</div>
-          ${!isPlanEnded ? `<button type="button" class="btn btn-secondary cp-part-btn" onclick="cpEditCarePlanMeeting(${curPlan.id}, ${m.id})">意見を訂正</button>` : ""}
+          ${!isPlanEnded && (canEdit || (m.recorded_by && m.recorded_by === cpLedgerStaff())) ? `<button type="button" class="btn btn-secondary cp-part-btn" onclick="cpEditCarePlanMeeting(${curPlan.id}, ${m.id})">記録を訂正</button>` : ""}
         </div>
         <div class="cp-plan-subnote">参加した職員: ${escapeHtml(m.attendees || "")}</div>
         <div class="cp-plan-read-box" style="margin-top:6px;">
@@ -24038,9 +24117,11 @@ function renderCarePlanTab() {
     // ⑤ 説明・同意・交付
     let sec5Body = "";
     const todayMax = toLocalDateStr(new Date());
-    if (canModifyThisPlan) {
+    if (canEditConsent) {
+      const missForConsent = curPlan.status !== "実施中" ? cpCarePlanMissingForConsent(curPlan) : [];
       sec5Body = `
-        <div class="cp-plan-subnote">説明日・同意日・交付日の3つがそろうと、この版の状態が「実施中」になります（先の日付は入れられません）。</div>
+        <div class="cp-plan-subnote">${curPlan.status === "実施中" ? "実施中の版です。日付を訂正するときは理由を入れます（空にはできません）。" : "説明日・同意日・交付日の3つがそろうと、この版の状態が「実施中」になります（先の日付は入れられません）。"}</div>
+        ${missForConsent.length ? `<div class="cp-plan-readonly-msg">同意の日を入れる前に、次のものをそろえてください：${escapeHtml(missForConsent.join("、"))}</div>` : ""}
         <div class="cp-plan-form-grid-3">
           <div>
             <label class="cp-plan-field-label" for="cpConsentExplainedOn">説明した日</label>
@@ -24086,7 +24167,7 @@ function renderCarePlanTab() {
 
     // ⑥ モニタリング
     const monListHtml = monitorings.length > 0 ? monitorings.map((m, idx) => {
-      const isEditingMon = canModifyThisPlan && Number(gState.editingCarePlanMonitoringId) === Number(m.id);
+      const isEditingMon = canMonitor && Number(gState.editingCarePlanMonitoringId) === Number(m.id);
       if (isEditingMon) {
         const editNeedRows = needs.map((n, nIdx) => {
           const itemObj = (Array.isArray(m.items) ? m.items : []).find(it => Number(it.need_id) === Number(n.id)) || {};
@@ -24151,7 +24232,7 @@ function renderCarePlanTab() {
         <div class="cp-plan-need-card">
           <div class="cp-plan-need-head">
             <div><strong>第${idx + 1}回 モニタリング</strong>（${escapeHtml(m.date || "")} ／ 担当: ${escapeHtml(m.by || "")} ／ 判定: <strong>${escapeHtml(m.review_needed || "")}</strong>）</div>
-            ${canModifyThisPlan ? `<button type="button" class="btn btn-secondary cp-part-btn" onclick="cpStartEditCarePlanMonitoring(${m.id})">変更</button>` : ""}
+            ${canMonitor ? `<button type="button" class="btn btn-secondary cp-part-btn" onclick="cpStartEditCarePlanMonitoring(${m.id})">変更</button>` : ""}
           </div>
           <div>${itemLines}</div>
           <div class="cp-plan-read-box" style="margin-top:6px;">
@@ -24163,7 +24244,8 @@ function renderCarePlanTab() {
     }).join("") : `<div class="cp-plan-subnote">モニタリングの記録はまだありません。</div>`;
 
     let addMonFormHtml = "";
-    if (canModifyThisPlan) {
+    if (!canMonitor && canEdit && !isPlanEnded) addMonFormHtml = `<div class="cp-plan-subnote">モニタリングは、この版が実施中になってから記録します。</div>`; // [Claude修正 2026-10-19]
+    if (canMonitor) {
       if (needs.length === 0) {
         addMonFormHtml = `<div class="cp-plan-subnote">※「③ 課題ごとの目標とサービス」に短期目標を登録すると、ここからモニタリングを記録できます。</div>`;
       } else {
@@ -24241,11 +24323,12 @@ function renderCarePlanTab() {
         <div class="cp-plan-detail-actions">
           <button type="button" class="btn btn-secondary" onclick="printCarePlanDocument(${curPlan.id})">計画書をA4印刷</button>
           ${histCount > 0 ? `<button type="button" class="btn btn-secondary" onclick="cpShowGenericEditHistory('care_plans', ${curPlan.id}, 'ケアプラン 第${curPlan.version}版')">変更履歴 (${histCount})</button>` : ""}
-          ${canEdit ? `<button type="button" class="btn btn-primary" onclick="cpReviewAndCreateNextVersion(${curPlan.id})">見直して新しい版を作る</button>` : ""}
+          ${canEdit && (curPlan.status === "実施中" || curPlan.status === "終了") && !cpCarePlanHasDraft(r.id) ? `<button type="button" class="btn btn-primary" onclick="cpReviewAndCreateNextVersion(${curPlan.id})">見直して新しい版を作る</button>` : ""}
           ${canEdit && curPlan.status !== "終了" ? `<button type="button" class="btn btn-secondary" onclick="cpEndCarePlanManually(${curPlan.id})">この版を終了にする</button>` : ""}
         </div>
       </div>
       ${endedBanner}
+      ${curPlan.status === "実施中" ? lockNote : ""}
 
       <details class="care-accordion cp-plan-acc" open>
         <summary class="cp-plan-acc-summary">① アセスメント（本人・家族の意向、できること、困っていること）</summary>
