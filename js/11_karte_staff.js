@@ -108,7 +108,6 @@ function cpCanEditVitalLimits() { return cpRoleFlags().nurse; }
 function cpCanEditPolicy() { const f = cpRoleFlags(); return f.director || f.caremanager || f.nurse; }
 const CP_CAREPLAN_PARTS = {
  policy: { label: "基本方針", who: "管理者・計画作成担当者・看護師", can: () => cpCanEditPolicy() },
- goal: { label: "ケアプラン目標", who: "計画作成担当者（ケアマネ）", can: () => cpCanEditCarePlanGoal() },
  sensor: { label: "見守りの注意", who: "全員", can: () => true },
  vital: { label: "バイタルの注意の目安", who: "看護師", can: () => cpCanEditVitalLimits() }
 };
@@ -140,22 +139,28 @@ function cpCarePlanSectionHtml(r) {
  const vitalLines = cpVitalLimitsText(r);
  const vitalSet = [r.bp_high_max, r.bp_high_min, r.temp_max, r.spo2_min, r.pulse_max, r.pulse_min].some(x => x !== null && x !== undefined && x !== "");
 
- // [Antigravity実装 2026-10-19] 実施中のケアプランがあれば短期目標を並べて表示し「ケアプランのタブで変えます」と出す（カルテからは変えない）
+ // [Claude修正 2026-10-19] ケアプラン目標はケアプランのタブからだけ出す（カルテで直接は変えない）。課題ごとに長期・短期目標と期間を出す
+ // ユーザー「ケアプランみなさんの作成しないと目標に入っているのはおかしい」「長期と短期目標があるはず」
+ const legacyGoal = r.care_plan_goal ? `<div class="cp-part-sub">以前のケアプラン目標（参考・ケアプランのタブができる前の記録）: ${escapeHtml(r.care_plan_goal)}${r.care_plan_consent_date ? "（同意日 " + escapeHtml(r.care_plan_consent_date) + "）" : ""}</div>` : "";
+ const openPlanBtn = `<div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;"><span class="cp-part-who">ケアプランのタブで変えます</span><button type="button" class="btn btn-secondary cp-part-btn" onclick="event.preventDefault(); event.stopPropagation(); selectResident(${r.id}); switchCareTab('careplan'); return false;">ケアプランを開く</button></div>`;
  let goalRowHtml = "";
  if (activePlan) {
-  const shortGoals = (Array.isArray(activePlan.needs) ? activePlan.needs : [])
-   .filter(n => n && (n.short_goal || n.need))
-   .map((n, idx) => {
-    const period = (n.short_from || n.short_to) ? ` <span class="cp-part-sub" style="display:inline;">（${escapeHtml(n.short_from || "未定")}〜${escapeHtml(n.short_to || "未定")}）</span>` : "";
-    return `<div>・${escapeHtml(n.short_goal || n.need)}${period}</div>`;
-   });
-  const goalsBody = shortGoals.length > 0 ? shortGoals.join("") : `<span class="cp-unset">短期目標未記入</span>`;
+  const per = (f, t) => (f || t) ? `（${escapeHtml(f || "未定")}〜${escapeHtml(t || "未定")}）` : "";
+  const needsHtml = (Array.isArray(activePlan.needs) ? activePlan.needs : []).filter(n => n).map(n => `<div class="cp-goal-need">
+   <div class="cp-goal-need-title">${escapeHtml(n.need || "課題（未記入）")}</div>
+   <div><span class="cp-goal-kind">長期</span>${n.long_goal ? escapeHtml(n.long_goal) : '<span class="cp-unset">未記入</span>'} <span class="cp-part-sub" style="display:inline;">${per(n.long_from, n.long_to)}</span></div>
+   <div><span class="cp-goal-kind">短期</span>${n.short_goal ? escapeHtml(n.short_goal) : '<span class="cp-unset">未記入</span>'} <span class="cp-part-sub" style="display:inline;">${per(n.short_from, n.short_to)}</span></div>
+  </div>`.replace(/>\s+</g, "><")).join(""); // 欄が pre-wrap なので、タグの間の改行・空白を詰める
   const consentDate = (activePlan.consent && activePlan.consent.consented_on) ? activePlan.consent.consented_on : "";
   const consentSub = `<div class="cp-part-sub">実施中: 第${Number(activePlan.version) || 1}版${consentDate ? " ／ 本人・家族への説明と同意: " + escapeHtml(consentDate) : ""}</div>`;
-  goalRowHtml = `<div class="cp-part-row"><div><div class="cp-part-label">ケアプラン目標</div><div class="cp-part-val">${goalsBody}</div>${consentSub}</div><div style="display:flex; flex-direction:column; align-items:flex-end; gap:4px; flex-shrink:0;"><span class="cp-part-who">ケアプランのタブで変えます</span><button type="button" class="btn btn-secondary cp-part-btn" onclick="event.preventDefault(); event.stopPropagation(); selectResident(${r.id}); switchCareTab('careplan'); return false;">ケアプランを開く</button></div></div>`;
+  goalRowHtml = `<div class="cp-part-row"><div style="flex:1; min-width:0;"><div class="cp-part-label">ケアプラン目標</div><div class="cp-part-val">${needsHtml || '<span class="cp-unset">課題・目標が未記入</span>'}</div>${consentSub}</div>${openPlanBtn}</div>`;
  } else {
-  goalRowHtml = `<div class="cp-part-row"><div><div class="cp-part-label">ケアプラン目標</div><div class="cp-part-val">${val(r.care_plan_goal)}</div>${consent}</div>${btn("goal")}</div>`;
+  const plans = (db && db.data && Array.isArray(db.data.care_plans)) ? db.data.care_plans.filter(p => p && !p.voided && Number(p.resident_id) === Number(r.id)) : [];
+  const draft = plans.find(p => p.status === "作成中" || p.status === "同意待ち");
+  const msg = draft ? `第${Number(draft.version) || 1}版を${escapeHtml(draft.status)}（実施中のケアプランはありません）` : (plans.length ? "実施中のケアプランはありません（前の版は終了）" : "ケアプラン未作成（ケアプランのタブで作成してください）");
+  goalRowHtml = `<div class="cp-part-row"><div style="flex:1; min-width:0;"><div class="cp-part-label">ケアプラン目標</div><div class="cp-part-val"><span class="cp-unset">${msg}</span></div>${legacyGoal}</div>${openPlanBtn}</div>`;
  }
+ if (activePlan && legacyGoal) goalRowHtml = goalRowHtml.replace('</div>' + openPlanBtn, legacyGoal + '</div>' + openPlanBtn);
 
  return `<details class="care-accordion cp-part-acc" open>
  <summary class="cp-part-summary">
@@ -181,8 +186,8 @@ function openCarePlanModal(resId, part = 'all') {
  if (!r) return;
  if (part === 'sensor_focus') part = 'sensor';
  const activePlan = cpGetActiveCarePlanForResident(r.id); // [Antigravity実装 2026-10-19]
- if (part === 'goal' && activePlan) {
-  alert("実施中のケアプランがあるため、ケアプラン目標は「ケアプラン」のタブで変えます。");
+ if (part === 'goal') { // [Claude修正 2026-10-19] ケアプラン目標はカルテでは変えない
+  alert("ケアプラン目標は「ケアプラン」のタブで作ります・変えます。");
   selectResident(r.id);
   switchCareTab('careplan');
   return;
@@ -196,7 +201,7 @@ function openCarePlanModal(resId, part = 'all') {
   return;
  }
  const titleEl = document.getElementById("carePlanModalTitle");
- if (titleEl) titleEl.textContent = `${parts.length === 1 ? CP_CAREPLAN_PARTS[parts[0]].label : "基本方針・ケアプラン目標・見守り注意"}の変更（${r.name} 様）`;
+ if (titleEl) titleEl.textContent = `${parts.length === 1 ? CP_CAREPLAN_PARTS[parts[0]].label : "基本方針・見守り注意・バイタルの目安"}の変更（${r.name} 様）`;
  document.getElementById("carePlanResidentId").value = r.id;
  document.getElementById("carePlanParts").value = parts.join(",");
  Object.keys(CP_CAREPLAN_PARTS).forEach(p => {

@@ -3212,7 +3212,7 @@ function openEditResidentModal(id) {
 // [Claude追加 2026-10-18] 利用者の登録・編集の画面で、変える権限のない欄を押せなくする
 function cpLockResidentPlanFields() {
  const lock = (ids, can, why) => ids.forEach(id => { const el = document.getElementById(id); if (el) { el.disabled = !can; el.title = can ? "" : why; } });
- lock(["resCarePlanGoal"], false, "ケアプラン目標は、カルテの「基本方針・ケアプラン目標・見守り注意」から計画作成担当者が変えます");
+ lock(["resCarePlanGoal"], false, "ケアプランは「ケアプラン」のタブで計画作成担当者が作ります。この欄は以前の記録です");
  lock(["resPolicyStamp"], cpCanEditPolicy(), "基本方針を変えられるのは管理者・計画作成担当者・看護師です");
  lock(["resBpHighMax", "resBpHighMin", "resTempMax", "resSpo2Min", "resPulseMax", "resPulseMin"], cpCanEditVitalLimits(), "バイタルの注意の目安を変えられるのは看護師です");
 }

@@ -220,7 +220,10 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
  const dementiaText = prev ? prev.dementia_behavior : "";
  const notesText = prev ? prev.care_notes : (r && r.life_history ? "人生歴: " + r.life_history : "");
  const familyText = prev ? prev.family_info : (r && r.family_wishes ? "家族の意向: " + r.family_wishes : "");
- const goalsText = prev ? prev.future_goals : (r && r.care_plan_goal ? r.care_plan_goal : "");
+ // [Claude修正 2026-10-19] 将来の目標は、実施中のケアプランの長期・短期目標を写す（出どころの版を付ける）。ケアプランがなければ前のサマリー、なければ以前のケアプラン目標
+ const cpActPlan = (r && typeof cpGetActiveCarePlanForResident === "function") ? cpGetActiveCarePlanForResident(r.id) : null;
+ const cpPlanGoals = cpActPlan ? `（第${Number(cpActPlan.version) || 1}版のケアプランより）` + (cpActPlan.needs || []).filter(x => x).map(x => `【${x.need || "課題"}】長期: ${x.long_goal || "未記入"}（${x.long_from || "未定"}〜${x.long_to || "未定"}）／短期: ${x.short_goal || "未記入"}（${x.short_from || "未定"}〜${x.short_to || "未定"}）`).join(" ") : "";
+ const goalsText = cpPlanGoals || (prev ? prev.future_goals : (r && r.care_plan_goal ? "（以前のケアプラン目標）" + r.care_plan_goal : ""));
 
  const fields = [
  { id: "csBasicInfo", val: basicText },

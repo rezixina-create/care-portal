@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261019_e3">
+ <link rel="stylesheet" href="style.css?v=20261019_e4">
 </head>
 <body>
 
@@ -166,7 +166,7 @@
  </section>
 
 <!-- 介護サブタブ切り替え [Claude修正] 「普段使う／定例・状況別」から、現場の動き（毎日・夜勤・曜日や月ごと・起きたとき）で分け直した。
-      口腔ケア（毎食後）とレク（毎日推奨）は毎日の段へ。ヒヤリハット・事故は画面右下のボタンからも開ける -->
+      口腔ケア（毎食後）とレク（毎日推奨）は毎日の段へ。ヒヤリハット・事故は「起きたとき」のタブから開く -->
  <nav class="care-tab-nav" aria-label="介護記録の種類">
   <div class="care-tab-group">
    <span class="care-tab-label">毎日</span>
@@ -210,7 +210,7 @@
    </div>
   </div>
  </nav>
- <button type="button" class="incident-fab" onclick="openNewIncidentModal()" title="ヒヤリハット・事故の報告書を書く">ヒヤリハット・事故を報告</button>
+ <!-- [Claude修正 2026-10-19] 画面右下にいつも出ていた「ヒヤリハット・事故を報告」のボタンは外した（ユーザー「そんなに頻繁にあるものではないので起きた時のタブだけで十分」）。「起きたとき」の「ヒヤリハット・事故」タブから書く -->
 
  <!-- 介護タブ内コンテンツ -->
  <div id="careTabContent">
@@ -1978,7 +1978,7 @@
  <input type="text" id="resSensorAlert" class="form-control">
  </div>
  <div class="form-group">
- <label>ケアプラン目標（カルテの欄から計画作成担当者が変えます）:</label>
+ <label>以前のケアプラン目標（参考。ケアプランは「ケアプラン」のタブで作ります）:</label>
  <input type="text" id="resCarePlanGoal" class="form-control">
  </div>
  <div class="form-group">
@@ -2902,13 +2902,7 @@
  <div class="cp-part-sub">本人・家族・主治医と話し合って決めたことを入れます。</div>
  </div>
 
- <div class="form-group" id="cpmPart_goal">
- <label for="quickCarePlanGoal">ケアプラン目標</label>
- <textarea id="quickCarePlanGoal" class="form-control" rows="3"></textarea>
- <label for="quickCarePlanConsentDate" style="margin-top:8px;">本人・家族に説明して同意をもらった日（目標を変えるときは必ず）</label>
- <input type="date" id="quickCarePlanConsentDate" class="form-control">
- <div id="quickCarePlanConsentLast" class="cp-part-sub"></div>
- </div>
+ <!-- [Claude修正 2026-10-19] ケアプラン目標の欄は外した（ケアプランのタブで作る・変える） -->
 
  <div class="form-group" id="cpmPart_sensor">
  <label for="quickSensorAlert">見守りの注意（離床センサーなど）</label>
@@ -3979,22 +3973,22 @@
  </div>
 
  <!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261019_e3"></script>
- <script src="js/02_terms.js?v=20261019_e3"></script>
- <script src="js/03_common.js?v=20261019_e3"></script>
- <script src="js/04_care_record.js?v=20261019_e3"></script>
- <script src="js/05_summary_print_audit.js?v=20261019_e3"></script>
- <script src="js/06_schema_history.js?v=20261019_e3"></script>
- <script src="js/07_daily_tables.js?v=20261019_e3"></script>
- <script src="js/08_meds.js?v=20261019_e3"></script>
- <script src="js/09_night_misc.js?v=20261019_e3"></script>
- <script src="js/10_office.js?v=20261019_e3"></script>
- <script src="js/11_karte_staff.js?v=20261019_e3"></script>
- <script src="js/12_hospital_photos.js?v=20261019_e3"></script>
- <script src="js/13_shift_units.js?v=20261019_e3"></script>
- <script src="js/14_auth_home.js?v=20261019_e3"></script>
- <script src="js/15_single_write.js?v=20261019_e3"></script>
- <script src="js/16_careplan.js?v=20261019_e3"></script>
+ <script src="js/01_core.js?v=20261019_e4"></script>
+ <script src="js/02_terms.js?v=20261019_e4"></script>
+ <script src="js/03_common.js?v=20261019_e4"></script>
+ <script src="js/04_care_record.js?v=20261019_e4"></script>
+ <script src="js/05_summary_print_audit.js?v=20261019_e4"></script>
+ <script src="js/06_schema_history.js?v=20261019_e4"></script>
+ <script src="js/07_daily_tables.js?v=20261019_e4"></script>
+ <script src="js/08_meds.js?v=20261019_e4"></script>
+ <script src="js/09_night_misc.js?v=20261019_e4"></script>
+ <script src="js/10_office.js?v=20261019_e4"></script>
+ <script src="js/11_karte_staff.js?v=20261019_e4"></script>
+ <script src="js/12_hospital_photos.js?v=20261019_e4"></script>
+ <script src="js/13_shift_units.js?v=20261019_e4"></script>
+ <script src="js/14_auth_home.js?v=20261019_e4"></script>
+ <script src="js/15_single_write.js?v=20261019_e4"></script>
+ <script src="js/16_careplan.js?v=20261019_e4"></script>
   
 
   <!-- ============================================================ -->
