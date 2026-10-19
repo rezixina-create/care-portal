@@ -3483,8 +3483,9 @@ function isStaffAdminOrClerk(staff) {
 }
 
 function isCurrentStaffAdminOrClerk() {
+ // [Claude修正 2026-10-19] 権限はログインした本人で決める。記録者の選ぶ欄を管理者に変えるだけで、介護職員でも職員の管理や資格の一覧を変えられていた
  const staffSelect = document.getElementById("currentStaff");
- const staff = (staffSelect ? staffSelect.value : "") || gState.currentStaff || "";
+ const staff = (gState.session && gState.session.staffName) || (staffSelect ? staffSelect.value : "") || gState.currentStaff || "";
  return isStaffAdminOrClerk(staff);
 }
 
@@ -17521,7 +17522,7 @@ function renderStaffModalList() {
   if (rank === 1) badgeStyle = "background:var(--caution-tint); color:var(--caution); font-weight:bold;";
   else if (rank <= 5) badgeStyle = "background:var(--pine-tint-2); color:var(--pine-dark); font-weight:bold;";
 
-  const empText = s.employment_type || "常勤";
+  const empText = s.employment_type || "常勤・非常勤: 未設定";
   const hireText = s.hire_date ? `入社: ${escapeHtml(s.hire_date)}` : "入社日: 未設定";
 
   row.innerHTML = `
@@ -17583,8 +17584,9 @@ function submitNewStaffStamp() {
 
  const role = document.getElementById("newStaffRole").value.trim();
  const empType = document.getElementById("newStaffEmploymentType").value.trim();
- const dutySel = document.getElementById("newStaffDutyType");
- const dutyType = (dutySel && dutySel.value) ? dutySel.value.trim() : (["管理者", "施設長", "生活相談員", "計画作成担当者（ケアマネ）", "主任看護師", "看護師", "事務員", "事務員 (パート)"].includes(role) ? "日勤専従" : "交替勤務");
+ // [Claude修正 2026-10-19] 勤務形態を選ばないとき、役職から決めて入れていた → 選んでもらう
+ if (!cpRequireSelect("newStaffDutyType", "勤務形態")) return false;
+ const dutyType = document.getElementById("newStaffDutyType").value.trim();
  const hireDate = (document.getElementById("newStaffHireDate")?.value || "").trim();
  const today = toLocalDateStr(new Date());
  if (hireDate) {
@@ -17698,7 +17700,7 @@ function openStaffEditModal(staffName) {
 
  setVal("editStaffRole", s.role || "");
  setVal("editStaffEmploymentType", s.employment_type || "");
- setVal("editStaffDutyType", s.duty_type || "交替勤務");
+ setVal("editStaffDutyType", s.duty_type || "");
  const hd = document.getElementById("editStaffHireDate");
  if (hd) { hd.value = s.hire_date || ""; hd.max = today; }
  const unitSel = document.getElementById("editStaffUnit");
@@ -17760,7 +17762,7 @@ function saveStaffBasicInfo() {
 
  const oldRole = s.role || "";
  const oldEmp = s.employment_type || "";
- const oldDuty = s.duty_type || "交替勤務";
+ const oldDuty = s.duty_type || "";
  const oldHire = s.hire_date || "";
  const oldUnit = s.unit_id ? String(s.unit_id) : "";
  const newUnitStr = newUnitId ? String(newUnitId) : "";
@@ -17784,6 +17786,11 @@ function saveStaffBasicInfo() {
   return false;
  }
 
+ // [Claude修正 2026-10-19] 自分の役職は自分で変えられない（事務員が自分を管理者にする、などを防ぐ）
+ if (oldRole !== role && s.name === cpLoginStaffName()) {
+  alert("自分の役職は変えられません。ほかの管理者・事務員に変えてもらってください。");
+  return false;
+ }
  const oldCopy = JSON.parse(JSON.stringify(s));
  if (oldCopy.hire_date === undefined) oldCopy.hire_date = "";
  s.role = role;
@@ -17895,12 +17902,18 @@ function addStaffQualificationRecord() {
    alert("その他の資格・研修名を入力してください。");
    return false;
   }
+  // [Claude修正 2026-10-19] 一覧にある資格を「その他」で入れると、集計から外れてしまう
+  const cpSame = cpMatchQualificationMaster(otherName);
+  if (cpSame) {
+   alert(cpSame.status === "使わない" ? `「${cpSame.name}」は一覧で「使わない」になっています。管理者・事務員に一覧を確かめてもらってください。` : `「${cpSame.name}」は一覧にあります。「その他」ではなく、一覧から選んでください。`);
+   return false;
+  }
   if (existingList.some(q => !q.voided && q.is_other && q.name === otherName)) {
    alert(`「${otherName}」はすでに登録されています。`);
    return false;
   }
   const recs = cpEnsureStaffQualificationRecords(s);
-  let nextId = recs.reduce((mx, r) => Math.max(mx, Number(r.id) || 0), 0) + 1;
+  let nextId = Math.max(Date.now(), recs.reduce((mx, r) => Math.max(mx, Number(r.id) || 0), 0) + 1); // [Claude修正 2026-10-19] 2台で同時に足しても番号が重ならないように
   newRec = {
    id: nextId,
    is_other: true,
@@ -17929,7 +17942,7 @@ function addStaffQualificationRecord() {
    return false;
   }
   const recs = cpEnsureStaffQualificationRecords(s);
-  let nextId = recs.reduce((mx, r) => Math.max(mx, Number(r.id) || 0), 0) + 1;
+  let nextId = Math.max(Date.now(), recs.reduce((mx, r) => Math.max(mx, Number(r.id) || 0), 0) + 1); // [Claude修正 2026-10-19] 2台で同時に足しても番号が重ならないように
   newRec = {
    id: nextId,
    is_other: false,
@@ -18123,7 +18136,7 @@ function renderStaffEditQualRecordsList(s) {
  const listEl = document.getElementById("staffQualRecordsList");
  const origEl = document.getElementById("staffQualOriginalTextNote");
  if (origEl) {
-  origEl.innerHTML = `元の <code>qualifications</code> の文字（消さずに保持）: <strong>${escapeHtml(s.qualifications || "（なし）")}</strong>`;
+  origEl.innerHTML = `前からの資格の書き方（消さずに残しています）: <strong>${escapeHtml(s.qualifications || "（なし）")}</strong>`;
  }
  if (!listEl) return;
  const recs = cpGetStaffQualifications(s);
@@ -18333,6 +18346,14 @@ function saveQualificationMasterItem() {
    renderQualificationMasterList();
    return true;
   }
+  // [Claude修正 2026-10-19] 職員に付いている項目の名前・種類を変えると、その職員の資格の意味が変わってしまう → 新しい項目を作ってもらう
+  if (((target.name || "") !== name || (target.kind || "資格") !== kind)) {
+   const cpUsers = (db.data.stamps || []).filter(st => cpGetStaffQualifications(st).some(q => !q.is_other && Number(q.master_id) === Number(target.id)));
+   if (cpUsers.length) {
+    alert(`「${target.name}」は ${cpUsers.length}名の職員に付いているため、名前・種類は変えられません。\n別のものにするときは、新しい項目を追加して、この項目は「使わない」にしてください。`);
+    return false;
+   }
+  }
   const editReason = (document.getElementById("qmEditReason")?.value || "").trim();
   if (!editReason) {
    alert("変更の理由を入力してください。");
@@ -18349,7 +18370,7 @@ function saveQualificationMasterItem() {
   target.updated_by = cpLoginStaffName();
   cpAppendEditHistory(target, oldCopy, ["name", "kana", "kind", "has_mark", "mark_detail", "source_url"], editReason);
  } else {
-  const nextId = masterList.reduce((mx, x) => Math.max(mx, Number(x.id) || 0), 0) + 1;
+  const nextId = Math.max(Date.now(), masterList.reduce((mx, x) => Math.max(mx, Number(x.id) || 0), 0) + 1); // [Claude修正 2026-10-19] 2台で同時に足すと同じ番号（11）になり、職員の資格がどちらを指すか分からなくなっていた
   masterList.push({
    id: nextId,
    name: name,
@@ -20158,7 +20179,7 @@ function renderStaffQualificationsTable() {
           const sourceLinks = cpFormatQualSourceLinksHtml(m.source_url);
           markTag = `<span class="badge qual-mark-badge" style="margin-left:4px;">★基準: ${escapeHtml(m.mark_detail || "")}${sourceLinks ? " " + sourceLinks : ""}</span>`;
         }
-        return `<span class="badge" style="background:#eef2ef; color:var(--ink); border:1px solid var(--line-2); font-size:13px; padding:2px 6px; margin:2px 4px 2px 0; display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap;"><strong>${escapeHtml(q.name)}</strong>${verTag}${markTag}</span>`;
+        return `<span class="badge" style="background:var(--ground); color:var(--ink); border:1px solid var(--line-2); font-size:13px; padding:2px 6px; margin:2px 4px 2px 0; display:inline-flex; align-items:center; gap:4px; flex-wrap:wrap;"><strong>${escapeHtml(q.name)}</strong>${verTag}${markTag}</span>`;
       }).join("");
     }
 
@@ -20168,9 +20189,9 @@ function renderStaffQualificationsTable() {
       <td style="text-align:center;">${badgeHtml}</td>
       <td><strong>${escapeHtml(s.name)}</strong></td>
       <td>${escapeHtml(s.role || '職員')}${wingText}</td>
-      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.employment_type === '非常勤 (パート)' ? 'background:#fef3c7; color:#92400e;' : 'background:#eef2ef; color:var(--ink);'}">${escapeHtml(s.employment_type || '—')}</span></td>
+      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.employment_type === '非常勤 (パート)' ? 'background:var(--caution-tint); color:var(--caution);' : 'background:var(--ground); color:var(--ink);'}">${escapeHtml(s.employment_type || '未設定')}</span></td>
       <td style="text-align:center; font-size:13px;">${escapeHtml(s.hire_date || '—')}</td>
-      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.duty_type === '日勤専従' ? 'background:#e0f2fe; color:#0369a1;' : 'background:#f0fdf4; color:#15803d;'}">${escapeHtml(s.duty_type || '—')}</span></td>
+      <td style="text-align:center;"><span class="badge" style="font-size:13px; padding:2px 6px; ${s.duty_type === '日勤専従' ? 'background:var(--pine-tint-2); color:var(--secondary-color);' : 'background:var(--pine-tint); color:var(--pine-dark);'}">${escapeHtml(s.duty_type || '未設定')}</span></td>
       <td>${qualItemsHtml}</td>
       <td style="text-align:center;">${opHtml}</td>
     `;
@@ -20194,7 +20215,7 @@ function renderStaffQualificationsTable() {
     const activeMasters = qMaster.filter(m => m.status !== "使わない");
     const listItemsHtml = activeMasters.map(m => {
       const cnt = masterCounts[m.id] || 0;
-      return `<span class="badge" style="background:#f3f4f6; color:var(--ink); border:1px solid var(--line-2); font-size:13px; padding:3px 8px;">${escapeHtml(m.name)}: <strong>${cnt}名</strong></span>`;
+      return `<span class="badge" style="background:var(--ground); color:var(--ink); border:1px solid var(--line-2); font-size:13px; padding:3px 8px;">${escapeHtml(m.name)}: <strong>${cnt}名</strong></span>`;
     }).join(" ");
 
     const markedMasters = activeMasters.filter(m => m.has_mark === "あり");
@@ -20203,7 +20224,7 @@ function renderStaffQualificationsTable() {
       const holderText = holders.length > 0 ? holders.join("、") : "該当者なし";
       const links = cpFormatQualSourceLinksHtml(m.source_url);
       return `
-        <div class="qual-master-card" style="margin-bottom:8px; padding:10px 12px; background:#f9fafb; border:1px solid var(--line-2); border-left:4px solid var(--pine); border-radius:4px;">
+        <div class="qual-master-card" style="margin-bottom:8px; padding:10px 12px; background:var(--pine-tint-2); border:1px solid var(--line-2); border-left:4px solid var(--pine); border-radius:4px;">
           <div style="font-size:13px; font-weight:bold; color:var(--ink); display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
             <span>${escapeHtml(m.name)}</span>
             <span class="badge qual-mark-badge">★基準の印</span>
@@ -20220,7 +20241,7 @@ function renderStaffQualificationsTable() {
     }).join("");
 
     area.innerHTML = `
-      <div style="border:1px solid var(--line-2); border-radius:6px; padding:12px; background:#ffffff;">
+      <div style="border:1px solid var(--line-2); border-radius:6px; padding:12px; background:var(--surface);">
         <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">マスタ登録資格・研修の集計と基準の印</div>
         <div style="display:flex; flex-wrap:wrap; gap:6px; margin-bottom:12px;">${listItemsHtml}</div>
         <div style="font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:6px;">【人員基準・加算に関する資格・研修と公的根拠】</div>
