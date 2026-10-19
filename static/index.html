@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261018_b3">
+ <link rel="stylesheet" href="style.css?v=20261019_a1">
 </head>
 <body>
 
@@ -197,6 +197,8 @@
     <button class="sub-tab-btn" onclick="switchCareTab('linen')">シーツ交換</button>
     <button class="sub-tab-btn" onclick="switchCareTab('grooming')">身だしなみ</button>
     <button class="sub-tab-btn" onclick="switchCareTab('weight')">月次体重</button>
+    <!-- [Antigravity実装 2026-10-19] ケアプランタブ -->
+    <button class="sub-tab-btn" onclick="switchCareTab('careplan')">ケアプラン</button>
    </div>
   </div>
   <div class="care-tab-group">
@@ -781,6 +783,11 @@
  <h4 style="font-size:15px; margin-bottom:8px;"> 本日の現場消費履歴 (押し間違えた場合は「修正」ボタンで戻せます):</h4>
  <div id="recentConsumeList"></div>
  </div>
+ </div>
+
+ <!-- [Antigravity実装 2026-10-19] ケアプランタブ -->
+ <div id="tabCarePlan" style="display:none;" class="panel-card">
+ <div id="carePlanTabContainer"></div>
  </div>
 
  </div>
@@ -3693,7 +3700,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261018_b3"></script>
+ <script src="app.js?v=20261019_a1"></script>
   
 
   <!-- ============================================================ -->

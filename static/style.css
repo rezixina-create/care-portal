@@ -2122,3 +2122,438 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .cp-part-who { font-size:13px; color:var(--ink-3); white-space:nowrap; }
 .cp-part-btn { padding:3px 10px; font-size:13px; flex-shrink:0; }
 .cp-unset { color:var(--ink-3); }
+
+/* [Antigravity実装 2026-10-19] ケアプランタブ */
+.cp-plan-top-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 10px 14px;
+  background: var(--pine-tint-2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  margin-bottom: 14px;
+}
+.cp-plan-top-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  min-width: 0;
+}
+.cp-plan-top-right {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  min-width: 0;
+}
+.cp-plan-main-title {
+  font-size: 16px;
+  font-weight: bold;
+  color: var(--pine-dark);
+}
+.cp-plan-label-inline {
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--ink);
+}
+.cp-plan-res-select {
+  width: 220px;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: bold;
+}
+.cp-plan-role-badge {
+  display: inline-block;
+  padding: 4px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--pine-dark);
+  background: var(--pine-tint);
+  border: 1px solid var(--pine-light);
+  border-radius: 6px;
+}
+.cp-plan-readonly-msg {
+  display: inline-block;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--caution);
+  background: var(--caution-tint);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 6px;
+}
+.cp-plan-section-block {
+  margin-bottom: 16px;
+}
+.cp-plan-section-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: bold;
+  color: var(--pine-dark);
+  margin-bottom: 8px;
+}
+.cp-plan-empty {
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 10px;
+}
+.cp-plan-empty-text {
+  font-size: 14px;
+  color: var(--ink);
+}
+.cp-plan-legacy-note {
+  font-size: 13px;
+  color: var(--ink-2);
+  padding: 8px 10px;
+  background: var(--pine-tint-2);
+  border-left: 4px solid var(--pine);
+  border-radius: 4px;
+  width: 100%;
+}
+.cp-plan-ver-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cp-plan-ver-card {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  cursor: pointer;
+}
+.cp-plan-ver-card-main {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+  min-width: 0;
+  flex: 1 1 220px;
+}
+.cp-plan-ver-num {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--pine-dark);
+}
+.cp-plan-ver-meta {
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.cp-plan-ver-card-act {
+  flex: 0 0 auto;
+}
+.cp-plan-ver-row-active {
+  background: var(--caution-tint);
+  border-left: 5px solid var(--sun);
+}
+.cp-plan-ver-row-selected {
+  outline: 2px solid var(--pine);
+  outline-offset: -2px;
+}
+.cp-plan-ver-btn {
+  padding: 4px 10px;
+  font-size: 13px;
+}
+.cp-plan-badge {
+  display: inline-block;
+  padding: 3px 10px;
+  font-size: 13px;
+  font-weight: bold;
+  border-radius: 6px;
+  border: 1px solid var(--line);
+}
+.cp-plan-badge-active {
+  background: var(--sun-tint);
+  color: var(--caution);
+  border-color: var(--sun);
+}
+.cp-plan-badge-wait {
+  background: var(--pine-tint);
+  color: var(--pine-dark);
+  border-color: var(--pine-light);
+}
+.cp-plan-badge-draft {
+  background: var(--ground);
+  color: var(--ink-2);
+  border-color: var(--line);
+}
+.cp-plan-badge-ended {
+  background: var(--line-2);
+  color: var(--ink-3);
+  border-color: var(--line);
+}
+.cp-plan-detail-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 10px;
+  padding: 12px 14px;
+  background: var(--pine-tint-2);
+  border: 1px solid var(--line);
+  border-left: 5px solid var(--pine);
+  border-radius: 8px;
+  margin-bottom: 12px;
+}
+.cp-plan-detail-title {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 15px;
+  color: var(--ink);
+}
+.cp-plan-detail-actions {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cp-plan-ended-banner {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  background: var(--line-2);
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--ink-3);
+  border-radius: 6px;
+  font-size: 13px;
+  color: var(--ink-2);
+}
+.cp-plan-acc {
+  margin-bottom: 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  overflow: hidden;
+}
+.cp-plan-acc-summary {
+  padding: 10px 14px;
+  background: var(--pine-tint-2);
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--pine-dark);
+  cursor: pointer;
+  border-bottom: 1px solid var(--line);
+}
+.cp-plan-acc-body {
+  padding: 12px 14px;
+  font-size: 13px;
+}
+.cp-plan-quote-bar {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+.cp-plan-select-inline {
+  flex: 1 1 220px;
+  min-width: 0;
+  font-size: 13px;
+}
+.cp-plan-form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+  gap: 10px;
+}
+.cp-plan-form-grid-3 {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 10px;
+}
+.cp-plan-field-label {
+  display: block;
+  font-size: 13px;
+  font-weight: bold;
+  color: var(--pine-dark);
+  margin-bottom: 4px;
+}
+.cp-plan-action-row {
+  display: flex;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+.cp-plan-read-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 10px;
+  margin-top: 6px;
+}
+.cp-plan-read-box {
+  padding: 8px 10px;
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  background: var(--ground);
+}
+.cp-plan-read-val {
+  font-size: 14px;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+.cp-plan-subnote {
+  font-size: 13px;
+  color: var(--ink-2);
+  margin-bottom: 6px;
+}
+.cp-plan-subhead {
+  font-size: 14px;
+  font-weight: bold;
+  color: var(--pine-dark);
+  margin-bottom: 8px;
+}
+.cp-plan-need-card,
+.cp-plan-meet-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-left: 4px solid var(--pine);
+  border-radius: 6px;
+  background: var(--surface);
+  margin-bottom: 10px;
+}
+.cp-plan-need-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  font-size: 14px;
+  color: var(--ink);
+  margin-bottom: 6px;
+}
+.cp-plan-date-pair {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 6px;
+}
+.cp-plan-date-lbl {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: var(--ink-2);
+  flex: 1 1 140px;
+  min-width: 0;
+}
+.cp-plan-svc-list {
+  margin-top: 10px;
+  padding-top: 8px;
+  border-top: 1px solid var(--line-2);
+}
+.cp-plan-svc-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 6px 8px;
+  background: var(--ground);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+.cp-plan-svc-edit {
+  display: block;
+}
+.cp-plan-svc-main {
+  flex: 1 1 200px;
+  min-width: 0;
+  word-break: break-word;
+}
+.cp-plan-svc-meta {
+  color: var(--ink-2);
+  font-size: 13px;
+}
+.cp-plan-svc-add,
+.cp-plan-add-box {
+  margin-top: 10px;
+  padding: 10px 12px;
+  background: var(--pine-tint-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+}
+.cp-plan-opinion-bar {
+  display: flex;
+  align-items: stretch;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 8px;
+}
+.cp-plan-opinion-bar .form-control {
+  flex: 1 1 200px;
+  min-width: 0;
+  font-size: 13px;
+}
+.cp-plan-mon-item-row {
+  margin-top: 8px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--line-2);
+  border-radius: 6px;
+}
+.cp-plan-mon-eval-line {
+  font-size: 13px;
+  color: var(--ink);
+  padding: 4px 0;
+}
+.cp-plan-term-warn {
+  display: inline-block;
+  padding: 2px 8px;
+  font-size: 13px;
+  font-weight: bold;
+  background: var(--caution-tint);
+  color: var(--caution);
+  border: 1px solid var(--sun);
+  border-radius: 4px;
+  margin-left: 6px;
+}
+.cp-plan-term-expired {
+  background: var(--alert-tint);
+  color: var(--alert);
+  border-color: var(--alert);
+}
+
+@media (max-width: 600px) {
+  .cp-plan-form-grid,
+  .cp-plan-form-grid-3,
+  .cp-plan-read-grid {
+    grid-template-columns: 1fr;
+  }
+  .cp-plan-res-select {
+    width: 100%;
+  }
+  .cp-plan-ver-table th,
+  .cp-plan-ver-table td {
+    padding: 6px 6px;
+    font-size: 13px;
+  }
+}
+
