@@ -23,6 +23,7 @@
   --caution-tint: #fbf1d9;
   --sun-tint: #fbe7b5;   /* [Claude追加] 3時期比較のバッジで使われていた変数 */
   --pine-light: #a9cfbf;
+  --surface-2: #f5f5f2;
 
   --primary-color: var(--pine);
   --primary-hover: var(--pine-dark);
@@ -2637,9 +2638,98 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 }
 @media (max-width: 600px) {
   .cp-eo-grid,
-  .rx-freq-sub {
+  .rx-freq-sub,
+  .staff-add-grid {
     grid-template-columns: 1fr !important;
   }
 }
+
+/* [Antigravity実装 2026-10-19] 職員の資格・研修マスタと保有資格記録 */
+.staff-add-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 8px;
+}
+.qual-candidate-list {
+  margin-top: 6px;
+  padding: 8px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.qual-candidate-btn {
+  font-size: 13px;
+  padding: 5px 10px;
+  border: 1px solid var(--pine-light);
+  border-radius: 4px;
+  background: var(--pine-tint-2);
+  color: var(--pine-dark);
+  cursor: pointer;
+  text-align: left;
+  line-height: 1.4;
+}
+.qual-candidate-btn:hover,
+.qual-candidate-btn:focus {
+  background: var(--pine-tint);
+  border-color: var(--pine);
+}
+.qual-mark-badge {
+  display: inline-block;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--caution-tint);
+  color: var(--caution);
+  border: 1px solid var(--sun);
+  font-weight: bold;
+}
+.qual-other-badge {
+  display: inline-block;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--ground);
+  color: var(--ink-2);
+  border: 1px solid var(--line);
+}
+.qual-verified-badge {
+  display: inline-block;
+  font-size: 13px;
+  padding: 2px 8px;
+  border-radius: 4px;
+  background: var(--pine-tint);
+  color: var(--pine-dark);
+  border: 1px solid var(--pine-light);
+}
+.qual-record-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.qual-record-card.is-voided {
+  background: var(--ground);
+  color: var(--ink-3);
+}
+.qual-master-card {
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 13px;
+}
+.qual-master-card.is-unused {
+  background: var(--ground);
+  color: var(--ink-3);
+}
+.qual-master-card.is-editing {
+  border: 2px solid var(--pine);
+  background: var(--pine-tint-2);
+}
+
 
 

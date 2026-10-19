@@ -4,7 +4,7 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261019_d1">
+ <link rel="stylesheet" href="style.css?v=20261019_e1">
 </head>
 <body>
 
@@ -1400,22 +1400,32 @@
   <div style="margin-top:24px; padding-top:20px; border-top:2px dashed var(--line-2);">
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; flex-wrap:wrap; gap:8px;">
       <div style="font-weight:bold; font-size:14px; color:var(--ink);">職員・保有資格の一覧</div>
-      <div id="qualificationSummaryBadges" style="display:inline-flex; gap:6px; flex-wrap:wrap; font-size:12px;"></div>
+      <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-secondary" id="btnOpenStaffManageFromOffice" style="font-size:13px; padding:4px 10px;" onclick="openStaffModal()">職員の登録・変更</button>
+        <button type="button" class="btn btn-secondary" id="btnOpenQualMasterModal" style="font-size:13px; padding:4px 10px;" onclick="openQualificationMasterModal()">資格・研修マスタの管理</button>
+        <span id="qualSectionReadOnlyNote" style="font-size:13px; color:var(--ink-3); display:none;">登録・変更は管理者・事務員が行います</span>
+      </div>
     </div>
-    <p class="panel-note" style="margin:0 0 8px;">人員の基準（グループホームでは管理者・計画作成担当者・介護従業者の人数や夜勤の配置など）に合っているかは、自治体の基準の資料で確かめてください。この一覧は数を出すだけで、合否は判定しません。</p>
-    <table class="data-table" id="staffQualificationsTable" style="width:100%; font-size:13px;">
-      <thead>
-        <tr style="background:#eef2ef;">
-          <th style="width:60px; text-align:center;">区分</th>
-          <th style="width:130px;">氏名</th>
-          <th style="width:140px;">役職 / 担当棟</th>
-          <th style="width:90px; text-align:center;">雇用形態</th>
-          <th style="width:90px; text-align:center;">勤務形態</th>
-          <th>主な保有資格</th>
-        </tr>
-      </thead>
-      <tbody></tbody>
-    </table>
+    <div id="qualificationSummaryBadges" style="display:flex; gap:6px; flex-wrap:wrap; font-size:13px; margin-bottom:8px;"></div>
+    <p class="panel-note" style="margin:0 0 8px;">人員の基準（グループホームでは管理者・計画作成担当者・介護従業者の人数や夜勤の配置など）に合っているかは、自治体の基準の資料で確かめてください。この一覧はマスタに登録された資格・研修の数を出すだけで、合否は判定しません（「その他」は集計に入れません）。</p>
+    <div style="overflow-x:auto;">
+      <table class="data-table" id="staffQualificationsTable" style="width:100%; font-size:13px;">
+        <thead>
+          <tr style="background:var(--pine-tint-2);">
+            <th style="width:52px; text-align:center;">区分</th>
+            <th style="width:120px;">氏名</th>
+            <th style="width:130px;">役職 / 担当棟</th>
+            <th style="width:86px; text-align:center;">常勤・非常勤</th>
+            <th style="width:96px; text-align:center;">入社日</th>
+            <th style="width:86px; text-align:center;">勤務形態</th>
+            <th>保有資格・研修（マスタ／その他・基準の印と出典）</th>
+            <th style="width:110px; text-align:center;">操作</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="qualificationMasterSummaryArea" style="margin-top:16px;"></div>
   </div>
 
  </div>
@@ -1561,35 +1571,245 @@
 
  <!-- 職員管理モーダル -->
  <div class="modal-overlay" id="staffModal" style="display:none;">
-  <div class="modal-card" style="max-width:520px;">
+  <div class="modal-card" style="max-width:680px;">
    <div class="modal-header">
     <h3 style="margin:0; font-size:16px;">職員・電子印鑑の追加・管理</h3>
     <button type="button" class="close-btn" onclick="closeModal('staffModal')">×</button>
    </div>
    <div class="modal-body" style="padding:16px;">
-    <div style="margin-bottom:16px; background:#f6f8f6; padding:12px; border-radius:6px; border:1px solid #dfe5e1;">
-     <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">＋ 新規職員の追加</div>
-     <div style="display:flex; gap:8px; align-items:center;">
-      <input type="text" id="newStaffName" class="form-control" style="flex:1; font-size:13px;">
-      <select id="newStaffRole" class="form-control" style="width:140px; font-size:13px;" aria-label="役職">
-       <option value="">役職を選ぶ</option>
-       <option value="介護職員">介護職員</option>
-       <option value="ユニットリーダー">ユニットリーダー</option>
-       <option value="生活相談員">生活相談員</option>
-       <option value="計画作成担当者（ケアマネ）">計画作成担当者（ケアマネ）</option>
-       <option value="看護師">看護師</option>
-       <option value="主任看護師">主任看護師</option>
-       <option value="管理者">管理者</option>
-       <option value="施設長">施設長</option>
-       <option value="事務員">事務員</option>
-       <option value="事務員 (パート)">事務員 (パート)</option>
-      </select>
-      <select id="newStaffUnit" class="form-control" style="width:130px; font-size:13px;" aria-label="担当の区分"></select>
-      <button type="button" class="btn btn-primary" style="font-size:13px; white-space:nowrap;" onclick="submitNewStaffStamp()">追加</button>
+    <div style="margin-bottom:16px; background:var(--pine-tint-2); padding:12px; border-radius:6px; border:1px solid var(--line);">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+      <div style="font-weight:bold; font-size:14px; color:var(--ink);">＋ 新規職員の追加</div>
+      <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="openQualificationMasterModal()">資格・研修マスタの管理</button>
+     </div>
+     <div class="staff-add-grid">
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">職員名 <span style="color:var(--alert);">*</span></label>
+       <input type="text" id="newStaffName" class="form-control" style="width:100%; font-size:13px;" aria-label="職員名">
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">役職 <span style="color:var(--alert);">*</span></label>
+       <select id="newStaffRole" class="form-control" style="width:100%; font-size:13px;" aria-label="役職">
+        <option value="">選んでください</option>
+        <option value="介護職員">介護職員</option>
+        <option value="ユニットリーダー">ユニットリーダー</option>
+        <option value="生活相談員">生活相談員</option>
+        <option value="計画作成担当者（ケアマネ）">計画作成担当者（ケアマネ）</option>
+        <option value="看護師">看護師</option>
+        <option value="主任看護師">主任看護師</option>
+        <option value="管理者">管理者</option>
+        <option value="施設長">施設長</option>
+        <option value="事務員">事務員</option>
+        <option value="事務員 (パート)">事務員 (パート)</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">常勤・非常勤 <span style="color:var(--alert);">*</span></label>
+       <select id="newStaffEmploymentType" class="form-control" style="width:100%; font-size:13px;" aria-label="常勤・非常勤">
+        <option value="">選んでください</option>
+        <option value="常勤">常勤</option>
+        <option value="非常勤">非常勤</option>
+        <option value="非常勤 (パート)">非常勤 (パート)</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">勤務形態</label>
+       <select id="newStaffDutyType" class="form-control" style="width:100%; font-size:13px;" aria-label="勤務形態">
+        <option value="">選んでください</option>
+        <option value="交替勤務">交替勤務</option>
+        <option value="日勤専従">日勤専従</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">入社日（先の日付は不可）</label>
+       <input type="date" id="newStaffHireDate" class="form-control" style="width:100%; font-size:13px;" aria-label="入社日">
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">担当の区分</label>
+       <select id="newStaffUnit" class="form-control" style="width:100%; font-size:13px;" aria-label="担当の区分"></select>
+      </div>
+     </div>
+     <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+      <button type="button" class="btn btn-primary" style="font-size:13px; white-space:nowrap;" onclick="submitNewStaffStamp()">職員を追加</button>
      </div>
     </div>
-    <div style="font-weight:bold; font-size:13px; margin-bottom:6px;">登録済み職員一覧</div>
-    <div id="staffModalList" style="display:flex; flex-direction:column; gap:6px; max-height:300px; overflow-y:auto;"></div>
+    <div style="font-weight:bold; font-size:14px; margin-bottom:6px; color:var(--ink);">登録済み職員一覧（各職員の「変更・資格」から入社日・常勤/非常勤・資格と研修を記録できます）</div>
+    <div id="staffModalList" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;"></div>
+   </div>
+  </div>
+ </div>
+
+ <!-- 職員情報の変更・資格と研修の記録モーダル -->
+ <div class="modal-overlay" id="staffEditModal" style="display:none;">
+  <div class="modal-card" style="max-width:700px;">
+   <div class="modal-header">
+    <h3 id="staffEditModalTitle" style="margin:0; font-size:16px;">職員情報の変更・資格と研修の記録</h3>
+    <button type="button" class="close-btn" onclick="closeModal('staffEditModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px; max-height:82vh; overflow-y:auto;">
+    <input type="hidden" id="editStaffTargetName">
+    <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+     <div style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">1. 基本情報（役職・常勤/非常勤・入社日）の変更</div>
+     <div class="staff-add-grid">
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">役職 <span style="color:var(--alert);">*</span></label>
+       <select id="editStaffRole" class="form-control" style="width:100%; font-size:13px;">
+        <option value="">選んでください</option>
+        <option value="介護職員">介護職員</option>
+        <option value="ユニットリーダー">ユニットリーダー</option>
+        <option value="生活相談員">生活相談員</option>
+        <option value="計画作成担当者（ケアマネ）">計画作成担当者（ケアマネ）</option>
+        <option value="看護師">看護師</option>
+        <option value="主任看護師">主任看護師</option>
+        <option value="管理者">管理者</option>
+        <option value="施設長">施設長</option>
+        <option value="事務員">事務員</option>
+        <option value="事務員 (パート)">事務員 (パート)</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">常勤・非常勤 <span style="color:var(--alert);">*</span></label>
+       <select id="editStaffEmploymentType" class="form-control" style="width:100%; font-size:13px;">
+        <option value="">選んでください</option>
+        <option value="常勤">常勤</option>
+        <option value="非常勤">非常勤</option>
+        <option value="非常勤 (パート)">非常勤 (パート)</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">勤務形態 <span style="color:var(--alert);">*</span></label>
+       <select id="editStaffDutyType" class="form-control" style="width:100%; font-size:13px;">
+        <option value="">選んでください</option>
+        <option value="交替勤務">交替勤務</option>
+        <option value="日勤専従">日勤専従</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">入社日（先の日付は不可）</label>
+       <input type="date" id="editStaffHireDate" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">担当の区分</label>
+       <select id="editStaffUnit" class="form-control" style="width:100%; font-size:13px;"></select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">変更の理由（既存の値を変えるときは必須）</label>
+       <input type="text" id="editStaffReason" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+     </div>
+     <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+      <button type="button" class="btn btn-primary" style="font-size:13px;" onclick="saveStaffBasicInfo()">基本情報を保存</button>
+     </div>
+    </div>
+
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+      <div style="font-weight:bold; font-size:14px; color:var(--pine-dark);">2. 資格・研修を追加する（マスタから選択／その他）</div>
+      <button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 8px;" onclick="openQualificationMasterModal()">資格・研修マスタを開く</button>
+     </div>
+     <div class="form-group" style="margin-bottom:8px;">
+      <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">名前・読みがなで検索（1文字入れると候補が出ます）</label>
+      <input type="text" id="staffQualSearchInput" class="form-control" style="width:100%; font-size:13px;" oninput="onStaffQualSearchInput()" onfocus="onStaffQualSearchInput()" autocomplete="off">
+      <div id="staffQualCandidateList" class="qual-candidate-list" style="display:none;"></div>
+     </div>
+     <div class="staff-add-grid">
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">追加する資格・研修 <span style="color:var(--alert);">*</span></label>
+       <select id="staffQualMasterSelect" class="form-control" style="width:100%; font-size:13px;" onchange="onStaffQualMasterSelectChange()">
+        <option value="">選んでください</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">取得日（任意・先の日付は不可）</label>
+       <input type="date" id="staffQualAcquiredDate" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+     </div>
+     <div id="staffQualOtherWrap" style="display:none; margin-top:8px;">
+      <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">その他の資格・研修名 <span style="color:var(--alert);">*</span>（一覧にないものを自由記入・集計には入りません）</label>
+      <input type="text" id="staffQualOtherName" class="form-control" style="width:100%; font-size:13px;">
+     </div>
+     <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+      <button type="button" class="btn btn-primary" style="font-size:13px;" onclick="addStaffQualificationRecord()">この資格・研修を追加</button>
+     </div>
+    </div>
+
+    <div>
+     <div style="font-weight:bold; font-size:14px; color:var(--ink); margin-bottom:6px;">3. 保有している資格・研修の一覧（資格証の確認・取消）</div>
+     <div id="staffQualOriginalTextNote" style="font-size:13px; color:var(--ink-2); margin-bottom:8px;"></div>
+     <div id="staffQualRecordsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeModal('staffEditModal')">閉じる</button>
+   </div>
+  </div>
+ </div>
+
+ <!-- 資格・研修の一覧（マスタ）管理モーダル -->
+ <div class="modal-overlay" id="qualificationMasterModal" style="display:none;">
+  <div class="modal-card" style="max-width:720px;">
+   <div class="modal-header">
+    <h3 style="margin:0; font-size:16px;">資格・研修の一覧（マスタ）の管理</h3>
+    <button type="button" class="close-btn" onclick="closeModal('qualificationMasterModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px; max-height:82vh; overflow-y:auto;">
+    <div id="qmFormContainer" style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+     <div id="qmFormModeTitle" style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">＋ マスタに資格・研修を追加</div>
+     <input type="hidden" id="qmEditId">
+     <div class="staff-add-grid">
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">名前 <span style="color:var(--alert);">*</span></label>
+       <input type="text" id="qmName" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">読みがな（ひらがな） <span style="color:var(--alert);">*</span></label>
+       <input type="text" id="qmKana" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">種類（資格／研修） <span style="color:var(--alert);">*</span></label>
+       <select id="qmKind" class="form-control" style="width:100%; font-size:13px;">
+        <option value="">選んでください</option>
+        <option value="資格">資格</option>
+        <option value="研修">研修</option>
+       </select>
+      </div>
+      <div>
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">基準や加算の印 <span style="color:var(--alert);">*</span></label>
+       <select id="qmHasMark" class="form-control" style="width:100%; font-size:13px;" onchange="onQmHasMarkChange()">
+        <option value="">選んでください</option>
+        <option value="なし">なし</option>
+        <option value="あり">あり</option>
+       </select>
+      </div>
+     </div>
+     <div id="qmMarkDetailWrap" style="display:none; margin-top:8px;">
+      <div class="staff-add-grid">
+       <div>
+        <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">印の中身（何の基準・加算か） <span style="color:var(--alert);">*</span></label>
+        <input type="text" id="qmMarkDetail" class="form-control" style="width:100%; font-size:13px;">
+       </div>
+       <div>
+        <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">出典URL（公的資料のURL・必須） <span style="color:var(--alert);">*</span></label>
+        <input type="text" id="qmSourceUrl" class="form-control" style="width:100%; font-size:13px;">
+       </div>
+      </div>
+      <p class="panel-note" style="margin:6px 0 0;">基準や加算の印を「あり」にするときは、何の基準・加算かと、根拠となる出典URL（https://...）の両方を入力してください（出典なしでは保存できません）。</p>
+     </div>
+     <div id="qmEditReasonWrap" style="display:none; margin-top:8px;">
+      <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">変更の理由 <span style="color:var(--alert);">*</span></label>
+      <input type="text" id="qmEditReason" class="form-control" style="width:100%; font-size:13px;">
+     </div>
+     <div style="display:flex; justify-content:flex-end; gap:8px; margin-top:10px;">
+      <button type="button" class="btn btn-secondary" id="qmCancelEditBtn" style="display:none; font-size:13px;" onclick="resetQualificationMasterForm()">新規追加に戻す</button>
+      <button type="button" class="btn btn-primary" id="qmSubmitBtn" style="font-size:13px;" onclick="saveQualificationMasterItem()">マスタに追加</button>
+     </div>
+    </div>
+
+    <div style="font-weight:bold; font-size:14px; color:var(--ink); margin-bottom:6px;">登録されている資格・研修マスタ一覧</div>
+    <div id="qualificationMasterList" style="display:flex; flex-direction:column; gap:8px;"></div>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeModal('qualificationMasterModal')">閉じる</button>
    </div>
   </div>
  </div>
@@ -3758,7 +3978,7 @@
  </div>
  </div>
 
- <script src="app.js?v=20261019_d1"></script>
+ <script src="app.js?v=20261019_e1"></script>
   
 
   <!-- ============================================================ -->
