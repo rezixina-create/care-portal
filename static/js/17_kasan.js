@@ -449,6 +449,8 @@ function cpKasanBasicDays(resident, yearMonth) {
 function cpGetKasanSettings() {
   const raw = (db && db.data && db.data.kasan_settings) || {};
   return {
+    office_no: raw.office_no || "",
+    media_code: raw.media_code || "",
     region_type: raw.region_type || "",
     taisei_items: Object.assign({}, raw.taisei_items || {}),
     gensan_items: Object.assign({}, raw.gensan_items || {}),
@@ -736,6 +738,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     unitKey: unitKey,
     basicDays: basicDays,
     hospDays: hospDaysCount,
+    daysCalc: daysCalc,
     items: items,
     totalUnits: totalUnits,
     regionType: settings.region_type,
@@ -850,8 +853,9 @@ function renderOfficeKasanTab() {
     <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
       <span>加算・減算の月の確認表（認知症対応型共同生活介護）</span>
       <div style="display:flex; gap:6px; flex-wrap:wrap;">
+        <button type="button" class="btn btn-primary" onclick="openKasanCsvModal()">国保連へのファイルを作る</button>
         <button type="button" class="btn btn-secondary" onclick="printKasanMonthlyTable()">確認表をA4横印刷</button>
-        <button type="button" class="btn btn-primary" onclick="openKasanSettingsModal()">事業所の加算・減算設定</button>
+        <button type="button" class="btn btn-secondary" onclick="openKasanSettingsModal()">事業所の加算・減算設定</button>
         <button type="button" class="btn btn-secondary" onclick="printEmergencyResidentSheets()">停電に備えた印刷</button>
       </div>
     </div>
@@ -925,6 +929,12 @@ function openKasanSettingsModal() {
   if (!modal) return;
 
   const settings = cpGetKasanSettings();
+
+  // 事業所番号・媒体区分
+  const offEl = document.getElementById("kasanOfficeNo");
+  if (offEl) offEl.value = settings.office_no || "";
+  const medEl = document.getElementById("kasanMediaCode");
+  if (medEl) medEl.value = settings.media_code || "";
 
   // 地域区分
   const regSel = document.getElementById("kasanRegionSelect");
@@ -1156,7 +1166,17 @@ function saveKasanSettings() {
   }
 
   const curSettings = cpGetKasanSettings();
+  const officeNo = (document.getElementById("kasanOfficeNo")?.value || "").trim();
+  const mediaCode = (document.getElementById("kasanMediaCode")?.value || "").trim();
+
+  let kasanError = "";
+  if (officeNo && !/^[A-Za-z0-9]{10}$/.test(officeNo)) {
+    kasanError = "事業所番号は英数字10桁ちょうどで入力してください。";
+  }
+
   const nextSettings = {
+    office_no: officeNo,
+    media_code: mediaCode,
     region_type: (document.getElementById("kasanRegionSelect")?.value || "").trim(),
     taisei_items: {},
     gensan_items: {},
@@ -1166,7 +1186,6 @@ function saveKasanSettings() {
 
   const kasanToday = toLocalDateStr(new Date());
   const kasanThisMonth = kasanToday.slice(0, 7);
-  let kasanError = "";
   CP_KASAN_TAISEI_DEFS.forEach(def => {
     const optKey = (document.getElementById(`kasanTaisei_${def.id}`)?.value || "").trim();
     const notifDate = (document.getElementById(`kasanTaiseiDate_${def.id}`)?.value || "").trim();
@@ -1203,12 +1222,16 @@ function saveKasanSettings() {
 
   // 変更の有無をチェック（無変更時は履歴を増やさない）
   const curJson = JSON.stringify({
-    region_type: curSettings.region_type,
+    office_no: curSettings.office_no || "",
+    media_code: curSettings.media_code || "",
+    region_type: curSettings.region_type || "",
     taisei_items: curSettings.taisei_items,
     gensan_items: curSettings.gensan_items
   });
   const nextJson = JSON.stringify({
-    region_type: nextSettings.region_type,
+    office_no: nextSettings.office_no || "",
+    media_code: nextSettings.media_code || "",
+    region_type: nextSettings.region_type || "",
     taisei_items: nextSettings.taisei_items,
     gensan_items: nextSettings.gensan_items
   });
@@ -1219,7 +1242,7 @@ function saveKasanSettings() {
     return;
   }
 
-  const logDetail = `地域区分: ${nextSettings.region_type || "未設定"}、届出加算更新、減算設定更新`;
+  const logDetail = `事業所番号: ${nextSettings.office_no || "未設定"}、媒体区分: ${nextSettings.media_code || "未設定"}、地域区分: ${nextSettings.region_type || "未設定"}、届出加算・減算更新`;
   nextSettings.edit_history.unshift({
     id: Date.now(),
     at: toLocalDateTimeStr(new Date()),
@@ -1434,6 +1457,567 @@ function printEmergencyResidentSheets() {
   }
 }
 
+
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+// 6. 国保連請求ファイル（CSV）作成機能（インタフェース仕様書 令和6年4月版 準拠）
+// ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+let gKasanGeneratedCsvText = "";
+let gKasanGeneratedCsvFileName = "";
+let gKasanCsvValidationResult = null;
+
+// 要介護状態区分コード マッピング（要介護1=21, 2=22, 3=23, 4=24, 5=25）
+const CP_KASAN_CARE_LEVEL_CODES = {
+  "要介護1": "21",
+  "要介護2": "22",
+  "要介護3": "23",
+  "要介護4": "24",
+  "要介護5": "25"
+};
+
+// モーダルを開く（権限チェック & 初期検証）
+function openKasanCsvModal() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("国保連請求ファイルの作成は、管理者および事務員のみ操作可能です。");
+    return;
+  }
+
+  const modal = document.getElementById("kasanCsvModal");
+  if (!modal) return;
+
+  const ym = gKasanSelectedMonth || toLocalDateStr(new Date()).slice(0, 7);
+  const [yStr, mStr] = ym.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  let nextY = y;
+  let nextM = m + 1;
+  if (nextM > 12) {
+    nextM = 1;
+    nextY += 1;
+  }
+  const nextYmFmt = `${nextY}年${nextM}月`;
+
+  const ymDisp = document.getElementById("kasanCsvTargetYmDisp");
+  if (ymDisp) ymDisp.textContent = `${yStr}年${mStr}月`;
+  const nextDisp = document.getElementById("kasanCsvNextYmDisp");
+  if (nextDisp) nextDisp.textContent = nextYmFmt;
+
+  // 初期化
+  gKasanGeneratedCsvText = "";
+  gKasanGeneratedCsvFileName = "";
+  const previewSec = document.getElementById("kasanCsvPreviewSection");
+  if (previewSec) previewSec.style.display = "none";
+  const dlBtn = document.getElementById("kasanCsvDownloadBtn");
+  if (dlBtn) dlBtn.style.display = "none";
+  const statusEl = document.getElementById("kasanCsvActionStatus");
+  if (statusEl) statusEl.textContent = "";
+
+  renderKasanCsvValidation(ym);
+  modal.style.display = "flex";
+}
+
+function closeKasanCsvModal() {
+  const modal = document.getElementById("kasanCsvModal");
+  if (modal) modal.style.display = "none";
+}
+
+// 利用者ごとの必須情報チェック
+function cpValidateResidentForKasanCsv(r, ym) {
+  const missing = [];
+  
+  const insNo = (r.insured_no || "").trim();
+  if (!insNo) {
+    missing.push("被保険者番号");
+  } else if (!/^[A-Za-z0-9]{1,10}$/.test(insNo)) {
+    missing.push("被保険者番号（半角英数字10桁以内）");
+  }
+
+  const insurerNo = (r.insurer_no || "").trim();
+  if (!insurerNo) {
+    missing.push("証記載保険者番号");
+  } else if (!/^\d{8}$/.test(insurerNo)) {
+    missing.push("証記載保険者番号（数字8桁）");
+  }
+
+  if (!r.gender || (r.gender !== "1" && r.gender !== "2")) {
+    missing.push("性別");
+  }
+
+  if (!r.benefit_rate || !["90", "80", "70"].includes(String(r.benefit_rate))) {
+    missing.push("保険給付率");
+  }
+
+  if (!r.care_start_date) {
+    missing.push("認定有効期間開始日");
+  }
+  if (!r.care_expiry_date) {
+    missing.push("認定有効期間終了日（要介護認定有効期限）");
+  }
+  if (r.care_start_date && r.care_expiry_date && r.care_start_date >= r.care_expiry_date) {
+    missing.push("認定有効期間（開始日が終了日以降）");
+  }
+
+  if (!r.birth_date) {
+    missing.push("生年月日");
+  }
+
+  if (!r.admission_date) {
+    missing.push("入所年月日（入居日）");
+  }
+
+  // 退所月の場合、退所後の状態が必要
+  const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === ym);
+  if (isDischargeMonth) {
+    if (!r.post_discharge_status) {
+      missing.push("退所後の状態");
+    }
+  }
+
+  // 要介護度（1〜5であること）
+  const careCode = CP_KASAN_CARE_LEVEL_CODES[r.care_level || ""];
+  if (!careCode) {
+    missing.push(`要介護度（要介護1〜5が必要: 現在 ${r.care_level || "未登録"}）`);
+  }
+
+  return {
+    valid: missing.length === 0,
+    missing: missing
+  };
+}
+
+// モーダル内の検証一覧表示
+function renderKasanCsvValidation(ym) {
+  const settings = cpGetKasanSettings();
+  const summaryEl = document.getElementById("kasanCsvValidationSummary");
+  const listBody = document.getElementById("kasanCsvResidentListBody");
+  const genBtn = document.getElementById("kasanCsvGenerateBtn");
+
+  const officeErrors = [];
+  if (!settings.office_no) {
+    officeErrors.push("事業所番号が未設定です（加算・減算設定で登録してください）");
+  } else if (!/^[A-Za-z0-9]{10}$/.test(settings.office_no)) {
+    officeErrors.push("事業所番号が英数字10桁ではありません");
+  }
+  if (!settings.media_code) {
+    officeErrors.push("媒体区分が未選択です（加算・減算設定で登録してください）");
+  }
+  if (!settings.region_type) {
+    officeErrors.push("地域区分が未選択です（加算・減算設定で登録してください）");
+  }
+
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const candidateResults = [];
+  let eligibleCount = 0;
+  let ineligibleCount = 0;
+
+  allResidents.forEach(r => {
+    const calc = cpComputeMonthlyKasan(r, ym);
+    if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
+      const v = cpValidateResidentForKasanCsv(r, ym);
+      if (v.valid) eligibleCount++;
+      else ineligibleCount++;
+      candidateResults.push({
+        resident: r,
+        calc: calc,
+        validation: v
+      });
+    }
+  });
+
+  gKasanCsvValidationResult = {
+    ym: ym,
+    settings: settings,
+    officeErrors: officeErrors,
+    candidates: candidateResults,
+    eligibleCount: eligibleCount,
+    ineligibleCount: ineligibleCount
+  };
+
+  let summaryHtml = "";
+  if (officeErrors.length > 0) {
+    summaryHtml += `
+      <div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); border-radius:4px; padding:8px 12px; font-size:13px; font-weight:bold; margin-bottom:8px;">
+        【事業所情報のエラー】以下の設定を完了するまでCSVファイルを作成できません:<br>
+        ${officeErrors.map(e => `・${escapeHtml(e)}`).join("<br>")}
+      </div>
+    `;
+  } else {
+    summaryHtml += `
+      <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:13px; margin-bottom:6px;">
+        <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">事業所番号: <strong>${escapeHtml(settings.office_no)}</strong></span>
+        <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">媒体区分: <strong>${escapeHtml(settings.media_code === "1" ? "1 伝送" : "7 伝送（インターネット）")}</strong></span>
+        <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">作成可能: <strong>${eligibleCount}</strong> 名</span>
+        ${ineligibleCount > 0 ? `<span class="badge" style="background:var(--caution-tint); color:var(--caution); padding:4px 8px; font-weight:bold;">情報不足（作成不可）: <strong>${ineligibleCount}</strong> 名</span>` : `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); padding:4px 8px;">全員作成可能</span>`}
+      </div>
+    `;
+    if (ineligibleCount > 0) {
+      summaryHtml += `
+        <div style="font-size:13px; color:var(--caution); margin-bottom:6px;">
+          ※情報不足の利用者は除外され、作成可能な利用者（${eligibleCount}名）のみで請求CSVファイルが作成されます。
+        </div>
+      `;
+    }
+  }
+  if (summaryEl) summaryEl.innerHTML = summaryHtml;
+
+  if (listBody) {
+    if (candidateResults.length === 0) {
+      listBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--ink-3);">当月の算定対象となる利用者の記録はありません。</td></tr>`;
+    } else {
+      listBody.innerHTML = candidateResults.map(item => {
+        const r = item.resident;
+        const v = item.validation;
+        const isOk = v.valid;
+        const statusBadge = isOk
+          ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:12px; padding:2px 6px;">出せる</span>`
+          : `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:12px; padding:2px 6px;">出せない</span>`;
+        const missingText = isOk
+          ? `<span style="color:var(--pine); font-size:12px;">必要項目が揃っています</span>`
+          : `<span style="color:var(--alert); font-size:12px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
+
+        return `
+          <tr>
+            <td style="text-align:center; white-space:nowrap;">${statusBadge}</td>
+            <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)}</td>
+            <td style="text-align:center; white-space:nowrap;">${escapeHtml(r.care_level || "未登録")}</td>
+            <td style="text-align:right; font-weight:bold; white-space:nowrap;">${item.calc.totalUnits.toLocaleString()} 単位</td>
+            <td>${missingText}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
+  if (genBtn) {
+    genBtn.disabled = (officeErrors.length > 0 || eligibleCount === 0);
+  }
+}
+
+// 請求CSVファイルの生成処理
+function generateKasanCsvFile() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("国保連請求ファイルの作成は、管理者および事務員のみ操作可能です。");
+    return;
+  }
+
+  const val = gKasanCsvValidationResult;
+  if (!val || val.officeErrors.length > 0) {
+    alert("事業所情報に不備があるため作成できません。加算・減算設定をご確認ください。");
+    return;
+  }
+
+  const eligibleItems = val.candidates.filter(c => c.validation.valid);
+  if (eligibleItems.length === 0) {
+    alert("作成可能な利用者が0名のため、請求ファイルを作成できません。利用者の請求情報を登録してください。");
+    return;
+  }
+
+  const settings = val.settings;
+  const ym = val.ym;
+  const ymRaw = ym.replace("-", ""); // YYYYMM
+  const [yStr, mStr] = ym.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  let nextY = y;
+  let nextM = m + 1;
+  if (nextM > 12) {
+    nextM = 1;
+    nextY += 1;
+  }
+  const nextYmRaw = `${nextY}${String(nextM).padStart(2, "0")}`; // 審査年月
+
+  const regionObj = CP_KASAN_REGION_RATES.find(r => r.key === settings.region_type);
+  if (!regionObj) {
+    alert("地域区分が正しく設定されていません。加算・減算設定をご確認ください。");
+    return;
+  }
+  const unitPriceInt = Math.round(regionObj.rate * 100); // 10.00 -> 1000, 10.90 -> 1090
+
+  const lines = [];
+  const previewRows = [];
+  let recordNumber = 1;
+
+  // 1行目: コントロールレコード（12項目）
+  // 1 レコード種別「1」, 2 レコード番号「1」, 3 ボリューム通番「0」, 4 データレコードの件数, 5 データ種別「711」, 6 福祉事務所特定番号「0」, 7 保険者番号「0」, 8 事業所番号, 9 都道府県番号「0」, 10 媒体区分, 11 処理対象年月, 12 ファイル管理番号「1」
+  // 注意: データレコード件数はデータ行作成後に確定して代入する
+
+  // 利用者ごとの計算データ準備
+  let grandTotalUnits = 0;
+  let grandCost100 = 0;
+  let grandHokenDemand = 0;
+  let grandUserBurden = 0;
+
+  const residentBlocks = [];
+
+  for (const item of eligibleItems) {
+    const r = item.resident;
+    const calc = item.calc;
+    const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
+
+    const totalUnits = calc.totalUnits;
+    const cost100 = Math.floor(totalUnits * regionObj.rate);
+    const hokenDemand = Math.floor(cost100 * (benefitRateInt / 100));
+    const userBurden = cost100 - hokenDemand;
+
+    grandTotalUnits += totalUnits;
+    grandCost100 += cost100;
+    grandHokenDemand += hokenDemand;
+    grandUserBurden += userBurden;
+
+    // 基本情報レコード 7171 01（56項目）
+    const insNo10 = String(r.insured_no || "").trim().padStart(10, "0");
+    const insurerNo8 = String(r.insurer_no || "").trim();
+    const birthRaw = (r.birth_date || "").replace(/-/g, "");
+    const genderCode = String(r.gender || "");
+    const careCode = CP_KASAN_CARE_LEVEL_CODES[r.care_level || ""] || "";
+    const careStartRaw = (r.care_start_date || "").replace(/-/g, "");
+    const careExpiryRaw = (r.care_expiry_date || "").replace(/-/g, "");
+    const preStatus = String(r.pre_admission_status || "");
+    const admissionRaw = (r.admission_date || "").replace(/-/g, "");
+
+    const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === ym);
+    const dischargeRaw = isDischargeMonth ? (r.discharge_date || "").replace(/-/g, "") : "";
+    const postStatus = isDischargeMonth ? String(r.post_discharge_status || "") : "";
+
+    // 外泊日数の算出（外泊の歴 r.outings から、外泊した日・戻った日を除く間の日）
+    let outingMidDays = 0;
+    if (calc.daysCalc && calc.daysCalc.details) {
+      Object.values(calc.daysCalc.details).forEach(kd => {
+        if (kd === "OUTING_MID") outingMidDays++;
+      });
+    } else {
+      const dCalc = cpKasanBasicDays(r, ym);
+      if (dCalc && dCalc.details) {
+        Object.values(dCalc.details).forEach(kd => {
+          if (kd === "OUTING_MID") outingMidDays++;
+        });
+      }
+    }
+    const outingDaysStr = outingMidDays > 0 ? String(outingMidDays) : "";
+    const inResidenceDaysStr = String(calc.basicDays);
+
+    const r01_fields = [
+      "7171", "01", ymRaw, settings.office_no, insurerNo8, insNo10,
+      "", "", "", "", "", "", // 7..12 公費1〜3
+      birthRaw, genderCode, careCode, "", // 13..16 (16: 空)
+      careStartRaw, careExpiryRaw, // 17..18
+      "", "", "", "", // 19..22 居宅サービス計画（空）
+      "", admissionRaw, dischargeRaw, inResidenceDaysStr, outingDaysStr, postStatus, // 23..28 (23: 空, 24: 入居, 25: 退居, 26: 入居実日数, 27: 外泊日数, 28: 退居後状態)
+      String(benefitRateInt), "", "", "", // 29..32 給付率
+      String(totalUnits), String(hokenDemand), String(userBurden), "", "", "" // 33..38 (36..38: 空)
+      // 39..56 公費の欄（18項目空。42..44, 48..50, 54..56 も空）
+    ];
+    while (r01_fields.length < 56) {
+      r01_fields.push("");
+    }
+
+    // 明細情報レコード 7171 02（各行18項目。候補は出さない）
+    const r02_list = [];
+    calc.items.forEach(it => {
+      if (it.candidate) return; // 候補は出さない
+      const r02_fields = [
+        "7171", "02", ymRaw, settings.office_no, insurerNo8, insNo10,
+        "32", String(it.code), String(it.unit_price), String(it.count),
+        "", "", "", // 11..13
+        String(it.subtotal), // 14
+        "", "", "", // 15..17
+        "" // 18 摘要
+      ];
+      r02_list.push(r02_fields);
+    });
+
+    // 集計情報レコード 7171 10（38項目。サービス種類32準拠）
+    // 8..13（実日数・計画単位数・限度額管理対象・対象外・短期入所日数）はすべて何も入れない（カンマのみ）
+    // 14 保険 単位数合計, 15 単位数単価, 16 保険 請求額, 17 利用者負担額
+    const r10_fields = [
+      "7171", "10", ymRaw, settings.office_no, insurerNo8, insNo10,
+      "32", "",
+      "", "",
+      "", "", "",
+      String(totalUnits), String(unitPriceInt), String(hokenDemand), String(userBurden)
+      // 18..38 （21項目空）
+    ];
+    while (r10_fields.length < 38) {
+      r10_fields.push("");
+    }
+
+    residentBlocks.push({
+      resident: r,
+      r01: r01_fields,
+      r02_list: r02_list,
+      r10: r10_fields
+    });
+  }
+
+  // 請求書レコード 7111（18項目）
+  // 1「7111」 2 サービス提供年月 3 事業所番号 4「1」 5「0」 6「01」
+  // 7 件数（人数） 8 単位数合計 9 費用合計（100％金額） 10 保険請求額 11 公費請求額「0」 12 利用者負担
+  // 13〜18 特定入所者等はすべて「0」
+  const r7111_fields = [
+    "7111", ymRaw, settings.office_no, "1", "0", "01",
+    String(eligibleItems.length), String(grandTotalUnits), String(grandCost100), String(grandHokenDemand), "0", String(grandUserBurden),
+    "0", "0", "0", "0", "0", "0"
+  ];
+
+  // データレコード総数 = 請求書1件 + 各利用者の (01: 1件 + 02: N件 + 10: 1件)
+  let dataRecordCount = 1; // 7111
+  residentBlocks.forEach(b => {
+    dataRecordCount += 1; // 01
+    dataRecordCount += b.r02_list.length; // 02
+    dataRecordCount += 1; // 10
+  });
+
+  // 1行目 コントロールレコード
+  recordNumber = 1;
+  const controlLine = `1,1,0,${dataRecordCount},711,0,0,${settings.office_no},0,${settings.media_code},${nextYmRaw},1`;
+  lines.push(controlLine);
+  previewRows.push({
+    lineNo: 1,
+    type: "コントロールレコード",
+    content: controlLine
+  });
+
+  // 2行目 請求書レコード 7111
+  recordNumber++;
+  const line7111 = `2,${recordNumber},` + r7111_fields.join(",");
+  lines.push(line7111);
+  previewRows.push({
+    lineNo: recordNumber,
+    type: "請求書レコード (7111)",
+    content: line7111
+  });
+
+  // 明細書レコード
+  for (const block of residentBlocks) {
+    // 01 基本情報
+    recordNumber++;
+    const line01 = `2,${recordNumber},` + block.r01.join(",");
+    lines.push(line01);
+    previewRows.push({
+      lineNo: recordNumber,
+      type: `明細書 基本 (7171-01: ${escapeHtml(block.resident.name)})`,
+      content: line01
+    });
+
+    // 02 明細情報
+    for (const r02 of block.r02_list) {
+      recordNumber++;
+      const line02 = `2,${recordNumber},` + r02.join(",");
+      lines.push(line02);
+      previewRows.push({
+        lineNo: recordNumber,
+        type: `明細書 明細 (7171-02: コード ${escapeHtml(r02[7])})`,
+        content: line02
+      });
+    }
+
+    // 10 集計情報
+    recordNumber++;
+    const line10 = `2,${recordNumber},` + block.r10.join(",");
+    lines.push(line10);
+    previewRows.push({
+      lineNo: recordNumber,
+      type: `明細書 集計 (7171-10: ${escapeHtml(block.resident.name)})`,
+      content: line10
+    });
+  }
+
+  // エンドレコード
+  recordNumber++;
+  const endLine = `3,${recordNumber}`;
+  lines.push(endLine);
+  previewRows.push({
+    lineNo: recordNumber,
+    type: "エンドレコード",
+    content: endLine
+  });
+
+  const fullCsvText = lines.join("
+
+") + "
+
+";
+
+  // 全角文字チェック（半角英数字・カンマ・CRLF以外が含まれていないか機械的検証）
+  const nonAsciiMatch = fullCsvText.match(/[^ -~
+
+,]/);
+  if (nonAsciiMatch) {
+    alert(`ファイル内に半角英数字・記号以外の文字が含まれています: ${nonAsciiMatch[0]}`);
+    return;
+  }
+
+  // ファイル名: 英字1文字＋年月6桁 (例: K202610.CSV) -> ベース7文字で8文字以内準拠
+  const fileName = `K${ymRaw}.CSV`;
+
+  gKasanGeneratedCsvText = fullCsvText;
+  gKasanGeneratedCsvFileName = fileName;
+
+  // 操作ログの記録
+  const opLogDetail = `${ym} 請求CSV作成（${eligibleItems.length}名分、ファイル名: ${fileName}、レコード数: ${recordNumber}）`;
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({
+    id: Date.now(),
+    at: toLocalDateTimeStr(new Date()),
+    by: cpLoginStaffName(),
+    kind: "国保連請求ファイル",
+    action: "作成",
+    detail: opLogDetail
+  });
+  db.save();
+
+  // プレビュー表示
+  const previewSec = document.getElementById("kasanCsvPreviewSection");
+  const fnDisp = document.getElementById("kasanCsvFileNameDisp");
+  const tbody = document.getElementById("kasanCsvPreviewTableBody");
+  const dlBtn = document.getElementById("kasanCsvDownloadBtn");
+  const statusEl = document.getElementById("kasanCsvActionStatus");
+
+  if (fnDisp) fnDisp.textContent = `ファイル名: ${fileName} (全${lines.length}行)`;
+  if (tbody) {
+    tbody.innerHTML = previewRows.map(pr => `
+      <tr>
+        <td style="text-align:right; font-family:monospace; color:var(--ink-2); white-space:nowrap;">${pr.lineNo}</td>
+        <td style="font-weight:bold; white-space:nowrap; font-size:12px; color:var(--pine-dark);">${pr.type}</td>
+        <td style="font-family:monospace; font-size:12px; word-break:break-all;">${escapeHtml(pr.content)}</td>
+      </tr>
+    `).join("");
+  }
+  if (previewSec) previewSec.style.display = "block";
+  if (dlBtn) dlBtn.style.display = "inline-block";
+  if (statusEl) {
+    statusEl.innerHTML = `<span style="color:var(--pine); font-weight:bold;">CSVファイルを正常に作成しました（${eligibleItems.length}名分）。下のボタンから端末へ保存できます。</span>`;
+  }
+}
+
+// 作成されたCSVファイルのダウンロード
+function downloadGeneratedKasanCsv() {
+  if (!gKasanGeneratedCsvText || !gKasanGeneratedCsvFileName) {
+    alert("作成されたCSVファイルがありません。先に「CSVファイルを作成する」を実行してください。");
+    return;
+  }
+
+  try {
+    const blob = new Blob([gKasanGeneratedCsvText], { type: "text/csv;charset=shift_jis;" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = gKasanGeneratedCsvFileName;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+
+    const statusEl = document.getElementById("kasanCsvActionStatus");
+    if (statusEl) {
+      statusEl.innerHTML = `<span style="color:var(--pine); font-weight:bold;">${escapeHtml(gKasanGeneratedCsvFileName)} を端末に保存しました。</span>`;
+    }
+  } catch (e) {
+    alert("ファイルの保存中にエラーが発生しました: " + (e.message || e));
+  }
+}
+
+
 // グローバル公開
 window.CP_KASAN_BASIC_CODES = CP_KASAN_BASIC_CODES;
 window.CP_KASAN_RESIDENT_DEFS = CP_KASAN_RESIDENT_DEFS;
@@ -1456,3 +2040,8 @@ window.deleteKasanCommitteeRule = deleteKasanCommitteeRule;
 window.saveKasanSettings = saveKasanSettings;
 window.printKasanMonthlyTable = printKasanMonthlyTable;
 window.printEmergencyResidentSheets = printEmergencyResidentSheets;
+window.openKasanCsvModal = openKasanCsvModal;
+window.closeKasanCsvModal = closeKasanCsvModal;
+window.generateKasanCsvFile = generateKasanCsvFile;
+window.downloadGeneratedKasanCsv = downloadGeneratedKasanCsv;
+window.cpValidateResidentForKasanCsv = cpValidateResidentForKasanCsv;

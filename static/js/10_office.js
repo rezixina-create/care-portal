@@ -3160,6 +3160,13 @@ function openAddResidentModal() {
  document.getElementById("resDrInstructions").value = "";
  document.getElementById("resNextClinicDate").value = "";
  document.getElementById("resCareExpiryDate").value = "";
+ document.getElementById("resInsuredNo").value = "";
+ document.getElementById("resInsurerNo").value = "";
+ document.getElementById("resGender").value = "";
+ document.getElementById("resBenefitRate").value = "";
+ document.getElementById("resCareStartDate").value = "";
+ document.getElementById("resPreAdmissionStatus").value = "";
+ document.getElementById("resPostDischargeStatus").value = "";
  document.getElementById("resClinicSpecialNotes").value = "";
  document.getElementById("resBpHighMax").value = "";
  document.getElementById("resBpHighMin").value = "";
@@ -3199,6 +3206,13 @@ function openEditResidentModal(id) {
  document.getElementById("resDrInstructions").value = r.dr_instructions || "";
  document.getElementById("resNextClinicDate").value = r.next_clinic_date || "";
  document.getElementById("resCareExpiryDate").value = r.care_expiry_date || "";
+ document.getElementById("resInsuredNo").value = r.insured_no || "";
+ document.getElementById("resInsurerNo").value = r.insurer_no || "";
+ document.getElementById("resGender").value = r.gender || "";
+ document.getElementById("resBenefitRate").value = r.benefit_rate || "";
+ document.getElementById("resCareStartDate").value = r.care_start_date || "";
+ document.getElementById("resPreAdmissionStatus").value = r.pre_admission_status || "";
+ document.getElementById("resPostDischargeStatus").value = r.post_discharge_status || "";
  document.getElementById("resClinicSpecialNotes").value = r.clinic_special_notes || "";
  document.getElementById("resBpHighMax").value = r.bp_high_max || "";
  document.getElementById("resBpHighMin").value = r.bp_high_min || "";
@@ -3274,6 +3288,14 @@ function submitResidentForm() {
  }
  }
  }
+ {
+  const csd = (document.getElementById("resCareStartDate")?.value || "").trim();
+  const ced = (document.getElementById("resCareExpiryDate")?.value || "").trim();
+  if (csd && ced && csd >= ced) {
+   alert("認定有効期間の開始日は、有効期限（終了日）より前の日付を入れてください。");
+   return;
+  }
+ }
  const residentData = {
  room_no: roomNo,
  unit_id: (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null,
@@ -3296,6 +3318,13 @@ function submitResidentForm() {
  dr_instructions: document.getElementById("resDrInstructions").value.trim(),
  next_clinic_date: document.getElementById("resNextClinicDate").value,
  care_expiry_date: document.getElementById("resCareExpiryDate").value,
+ insured_no: (document.getElementById("resInsuredNo")?.value || "").trim(),
+ insurer_no: (document.getElementById("resInsurerNo")?.value || "").trim(),
+ gender: (document.getElementById("resGender")?.value || "").trim(),
+ benefit_rate: (document.getElementById("resBenefitRate")?.value || "").trim(),
+ care_start_date: (document.getElementById("resCareStartDate")?.value || "").trim(),
+ pre_admission_status: (document.getElementById("resPreAdmissionStatus")?.value || "").trim(),
+ post_discharge_status: (document.getElementById("resPostDischargeStatus")?.value || "").trim(),
  clinic_special_notes: document.getElementById("resClinicSpecialNotes").value.trim(),
  bp_high_max: document.getElementById("resBpHighMax").value ? parseInt(document.getElementById("resBpHighMax").value, 10) : null,
  bp_high_min: document.getElementById("resBpHighMin").value ? parseInt(document.getElementById("resBpHighMin").value, 10) : null,
@@ -3320,7 +3349,7 @@ function submitResidentForm() {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
 
- cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min", "insured_no", "insurer_no", "gender", "benefit_rate", "care_start_date", "pre_admission_status", "post_discharge_status"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();

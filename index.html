@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261021_b1">
+	<link rel="stylesheet" href="style.css?v=20261021_c1">
 </head>
 <body>
 
@@ -2046,6 +2046,70 @@
  <label>要介護認定有効期限:</label>
  <input type="date" id="resCareExpiryDate" class="form-control">
  </div>
+	<div style="border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px;">
+		<div style="font-size:13px; font-weight:bold; color:var(--pine-dark); margin-bottom:8px;">国保連 請求の情報:</div>
+		<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+			<div class="form-group">
+				<label>被保険者番号（半角英数字10桁まで）:</label>
+				<input type="text" id="resInsuredNo" class="form-control" maxlength="10">
+			</div>
+			<div class="form-group">
+				<label>証記載保険者番号（数字8桁）:</label>
+				<input type="text" id="resInsurerNo" class="form-control" maxlength="8">
+			</div>
+			<div class="form-group">
+				<label>性別:</label>
+				<select id="resGender" class="form-control">
+					<option value="">選んでください</option>
+					<option value="1">1 男</option>
+					<option value="2">2 女</option>
+				</select>
+			</div>
+			<div class="form-group">
+				<label>保険給付率:</label>
+				<select id="resBenefitRate" class="form-control">
+					<option value="">選んでください</option>
+					<option value="90">90 %</option>
+					<option value="80">80 %</option>
+					<option value="70">70 %</option>
+				</select>
+			</div>
+			<div class="form-group">
+				<label>認定有効期間の開始日:</label>
+				<input type="date" id="resCareStartDate" class="form-control">
+			</div>
+			<div class="form-group">
+				<label>入所前の状況（任意）:</label>
+				<select id="resPreAdmissionStatus" class="form-control">
+					<option value="">選んでください</option>
+					<option value="1">1 居宅</option>
+					<option value="2">2 医療機関</option>
+					<option value="3">3 介護老人福祉施設</option>
+					<option value="4">4 介護老人保健施設</option>
+					<option value="5">5 介護療養型医療施設</option>
+					<option value="6">6 認知症対応型共同生活介護</option>
+					<option value="7">7 特定施設入居者生活介護</option>
+					<option value="8">8 その他</option>
+					<option value="9">9 介護医療院</option>
+				</select>
+			</div>
+			<div class="form-group" style="grid-column: 1 / -1;">
+				<label>退所後の状態（退所した方のみ）:</label>
+				<select id="resPostDischargeStatus" class="form-control">
+					<option value="">選んでください</option>
+					<option value="1">1 居宅</option>
+					<option value="2">2 介護施設</option>
+					<option value="3">3 医療機関入院</option>
+					<option value="4">4 死亡</option>
+					<option value="5">5 その他</option>
+					<option value="6">6 介護老人福祉施設入所</option>
+					<option value="7">7 介護老人保健施設入所</option>
+					<option value="8">8 介護療養型医療施設入院</option>
+					<option value="9">9 介護医療院入所</option>
+				</select>
+			</div>
+		</div>
+	</div>
  <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
  <button class="btn btn-secondary" onclick="closeModal('residentModal')">キャンセル</button>
  <button class="btn btn-primary" onclick="submitResidentForm()">登録を保存</button>
@@ -3980,23 +4044,23 @@
  </div>
 
  <!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261021_b1"></script>
- <script src="js/02_terms.js?v=20261021_b1"></script>
- <script src="js/03_common.js?v=20261021_b1"></script>
- <script src="js/04_care_record.js?v=20261021_b1"></script>
- <script src="js/05_summary_print_audit.js?v=20261021_b1"></script>
- <script src="js/06_schema_history.js?v=20261021_b1"></script>
- <script src="js/07_daily_tables.js?v=20261021_b1"></script>
- <script src="js/08_meds.js?v=20261021_b1"></script>
- <script src="js/09_night_misc.js?v=20261021_b1"></script>
- <script src="js/10_office.js?v=20261021_b1"></script>
- <script src="js/11_karte_staff.js?v=20261021_b1"></script>
- <script src="js/12_hospital_photos.js?v=20261021_b1"></script>
- <script src="js/13_shift_units.js?v=20261021_b1"></script>
- <script src="js/14_auth_home.js?v=20261021_b1"></script>
- <script src="js/15_single_write.js?v=20261021_b1"></script>
- <script src="js/16_careplan.js?v=20261021_b1"></script>
-	<script src="js/17_kasan.js?v=20261021_b1"></script>
+ <script src="js/01_core.js?v=20261021_c1"></script>
+ <script src="js/02_terms.js?v=20261021_c1"></script>
+ <script src="js/03_common.js?v=20261021_c1"></script>
+ <script src="js/04_care_record.js?v=20261021_c1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261021_c1"></script>
+ <script src="js/06_schema_history.js?v=20261021_c1"></script>
+ <script src="js/07_daily_tables.js?v=20261021_c1"></script>
+ <script src="js/08_meds.js?v=20261021_c1"></script>
+ <script src="js/09_night_misc.js?v=20261021_c1"></script>
+ <script src="js/10_office.js?v=20261021_c1"></script>
+ <script src="js/11_karte_staff.js?v=20261021_c1"></script>
+ <script src="js/12_hospital_photos.js?v=20261021_c1"></script>
+ <script src="js/13_shift_units.js?v=20261021_c1"></script>
+ <script src="js/14_auth_home.js?v=20261021_c1"></script>
+ <script src="js/15_single_write.js?v=20261021_c1"></script>
+ <script src="js/16_careplan.js?v=20261021_c1"></script>
+	<script src="js/17_kasan.js?v=20261021_c1"></script>
   
 
   <!-- ============================================================ -->
@@ -4712,6 +4776,32 @@
 				<button type="button" class="close-btn" onclick="closeKasanSettingsModal()">&times;</button>
 			</div>
 			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<!-- 事業所番号・媒体区分（請求用） -->
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">請求事業所情報（国保連請求）</h4>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:6px;">
+						国保連への請求ファイル作成に必要な事業所番号と媒体区分を設定します。
+					</div>
+					<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+						<div>
+							<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">
+								事業所番号（英数字10桁）:
+							</label>
+							<input type="text" id="kasanOfficeNo" class="form-control" maxlength="10" style="font-size:13px; width:100%;">
+						</div>
+						<div>
+							<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">
+								媒体区分:
+							</label>
+							<select id="kasanMediaCode" class="form-control" style="font-size:13px; width:100%;">
+								<option value="">選んでください</option>
+								<option value="1">1 伝送</option>
+								<option value="7">7 伝送（インターネット）</option>
+							</select>
+						</div>
+					</div>
+				</div>
+
 				<!-- 地域区分 -->
 				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
 					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">地域区分（1単位の単価）</h4>
@@ -4858,6 +4948,76 @@
 			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('outingReturnModal')">戻る</button>
 				<button type="button" class="btn btn-primary" onclick="submitOutingReturnModal()">帰所を完了する</button>
+			</div>
+		</div>
+	</div>
+
+
+	<!-- [Antigravity追加 2026-10-21] 国保連請求ファイル（CSV）作成モーダル -->
+	<div class="modal-overlay" id="kasanCsvModal" style="display:none;">
+		<div class="modal-card" style="max-width:880px; max-height:90vh; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">国保連請求ファイル（CSV）の作成</h3>
+				<button type="button" class="close-btn" onclick="closeKasanCsvModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<!-- 注意書き -->
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+					<div style="font-weight:bold; font-size:13px; color:var(--pine-dark); margin-bottom:4px;">国保連インタフェース仕様書 準拠ファイル作成（確認用）</div>
+					<div style="font-size:13px; color:var(--ink-2); line-height:1.6;">
+						※対象年月: <strong id="kasanCsvTargetYmDisp">-</strong>（処理対象年月: <span id="kasanCsvNextYmDisp">-</span>）<br>
+						※当機能は「仕様書どおりのCSVファイルが作成できるか」を事前検証するためのものです。実際の国保連への送信は行われません。<br>
+						※国保中央会インタフェース仕様書解説書（サービス事業所編 令和6年4月版）に準拠し、サービス種類32の集計情報（8..13）および基本情報（16、19..23、36..38、42..44、48..50、54..56）は空欄（カンマのみ）とし、入居実日数（26）・外泊日数（27）を出力します。
+					</div>
+				</div>
+
+				<!-- 対象者の確認一覧 -->
+				<div style="margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">対象利用者の確認状況</h4>
+					<div id="kasanCsvValidationSummary" style="margin-bottom:8px;"></div>
+					<div style="overflow-x:auto; max-height:220px; border:1px solid var(--line-2); border-radius:4px;">
+						<table class="data-table" style="width:100%; font-size:13px; margin:0;">
+							<thead>
+								<tr style="background:var(--ground);">
+									<th style="width:60px; text-align:center;">状態</th>
+									<th style="width:140px;">利用者名</th>
+									<th style="width:90px; text-align:center;">要介護度</th>
+									<th style="width:100px; text-align:right;">算定単位数</th>
+									<th>確認結果・不足項目</th>
+								</tr>
+							</thead>
+							<tbody id="kasanCsvResidentListBody"></tbody>
+						</table>
+					</div>
+				</div>
+
+				<!-- 作成ファイルプレビュー -->
+				<div id="kasanCsvPreviewSection" style="display:none; margin-bottom:16px;">
+					<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+						<h4 style="margin:0; font-size:14px; color:var(--pine-dark);">作成されたCSVファイルの内容プレビュー</h4>
+						<span id="kasanCsvFileNameDisp" style="font-weight:bold; font-size:13px; color:var(--pine);"></span>
+					</div>
+					<div id="kasanCsvPreviewTableContainer" style="overflow-x:auto; max-height:260px; border:1px solid var(--line-2); border-radius:4px;">
+						<table class="data-table" style="width:100%; font-size:13px; margin:0;">
+							<thead>
+								<tr style="background:var(--ground);">
+									<th style="width:50px; text-align:right;">行</th>
+									<th style="width:160px;">レコード種別</th>
+									<th>出力内容（半角英数字・カンマ区切り）</th>
+								</tr>
+							</thead>
+							<tbody id="kasanCsvPreviewTableBody"></tbody>
+						</table>
+					</div>
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:space-between; align-items:center;">
+				<div id="kasanCsvActionStatus" style="font-size:13px; color:var(--ink-2);"></div>
+				<div style="display:flex; gap:8px;">
+					<button type="button" class="btn btn-secondary" onclick="closeKasanCsvModal()">閉じる</button>
+					<button type="button" class="btn btn-primary" id="kasanCsvGenerateBtn" onclick="generateKasanCsvFile()">CSVファイルを作成する</button>
+					<button type="button" class="btn btn-secondary" id="kasanCsvDownloadBtn" style="display:none;" onclick="downloadGeneratedKasanCsv()">ファイルを端末に保存</button>
+				</div>
 			</div>
 		</div>
 	</div>
