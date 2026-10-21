@@ -6,6 +6,25 @@ import roster
 START = DT.date(2025, 10, 18)
 END = DT.date(2026, 10, 17)
 DAYS = [(START + DT.timedelta(days=i)) for i in range((END - START).days + 1)]
+# 勤務表だけ先まで作る（加算・減算の確認用。発表 2026-12-07・2027-02 上旬まで）
+ROSTER_END = DT.date(2027, 2, 28)
+ROSTER_DAYS = [(START + DT.timedelta(days=i)) for i in range((ROSTER_END - START).days + 1)]
+# 行事の日は職員全員参加: 夜勤・明け以外は全員「日」（gen_facility の行事と同じ日。新年会 1/2 は年始で人が少ないので入れない）
+STAFF_EVENT_DAYS = {(2, 3), (3, 3), (4, 6), (5, 5), (7, 7), (8, 15), (9, 15), (10, 10), (12, 24)}
+def is_staff_event(d): return (d.month, d.day) in STAFF_EVENT_DAYS
+# 年末年始（12/29〜1/3）: 介護職はぎりぎりの人数で回し、入浴はしない。事務・看護は休み（看護師はオンコール）
+def is_newyear(d): return (d.month == 12 and d.day >= 29) or (d.month == 1 and d.day <= 3)
+# 年末年始（END より後だけ）: 介護職員は1人1日、12/30〜1/4 のどこかを希望休に。事務・看護は 12/29〜1/3 休み
+def hope_offs():
+    """END より後の希望休 {(名前, 日付): 理由}"""
+    out = {}
+    # 1人1日ずつ、12/30・12/31・1/1・1/3・1/4 に順に割り振る（1日に休める人数には限りがあるため。1/2 は新年会で全員出る）
+    ny = [DT.date(2026, 12, 30), DT.date(2026, 12, 31), DT.date(2027, 1, 1), DT.date(2027, 1, 3), DT.date(2027, 1, 4)]
+    for unit, members in STAFF_UNIT.items():
+        for i, m in enumerate(members):
+            out[(m, ny[(i + unit) % len(ny)])] = "年末年始の休み"
+    out[("小林 亮", DT.date(2026, 10, 25))] = "冠婚葬祭"   # 前から入っている希望休
+    return out
 RES = {r["id"]: r for r in roster.R}
 
 def ds(d): return d.isoformat()
@@ -50,7 +69,9 @@ def _build_roster():
         nights = {m: 0 for m in members}
         prev = {}      # 前の日の勤務
         prev2 = {}
-        for d in [START - DT.timedelta(days=1)] + DAYS:
+        hopes = hope_offs()
+        for d in [START - DT.timedelta(days=1)] + ROSTER_DAYS:
+            future = d > END
             ake = [m for m in members if prev.get(m) == "夜"]
             free = [m for m in members if m not in ake]
             # 明けの次の日は休み、遅番の次の日は早番にしない
@@ -65,11 +86,20 @@ def _build_roster():
             for m in ake: today[m] = "明"
             for kind in ("夜", "早", "遅", "日"):
                 cand = sorted([m for m in free if today[m] == "休"], key=lambda m: score(m, kind))
+                if future:
+                    ok_c = [m for m in cand if (m, d) not in hopes and not (kind == "夜" and (m, d + DT.timedelta(days=1)) in hopes)]
+                    if ok_c: cand = ok_c
                 if not cand: continue
                 today[cand[0]] = kind; worked[cand[0]] += 1
                 if kind == "夜": nights[cand[0]] += 1
             _shift_cache[(unit, d)] = {v: k for k, v in today.items() if v in ("早", "日", "遅", "夜")}
-            _shift_cache[("all", unit, d)] = today
+            shown = dict(today)
+            if is_staff_event(d):
+                for m, v in today.items():
+                    if v in ("休", "早", "遅"):
+                        shown[m] = "日"
+                        if future and v == "休": worked[m] += 1   # 先の月は、行事で出た分を後の休みで調整
+            _shift_cache[("all", unit, d)] = shown
             prev2, prev = prev, today
 def shift(unit, d):
     if not _shift_cache: _build_roster()
@@ -78,10 +108,10 @@ def shift(unit, d):
     return _shift_cache[(unit, d)]
 OFFICE_STAFF = {"木村 健一": "平日", "佐々木 浩二": "平日", "小林 恵子": "平日", "鈴木 美智子": "平日", "加藤 由美": "平日", "松本 陽子": "平日", "田中 慎一": "月水金"}
 def monthly_shifts():
-    """記録を書いた職員と同じ勤務表（2025-10〜2026-10）"""
+    """記録を書いた職員と同じ勤務表（2025-10〜2027-02。行事の日は夜勤・明け以外が全員「日」）"""
     if not _shift_cache: _build_roster()
     out = {}
-    for d in DAYS:
+    for d in ROSTER_DAYS:
         ym = d.isoformat()[:7]; day = str(d.day)
         mo = out.setdefault(ym, {})
         for unit in STAFF_UNIT:
@@ -90,6 +120,8 @@ def monthly_shifts():
         for m, pat in OFFICE_STAFF.items():
             wd = d.weekday()
             on = (wd < 5) if pat == "平日" else (wd in (0, 2, 4))
+            if d > END and is_newyear(d): on = False
+            if is_staff_event(d): on = True
             mo.setdefault(m, {})[day] = "日" if on else "休"
     return out
 def who(unit, d, hhmm):
@@ -100,6 +132,7 @@ def who(unit, d, hhmm):
     return shift(unit, d)["夜"]
 def nurse(d):
     if d.weekday() >= 5: return None
+    if d > END and is_newyear(d): return None   # 年末年始は看護師も休み（オンコール）
     return NURSES[d.toordinal() % 2]
 
 # ---------- 季節 ----------
@@ -493,7 +526,7 @@ def generate():
 
             # ---------------- 入浴（週2回）・塗り薬 ----------------
             bath_days = {1: (0, 3), 2: (1, 4)}[unit] if rid % 2 else ({1: (2, 5), 2: (0, 3)}[unit])
-            bath_today = wd in bath_days
+            bath_today = wd in bath_days and not is_newyear(d)   # 年末年始は入浴なし
             if bath_today:
                 btt = tm(rr, "14:00", 40)
                 if here(rid, d, btt):

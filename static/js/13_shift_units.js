@@ -1144,6 +1144,16 @@ function renderShiftTable(yearMonth) {
  }
  }
 
+ // [Claude修正] すでに勤務表がある月は、自動で作り直さない（夜勤の確定・記録を書いた職員と合わなくなるため）
+ // 足りない職員・反映されていない希望休は、表の上に知らせる。作り直すときは「1ヶ月シフト自動生成」を押す
+ const cpShiftIssues = [];
+ if (currentData && Object.keys(currentData).length > 0) {
+ careStaffNames.filter(name => !currentData[name]).forEach(name => cpShiftIssues.push(`${name} さんの勤務がこの月の表にありません`));
+ (db.data.shift_hope_offs || []).filter(h => h.year_month === ym).forEach(h => {
+ if (currentData[h.staff_name] && currentData[h.staff_name][h.day] !== "休") cpShiftIssues.push(`${h.staff_name} さんの希望休（${h.day}日）が「休」になっていません`);
+ });
+ needRegen = false;
+ }
  if (needRegen) {
  generateMonthlyShiftData(ym);
  }
@@ -1151,6 +1161,15 @@ function renderShiftTable(yearMonth) {
 
  const table = document.getElementById("shiftMatrixTable");
  if (!table) return;
+ {
+ let notice = document.getElementById("shiftRegenNotice");
+ if (!notice) {
+ notice = document.createElement("div");
+ notice.id = "shiftRegenNotice";
+ table.parentNode.insertBefore(notice, table);
+ }
+ notice.innerHTML = cpShiftIssues.length ? `<div style="background:var(--caution-tint); border:1px solid var(--line-2); border-radius:6px; padding:8px 12px; margin-bottom:8px; font-size:13px; color:var(--ink);"><strong>この月の勤務表で確かめてほしいこと（自動では作り直していません）</strong><br>${cpShiftIssues.map(t => "・" + escapeHtml(t)).join("<br>")}<br>直すときは表のマスを押して変えるか、「1ヶ月シフト自動生成」で作り直してください（作り直すと、この月の勤務は全部入れ替わります）。</div>` : "";
+ }
 
  // [Antigravity実装 2026-10-15] 区分が複数ある施設で表の上に色見本を表示（1つしかない施設では出さない）
  const cpFacilityUnits = cpUnits();
