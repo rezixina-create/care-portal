@@ -685,7 +685,7 @@ class LocalDB {
  "daily_schedules", "monthly_notices", "care_summaries", "body_schema_pins",
  "eyedrop_orders", "vaccines", "topical_records", "prescriptions", "resident_medications",
  "units", "unit_logs", "settings_logs", "contract_docs", "contract_doc_types", "billing_overrides",
- "care_plans", "qualification_master" // [Antigravity実装 2026-10-19] ケアプラン・資格研修マスタ
+ "care_plans", "qualification_master", "dementia_assessments" // [Antigravity実装 2026-10-21] ケアプラン・資格研修マスタ・認知症高齢者自立度
  ];
  arrayKeys.forEach(k => {
  if (!Array.isArray(d[k])) d[k] = [];

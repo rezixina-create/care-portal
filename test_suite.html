@@ -258,6 +258,37 @@
       <input id="schemaPinNotes">
       <button id="btnDeleteSchemaPin"></button>
     </div>
+    <div id="dementiaAssessmentModal" style="display:none;">
+      <input type="hidden" id="dementiaResId">
+      <div id="dementiaResName"></div>
+      <select id="dementiaRank">
+        <option value="">-- 選んでください --</option>
+        <option value="自立">自立</option>
+        <option value="Ⅰ">Ⅰ</option>
+        <option value="Ⅱa">Ⅱa</option>
+        <option value="Ⅱb">Ⅱb</option>
+        <option value="Ⅲa">Ⅲa</option>
+        <option value="Ⅲb">Ⅲb</option>
+        <option value="Ⅳ">Ⅳ</option>
+        <option value="M">M</option>
+      </select>
+      <input type="date" id="dementiaAssessedOn">
+      <select id="dementiaBasis">
+        <option value="">-- 選んでください --</option>
+        <option value="医師の判定">医師の判定</option>
+        <option value="主治医意見書">主治医意見書</option>
+        <option value="認定調査票">認定調査票</option>
+      </select>
+      <div id="dementiaDoctorRow">
+        <span id="dementiaDoctorLabel"></span>
+        <input type="text" id="dementiaDoctorName">
+      </div>
+    </div>
+    <div id="dementiaAssessmentHistoryModal" style="display:none;">
+      <input type="hidden" id="dementiaHistResId">
+      <div id="dementiaHistResName"></div>
+      <div id="dementiaHistoryListContainer"></div>
+    </div>
   </div>
 
   <!-- [Claude整理 2026-10-19] app.js を js/ に分けた。順番を変えない -->
@@ -810,6 +841,206 @@
 
       // 設定を復元
       db.data.kasan_settings = origKasanSettings;
+
+      // 32b. [Antigravity実装 2026-10-21] 認知症高齢者の日常生活自立度の検証
+      const origDementia = JSON.parse(JSON.stringify(db.data.dementia_assessments || []));
+      db.data.dementia_assessments = [];
+
+      // Test 115: cpGetDementiaRankOn 判定がない場合および判定日より前の日は null を返すこと
+      db.data.dementia_assessments = [
+        {
+          id: 1001,
+          resident_id: 1,
+          rank: "Ⅱa",
+          assessed_on: "2026-09-10",
+          basis: "医師の判定",
+          doctor_name: "山田 太郎",
+          recorded_by: "高橋 敏男",
+          recorded_at: "2026-09-10 10:00",
+          voided: false,
+          void_reason: "",
+          voided_by: "",
+          voided_at: ""
+        }
+      ];
+      const rankPre = cpGetDementiaRankOn(1, "2026-09-09");
+      const rankOn = cpGetDementiaRankOn(1, "2026-09-10");
+      assert(rankPre === null && rankOn !== null && rankOn.rank === "Ⅱa", "Test 115: 判定日より前の日は null、判定日当日は判定を返すこと");
+
+      // Test 116: 判定が2つあるとき、その間の日は古い方、あとの日は新しい方を返すこと
+      db.data.dementia_assessments.push({
+        id: 1002,
+        resident_id: 1,
+        rank: "Ⅲa",
+        assessed_on: "2026-10-01",
+        basis: "主治医意見書",
+        doctor_name: "佐藤 健一",
+        recorded_by: "小林 恵子",
+        recorded_at: "2026-10-01 11:00",
+        voided: false,
+        void_reason: "",
+        voided_by: "",
+        voided_at: ""
+      });
+      const rankBetween = cpGetDementiaRankOn(1, "2026-09-20");
+      const rankAfter = cpGetDementiaRankOn(1, "2026-10-05");
+      assert(rankBetween !== null && rankBetween.rank === "Ⅱa" && rankAfter !== null && rankAfter.rank === "Ⅲa", "Test 116: 2つの判定の間（2026-09-20）は古い方（Ⅱa）、あとの日（2026-10-05）は新しい方（Ⅲa）を返すこと");
+
+      // Test 117: 新しい方を取消すと古い方に戻り、取消された判定は使われないこと
+      submitVoidDementiaAssessment(1002, "判定見直しのため");
+      const rankAfterVoid = cpGetDementiaRankOn(1, "2026-10-05");
+      assert(rankAfterVoid !== null && rankAfterVoid.rank === "Ⅱa" && rankAfterVoid.id === 1001, "Test 117: 新しい方を取消すと古い判定（Ⅱa）に戻り取消判定が除外されること");
+
+      // Test 118: 同じ判定日が2つあるときは後から入れた方を返すこと
+      db.data.dementia_assessments = [
+        {
+          id: 2001,
+          resident_id: 2,
+          rank: "Ⅰ",
+          assessed_on: "2026-10-10",
+          basis: "認定調査票",
+          doctor_name: "",
+          recorded_by: "高橋 敏男",
+          recorded_at: "2026-10-10 09:00",
+          voided: false,
+          void_reason: "",
+          voided_by: "",
+          voided_at: ""
+        },
+        {
+          id: 2002,
+          resident_id: 2,
+          rank: "Ⅱb",
+          assessed_on: "2026-10-10",
+          basis: "医師の判定",
+          doctor_name: "高橋 医長",
+          recorded_by: "鈴木 美智子",
+          recorded_at: "2026-10-10 14:00",
+          voided: false,
+          void_reason: "",
+          voided_by: "",
+          voided_at: ""
+        }
+      ];
+      const rankSameDate = cpGetDementiaRankOn(2, "2026-10-10");
+      assert(rankSameDate !== null && rankSameDate.rank === "Ⅱb" && rankSameDate.id === 2002, "Test 118: 同一判定日の場合は後から登録された方（Ⅱb）が優先されること");
+
+      // Test 119: 権限チェック（管理者・計画作成担当者・看護師は可、介護職員は不可）
+      const origSession = gState.session;
+      let alertCount = 0;
+      window.alert = function() { alertCount++; };
+
+      // aaaa (管理者・木村健一)
+      gState.session = { staffName: "木村 健一" };
+      const canDirector = cpCanEditPolicy();
+
+      // ffff (計画作成担当者・小林恵子)
+      gState.session = { staffName: "小林 恵子" };
+      const canCaremanager = cpCanEditPolicy();
+
+      // bbbb (看護師・鈴木美智子)
+      gState.session = { staffName: "鈴木 美智子" };
+      const canNurse = cpCanEditPolicy();
+
+      // dddd (介護職員・伊藤翔太)
+      gState.session = { staffName: "伊藤 翔太" };
+      const canCaregiver = cpCanEditPolicy();
+
+      // 介護職員で直接保存・取消を呼んでもブロックされデータが変わらないこと
+      const beforeCount = db.data.dementia_assessments.length;
+      submitDementiaAssessment(); // should block
+      submitVoidDementiaAssessment(2001, "テスト"); // should block
+      const afterCount = db.data.dementia_assessments.length;
+      const notVoided = db.data.dementia_assessments.find(a => a.id === 2001)?.voided === false;
+
+      // 復元
+      gState.session = origSession;
+      window.alert = origAlert;
+
+      assert(canDirector === true && canCaremanager === true && canNurse === true && canCaregiver === false && beforeCount === afterCount && notVoided === true, "Test 119: 管理者・計画作成担当者・看護師のみ登録・取消可能で介護職員は直接呼出でもデータ不変であること");
+
+      // Test 120: バリデーション（未選択・医師名欠如・未来日・取消理由なしで停止すること）
+      let valAlerts = [];
+      window.alert = function(msg) { valAlerts.push(msg); };
+
+      // 管理者で実行
+      gState.session = { staffName: "木村 健一" };
+      const rIdEl = document.getElementById("dementiaResId");
+      const rRankEl = document.getElementById("dementiaRank");
+      const rDateEl = document.getElementById("dementiaAssessedOn");
+      const rBasisEl = document.getElementById("dementiaBasis");
+      const rDocEl = document.getElementById("dementiaDoctorName");
+
+      // 1. ランク未選択
+      if (rIdEl) rIdEl.value = "1";
+      if (rRankEl) rRankEl.value = "";
+      if (rDateEl) rDateEl.value = "2026-10-01";
+      if (rBasisEl) rBasisEl.value = "認定調査票";
+      submitDementiaAssessment();
+
+      // 2. 根拠未選択
+      if (rRankEl) rRankEl.value = "Ⅰ";
+      if (rBasisEl) rBasisEl.value = "";
+      submitDementiaAssessment();
+
+      // 3. 医師名欠如（医師の判定時）
+      if (rBasisEl) rBasisEl.value = "医師の判定";
+      if (rDocEl) rDocEl.value = "";
+      submitDementiaAssessment();
+
+      // 4. 未来日
+      if (rDocEl) rDocEl.value = "山田 医師";
+      if (rDateEl) rDateEl.value = "2099-01-01";
+      submitDementiaAssessment();
+
+      // 5. 取消理由なし
+      submitVoidDementiaAssessment(2001, "");
+
+      // 復元
+      gState.session = origSession;
+      window.alert = origAlert;
+
+      assert(valAlerts.length === 5, "Test 120: ランク未選択・根拠未選択・医師名欠如・未来日・取消理由なしの各ケースで確実に停止すること");
+
+      // Test 121: 複数端末で異なる利用者への同時登録が正常に保持されること
+      const testNow = toLocalDateTimeStr(new Date());
+      const recUser3 = {
+        id: 3001,
+        resident_id: 3,
+        rank: "Ⅲb",
+        assessed_on: "2026-10-01",
+        basis: "医師の判定",
+        doctor_name: "鈴木 医師",
+        recorded_by: "高橋 敏男",
+        recorded_at: testNow,
+        voided: false,
+        void_reason: "",
+        voided_by: "",
+        voided_at: ""
+      };
+      const recUser4 = {
+        id: 4001,
+        resident_id: 4,
+        rank: "Ⅳ",
+        assessed_on: "2026-10-01",
+        basis: "認定調査票",
+        doctor_name: "",
+        recorded_by: "小林 恵子",
+        recorded_at: testNow,
+        voided: false,
+        void_reason: "",
+        voided_by: "",
+        voided_at: ""
+      };
+      db.data.dementia_assessments.push(recUser3);
+      db.data.dementia_assessments.push(recUser4);
+
+      const res3 = cpGetDementiaRankOn(3, "2026-10-01");
+      const res4 = cpGetDementiaRankOn(4, "2026-10-01");
+      assert(res3 !== null && res3.rank === "Ⅲb" && res4 !== null && res4.rank === "Ⅳ", "Test 121: 異なる利用者への同時登録が独立して正しく参照できること");
+
+      // データの復元
+      db.data.dementia_assessments = origDementia;
 
       // 33. 総合結果判定
       log("====================================================");

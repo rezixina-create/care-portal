@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261021_d2">
+	<link rel="stylesheet" href="style.css?v=20261021_e1">
 </head>
 <body>
 
@@ -4043,24 +4043,99 @@
  </div>
  </div>
 
- <!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261021_d2"></script>
- <script src="js/02_terms.js?v=20261021_d2"></script>
- <script src="js/03_common.js?v=20261021_d2"></script>
- <script src="js/04_care_record.js?v=20261021_d2"></script>
- <script src="js/05_summary_print_audit.js?v=20261021_d2"></script>
- <script src="js/06_schema_history.js?v=20261021_d2"></script>
- <script src="js/07_daily_tables.js?v=20261021_d2"></script>
- <script src="js/08_meds.js?v=20261021_d2"></script>
- <script src="js/09_night_misc.js?v=20261021_d2"></script>
- <script src="js/10_office.js?v=20261021_d2"></script>
- <script src="js/11_karte_staff.js?v=20261021_d2"></script>
- <script src="js/12_hospital_photos.js?v=20261021_d2"></script>
- <script src="js/13_shift_units.js?v=20261021_d2"></script>
- <script src="js/14_auth_home.js?v=20261021_d2"></script>
- <script src="js/15_single_write.js?v=20261021_d2"></script>
- <script src="js/16_careplan.js?v=20261021_d2"></script>
-	<script src="js/17_kasan.js?v=20261021_d2"></script>
+ 	<!-- [Antigravity実装 2026-10-21] 認知症高齢者の日常生活自立度 登録モーダル -->
+	<div class="modal-overlay" id="dementiaAssessmentModal" style="display:none;">
+		<div class="modal-card" style="max-width:560px; max-height:90vh; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">認知症高齢者の日常生活自立度の登録</h3>
+				<button type="button" class="close-btn" onclick="closeDementiaAssessmentModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<input type="hidden" id="dementiaResId" value="">
+				<div style="background:var(--pine-tint); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:14px;">
+					<div style="font-size:13px; font-weight:bold; color:var(--pine-dark);" id="dementiaResName">- 様</div>
+					<div style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+						厚生労働省留意事項通知に基づき、医師の判定結果、主治医意見書、または認定調査票の記載を登録します。
+					</div>
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">ランク (必須):</label>
+					<select id="dementiaRank" class="form-control" style="font-size:13px;">
+						<option value="">-- 選んでください --</option>
+						<option value="自立">自立</option>
+						<option value="Ⅰ">Ⅰ</option>
+						<option value="Ⅱa">Ⅱa</option>
+						<option value="Ⅱb">Ⅱb</option>
+						<option value="Ⅲa">Ⅲa</option>
+						<option value="Ⅲb">Ⅲb</option>
+						<option value="Ⅳ">Ⅳ</option>
+						<option value="M">M</option>
+					</select>
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">判定日 (必須):</label>
+					<input type="date" id="dementiaAssessedOn" class="form-control" style="font-size:13px;">
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">根拠 (必須):</label>
+					<select id="dementiaBasis" class="form-control" style="font-size:13px;" onchange="onDementiaBasisChange()">
+						<option value="">-- 選んでください --</option>
+						<option value="医師の判定">医師の判定</option>
+						<option value="主治医意見書">主治医意見書</option>
+						<option value="認定調査票">認定調査票</option>
+					</select>
+				</div>
+
+				<div id="dementiaDoctorRow" style="margin-bottom:12px; display:none;">
+					<label id="dementiaDoctorLabel" style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">判定医師名 (必須):</label>
+					<input type="text" id="dementiaDoctorName" class="form-control" style="font-size:13px;">
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeDementiaAssessmentModal()">キャンセル</button>
+				<button type="button" class="btn btn-primary" style="font-size:13px; font-weight:bold;" onclick="submitDementiaAssessment()">判定を保存</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Antigravity実装 2026-10-21] 認知症高齢者の日常生活自立度 履歴モーダル -->
+	<div class="modal-overlay" id="dementiaAssessmentHistoryModal" style="display:none;">
+		<div class="modal-card" style="max-width:680px; max-height:90vh; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;" id="dementiaHistResName">自立度判定履歴</h3>
+				<button type="button" class="close-btn" onclick="closeDementiaAssessmentHistoryModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<input type="hidden" id="dementiaHistResId" value="">
+				<div id="dementiaHistoryListContainer"></div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end;">
+				<button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeDementiaAssessmentHistoryModal()">閉じる</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
+ <script src="js/01_core.js?v=20261021_e1"></script>
+ <script src="js/02_terms.js?v=20261021_e1"></script>
+ <script src="js/03_common.js?v=20261021_e1"></script>
+ <script src="js/04_care_record.js?v=20261021_e1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261021_e1"></script>
+ <script src="js/06_schema_history.js?v=20261021_e1"></script>
+ <script src="js/07_daily_tables.js?v=20261021_e1"></script>
+ <script src="js/08_meds.js?v=20261021_e1"></script>
+ <script src="js/09_night_misc.js?v=20261021_e1"></script>
+ <script src="js/10_office.js?v=20261021_e1"></script>
+ <script src="js/11_karte_staff.js?v=20261021_e1"></script>
+ <script src="js/12_hospital_photos.js?v=20261021_e1"></script>
+ <script src="js/13_shift_units.js?v=20261021_e1"></script>
+ <script src="js/14_auth_home.js?v=20261021_e1"></script>
+ <script src="js/15_single_write.js?v=20261021_e1"></script>
+ <script src="js/16_careplan.js?v=20261021_e1"></script>
+	<script src="js/17_kasan.js?v=20261021_e1"></script>
   
 
   <!-- ============================================================ -->

@@ -1690,3 +1690,395 @@ function submitOrderApply() {
  alert("発注申請を提出しました（上司承認待ちへ）！要発注アラートを発注手配済みに更新し、管理者の認証アラートへ通知しました。");
 }
 
+
+
+// ==========================================
+// [Antigravity実装 2026-10-21] 認知症高齢者の日常生活自立度
+// 厚生労働省留意事項通知準拠（医師の判定／主治医意見書／認定調査票）
+// ==========================================
+
+function cpGetDementiaAssessments(residentId) {
+  const list = (db.data && Array.isArray(db.data.dementia_assessments)) ? db.data.dementia_assessments : [];
+  if (residentId === undefined || residentId === null) return list;
+  return list.filter(a => Number(a.resident_id) === Number(residentId));
+}
+
+function cpGetLatestDementiaAssessment(residentId) {
+  if (!residentId) return null;
+  const list = (db.data && Array.isArray(db.data.dementia_assessments)) ? db.data.dementia_assessments : [];
+  const resId = Number(residentId);
+  const valid = list.filter(a => Number(a.resident_id) === resId && !a.voided);
+  if (!valid.length) return null;
+  valid.sort((a, b) => {
+    const cmp = String(b.assessed_on || "").localeCompare(String(a.assessed_on || ""));
+    if (cmp !== 0) return cmp;
+    const recA = String(a.recorded_at || "");
+    const recB = String(b.recorded_at || "");
+    if (recB !== recA) return recB.localeCompare(recA);
+    return Number(b.id || 0) - Number(a.id || 0);
+  });
+  return valid[0];
+}
+
+function cpGetDementiaRankOn(residentId, dateStr) {
+  if (!residentId || !dateStr) return null;
+  const list = (db.data && Array.isArray(db.data.dementia_assessments)) ? db.data.dementia_assessments : [];
+  const resId = Number(residentId);
+  const targetDate = String(dateStr).trim();
+  const valid = list.filter(a =>
+    Number(a.resident_id) === resId &&
+    !a.voided &&
+    a.assessed_on &&
+    String(a.assessed_on).trim() <= targetDate
+  );
+  if (!valid.length) return null;
+  valid.sort((a, b) => {
+    const cmp = String(b.assessed_on || "").localeCompare(String(a.assessed_on || ""));
+    if (cmp !== 0) return cmp;
+    const recA = String(a.recorded_at || "");
+    const recB = String(b.recorded_at || "");
+    if (recB !== recA) return recB.localeCompare(recA);
+    return Number(b.id || 0) - Number(a.id || 0);
+  });
+  const best = valid[0];
+  if (best && typeof best.valueOf !== "function") {
+    best.valueOf = function() { return this.rank; };
+    best.toString = function() { return this.rank; };
+  }
+  return best;
+}
+
+function cpDementiaSectionHtml(r) {
+  if (!r) return "";
+  const latest = cpGetLatestDementiaAssessment(r.id);
+  const canEdit = typeof cpCanEditPolicy === "function" && cpCanEditPolicy();
+
+  let bodyHtml = "";
+  if (!latest) {
+    bodyHtml = '<div style="font-size:13px; color:var(--text-muted); padding:4px 0;">未登録</div>';
+  } else {
+    const doctorStr = latest.doctor_name ? `（医師: ${escapeHtml(latest.doctor_name)}）` : "";
+    bodyHtml = `
+      <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px;">
+        <span style="display:inline-block; font-size:15px; font-weight:bold; color:var(--pine-dark); background:var(--pine-light); border:1px solid var(--pine); border-radius:4px; padding:2px 10px;">ランク ${escapeHtml(latest.rank)}</span>
+        <span style="color:var(--text);">判定日: <strong>${escapeHtml(latest.assessed_on)}</strong></span>
+        <span style="color:var(--text-muted);">根拠: ${escapeHtml(latest.basis)}${doctorStr}</span>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="card" style="margin-bottom:12px; padding:12px; border:1px solid var(--line); border-radius:8px; background:var(--surface);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+        <div style="font-weight:bold; color:var(--pine); font-size:14px;">
+          認知症高齢者の日常生活自立度
+        </div>
+        <div style="display:flex; gap:6px; flex-wrap:wrap;">
+          ${canEdit ? `<button type="button" class="btn btn-primary" style="font-size:13px; padding:3px 10px;" onclick="openDementiaAssessmentModal(${r.id})">判定を登録</button>` : ""}
+          <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="openDementiaAssessmentHistoryModal(${r.id})">履歴</button>
+        </div>
+      </div>
+      <div>
+        ${bodyHtml}
+      </div>
+    </div>
+  `;
+}
+
+function openDementiaAssessmentModal(residentId) {
+  if (typeof cpCanEditPolicy === "function" && !cpCanEditPolicy()) {
+    alert("認知症高齢者の日常生活自立度を登録できるのは管理者・計画作成担当者・看護師です。");
+    return;
+  }
+  const r = (gState.residents || []).find(x => Number(x.id) === Number(residentId));
+  if (!r) {
+    alert("利用者が見つかりません。");
+    return;
+  }
+  const resIdEl = document.getElementById("dementiaResId");
+  const resNameEl = document.getElementById("dementiaResName");
+  const rankEl = document.getElementById("dementiaRank");
+  const dateEl = document.getElementById("dementiaAssessedOn");
+  const basisEl = document.getElementById("dementiaBasis");
+  const docEl = document.getElementById("dementiaDoctorName");
+
+  if (resIdEl) resIdEl.value = r.id;
+  if (resNameEl) resNameEl.textContent = `${r.name} 様 (${r.room_no || "-"}号室)`;
+  if (rankEl) rankEl.value = "";
+  if (dateEl) {
+    dateEl.value = "";
+    dateEl.max = toLocalDateStr(new Date());
+  }
+  if (basisEl) basisEl.value = "";
+  if (docEl) docEl.value = "";
+
+  onDementiaBasisChange();
+
+  const modal = document.getElementById("dementiaAssessmentModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeDementiaAssessmentModal() {
+  const modal = document.getElementById("dementiaAssessmentModal");
+  if (modal) modal.style.display = "none";
+}
+
+function onDementiaBasisChange() {
+  const basisEl = document.getElementById("dementiaBasis");
+  const rowEl = document.getElementById("dementiaDoctorRow");
+  const labelEl = document.getElementById("dementiaDoctorLabel");
+  if (!basisEl || !rowEl) return;
+  const basis = basisEl.value;
+  if (basis === "医師の判定" || basis === "主治医意見書") {
+    rowEl.style.display = "block";
+    if (labelEl) labelEl.textContent = "判定医師名 (必須)";
+  } else if (basis === "認定調査票") {
+    rowEl.style.display = "block";
+    if (labelEl) labelEl.textContent = "判定医師名 (任意)";
+  } else {
+    rowEl.style.display = "none";
+  }
+}
+
+function submitDementiaAssessment() {
+  if (typeof cpCanEditPolicy === "function" && !cpCanEditPolicy()) {
+    alert("認知症高齢者の日常生活自立度を登録できるのは管理者・計画作成担当者・看護師です。");
+    return;
+  }
+  const resIdEl = document.getElementById("dementiaResId");
+  const resId = resIdEl ? Number(resIdEl.value) : 0;
+  if (!resId) {
+    alert("利用者が選択されていません。");
+    return;
+  }
+  const rankEl = document.getElementById("dementiaRank");
+  const rank = rankEl ? rankEl.value.trim() : "";
+  if (!rank) {
+    alert("ランクを選んでください。");
+    return;
+  }
+  const dateEl = document.getElementById("dementiaAssessedOn");
+  const assessedOn = dateEl ? dateEl.value.trim() : "";
+  if (!assessedOn) {
+    alert("判定日を入力してください。");
+    return;
+  }
+  const today = toLocalDateStr(new Date());
+  if (assessedOn > today) {
+    alert("判定日に未来の日付は指定できません。");
+    return;
+  }
+  const basisEl = document.getElementById("dementiaBasis");
+  const basis = basisEl ? basisEl.value.trim() : "";
+  if (!basis) {
+    alert("根拠を選んでください。");
+    return;
+  }
+  const docEl = document.getElementById("dementiaDoctorName");
+  const doctorName = docEl ? docEl.value.trim() : "";
+  if ((basis === "医師の判定" || basis === "主治医意見書") && !doctorName) {
+    alert("医師の判定または主治医意見書の場合は、判定した医師名を入力してください。");
+    return;
+  }
+
+  if (!Array.isArray(db.data.dementia_assessments)) {
+    db.data.dementia_assessments = [];
+  }
+
+  const now = new Date();
+  const id = Date.now();
+  const rec = {
+    id: id,
+    resident_id: resId,
+    rank: rank,
+    assessed_on: assessedOn,
+    basis: basis,
+    doctor_name: doctorName,
+    recorded_by: (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "",
+    recorded_at: toLocalDateTimeStr(now),
+    voided: false,
+    void_reason: "",
+    voided_by: "",
+    voided_at: ""
+  };
+
+  db.data.dementia_assessments.push(rec);
+  db.save();
+
+  closeDementiaAssessmentModal();
+  if (typeof renderResidentDetail === "function") renderResidentDetail();
+  alert("認知症高齢者の日常生活自立度を登録しました。");
+}
+
+function openDementiaAssessmentHistoryModal(residentId) {
+  const r = (gState.residents || []).find(x => Number(x.id) === Number(residentId));
+  if (!r) {
+    alert("利用者が見つかりません。");
+    return;
+  }
+  const titleEl = document.getElementById("dementiaHistResName");
+  if (titleEl) titleEl.textContent = `${r.name} 様 (${r.room_no || "-"}号室) - 自立度判定履歴`;
+  const hidEl = document.getElementById("dementiaHistResId");
+  if (hidEl) hidEl.value = r.id;
+
+  renderDementiaAssessmentHistoryList(r.id);
+
+  const modal = document.getElementById("dementiaAssessmentHistoryModal");
+  if (modal) modal.style.display = "flex";
+}
+
+function closeDementiaAssessmentHistoryModal() {
+  const modal = document.getElementById("dementiaAssessmentHistoryModal");
+  if (modal) modal.style.display = "none";
+}
+
+function renderDementiaAssessmentHistoryList(residentId) {
+  const container = document.getElementById("dementiaHistoryListContainer");
+  if (!container) return;
+  const list = cpGetDementiaAssessments(residentId).slice();
+  list.sort((a, b) => {
+    const cmp = String(b.assessed_on || "").localeCompare(String(a.assessed_on || ""));
+    if (cmp !== 0) return cmp;
+    const recA = String(a.recorded_at || "");
+    const recB = String(b.recorded_at || "");
+    if (recB !== recA) return recB.localeCompare(recA);
+    return Number(b.id || 0) - Number(a.id || 0);
+  });
+
+  if (!list.length) {
+    container.innerHTML = '<div style="font-size:13px; color:var(--text-muted); text-align:center; padding:16px 0;">判定記録はありません。</div>';
+    return;
+  }
+
+  const canEdit = typeof cpCanEditPolicy === "function" && cpCanEditPolicy();
+  container.innerHTML = list.map(a => {
+    const isVoided = !!a.voided;
+    const docText = a.doctor_name ? ` (医師: ${escapeHtml(a.doctor_name)})` : "";
+    return `
+      <div style="border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:8px; background:${isVoided ? "var(--ground)" : "var(--surface)"}; opacity:${isVoided ? "0.75" : "1"};">
+        <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+          <div>
+            <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
+              ${isVoided ? '<span style="font-size:13px; font-weight:bold; color:var(--alert); background:rgba(220,38,38,0.1); border:1px solid var(--alert); border-radius:4px; padding:1px 6px;">取消済</span>' : ""}
+              <strong style="font-size:15px; color:${isVoided ? "var(--text-muted)" : "var(--pine-dark)"}; ${isVoided ? "text-decoration:line-through;" : ""}">ランク ${escapeHtml(a.rank)}</strong>
+              <span style="font-size:13px; color:var(--text);">判定日: ${escapeHtml(a.assessed_on)}</span>
+            </div>
+            <div style="font-size:13px; color:var(--text-muted);">
+              根拠: ${escapeHtml(a.basis)}${docText}
+            </div>
+            <div style="font-size:13px; color:var(--text-muted); margin-top:2px;">
+              登録者: ${escapeHtml(a.recorded_by || "-")} (${escapeHtml(a.recorded_at || "-")})
+            </div>
+            ${isVoided ? `
+              <div style="margin-top:6px; padding:6px 8px; background:rgba(220,38,38,0.06); border-left:3px solid var(--alert); font-size:13px;">
+                <span style="font-weight:bold; color:var(--alert);">取消理由:</span> ${escapeHtml(a.void_reason || "-")}<br>
+                <span style="color:var(--text-muted);">取消者: ${escapeHtml(a.voided_by || "-")} (${escapeHtml(a.voided_at || "-")})</span>
+              </div>
+            ` : ""}
+          </div>
+          <div>
+            ${(!isVoided && canEdit) ? `
+              <button type="button" id="voidBtn_${a.id}" class="btn btn-secondary" style="font-size:13px; padding:3px 8px; color:var(--alert); border-color:var(--line);" onclick="openVoidDementiaAssessment(${a.id})">取消</button>
+            ` : ""}
+          </div>
+        </div>
+        <div id="voidBox_${a.id}" style="display:none; margin-top:10px; padding:8px; border:1px solid var(--line); border-radius:4px; background:var(--ground);">
+          <div style="font-size:13px; font-weight:bold; margin-bottom:4px; color:var(--alert);">この判定記録を取り消します</div>
+          <input type="text" id="voidReason_${a.id}" class="form-control" style="font-size:13px; margin-bottom:6px; width:100%; box-sizing:border-box;" placeholder="取消の理由を入力してください">
+          <div style="display:flex; gap:6px; justify-content:flex-end;">
+            <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="cancelVoidDementiaAssessment(${a.id})">戻る</button>
+            <button type="button" class="btn btn-danger" style="font-size:13px; padding:3px 10px; background:var(--alert); color:#fff; border:none;" onclick="confirmVoidDementiaAssessment(${a.id})">取消を確定</button>
+          </div>
+        </div>
+      </div>
+    `;
+  }).join("");
+}
+
+function openVoidDementiaAssessment(assessmentId) {
+  if (typeof cpCanEditPolicy === "function" && !cpCanEditPolicy()) {
+    alert("認知症高齢者の日常生活自立度を取り消せるのは管理者・計画作成担当者・看護師です。");
+    return;
+  }
+  const btn = document.getElementById(`voidBtn_${assessmentId}`);
+  const box = document.getElementById(`voidBox_${assessmentId}`);
+  if (btn) btn.style.display = "none";
+  if (box) {
+    box.style.display = "block";
+    const inp = document.getElementById(`voidReason_${assessmentId}`);
+    if (inp) {
+      inp.value = "";
+      inp.focus();
+    }
+  }
+}
+
+function cancelVoidDementiaAssessment(assessmentId) {
+  const btn = document.getElementById(`voidBtn_${assessmentId}`);
+  const box = document.getElementById(`voidBox_${assessmentId}`);
+  if (btn) btn.style.display = "inline-block";
+  if (box) box.style.display = "none";
+}
+
+function confirmVoidDementiaAssessment(assessmentId) {
+  if (typeof cpCanEditPolicy === "function" && !cpCanEditPolicy()) {
+    alert("認知症高齢者の日常生活自立度を取り消せるのは管理者・計画作成担当者・看護師です。");
+    return;
+  }
+  const inp = document.getElementById(`voidReason_${assessmentId}`);
+  const reason = inp ? inp.value.trim() : "";
+  if (!reason) {
+    alert("取消の理由を入力してください。");
+    return;
+  }
+  submitVoidDementiaAssessment(assessmentId, reason);
+}
+
+function submitVoidDementiaAssessment(assessmentId, voidReason) {
+  if (typeof cpCanEditPolicy === "function" && !cpCanEditPolicy()) {
+    alert("認知症高齢者の日常生活自立度を取り消せるのは管理者・計画作成担当者・看護師です。");
+    return;
+  }
+  const reason = (voidReason || "").trim();
+  if (!reason) {
+    alert("取消の理由を入力してください。");
+    return;
+  }
+  const list = (db.data && Array.isArray(db.data.dementia_assessments)) ? db.data.dementia_assessments : [];
+  const target = list.find(a => Number(a.id) === Number(assessmentId));
+  if (!target) {
+    alert("該当する判定記録が見つかりません。");
+    return;
+  }
+  if (target.voided) {
+    alert("既に取り消されています。");
+    return;
+  }
+  const now = new Date();
+  target.voided = true;
+  target.void_reason = reason;
+  target.voided_by = (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "";
+  target.voided_at = toLocalDateTimeStr(now);
+
+  db.save();
+
+  if (typeof renderResidentDetail === "function") renderResidentDetail();
+  renderDementiaAssessmentHistoryList(target.resident_id);
+  alert("判定記録を取り消しました。");
+}
+
+window.cpGetDementiaAssessments = cpGetDementiaAssessments;
+window.cpGetLatestDementiaAssessment = cpGetLatestDementiaAssessment;
+window.cpGetDementiaRankOn = cpGetDementiaRankOn;
+window.cpDementiaSectionHtml = cpDementiaSectionHtml;
+window.openDementiaAssessmentModal = openDementiaAssessmentModal;
+window.closeDementiaAssessmentModal = closeDementiaAssessmentModal;
+window.onDementiaBasisChange = onDementiaBasisChange;
+window.submitDementiaAssessment = submitDementiaAssessment;
+window.openDementiaAssessmentHistoryModal = openDementiaAssessmentHistoryModal;
+window.closeDementiaAssessmentHistoryModal = closeDementiaAssessmentHistoryModal;
+window.renderDementiaAssessmentHistoryList = renderDementiaAssessmentHistoryList;
+window.openVoidDementiaAssessment = openVoidDementiaAssessment;
+window.cancelVoidDementiaAssessment = cancelVoidDementiaAssessment;
+window.confirmVoidDementiaAssessment = confirmVoidDementiaAssessment;
+window.submitVoidDementiaAssessment = submitVoidDementiaAssessment;
