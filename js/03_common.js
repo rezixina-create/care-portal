@@ -125,6 +125,202 @@ function executeFacilityNameChange() {
  alert(`施設名を「${newName}」に更新しました。\n全端末および各種印刷書類に反映されます。`);
 }
 
+// ==============================================================
+// 全小窓 (modal-overlay) 共通の背景（外側）クリック閉鎖システム
+// - 外側の暗い背景を押すと小窓の「×」「閉じる」と同じ処理で安全に閉じる
+// - 中で押し始めて外で離したドラッグ操作（文字選択など）では閉じない
+// - 開いてから入力・選択が変更されていれば確認ダイアログを表示（書きかけ保護）
+// - 2名承認画面・パスワード/PIN設定画面・保存処理中は外側クリック閉鎖から除外
+// ==============================================================
+
+const CP_MODAL_BACKDROP_EXCLUDED = new Set([
+  "resetStaffPinModal",     // 【2名承認制】暗証番号の初期化
+  "accountResetModal",      // 2名承認によるID・パスワード初期化
+  "facilityNameModal",      // 施設名変更（管理者・事務員2名承認）
+  "staffPinAuthModal",      // 職員切り替え認証（暗証番号入力）
+  "initialPinModal",        // 職員自己暗証番号変更（初回設定）
+  "accountSettingsModal"    // ID・パスワード個別設定
+]);
+
+let _cpBackdropPointerDownTarget = null;
+
+document.addEventListener("mousedown", (e) => {
+  _cpBackdropPointerDownTarget = e.target;
+}, true);
+
+document.addEventListener("touchstart", (e) => {
+  _cpBackdropPointerDownTarget = e.target;
+}, { capture: true, passive: true });
+
+document.addEventListener("input", (e) => {
+  const modal = e.target && e.target.closest ? e.target.closest(".modal-overlay") : null;
+  if (modal) modal._cpDirty = true;
+}, true);
+
+document.addEventListener("change", (e) => {
+  const modal = e.target && e.target.closest ? e.target.closest(".modal-overlay") : null;
+  if (modal) modal._cpDirty = true;
+}, true);
+
+document.addEventListener("focusin", (e) => {
+  const modal = e.target && e.target.closest ? e.target.closest(".modal-overlay") : null;
+  if (modal && !modal._cpSnapshot) {
+    cpSnapshotModal(modal);
+  }
+}, true);
+
+function cpGetElementKey(el, idx) {
+  if (el.id) return "id:" + el.id;
+  if (el.type === "radio") return "radio:" + (el.name || "") + ":" + el.value;
+  if (el.name) return "name:" + el.name + "_" + idx;
+  return "el:" + el.tagName + "_" + idx;
+}
+
+function cpSnapshotModal(modal) {
+  if (!modal) return;
+  const map = new Map();
+  const els = modal.querySelectorAll("input, select, textarea");
+  els.forEach((el, idx) => {
+    if (el.type === "button" || el.type === "submit" || el.type === "reset" || el.type === "hidden") return;
+    const key = cpGetElementKey(el, idx);
+    if (el.type === "checkbox" || el.type === "radio") {
+      map.set(key, el.checked);
+    } else {
+      map.set(key, el.value);
+    }
+  });
+  modal._cpSnapshot = map;
+}
+
+function cpIsModalDirty(modal) {
+  if (!modal) return false;
+  if (!modal._cpDirty) return false;
+  if (!modal._cpSnapshot) return true;
+
+  const els = modal.querySelectorAll("input, select, textarea");
+  for (let i = 0; i < els.length; i++) {
+    const el = els[i];
+    if (el.type === "button" || el.type === "submit" || el.type === "reset" || el.type === "hidden") continue;
+    const key = cpGetElementKey(el, i);
+    if (modal._cpSnapshot.has(key)) {
+      const initial = modal._cpSnapshot.get(key);
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (el.checked !== initial) return true;
+      } else {
+        if (el.value !== initial) return true;
+      }
+    } else {
+      if (el.type === "checkbox" || el.type === "radio") {
+        if (el.checked) return true;
+      } else if (el.value && el.value.trim() !== "") {
+        return true;
+      }
+    }
+  }
+  return false;
+}
+
+function cpDismissModal(modal) {
+  if (!modal) return;
+  const closeBtn = modal.querySelector(".close-btn, .modal-close-btn");
+  if (closeBtn) {
+    closeBtn.click();
+  } else {
+    const cancelBtn = modal.querySelector('button[onclick*="closeModal"], button[onclick*="close"]');
+    if (cancelBtn) {
+      cancelBtn.click();
+    } else if (typeof closeModal === "function") {
+      closeModal(modal.id);
+    } else {
+      modal.style.display = "none";
+    }
+  }
+
+  if (modal.style.display !== "none" && getComputedStyle(modal).display !== "none") {
+    if (typeof closeModal === "function") {
+      closeModal(modal.id);
+    } else {
+      modal.style.display = "none";
+    }
+  }
+}
+
+function cpHandleModalOverlayClick(e) {
+  const modal = this;
+  if (!modal) return;
+
+  if (e._cpBackdropHandled) return;
+  e._cpBackdropHandled = true;
+
+  if (e.target !== modal) return;
+  if (_cpBackdropPointerDownTarget !== modal) return;
+  if (CP_MODAL_BACKDROP_EXCLUDED.has(modal.id)) return;
+  if (window.db && window.db._saving) return;
+
+  if (cpIsModalDirty(modal)) {
+    if (!confirm("書きかけの内容があります。閉じますか？")) {
+      return;
+    }
+  }
+
+  cpDismissModal(modal);
+}
+
+function initModalBackdropDismissal() {
+  if (window._cpModalBackdropInitialized) return;
+  window._cpModalBackdropInitialized = true;
+
+  const modals = document.querySelectorAll(".modal-overlay");
+  modals.forEach((modal) => {
+    modal.addEventListener("click", cpHandleModalOverlayClick);
+
+    const isVisible = modal.style.display !== "none" && getComputedStyle(modal).display !== "none";
+    modal._cpWasVisible = isVisible;
+    if (isVisible) {
+      cpSnapshotModal(modal);
+    }
+
+    const observer = new MutationObserver((mutations) => {
+      for (const m of mutations) {
+        if (m.type === "attributes" && (m.attributeName === "style" || m.attributeName === "class")) {
+          const visible = modal.style.display !== "none" && getComputedStyle(modal).display !== "none";
+          if (visible && !modal._cpWasVisible) {
+            modal._cpWasVisible = true;
+            modal._cpDirty = false;
+            modal._cpSnapshot = null;
+            setTimeout(() => {
+              if (modal.style.display !== "none") {
+                cpSnapshotModal(modal);
+              }
+            }, 30);
+          } else if (!visible && modal._cpWasVisible) {
+            modal._cpWasVisible = false;
+            modal._cpDirty = false;
+            modal._cpSnapshot = null;
+          }
+        }
+      }
+    });
+
+    observer.observe(modal, { attributes: true, attributeFilter: ["style", "class"] });
+  });
+}
+
+document.addEventListener("click", (e) => {
+  const modal = e.target;
+  if (!modal || !modal.classList || !modal.classList.contains("modal-overlay")) return;
+  if (e._cpBackdropHandled) return;
+  cpHandleModalOverlayClick.call(modal, e);
+});
+
+// 即時バインドおよびDOMContentLoaded時のバインド
+initModalBackdropDismissal();
+
+window.addEventListener("DOMContentLoaded", () => {
+  initModalBackdropDismissal();
+});
+
+
 function updateFacilityNameUI() {
  const name = getFacilityName();
  const backupFacEl = document.getElementById("backupFacilityNameDisplay");
@@ -152,6 +348,7 @@ window.addEventListener("DOMContentLoaded", () => {
  checkGlobalAlerts();
  syncCategoryButtons();
  setupEventListeners();
+  initModalBackdropDismissal();
 });
 
 // 職員セレクトボックス (役職・序列順)

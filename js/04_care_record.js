@@ -495,8 +495,8 @@ function renderResidentDetail() {
  <div style="padding:12px; font-size:13px;">
  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px;">
  <div style="flex:1;">
- <div><strong> 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:#1c2622;">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
- <div style="margin-top:6px;"><strong> 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:#36443e;">${escapeHtml(r.family_wishes || "特になし")}</span></div>
+ <div><strong> 緊急連絡先 & 搬送・延命処置方針:</strong> <span style="font-weight:bold; color:var(--ink);">${escapeHtml(r.emergency_contact || "未登録")}</span></div>
+ <div style="margin-top:6px;"><strong> 家族の要望 (ACP・看取り・面会・ケア希望):</strong> <span style="color:var(--ink-2);">${escapeHtml(r.family_wishes || "未登録")}</span></div>
  </div>
  <button class="btn btn-secondary" style="padding:3px 10px; font-size:11px; background:#eef2ef; white-space:nowrap; margin-left:8px;" onclick="openFamilyHistoryModal(${r.id})"> 項目を編集</button>
  </div>
