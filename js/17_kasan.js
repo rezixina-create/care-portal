@@ -1191,10 +1191,63 @@ function renderOfficeKasanTab() {
   // 体制加算件数
   const notifiedCount = Object.values(settings.taisei_items).filter(x => x && x.option_key && x.option_key !== "none").length;
   // 減算件数
-  const activeGensanCount = Object.values(settings.gensan_items).filter(x => {
+  const rawGensanCount = Object.values(settings.gensan_items).filter(x => {
     if (!x || x.has_gensan !== "あり") return false;
     return (!x.start_month || ym >= x.start_month) && (!x.end_month || ym <= x.end_month);
   }).length;
+  const reds = cpGetActiveReductions(ym);
+  let activeGensanCount = rawGensanCount;
+  if (reds.has_yagen) activeGensanCount++;
+  if (reds.has_cho) activeGensanCount++;
+  if (reds.has_ketsu) activeGensanCount++;
+
+  // 減算状態・警告バナーの作成
+  const reductionItems = [];
+  if (reds.has_yagen) {
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>夜間勤務等減算（夜減・所定単位数の10%減算）適用中</strong>: ${escapeHtml(reds.yagen_reason)}</div>`);
+  }
+  if (reds.has_cho) {
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>定員超過減算（超・所定単位数の30%減算）適用中</strong>: ${escapeHtml(reds.cho_reason)}</div>`);
+  }
+  if (reds.has_ketsu) {
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>人員基準欠如減算（欠・所定単位数の30%減算）適用中</strong>: ${escapeHtml(reds.ketsu_reason)}</div>`);
+  }
+
+  const warningItems = [];
+  if (reds.yagen_unconfirmed) {
+    warningItems.push(`<div style="margin-bottom:4px;">[警告] <strong>前月夜勤未確定の警告</strong>: 前月（${escapeHtml(reds.prevYm)}）の勤務表に夜勤不足が疑われる日（${reds.prevShortageCount}日）がありますが、夜勤状況が未確定です。「夜勤不足の確定」から確定を行ってください。</div>`);
+  }
+  if (reds.cho_candidate) {
+    warningItems.push(`<div style="margin-bottom:4px;">[注意] <strong>当月定員超過注意</strong>: 当月（${escapeHtml(ym)}）の月平均入居者数（${reds.cho_avg}名）が定員（${reds.capacity}名）を超えています。翌月以降の定員超過減算の対象となる可能性があります。「定員超過の確定」から確認してください。</div>`);
+  }
+  if (reds.conflict) {
+    warningItems.push(`<div style="margin-bottom:4px; font-weight:bold; color:var(--alert);">[警告] <strong>市町村確認注意</strong>: 定員超過減算と人員基準欠如減算が同時に該当しています。重複時の算定ルールや減算の適用順について、市町村に確かめてください。</div>`);
+  }
+
+  let reductionAlertHtml = "";
+  if (reductionItems.length > 0) {
+    reductionAlertHtml += `
+      <div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); border-radius:6px; padding:10px 14px; margin-bottom:10px; font-size:13px; line-height:1.6;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">当月適用されている減算（計 ${reductionItems.length} 件）:</div>
+        ${reductionItems.join("")}
+      </div>
+    `;
+  }
+  if (warningItems.length > 0) {
+    reductionAlertHtml += `
+      <div style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--line); border-radius:6px; padding:10px 14px; margin-bottom:10px; font-size:13px; line-height:1.6;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">減算に関する確認・警告事項:</div>
+        ${warningItems.join("")}
+      </div>
+    `;
+  }
+  if (reductionItems.length === 0 && warningItems.length === 0) {
+    reductionAlertHtml = `
+      <div style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); border-radius:6px; padding:8px 14px; margin-bottom:10px; font-size:13px;">
+        当月適用される夜間勤務等減算・定員超過減算・人員基準欠如減算はありません。
+      </div>
+    `;
+  }
 
   // 対象利用者の集計（退所者でも当月在所日・入院日・死亡退所がある場合は表に出す）
   const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
@@ -1269,6 +1322,9 @@ function renderOfficeKasanTab() {
         <button type="button" class="btn btn-primary" onclick="openKasanCsvModal()">国保連へのファイルを作る</button>
         <button type="button" class="btn btn-secondary" onclick="printKasanMonthlyTable()">確認表をA4横印刷</button>
         <button type="button" class="btn btn-secondary" onclick="openKasanSettingsModal()">事業所の加算・減算設定</button>
+        <button type="button" class="btn btn-secondary" onclick="openKasanNightConfirmModal()">夜勤不足の確定</button>
+        <button type="button" class="btn btn-secondary" onclick="openKasanCapacityConfirmModal()">定員超過の確定</button>
+        <button type="button" class="btn btn-secondary" onclick="openKasanStaffShortageModal()">人員基準欠如の登録</button>
         <button type="button" class="btn btn-secondary" onclick="printEmergencyResidentSheets()">停電に備えた印刷</button>
       </div>
     </div>
@@ -1287,6 +1343,8 @@ function renderOfficeKasanTab() {
       </span>
       ${activeGensanCount > 0 ? `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:4px 8px; font-weight:bold;">適用中の減算: ${activeGensanCount}件あり</span>` : `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); font-size:13px; padding:4px 8px; border:1px solid var(--line-2);">減算: なし</span>`}
     </div>
+
+    ${reductionAlertHtml}
 
     <p class="panel-note" style="margin:4px 0 12px; line-height:1.6;">
       ※月ごと・利用者ごとに算定対象となる加算・減算の目安です。基本の日数および金額は「目安」と表示しています。
@@ -2513,26 +2571,687 @@ window.cpAddMonths = cpAddMonths;
 window.cpDetectNightShortageCandidate = cpDetectNightShortageCandidate;
 window.cpCalcMonthlyAvgResidents = cpCalcMonthlyAvgResidents;
 window.cpGetActiveReductions = cpGetActiveReductions;
-window.closeKasanStaffShortageModal = function() { const m = document.getElementById("kasanStaffShortageModal"); if (m) m.style.display = "none"; };
-window.closeKasanNightConfirmModal = function() { const m = document.getElementById("kasanNightConfirmModal"); if (m) m.style.display = "none"; };
-window.closeKasanCapacityConfirmModal = function() { const m = document.getElementById("kasanCapacityConfirmModal"); if (m) m.style.display = "none"; };
-window.onKasanStaffShortageTypeChange = function() {
-  const t = document.getElementById("kasanStaffShortageType")?.value;
-  const b = document.getElementById("kasanStaffShortageMonthEndBox");
-  if (b) b.style.display = (t === "care_under_10") ? "block" : "none";
-};
-window.onKasanStaffShortageWaiverChange = function() {
-  const isW = document.getElementById("kasanStaffShortageIsWaiver")?.checked;
-  const b = document.getElementById("kasanStaffShortageWaiverReasonBox");
-  if (b) b.style.display = isW ? "block" : "none";
-};
-window.onKasanCapacityGraceChange = function() {
+// =====================================================================
+// 減算管理モーダル群（夜勤不足確定・定員超過確定・人員基準欠如管理）
+// =====================================================================
+
+// ---------------------------------------------------------------------
+// 1. 夜勤職員配置加算・減算の確定モーダル
+// ---------------------------------------------------------------------
+function openKasanNightConfirmModal(optYm) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const modal = document.getElementById("kasanNightConfirmModal");
+  if (!modal) return;
+  const ym = optYm || document.getElementById("kasanYearMonth")?.value || toLocalDateStr(new Date()).slice(0, 7);
+  const ymInput = document.getElementById("kasanNightTargetYm");
+  if (ymInput) ymInput.value = ym;
+  renderKasanNightConfirmView(ym);
+  modal.style.display = "flex";
+}
+
+function closeKasanNightConfirmModal() {
+  const m = document.getElementById("kasanNightConfirmModal");
+  if (m) m.style.display = "none";
+}
+
+function onKasanNightTargetYmChange(ym) {
+  renderKasanNightConfirmView(ym);
+}
+
+function renderKasanNightConfirmView(ym) {
+  const detContainer = document.getElementById("kasanNightDetectionArea");
+  if (!detContainer) return;
+  if (!ym) {
+    detContainer.innerHTML = '<p style="color:var(--ink-3); font-size:13px;">年月を選択してください。</p>';
+    return;
+  }
+  const cand = cpDetectNightShortageCandidate(ym);
+  const settings = cpGetKasanSettings();
+  const existing = (settings.night_shortage && settings.night_shortage[ym]) || null;
+
+  let candBadge = "";
+  if (cand.isCandidate) {
+    candBadge = `<div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); padding:8px 12px; border-radius:4px; font-weight:bold; margin-bottom:10px; font-size:13px;">
+      [警告] 減算候補：夜勤人員の不足（2日連続不足または月4日以上不足）に該当しています。事務による確定が必要です。
+    </div>`;
+  } else if (cand.count > 0) {
+    candBadge = `<div style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--line); padding:8px 12px; border-radius:4px; margin-bottom:10px; font-size:13px;">
+      ※ 夜勤不足日が ${cand.count} 日ありますが、2日連続または月4日以上の条件には達していません。
+    </div>`;
+  } else {
+    candBadge = `<div style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); padding:8px 12px; border-radius:4px; margin-bottom:10px; font-size:13px;">
+      基準達成：当月に夜勤人員の不足日はありません（全日ユニットごとに1名以上配置済）。
+    </div>`;
+  }
+
+  let shortageTableHtml = "";
+  if (cand.shortageDays.length > 0) {
+    shortageTableHtml = `
+      <div style="margin:8px 0; overflow-x:auto;">
+        <table class="data-table" style="width:100%; font-size:13px;">
+          <thead>
+            <tr style="background:var(--ground);">
+              <th style="width:110px;">日付</th>
+              <th style="width:80px; text-align:center;">夜勤人数</th>
+              <th style="width:160px;">配置職員</th>
+              <th>不足しているユニット</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${cand.shortageDays.map(sd => `
+              <tr>
+                <td style="font-weight:bold;">${escapeHtml(sd.date)}</td>
+                <td style="text-align:center; color:${sd.count < cand.standard ? 'var(--alert)' : 'var(--ink)'}; font-weight:bold;">${sd.count} 名</td>
+                <td>${escapeHtml((sd.staffNames || []).join('、') || '（なし）')}</td>
+                <td style="color:var(--alert); font-weight:bold;">${escapeHtml((sd.lackingUnits || []).join('、'))}</td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+  } else {
+    shortageTableHtml = `<p style="font-size:13px; color:var(--ink-2); margin:4px 0;">不足日：なし</p>`;
+  }
+
+  let unenteredHtml = "";
+  if (cand.unenteredDays && cand.unenteredDays.length > 0) {
+    unenteredHtml = `
+      <div style="background:var(--ground); border:1px solid var(--line); padding:8px 12px; border-radius:4px; font-size:13px; color:var(--ink-2); margin-top:8px;">
+        <strong style="color:var(--caution);">勤務表の未入力日（${cand.unenteredDays.length}日）:</strong>
+        <div style="margin-top:2px; font-size:13px; color:var(--ink-2);">${escapeHtml(cand.unenteredDays.join(', '))}</div>
+        <div style="font-size:13px; color:var(--ink-3); margin-top:2px;">※勤務表がまだ入っていない日は不足とは数えません。</div>
+      </div>
+    `;
+  }
+
+  detContainer.innerHTML = `
+    <div style="margin-bottom:12px;">
+      <div style="font-size:13px; color:var(--ink-2); margin-bottom:6px;">
+        配置基準: <strong>ユニットごとに1人以上（事業所定数: 最低 ${cand.standard} 名/日）</strong>
+      </div>
+      ${candBadge}
+      <div style="font-weight:bold; font-size:13px; color:var(--pine-dark); margin-top:8px;">勤務表から検出された夜勤不足日（計 ${cand.count} 日）:</div>
+      ${shortageTableHtml}
+      ${unenteredHtml}
+    </div>
+  `;
+
+  // フォーム値の設定
+  const isConditionMet = existing ? !!existing.condition_met : cand.isCandidate;
+  const radioMet = document.getElementById("kasanNightStatusMet");
+  const radioNotMet = document.getElementById("kasanNightStatusNotMet");
+  if (isConditionMet) {
+    if (radioMet) radioMet.checked = true;
+  } else {
+    if (radioNotMet) radioNotMet.checked = true;
+  }
+
+  const reasonInput = document.getElementById("kasanNightReason");
+  if (reasonInput) {
+    let defReason = "";
+    if (existing && existing.condition_reason) {
+      defReason = existing.condition_reason;
+    } else if (cand.hasConsecutive2 && cand.count >= 4) {
+      defReason = "2日連続不足および月4日以上不足";
+    } else if (cand.hasConsecutive2) {
+      defReason = "2日連続不足";
+    } else if (cand.count >= 4) {
+      defReason = "月4日以上不足";
+    }
+    reasonInput.value = defReason;
+  }
+
+  const notesInput = document.getElementById("kasanNightNotes");
+  if (notesInput) notesInput.value = (existing && existing.notes) || "";
+
+  // 変更理由欄と状態表示
+  const editArea = document.getElementById("kasanNightEditReasonArea");
+  const editInput = document.getElementById("kasanNightEditReason");
+  const statusDisp = document.getElementById("kasanNightCurrentStatusDisp");
+  if (editInput) editInput.value = "";
+  if (existing && existing.confirmed) {
+    if (statusDisp) {
+      statusDisp.innerHTML = `
+        <div style="background:var(--pine-tint); border:1px solid var(--pine); border-radius:4px; padding:6px 10px; margin-bottom:8px; font-size:13px;">
+          <strong>確定済み</strong>: ${existing.condition_met ? '<span style="color:var(--alert); font-weight:bold;">夜勤不足に該当（翌月減算）</span>' : '<span style="color:var(--pine-dark); font-weight:bold;">基準適合（減算なし）</span>'}
+          （確定日時: ${escapeHtml(existing.confirmed_at || '-')} / 確定者: ${escapeHtml(existing.confirmed_by || '-')})
+        </div>
+      `;
+    }
+    if (editArea) editArea.style.display = "block";
+  } else {
+    if (statusDisp) {
+      statusDisp.innerHTML = `
+        <div style="background:var(--caution-tint); border:1px solid var(--line); border-radius:4px; padding:6px 10px; margin-bottom:8px; font-size:13px; color:var(--caution);">
+          <strong>未確定</strong>: 事務による確定を行ってください。
+        </div>
+      `;
+    }
+    if (editArea) editArea.style.display = "none";
+  }
+
+  // 履歴表示
+  const histArea = document.getElementById("kasanNightHistoryArea");
+  if (histArea) {
+    if (existing && Array.isArray(existing.edit_history) && existing.edit_history.length > 0) {
+      histArea.innerHTML = `
+        <div style="margin-top:12px; border-top:1px solid var(--line-2); padding-top:8px;">
+          <div style="font-weight:bold; font-size:13px; color:var(--ink-2); margin-bottom:4px;">変更履歴（過去の確定内容）:</div>
+          <table class="data-table" style="width:100%; font-size:13px;">
+            <thead>
+              <tr style="background:var(--ground);">
+                <th style="width:130px;">変更日時</th>
+                <th style="width:100px;">変更者</th>
+                <th style="width:120px;">変更前判定</th>
+                <th>変更理由</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${existing.edit_history.map(h => `
+                <tr>
+                  <td>${escapeHtml(h.edited_at || h.changed_at || '')}</td>
+                  <td>${escapeHtml(h.edited_by || h.changed_by || '')}</td>
+                  <td>${h.prev_condition_met ? '<span style="color:var(--alert);">減算該当</span>' : '基準適合'}</td>
+                  <td>${escapeHtml(h.reason || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      histArea.innerHTML = "";
+    }
+  }
+}
+
+function submitKasanNightConfirm() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const ymInput = document.getElementById("kasanNightTargetYm");
+  const ym = ymInput?.value;
+  if (!ym) {
+    alert("対象年月を選択してください。");
+    return;
+  }
+  const radioMet = document.getElementById("kasanNightStatusMet");
+  const conditionMet = !!(radioMet && radioMet.checked);
+  const reason = (document.getElementById("kasanNightReason")?.value || "").trim();
+  const notes = (document.getElementById("kasanNightNotes")?.value || "").trim();
+
+  if (conditionMet && !reason) {
+    alert("夜勤不足に該当とする場合は、該当理由を入力してください。");
+    return;
+  }
+
+  if (!db.data.kasan_settings) db.data.kasan_settings = {};
+  if (!db.data.kasan_settings.night_shortage) db.data.kasan_settings.night_shortage = {};
+
+  const existing = db.data.kasan_settings.night_shortage[ym] || null;
+  const history = (existing && Array.isArray(existing.edit_history)) ? existing.edit_history.slice() : [];
+
+  if (existing && existing.confirmed) {
+    const editReason = (document.getElementById("kasanNightEditReason")?.value || "").trim();
+    if (!editReason) {
+      alert("確定済みの内容を変更する場合は、変更理由の入力が必須です。");
+      return;
+    }
+    history.push({
+      edited_at: toLocalDateTimeStr(new Date()),
+      edited_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+      reason: editReason,
+      prev_condition_met: existing.condition_met,
+      prev_reason: existing.condition_reason || "",
+      prev_notes: existing.notes || ""
+    });
+  }
+
+  db.data.kasan_settings.night_shortage[ym] = {
+    year_month: ym,
+    confirmed: true,
+    condition_met: conditionMet,
+    condition_reason: conditionMet ? reason : "",
+    notes: notes,
+    confirmed_at: toLocalDateTimeStr(new Date()),
+    confirmed_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+    edit_history: history
+  };
+
+  db.save();
+  alert(`${ym} の夜勤人員状況を確定しました（${conditionMet ? '翌月減算該当' : '基準適合'}）。`);
+  closeKasanNightConfirmModal();
+  if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
+}
+
+// ---------------------------------------------------------------------
+// 2. 定員超過の確定モーダル
+// ---------------------------------------------------------------------
+function openKasanCapacityConfirmModal(optYm) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const modal = document.getElementById("kasanCapacityConfirmModal");
+  if (!modal) return;
+  const ym = optYm || document.getElementById("kasanYearMonth")?.value || toLocalDateStr(new Date()).slice(0, 7);
+  const ymInput = document.getElementById("kasanCapacityTargetYm");
+  if (ymInput) ymInput.value = ym;
+  renderKasanCapacityConfirmView(ym);
+  modal.style.display = "flex";
+}
+
+function closeKasanCapacityConfirmModal() {
+  const m = document.getElementById("kasanCapacityConfirmModal");
+  if (m) m.style.display = "none";
+}
+
+function onKasanCapacityTargetYmChange(ym) {
+  renderKasanCapacityConfirmView(ym);
+}
+
+function onKasanCapacityGraceChange() {
   const isG = document.getElementById("kasanCapacityDisasterGrace")?.checked;
   const b = document.getElementById("kasanCapacityGraceReasonBox");
   if (b) b.style.display = isG ? "block" : "none";
-};
-window.submitKasanStaffShortage = function() {
-  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) { alert("管理者または事務のみ操作可能です。"); return; }
+}
+
+function renderKasanCapacityConfirmView(ym) {
+  const calcContainer = document.getElementById("kasanCapacityCalcArea");
+  if (!calcContainer) return;
+  if (!ym) {
+    calcContainer.innerHTML = '<p style="color:var(--ink-3); font-size:13px;">年月を選択してください。</p>';
+    return;
+  }
+  const mCalc = cpCalcMonthlyAvgResidents(ym);
+  const settings = cpGetKasanSettings();
+  const capacity = (settings.capacity && parseInt(settings.capacity, 10) > 0) ? parseInt(settings.capacity, 10) : 0;
+  const existing = (settings.capacity_excess && settings.capacity_excess[ym]) || null;
+  const isExcessCalc = (capacity > 0 && mCalc.avg > capacity);
+
+  let statusBadge = "";
+  if (capacity <= 0) {
+    statusBadge = `<div style="background:var(--caution-tint); color:var(--caution); padding:8px 12px; border-radius:4px; font-weight:bold; margin-bottom:10px; font-size:13px;">
+      ※ 事業所定員が未設定です。事業所の加算・減算設定で定員（例: 18名）を登録してください。
+    </div>`;
+  } else if (isExcessCalc) {
+    statusBadge = `<div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); padding:8px 12px; border-radius:4px; font-weight:bold; margin-bottom:10px; font-size:13px;">
+      [警告] 定員超過：当月の月平均入居者数（${mCalc.avg}名）が定員（${capacity}名）を超えています。翌月（災害等の猶予時は翌々月）から解消月まで減算対象となります。
+    </div>`;
+  } else {
+    statusBadge = `<div style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); padding:8px 12px; border-radius:4px; margin-bottom:10px; font-size:13px;">
+      定員内：当月の月平均入居者数（${mCalc.avg}名）は定員（${capacity}名）以内です。
+    </div>`;
+  }
+
+  calcContainer.innerHTML = `
+    <div style="margin-bottom:12px;">
+      ${statusBadge}
+      <div style="background:var(--ground); border:1px solid var(--line); border-radius:4px; padding:10px 14px; font-size:13px; line-height:1.7;">
+        <div>・当月延べ入居日数: <strong>${mCalc.totalPersonDays}</strong> 日人（日ごとの在所者数合計）</div>
+        <div>・当月の日数: <strong>${mCalc.daysInMonth}</strong> 日</div>
+        <div>・月平均入居者数: 延べ ${mCalc.totalPersonDays} ÷ ${mCalc.daysInMonth}日 ＝ ${(mCalc.totalPersonDays / mCalc.daysInMonth).toFixed(2)} → <strong>切り上げ: ${mCalc.avg} 名</strong></div>
+        <div>・事業所定員: <strong>${capacity > 0 ? capacity + ' 名' : '未設定'}</strong></div>
+      </div>
+    </div>
+  `;
+
+  // フォーム値の設定
+  const isExcessFinal = existing ? !!existing.is_excess : isExcessCalc;
+  const radioExcess = document.getElementById("kasanCapacityStatusExcess");
+  const radioNormal = document.getElementById("kasanCapacityStatusNormal");
+  if (isExcessFinal) {
+    if (radioExcess) radioExcess.checked = true;
+  } else {
+    if (radioNormal) radioNormal.checked = true;
+  }
+
+  const graceCb = document.getElementById("kasanCapacityDisasterGrace");
+  const graceReasonBox = document.getElementById("kasanCapacityGraceReasonBox");
+  const graceReasonInput = document.getElementById("kasanCapacityGraceReason");
+  if (graceCb) {
+    graceCb.checked = !!(existing && existing.is_disaster_grace);
+    if (graceReasonBox) graceReasonBox.style.display = graceCb.checked ? "block" : "none";
+  }
+  if (graceReasonInput) graceReasonInput.value = (existing && existing.disaster_reason) || "";
+
+  const resolvedInput = document.getElementById("kasanCapacityResolvedYm");
+  if (resolvedInput) resolvedInput.value = (existing && existing.resolved_ym) || "";
+
+  const notesInput = document.getElementById("kasanCapacityNotes");
+  if (notesInput) notesInput.value = (existing && existing.notes) || "";
+
+  // 変更理由欄と状態表示
+  const editArea = document.getElementById("kasanCapacityEditReasonArea");
+  const editInput = document.getElementById("kasanCapacityEditReason");
+  const statusDisp = document.getElementById("kasanCapacityCurrentStatusDisp");
+  if (editInput) editInput.value = "";
+  if (existing && existing.confirmed) {
+    if (statusDisp) {
+      statusDisp.innerHTML = `
+        <div style="background:var(--pine-tint); border:1px solid var(--pine); border-radius:4px; padding:6px 10px; margin-bottom:8px; font-size:13px;">
+          <strong>確定済み</strong>: ${existing.is_excess ? '<span style="color:var(--alert); font-weight:bold;">定員超過に該当</span>' : '<span style="color:var(--pine-dark); font-weight:bold;">定員内（減算なし）</span>'}
+          （確定日時: ${escapeHtml(existing.confirmed_at || '-')} / 確定者: ${escapeHtml(existing.confirmed_by || '-')})
+          ${existing.resolved_ym ? ` / 解消月: ${escapeHtml(existing.resolved_ym)}` : (existing.is_excess ? ' / 解消月: 継続中' : '')}
+        </div>
+      `;
+    }
+    if (editArea) editArea.style.display = "block";
+  } else {
+    if (statusDisp) {
+      statusDisp.innerHTML = `
+        <div style="background:var(--caution-tint); border:1px solid var(--line); border-radius:4px; padding:6px 10px; margin-bottom:8px; font-size:13px; color:var(--caution);">
+          <strong>未確定</strong>: 事務による確定を行ってください。
+        </div>
+      `;
+    }
+    if (editArea) editArea.style.display = "none";
+  }
+
+  // 履歴表示
+  const histArea = document.getElementById("kasanCapacityHistoryArea");
+  if (histArea) {
+    if (existing && Array.isArray(existing.edit_history) && existing.edit_history.length > 0) {
+      histArea.innerHTML = `
+        <div style="margin-top:12px; border-top:1px solid var(--line-2); padding-top:8px;">
+          <div style="font-weight:bold; font-size:13px; color:var(--ink-2); margin-bottom:4px;">変更履歴（過去の確定内容）:</div>
+          <table class="data-table" style="width:100%; font-size:13px;">
+            <thead>
+              <tr style="background:var(--ground);">
+                <th style="width:130px;">変更日時</th>
+                <th style="width:100px;">変更者</th>
+                <th style="width:120px;">変更前判定</th>
+                <th>変更理由</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${existing.edit_history.map(h => `
+                <tr>
+                  <td>${escapeHtml(h.edited_at || h.changed_at || '')}</td>
+                  <td>${escapeHtml(h.edited_by || h.changed_by || '')}</td>
+                  <td>${h.prev_is_excess ? '<span style="color:var(--alert);">定員超過</span>' : '定員内'}</td>
+                  <td>${escapeHtml(h.reason || '')}</td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      `;
+    } else {
+      histArea.innerHTML = "";
+    }
+  }
+}
+
+function submitKasanCapacityConfirm() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const ymInput = document.getElementById("kasanCapacityTargetYm");
+  const ym = ymInput?.value;
+  if (!ym) {
+    alert("対象年月を選択してください。");
+    return;
+  }
+  const radioExcess = document.getElementById("kasanCapacityStatusExcess");
+  const isExcess = !!(radioExcess && radioExcess.checked);
+  const isGrace = !!document.getElementById("kasanCapacityDisasterGrace")?.checked;
+  const graceReason = (document.getElementById("kasanCapacityGraceReason")?.value || "").trim();
+  const resolvedYm = (document.getElementById("kasanCapacityResolvedYm")?.value || "").trim();
+  const notes = (document.getElementById("kasanCapacityNotes")?.value || "").trim();
+
+  if (isGrace && !graceReason) {
+    alert("災害等の猶予を適用する場合は、事由・理由を入力してください。");
+    return;
+  }
+  if (resolvedYm && resolvedYm < ym) {
+    alert("解消した年月は対象年月以降を指定してください。");
+    return;
+  }
+
+  const mCalc = cpCalcMonthlyAvgResidents(ym);
+  const settings = cpGetKasanSettings();
+  const capacity = (settings.capacity && parseInt(settings.capacity, 10) > 0) ? parseInt(settings.capacity, 10) : 0;
+
+  if (!db.data.kasan_settings) db.data.kasan_settings = {};
+  if (!db.data.kasan_settings.capacity_excess) db.data.kasan_settings.capacity_excess = {};
+
+  const existing = db.data.kasan_settings.capacity_excess[ym] || null;
+  const history = (existing && Array.isArray(existing.edit_history)) ? existing.edit_history.slice() : [];
+
+  if (existing && existing.confirmed) {
+    const editReason = (document.getElementById("kasanCapacityEditReason")?.value || "").trim();
+    if (!editReason) {
+      alert("確定済みの内容を変更する場合は、変更理由の入力が必須です。");
+      return;
+    }
+    history.push({
+      edited_at: toLocalDateTimeStr(new Date()),
+      edited_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+      reason: editReason,
+      prev_is_excess: existing.is_excess,
+      prev_resolved_ym: existing.resolved_ym || "",
+      prev_notes: existing.notes || ""
+    });
+  }
+
+  db.data.kasan_settings.capacity_excess[ym] = {
+    year_month: ym,
+    confirmed: true,
+    avg_residents: mCalc.avg,
+    total_person_days: mCalc.totalPersonDays,
+    days_in_month: mCalc.daysInMonth,
+    capacity: capacity,
+    is_excess: isExcess,
+    is_disaster_grace: isGrace,
+    disaster_reason: isGrace ? graceReason : "",
+    resolved_ym: resolvedYm,
+    notes: notes,
+    confirmed_at: toLocalDateTimeStr(new Date()),
+    confirmed_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+    edit_history: history
+  };
+
+  db.save();
+  alert(`${ym} の定員超過状況を確定しました（${isExcess ? '定員超過該当' : '定員内'}）。`);
+  closeKasanCapacityConfirmModal();
+  if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
+}
+
+// ---------------------------------------------------------------------
+// 3. 人員基準欠如の登録・解消管理モーダル
+// ---------------------------------------------------------------------
+function openKasanStaffShortageModal() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const modal = document.getElementById("kasanStaffShortageModal");
+  if (!modal) return;
+  renderKasanStaffShortageList();
+  // リセット
+  const typeEl = document.getElementById("kasanStaffShortageType");
+  if (typeEl) typeEl.value = "";
+  const sYmEl = document.getElementById("kasanStaffShortageStartYm");
+  if (sYmEl) sYmEl.value = document.getElementById("kasanYearMonth")?.value || toLocalDateStr(new Date()).slice(0, 7);
+  const rYmEl = document.getElementById("kasanStaffShortageResolvedYm");
+  if (rYmEl) rYmEl.value = "";
+  const rReasonEl = document.getElementById("kasanStaffShortageReason");
+  if (rReasonEl) rReasonEl.value = "";
+  const waiverCb = document.getElementById("kasanStaffShortageIsWaiver");
+  if (waiverCb) waiverCb.checked = false;
+  const wReasonEl = document.getElementById("kasanStaffShortageWaiverReason");
+  if (wReasonEl) wReasonEl.value = "";
+  const wMonthEndCb = document.getElementById("kasanStaffShortageWaiverMonthEnd");
+  if (wMonthEndCb) wMonthEndCb.checked = false;
+  onKasanStaffShortageTypeChange();
+  onKasanStaffShortageWaiverChange();
+  cancelResolveStaffShortage();
+  modal.style.display = "flex";
+}
+
+function closeKasanStaffShortageModal() {
+  const m = document.getElementById("kasanStaffShortageModal");
+  if (m) m.style.display = "none";
+}
+
+function onKasanStaffShortageTypeChange() {
+  const t = document.getElementById("kasanStaffShortageType")?.value;
+  const b = document.getElementById("kasanStaffShortageMonthEndBox");
+  if (b) b.style.display = (t === "care_under_10") ? "block" : "none";
+}
+
+function onKasanStaffShortageWaiverChange() {
+  const isW = document.getElementById("kasanStaffShortageIsWaiver")?.checked;
+  const b = document.getElementById("kasanStaffShortageWaiverReasonBox");
+  if (b) b.style.display = isW ? "block" : "none";
+}
+
+function renderKasanStaffShortageList() {
+  const container = document.getElementById("kasanStaffShortageListArea");
+  if (!container) return;
+  const settings = cpGetKasanSettings();
+  const list = Array.isArray(settings.staff_shortage) ? settings.staff_shortage : [];
+
+  if (list.length === 0) {
+    container.innerHTML = '<p style="font-size:13px; color:var(--ink-3); margin:4px 0 10px;">現在、登録された人員基準欠如の記録はありません。</p>';
+    return;
+  }
+
+  container.innerHTML = `
+    <div style="overflow-x:auto; margin-bottom:14px; max-height:240px; border:1px solid var(--line-2); border-radius:4px;">
+      <table class="data-table" style="width:100%; font-size:13px; margin:0;">
+        <thead>
+          <tr style="background:var(--ground);">
+            <th style="width:90px;">発生年月</th>
+            <th style="width:170px;">欠如の種類</th>
+            <th style="width:110px;">減算適用</th>
+            <th>理由 / 特例</th>
+            <th style="width:100px;">解消年月</th>
+            <th style="width:130px; text-align:center;">操作</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${list.map(item => {
+            let startRedYm = "";
+            if (item.type === "care_over_10") {
+              startRedYm = cpGetNextYm(item.start_ym) + "〜";
+            } else {
+              startRedYm = cpAddMonths(item.start_ym, 2) + "〜";
+            }
+            if (item.is_waiver) startRedYm = "特例除外";
+            if (item.type === "care_under_10" && item.waiver_next_month_end) startRedYm = "翌月末解消除外";
+
+            const resolvedText = item.resolved_ym ? escapeHtml(item.resolved_ym) : '<span style="color:var(--alert); font-weight:bold;">継続中</span>';
+            const histCount = (Array.isArray(item.edit_history) && item.edit_history.length > 0) ? ` (履歴${item.edit_history.length}件)` : '';
+
+            return `
+              <tr>
+                <td style="font-weight:bold;">${escapeHtml(item.start_ym)}</td>
+                <td>${escapeHtml(cpGetStaffShortageTypeLabel(item.type))}</td>
+                <td style="font-weight:bold; color:${startRedYm.includes('除外') ? 'var(--pine-dark)' : 'var(--alert)'};">${escapeHtml(startRedYm)}</td>
+                <td>
+                  <div>${escapeHtml(item.reason || '-')}</div>
+                  ${item.is_waiver ? `<div style="color:var(--pine-dark); font-size:13px;">※特例理由: ${escapeHtml(item.waiver_reason || '-')}</div>` : ''}
+                  ${item.waiver_next_month_end ? `<div style="color:var(--pine-dark); font-size:13px;">※翌月末までに充足</div>` : ''}
+                </td>
+                <td>${resolvedText}${histCount}</td>
+                <td style="text-align:center;">
+                  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openResolveStaffShortage('${escapeHtml(item.id)}')">解消月を追記/変更</button>
+                </td>
+              </tr>
+            `;
+          }).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+let gResolvingStaffShortageId = null;
+
+function openResolveStaffShortage(id) {
+  gResolvingStaffShortageId = id;
+  const settings = cpGetKasanSettings();
+  const list = Array.isArray(settings.staff_shortage) ? settings.staff_shortage : [];
+  const target = list.find(x => x && x.id === id);
+  if (!target) return;
+
+  const box = document.getElementById("kasanStaffShortageResolveBox");
+  if (!box) return;
+  box.style.display = "block";
+
+  const infoEl = document.getElementById("kasanStaffShortageResolveTargetInfo");
+  if (infoEl) {
+    infoEl.innerHTML = `対象: <strong>${escapeHtml(target.start_ym)} 発生 ${escapeHtml(cpGetStaffShortageTypeLabel(target.type))}</strong>（現在の解消年月: ${target.resolved_ym ? escapeHtml(target.resolved_ym) : '継続中'}）`;
+  }
+  const ymInput = document.getElementById("kasanStaffShortageResolveYmInput");
+  if (ymInput) ymInput.value = target.resolved_ym || "";
+  const reasonInput = document.getElementById("kasanStaffShortageResolveReasonInput");
+  if (reasonInput) reasonInput.value = "";
+}
+
+function cancelResolveStaffShortage() {
+  gResolvingStaffShortageId = null;
+  const box = document.getElementById("kasanStaffShortageResolveBox");
+  if (box) box.style.display = "none";
+}
+
+function submitResolveStaffShortage() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  if (!gResolvingStaffShortageId) return;
+  const ymInput = document.getElementById("kasanStaffShortageResolveYmInput");
+  const newResolvedYm = (ymInput?.value || "").trim();
+  const reasonInput = document.getElementById("kasanStaffShortageResolveReasonInput");
+  const reason = (reasonInput?.value || "").trim();
+
+  if (!reason) {
+    alert("解消月の登録または変更を行う場合は、理由の入力が必須です。");
+    return;
+  }
+
+  if (!db.data.kasan_settings || !Array.isArray(db.data.kasan_settings.staff_shortage)) return;
+  const target = db.data.kasan_settings.staff_shortage.find(x => x && x.id === gResolvingStaffShortageId);
+  if (!target) return;
+
+  if (newResolvedYm && target.start_ym && newResolvedYm < target.start_ym) {
+    alert("解消年月は発生年月以降を指定してください。");
+    return;
+  }
+
+  if (!Array.isArray(target.edit_history)) target.edit_history = [];
+  target.edit_history.push({
+    edited_at: toLocalDateTimeStr(new Date()),
+    edited_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+    reason: reason,
+    prev_resolved_ym: target.resolved_ym || ""
+  });
+
+  target.resolved_ym = newResolvedYm;
+  target.updated_at = toLocalDateTimeStr(new Date());
+  target.updated_by = (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員");
+
+  db.save();
+  alert("人員基準欠如の解消年月を更新しました。");
+  cancelResolveStaffShortage();
+  renderKasanStaffShortageList();
+  if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
+}
+
+function submitKasanStaffShortage() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
   const type = document.getElementById("kasanStaffShortageType")?.value;
   const sYm = document.getElementById("kasanStaffShortageStartYm")?.value;
   const rYm = document.getElementById("kasanStaffShortageResolvedYm")?.value;
@@ -2540,27 +3259,58 @@ window.submitKasanStaffShortage = function() {
   const isW = document.getElementById("kasanStaffShortageIsWaiver")?.checked;
   const wReason = (document.getElementById("kasanStaffShortageWaiverReason")?.value || "").trim();
   const wMonthEnd = document.getElementById("kasanStaffShortageWaiverMonthEnd")?.checked;
+
   if (!type) { alert("欠如の種類を選択してください。"); return; }
   if (!sYm) { alert("始まった月を入力してください。"); return; }
   if (!reason) { alert("欠如の理由を入力してください。"); return; }
   if (sYm && rYm && sYm > rYm) { alert("始まった月と解消した月の順序が不正です。"); return; }
   if (isW && !wReason) { alert("減算除外の理由を入力してください。"); return; }
+
   if (!db.data.kasan_settings) db.data.kasan_settings = {};
   if (!Array.isArray(db.data.kasan_settings.staff_shortage)) db.data.kasan_settings.staff_shortage = [];
+
   db.data.kasan_settings.staff_shortage.push({
     id: "ss_" + Date.now(),
     type: type,
     start_ym: sYm,
-    resolved_ym: rYm,
+    resolved_ym: rYm || "",
     reason: reason,
     waiver_next_month_end: !!wMonthEnd,
     is_waiver: !!isW,
     waiver_reason: wReason,
     created_at: toLocalDateTimeStr(new Date()),
-    created_by: cpLoginStaffName()
+    created_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
+    edit_history: []
   });
+
   db.save();
   alert("人員基準欠如を登録しました。");
-  window.closeKasanStaffShortageModal();
+  renderKasanStaffShortageList();
+  const typeEl = document.getElementById("kasanStaffShortageType");
+  if (typeEl) typeEl.value = "";
+  const reasonEl = document.getElementById("kasanStaffShortageReason");
+  if (reasonEl) reasonEl.value = "";
+  closeKasanStaffShortageModal();
   if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
-};
+}
+
+window.openKasanNightConfirmModal = openKasanNightConfirmModal;
+window.closeKasanNightConfirmModal = closeKasanNightConfirmModal;
+window.onKasanNightTargetYmChange = onKasanNightTargetYmChange;
+window.submitKasanNightConfirm = submitKasanNightConfirm;
+
+window.openKasanCapacityConfirmModal = openKasanCapacityConfirmModal;
+window.closeKasanCapacityConfirmModal = closeKasanCapacityConfirmModal;
+window.onKasanCapacityTargetYmChange = onKasanCapacityTargetYmChange;
+window.onKasanCapacityGraceChange = onKasanCapacityGraceChange;
+window.submitKasanCapacityConfirm = submitKasanCapacityConfirm;
+
+window.openKasanStaffShortageModal = openKasanStaffShortageModal;
+window.closeKasanStaffShortageModal = closeKasanStaffShortageModal;
+window.renderKasanStaffShortageList = renderKasanStaffShortageList;
+window.openResolveStaffShortage = openResolveStaffShortage;
+window.cancelResolveStaffShortage = cancelResolveStaffShortage;
+window.submitResolveStaffShortage = submitResolveStaffShortage;
+window.onKasanStaffShortageTypeChange = onKasanStaffShortageTypeChange;
+window.onKasanStaffShortageWaiverChange = onKasanStaffShortageWaiverChange;
+window.submitKasanStaffShortage = submitKasanStaffShortage;

@@ -763,6 +763,51 @@
       const activeTaiseiUnits = dummyCalc.items.filter(it => ["6161", "6099", "6122", "6200"].includes(it.code)).reduce((s, it) => s + it.subtotal, 0);
       assert(hasExcludedNote && activeTaiseiUnits === 0, "Test 107: 定員超過・人員欠如の月に対象4体制加算が算定除外（単位数0）されること");
 
+      // Test 108: 夜勤不足確定関数の定義
+      assert(typeof openKasanNightConfirmModal === "function" && typeof submitKasanNightConfirm === "function", "Test 108: 夜勤不足確定関数（openKasanNightConfirmModal, submitKasanNightConfirm）が存在すること");
+
+      // Test 109: 定員超過確定関数の定義
+      assert(typeof openKasanCapacityConfirmModal === "function" && typeof submitKasanCapacityConfirm === "function", "Test 109: 定員超過確定関数（openKasanCapacityConfirmModal, submitKasanCapacityConfirm）が存在すること");
+
+      // Test 110: 人員基準欠如管理関数の定義
+      assert(typeof openKasanStaffShortageModal === "function" && typeof submitKasanStaffShortage === "function", "Test 110: 人員基準欠如管理関数（openKasanStaffShortageModal, submitKasanStaffShortage）が存在すること");
+
+      // Test 111: 人員基準欠如の解消月追記・変更関数
+      assert(typeof openResolveStaffShortage === "function" && typeof submitResolveStaffShortage === "function", "Test 111: 人員基準欠如解消月追記関数（openResolveStaffShortage, submitResolveStaffShortage）が存在すること");
+
+      // Test 112: 権限ガードの動作（管理者・事務以外はアラートを出してブロックされること）
+      let testGuardBlocked = false;
+      const origPerm = window.isCurrentStaffAdminOrClerk;
+      const origAlert = window.alert;
+      window.isCurrentStaffAdminOrClerk = () => false;
+      window.alert = (msg) => { if (msg.includes("管理者") || msg.includes("事務")) testGuardBlocked = true; };
+      openKasanNightConfirmModal();
+      window.isCurrentStaffAdminOrClerk = origPerm;
+      window.alert = origAlert;
+      assert(testGuardBlocked === true, "Test 112: 権限のない職員（管理者・事務以外）が画面を開こうとした際にブロックされること");
+
+      // Test 113: 夜勤不足確定データの保存と翌月減算適用
+      const testYm = "2026-08";
+      if (!db.data.kasan_settings) db.data.kasan_settings = {};
+      if (!db.data.kasan_settings.night_shortage) db.data.kasan_settings.night_shortage = {};
+      db.data.kasan_settings.night_shortage[testYm] = {
+        year_month: testYm,
+        confirmed: true,
+        condition_met: true,
+        condition_reason: "2日連続不足",
+        edit_history: []
+      };
+      const testReds = cpGetActiveReductions("2026-09");
+      assert(testReds.has_yagen === true && testReds.yagen_reason.includes("2026-08"), "Test 113: 前月夜勤不足確定により当月に夜間勤務等減算が適用されること");
+
+      // Test 114: 人員基準欠如の解消月指定により翌月以降減算が終了すること
+      db.data.kasan_settings.staff_shortage = [
+        { id: "ss_test_res", type: "care_over_10", start_ym: "2026-07", resolved_ym: "2026-08", reason: "退職", is_waiver: false }
+      ];
+      const testReds08 = cpGetActiveReductions("2026-08");
+      const testReds09 = cpGetActiveReductions("2026-09");
+      assert(testReds08.has_ketsu === true && testReds09.has_ketsu === false, "Test 114: 解消月（2026-08）までは減算対象で翌月（2026-09）は減算終了すること");
+
       // 設定を復元
       db.data.kasan_settings = origKasanSettings;
 
