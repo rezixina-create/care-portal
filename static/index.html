@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261021_c2">
+	<link rel="stylesheet" href="style.css?v=20261021_c3">
 </head>
 <body>
 
@@ -4044,23 +4044,23 @@
  </div>
 
  <!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261021_c2"></script>
- <script src="js/02_terms.js?v=20261021_c2"></script>
- <script src="js/03_common.js?v=20261021_c2"></script>
- <script src="js/04_care_record.js?v=20261021_c2"></script>
- <script src="js/05_summary_print_audit.js?v=20261021_c2"></script>
- <script src="js/06_schema_history.js?v=20261021_c2"></script>
- <script src="js/07_daily_tables.js?v=20261021_c2"></script>
- <script src="js/08_meds.js?v=20261021_c2"></script>
- <script src="js/09_night_misc.js?v=20261021_c2"></script>
- <script src="js/10_office.js?v=20261021_c2"></script>
- <script src="js/11_karte_staff.js?v=20261021_c2"></script>
- <script src="js/12_hospital_photos.js?v=20261021_c2"></script>
- <script src="js/13_shift_units.js?v=20261021_c2"></script>
- <script src="js/14_auth_home.js?v=20261021_c2"></script>
- <script src="js/15_single_write.js?v=20261021_c2"></script>
- <script src="js/16_careplan.js?v=20261021_c2"></script>
-	<script src="js/17_kasan.js?v=20261021_c2"></script>
+ <script src="js/01_core.js?v=20261021_c3"></script>
+ <script src="js/02_terms.js?v=20261021_c3"></script>
+ <script src="js/03_common.js?v=20261021_c3"></script>
+ <script src="js/04_care_record.js?v=20261021_c3"></script>
+ <script src="js/05_summary_print_audit.js?v=20261021_c3"></script>
+ <script src="js/06_schema_history.js?v=20261021_c3"></script>
+ <script src="js/07_daily_tables.js?v=20261021_c3"></script>
+ <script src="js/08_meds.js?v=20261021_c3"></script>
+ <script src="js/09_night_misc.js?v=20261021_c3"></script>
+ <script src="js/10_office.js?v=20261021_c3"></script>
+ <script src="js/11_karte_staff.js?v=20261021_c3"></script>
+ <script src="js/12_hospital_photos.js?v=20261021_c3"></script>
+ <script src="js/13_shift_units.js?v=20261021_c3"></script>
+ <script src="js/14_auth_home.js?v=20261021_c3"></script>
+ <script src="js/15_single_write.js?v=20261021_c3"></script>
+ <script src="js/16_careplan.js?v=20261021_c3"></script>
+	<script src="js/17_kasan.js?v=20261021_c3"></script>
   
 
   <!-- ============================================================ -->
@@ -5000,7 +5000,7 @@
 					<div style="font-weight:bold; font-size:13px; color:var(--pine-dark); margin-bottom:4px;">国保連インタフェース仕様書 準拠ファイル作成（確認用）</div>
 					<div style="font-size:13px; color:var(--ink-2); line-height:1.6;">
 						※対象年月: <strong id="kasanCsvTargetYmDisp">-</strong>（処理対象年月: <span id="kasanCsvNextYmDisp">-</span>）<br>
-						※当機能は「仕様書どおりのCSVファイルが作成できるか」を事前検証するためのものです。実際の国保連への送信は行われません。<br><strong>まだ入っていないもの（第2段階の後半）: 介護予防（37）・短期利用（38・39）。この画面のファイルは、そのまま請求には使えません。</strong><br>
+						※当機能は「仕様書どおりのCSVファイルが作成できるか」を事前検証するためのものです。実際の国保連への送信は行われません。<br><strong>まだ入っていないもの: 介護予防（37）・短期利用（38・39）。夜勤・定員超過・人員基準欠如の減算は、確定・登録の画面ができるまで反映されません。この画面のファイルは、そのまま請求には使えません。</strong><br>
 						※国保中央会インタフェース仕様書解説書（サービス事業所編 令和6年4月版）に準拠し、サービス種類32の集計情報（8..13）および基本情報（16、19..23、36..38、42..44、48..50、54..56）は空欄（カンマのみ）とし、入居実日数（26）・外泊日数（27）を出力します。
 					</div>
 				</div>

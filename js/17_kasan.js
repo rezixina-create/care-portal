@@ -328,7 +328,7 @@ const CP_KASAN_SOURCES = [
   },
   {
     label: "厚生労働省 留意事項通知 第2の1⑹⑻⑼「定員超過・人員基準欠如・夜間勤務条件基準の減算要件」",
-    url: "https://www.mhlw.go.jp/content/12300000/001477917.pdf"
+    url: "https://www.mhlw.go.jp/content/12300000/001283858.pdf"
   },
   {
     label: "厚生労働省 給付費分科会 「地域区分について」令和6年12月23日",
@@ -380,27 +380,49 @@ function cpDetectNightShortageCandidate(yearMonth) {
   if (isNaN(y) || isNaN(m)) return { shortageDays: [], count: 0, hasConsecutive2: false, consecutivePairs: [], isCandidate: false, standard: 1 };
   const daysInMonth = new Date(y, m, 0).getDate();
 
-  const units = (db && db.data && Array.isArray(db.data.units)) ? db.data.units : [];
+  // [Claude修正] 夜勤の人数はユニット（区分）ごとに見る。1つのユニットに2人・もう1つに0人の日は不足
+  // 夜勤職員の基準は「ユニットごとに1人以上」（留意事項通知 第2の1⑼、市川市 運営の手引き）。3ユニットで2人の特例は扱っていない
+  const units = (db && db.data && Array.isArray(db.data.units)) ? db.data.units.filter(u => u && u.id !== undefined) : [];
   const standard = Math.max(1, units.length);
+  const stamps = (db && db.data && Array.isArray(db.data.stamps)) ? db.data.stamps : [];
+  const unitOfStaff = {};
+  stamps.forEach(s => { if (s && s.name) unitOfStaff[s.name] = (s.unit_id !== undefined && s.unit_id !== null && s.unit_id !== "") ? Number(s.unit_id) : null; });
 
   const monthShifts = (db && db.data && db.data.monthly_shifts && db.data.monthly_shifts[yearMonth]) || {};
   const shortageDays = [];
+  const unenteredDays = []; // [Claude修正] 勤務表がまだ入っていない日は「不足」と数えず、別に知らせる
 
   for (let d = 1; d <= daysInMonth; d++) {
     let nightCount = 0;
+    let entered = false;
     const staffNames = [];
+    const perUnit = {};
+    units.forEach(u => { perUnit[Number(u.id)] = 0; });
     Object.keys(monthShifts).forEach(sName => {
-      if (monthShifts[sName] && monthShifts[sName][d] === "夜") {
+      const v = monthShifts[sName] ? (monthShifts[sName][d] !== undefined ? monthShifts[sName][d] : monthShifts[sName][String(d)]) : null;
+      if (v) entered = true;
+      if (v === "夜") {
         nightCount++;
         staffNames.push(sName);
+        const uId = unitOfStaff[sName];
+        if (uId !== null && uId !== undefined && perUnit[uId] !== undefined) perUnit[uId]++;
       }
     });
-    if (nightCount < standard) {
+    const dateStr = `${yearMonth}-${String(d).padStart(2, "0")}`;
+    if (!entered) {
+      unenteredDays.push(dateStr);
+      continue;
+    }
+    const lackingUnits = units.length > 0
+      ? units.filter(u => perUnit[Number(u.id)] < 1).map(u => u.name || String(u.id))
+      : (nightCount < 1 ? ["事業所"] : []);
+    if (lackingUnits.length > 0) {
       shortageDays.push({
         day: d,
-        date: `${yearMonth}-${String(d).padStart(2, "0")}`,
+        date: dateStr,
         count: nightCount,
-        staffNames: staffNames
+        staffNames: staffNames,
+        lackingUnits: lackingUnits
       });
     }
   }
@@ -422,7 +444,8 @@ function cpDetectNightShortageCandidate(yearMonth) {
     hasConsecutive2: hasConsecutive2,
     consecutivePairs: consecutivePairs,
     isCandidate: isCandidate,
-    standard: standard
+    standard: standard,
+    unenteredDays: unenteredDays
   };
 }
 
@@ -1073,7 +1096,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   // 4. 既存個別減算（身体拘束廃止未実施減算等）
   CP_KASAN_GENSAN_DEFS.forEach(def => {
     const gSet = settings.gensan_items[def.id];
-    if (gSet && gSet.has_gensan === "有" && basicDays > 0) {
+    if (gSet && gSet.has_gensan === "あり" && basicDays > 0) {
       const inRange = (!gSet.start_month || yearMonth >= gSet.start_month) &&
                       (!gSet.end_month || yearMonth <= gSet.end_month);
       if (inRange) {
@@ -1268,7 +1291,7 @@ function renderOfficeKasanTab() {
     <p class="panel-note" style="margin:4px 0 12px; line-height:1.6;">
       ※月ごと・利用者ごとに算定対象となる加算・減算の目安です。基本の日数および金額は「目安」と表示しています。
       入院した日・退院した日・外泊の日の基本日数への算入基準は確認中のため、確定値ではありません。
-      処遇改善加算、「・超」「・欠」「・夜減」、短期利用（38）・介護予防（37・39）は第2段階として除外しています。
+      短期利用（38）・介護予防（37・39）はまだ入っていません。夜勤・定員超過・人員基準欠如の減算は、確定・登録の画面ができるまで反映されません。
     </p>
 
     <div style="overflow-x:auto;">
