@@ -30,7 +30,7 @@ const CP_KASAN_RESIDENT_DEFS = {
   mitori_death: { code: "6144", units: 1280, unit_type: "日", name: "看取り介護加算（死亡日）" },
   discharge_consult: { code: "6502", units: 400, unit_type: "回", name: "退居時相談援助加算（1回限り）" },
   discharge_info: { code: "6150", units: 250, unit_type: "回", name: "退居時情報提供加算" },
-  life: { code: "6361", units: 40, unit_type: "月", name: "科学的介護推進体制加算（LIFE提出月）" }
+  life: { code: "6361", units: 40, unit_type: "月", name: "科学的介護推進体制加算" }
 };
 
 const CP_KASAN_TAISEI_DEFS = [
@@ -123,6 +123,16 @@ const CP_KASAN_TAISEI_DEFS = [
       { key: "none", label: "届出なし", code: null, units: 0 },
       { key: "1", label: "生産性向上推進体制加算（Ⅰ）", code: "6237", units: 100 },
       { key: "2", label: "生産性向上推進体制加算（Ⅱ）", code: "6238", units: 10 }
+    ]
+  },
+  {
+    id: "life",
+    name: "科学的介護推進体制加算",
+    unit_type: "月",
+    computed_elsewhere: true,
+    options: [
+      { key: "none", label: "届出なし", code: null, units: 0 },
+      { key: "1", label: "科学的介護推進体制加算", code: "6361", units: 40 }
     ]
   },
   {
@@ -471,8 +481,12 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   const items = [];
 
   // 1. 基本サービスコード
-  const careLevel = r.care_level || "要介護3";
-  const basicCodeObj = CP_KASAN_BASIC_CODES[unitKey][careLevel] || CP_KASAN_BASIC_CODES[unitKey]["要介護3"];
+  const careLevel = r.care_level || "";
+  // [Claude修正] 要介護度が無い・要介護1〜5以外のときに「要介護3」として数えていた。決めつけずに付けない
+  const basicCodeObj = CP_KASAN_BASIC_CODES[unitKey][careLevel] || null;
+  if (!basicCodeObj) {
+    return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: hospDaysCount, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel };
+  }
   if (basicDays > 0) {
     items.push({
       category: "基本",
@@ -482,7 +496,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       count: basicDays,
       unit_label: "日",
       subtotal: basicCodeObj.units * basicDays,
-      note: "目安（数え方は確認中）"
+      note: ""
     });
   }
 
@@ -495,7 +509,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       if (dStr >= r.admission_date) {
         const diffMs = new Date(dStr) - new Date(r.admission_date);
         const diffDays = Math.floor(diffMs / 86400000);
-        if (diffDays >= 0 && diffDays < 30 && cpStatusOn(r, dStr) === "在所") {
+        if (diffDays >= 0 && diffDays < 30 && daysCalc.details && daysCalc.details[dStr] === "BASIC") { // [Claude修正] 基本の単位数を付ける日だけ
           initDays++;
         }
       }
@@ -514,36 +528,18 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     }
   }
 
-  // b. 入院時費用 6400 246単位/日: 入院の初日と最終日は数えない。1か月に6日まで
-  const hosps = cpGetHospitalizations(r);
-  if (hosps.length > 0) {
-    let eligibleHospDays = 0;
-    for (let d = 1; d <= daysInMonth; d++) {
-      const dStr = `${yStr}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      for (let i = 0; i < hosps.length; i++) {
-        const h = hosps[i];
-        if (!h || !h.admission_date) continue;
-        const isStart = (dStr === h.admission_date);
-        const isEnd = (h.discharge_date && dStr === h.discharge_date);
-        if (!isStart && !isEnd && dStr > h.admission_date && (!h.discharge_date || dStr < h.discharge_date)) {
-          eligibleHospDays++;
-          break;
-        }
-      }
-    }
-    const billedHospDays = Math.min(6, eligibleHospDays);
-    if (billedHospDays > 0) {
-      items.push({
-        category: "個別加算",
-        code: CP_KASAN_RESIDENT_DEFS.hospital.code,
-        name: CP_KASAN_RESIDENT_DEFS.hospital.name,
-        unit_price: CP_KASAN_RESIDENT_DEFS.hospital.units,
-        count: billedHospDays,
-        unit_label: "日",
-        subtotal: CP_KASAN_RESIDENT_DEFS.hospital.units * billedHospDays,
-        note: eligibleHospDays > 6 ? `対象${eligibleHospDays}日中上限6日` : ""
-      });
-    }
+  // b. 入院時費用 6400 246単位/日 [Claude修正] 数え方の関数 cpKasanBasicDays の結果（初日・最終日を除く、月6日、月またぎは連続12日まで）を使う
+  if (hospDaysCount > 0) {
+    items.push({
+      category: "個別加算",
+      code: CP_KASAN_RESIDENT_DEFS.hospital.code,
+      name: CP_KASAN_RESIDENT_DEFS.hospital.name,
+      unit_price: CP_KASAN_RESIDENT_DEFS.hospital.units,
+      count: hospDaysCount,
+      unit_label: "日",
+      subtotal: CP_KASAN_RESIDENT_DEFS.hospital.units * hospDaysCount,
+      note: "届出が要る"
+    });
   }
 
   // c. 看取り介護加算（死亡日から数える。その45日の中で入院していた日は数えない。死亡した月にまとめて出す）
@@ -555,12 +551,15 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       let d2_3Count = 0;
       let d4_30Count = 0;
       let d31_45Count = 0;
+      const mitoriDetails = {};
 
       for (let offset = 0; offset < 45; offset++) {
         const targetMs = deathTime - (offset * 86400000);
         const targetDateStr = toLocalDateStr(new Date(targetMs));
-        // 入院していた日は数えない
-        if (cpStatusOn(r, targetDateStr) === "入院中") continue;
+        // [Claude修正] 基本の単位数を付ける日だけ数える（入院・外泊の間の日は除く。前の月の日は前の月の数え方で見る）
+        const tYm = targetDateStr.slice(0, 7);
+        if (!mitoriDetails[tYm]) mitoriDetails[tYm] = cpKasanBasicDays(r, tYm).details || {};
+        if (mitoriDetails[tYm][targetDateStr] !== "BASIC") continue;
 
         if (offset === 0) dCount++;
         else if (offset >= 1 && offset <= 2) d2_3Count++;
@@ -577,7 +576,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
           count: dCount,
           unit_label: "日",
           subtotal: CP_KASAN_RESIDENT_DEFS.mitori_death.units * dCount,
-          note: `死亡日: ${r.discharge_date}`
+          note: `死亡日: ${r.discharge_date}（届出・医療連携体制加算・同意などの条件は確認してください）`
         });
       }
       if (d2_3Count > 0) {
@@ -631,39 +630,45 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
           unit_price: CP_KASAN_RESIDENT_DEFS.discharge_consult.units,
           count: 1,
           unit_label: "回",
-          subtotal: CP_KASAN_RESIDENT_DEFS.discharge_consult.units,
-          note: `退居日 ${r.discharge_date}`
+          subtotal: 0,
+          candidate: true,
+          note: `候補（退居日 ${r.discharge_date}）。退居から2週間以内に相談援助を行ったか、退居先（入院・他の介護保険施設は対象外）を確かめてから請求する。合計には入れていない`
         });
       }
     }
   }
 
-  // e. 科学的介護推進体制加算（LIFE提出月: 利用開始月、3か月ごと、終了月）
+  // e. 科学的介護推進体制加算 [Claude修正] 1月につき40単位（サービスコード表）。届出があれば毎月付く（提出の月だけではない）。
+  //    LIFE への提出が要る月（利用開始月・少なくとも3か月ごと・終了月）は、別に「提出の月」として知らせる
+  let lifeSubmitNote = "";
   if (r.admission_date) {
     const isStartMonth = (r.admission_date.slice(0, 7) === yearMonth);
     const isEndMonth = (r.discharge_date && r.discharge_date.slice(0, 7) === yearMonth);
     const startY = parseInt(r.admission_date.slice(0, 4), 10);
     const startM = parseInt(r.admission_date.slice(5, 7), 10);
     const diffMonths = ((y - startY) * 12) + (m - startM);
-    const is3MonthCycle = (diffMonths >= 0 && diffMonths % 3 === 0);
-
-    if (basicDays > 0 && (isStartMonth || isEndMonth || is3MonthCycle)) {
-      items.push({
-        category: "個別加算",
-        code: CP_KASAN_RESIDENT_DEFS.life.code,
-        name: CP_KASAN_RESIDENT_DEFS.life.name,
-        unit_price: CP_KASAN_RESIDENT_DEFS.life.units,
-        count: 1,
-        unit_label: "月",
-        subtotal: CP_KASAN_RESIDENT_DEFS.life.units,
-        note: isStartMonth ? "利用開始月" : (isEndMonth ? "利用終了月" : "3か月周期")
-      });
+    if (basicDays > 0 && (isStartMonth || isEndMonth || (diffMonths >= 0 && diffMonths % 3 === 0))) {
+      lifeSubmitNote = isStartMonth ? "LIFE 提出の月（利用開始月）" : (isEndMonth ? "LIFE 提出の月（利用終了月）" : "LIFE 提出の月（3か月ごとの目安）");
     }
+  }
+  const lifeSet = settings.taisei_items.life;
+  if (lifeSet && lifeSet.option_key === "1" && basicDays > 0) {
+    items.push({
+      category: "体制加算",
+      code: CP_KASAN_RESIDENT_DEFS.life.code,
+      name: "科学的介護推進体制加算",
+      unit_price: CP_KASAN_RESIDENT_DEFS.life.units,
+      count: 1,
+      unit_label: "月",
+      subtotal: CP_KASAN_RESIDENT_DEFS.life.units,
+      note: lifeSubmitNote
+    });
   }
 
   // 3. 事業所体制の加算（届出済みで有効なもの）
   CP_KASAN_TAISEI_DEFS.forEach(def => {
     const setItem = settings.taisei_items[def.id];
+    if (def.computed_elsewhere) return; // 科学的介護推進体制加算は上で数える
     if (setItem && setItem.option_key && setItem.option_key !== "none") {
       const opt = def.options.find(o => o.key === setItem.option_key);
       if (opt && opt.code && opt.units > 0) {
@@ -701,7 +706,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       const inRange = (!gSet.start_month || yearMonth >= gSet.start_month) &&
                       (!gSet.end_month || yearMonth <= gSet.end_month);
       if (inRange) {
-        const reductionObj = (def.codes[unitKey] && def.codes[unitKey][careLevel]) || (def.codes[unitKey] && def.codes[unitKey]["要介護3"]);
+        const reductionObj = def.codes[unitKey] && def.codes[unitKey][careLevel];
         if (reductionObj) {
           items.push({
             category: "減算",
@@ -795,30 +800,33 @@ function renderOfficeKasanTab() {
   // 表の各行HTML
   const rowsHtml = monthlyResults.map(res => {
     const r = res.resident;
-    const codesHtml = res.items.map(it => {
+    const codesHtml = (res.levelMissing ? `<div style="font-size:13px; color:var(--caution); font-weight:bold;">要介護度が未登録か要介護1〜5ではないため、数えていません（${escapeHtml(res.careLevel || "未登録")}）</div>` : "") + res.items.map(it => {
+      if (it.candidate) {
+        return `<div style="font-size:13px; margin-bottom:2px; color:var(--caution);"><span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:1px 5px;">${escapeHtml(it.code)}</span> <strong>${escapeHtml(it.name)}</strong>: ${it.unit_price}単位（${escapeHtml(it.note)}）</div>`;
+      }
       const isMinus = it.subtotal < 0;
       const colorStyle = isMinus ? "color:var(--alert); font-weight:bold;" : "color:var(--ink);";
       const badgeStyle = isMinus ? "background:var(--alert-tint); color:var(--alert);" : "background:var(--pine-tint); color:var(--pine-dark);";
       return `
-        <div style="font-size:12px; margin-bottom:2px; display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
-          <span class="badge" style="${badgeStyle} font-size:11px; padding:1px 5px;">${escapeHtml(it.code)}</span>
+        <div style="font-size:13px; margin-bottom:2px; display:flex; align-items:center; gap:4px; flex-wrap:wrap;">
+          <span class="badge" style="${badgeStyle} font-size:13px; padding:1px 5px;">${escapeHtml(it.code)}</span>
           <span style="font-weight:bold;">${escapeHtml(it.name)}</span>:
           <span>${it.unit_price}単位 × ${it.count}${escapeHtml(it.unit_label)} ＝</span>
           <span style="${colorStyle}">${it.subtotal.toLocaleString()}単位</span>
-          ${it.note ? `<span style="color:var(--ink-3); font-size:11px;">(${escapeHtml(it.note)})</span>` : ""}
+          ${it.note ? `<span style="color:var(--ink-3); font-size:13px;">(${escapeHtml(it.note)})</span>` : ""}
         </div>
       `;
     }).join("");
 
     const yenDisplay = res.estimatedYen !== null
       ? `<strong>${res.estimatedYen.toLocaleString()}</strong> 円`
-      : `<span style="font-size:12px; color:var(--caution);">地域区分未選択</span>`;
+      : `<span style="font-size:13px; color:var(--caution);">地域区分未選択</span>`;
 
     return `
       <tr>
         <td style="font-weight:bold; white-space:nowrap;">
           ${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)}
-          ${r.status === "退所" ? `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:11px; margin-left:4px;">退所</span>` : ""}
+          ${r.status === "退所" ? `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:13px; margin-left:4px;">退所</span>` : ""}
         </td>
         <td style="text-align:center; white-space:nowrap;">${escapeHtml(r.care_level || "-")}</td>
         <td style="text-align:right; font-weight:bold; white-space:nowrap;">${res.basicDays} 日</td>
@@ -875,7 +883,7 @@ function renderOfficeKasanTab() {
           <tr style="background:var(--pine-tint-2);">
             <th style="width:140px;">利用者名（居室）</th>
             <th style="width:70px; text-align:center;">要介護度</th>
-            <th style="width:110px; text-align:right;">在所日数 (目安)<br><span style="font-size:11px; font-weight:normal; color:var(--ink-3);">※数え方は確認中</span></th>
+            <th style="width:110px; text-align:right;">在所日数 (目安)<br><span style="font-size:13px; font-weight:normal; color:var(--ink-3);">※数え方は確認中</span></th>
             <th style="width:80px; text-align:right;">入院日数</th>
             <th>算定コード・日数/回数 内訳</th>
             <th style="width:120px; text-align:right;">単位数合計 (目安)</th>
@@ -979,7 +987,7 @@ function openKasanSettingsModal() {
             </label>
             <label style="font-size:13px; color:var(--ink-2); display:flex; align-items:center; gap:4px; flex:1; min-width:200px;">
               理由:
-              <input type="text" class="form-control" id="kasanGensanReason_${def.id}" style="font-size:13px; width:100%;" placeholder="例: 委員会未開催のため" value="${escapeHtml(cur.reason || "")}">
+              <input type="text" class="form-control" id="kasanGensanReason_${def.id}" style="font-size:13px; width:100%;" value="${escapeHtml(cur.reason || "")}">
             </label>
           </div>
         </div>
@@ -995,12 +1003,12 @@ function openKasanSettingsModal() {
   if (histContainer) {
     if (settings.edit_history && settings.edit_history.length > 0) {
       histContainer.innerHTML = settings.edit_history.map(h => `
-        <div style="font-size:12px; color:var(--ink-2); padding:3px 0; border-bottom:1px dashed var(--line-2);">
+        <div style="font-size:13px; color:var(--ink-2); padding:3px 0; border-bottom:1px dashed var(--line-2);">
           ${escapeHtml(h.at || "")} ${escapeHtml(h.by || "")}：${escapeHtml(h.detail || "")}
         </div>
       `).join("");
     } else {
-      histContainer.innerHTML = `<span style="font-size:12px; color:var(--ink-3);">変更履歴はありません。</span>`;
+      histContainer.innerHTML = `<span style="font-size:13px; color:var(--ink-3);">変更履歴はありません。</span>`;
     }
   }
 
@@ -1028,7 +1036,7 @@ function renderKasanCommitteeRulesList() {
 
   listEl.innerHTML = rules.map(rule => {
     // 事務所の委員会記録と照合
-    const matched = committees.filter(c => c && c.committee_name && c.committee_name.includes(rule.name));
+    const matched = committees.filter(c => c && !c.voided && c.committee_name && c.committee_name.includes(rule.name)); // [Claude修正] 取消した記録は数えない
     matched.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")));
 
     let lastHeld = "未開催";
@@ -1045,7 +1053,10 @@ function renderKasanCommitteeRulesList() {
       }
     }
 
-    const badge = isExpired
+    const ruleOff = rule.status === "使わない";
+    const badge = ruleOff
+      ? `<span class="badge" style="background:var(--ground); color:var(--ink-2);">使わない（${escapeHtml(rule.ended_at || "")} ${escapeHtml(rule.ended_by || "")}・理由: ${escapeHtml(rule.end_reason || "")}）</span>`
+      : isExpired
       ? `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-weight:bold;">期限超過（次回期限: ${nextDue}）</span>`
       : `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark);">次回期限: ${nextDue}</span>`;
 
@@ -1054,15 +1065,15 @@ function renderKasanCommitteeRulesList() {
         <div>
           <div style="font-weight:bold; font-size:13px; color:var(--ink);">
             ${escapeHtml(rule.name)}
-            <span style="font-size:12px; font-weight:normal; color:var(--ink-2); margin-left:6px;">(${rule.interval_months}か月に1回)</span>
+            <span style="font-size:13px; font-weight:normal; color:var(--ink-2); margin-left:6px;">(${rule.interval_months}か月に1回)</span>
             ${badge}
           </div>
-          <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">
+          <div style="font-size:13px; color:var(--ink-2); margin-top:2px;">
             最終開催日: <strong>${escapeHtml(lastHeld)}</strong> ／
             出典: <a href="${escapeHtml(rule.source_url)}" target="_blank" rel="noopener noreferrer" style="color:var(--pine); text-decoration:underline;">公的資料リンク</a>
           </div>
         </div>
-        <button type="button" class="btn btn-secondary" style="font-size:12px; padding:2px 8px;" onclick="deleteKasanCommitteeRule(${rule.id})">削除</button>
+        ${ruleOff ? "" : `<button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 8px;" onclick="deleteKasanCommitteeRule(${rule.id})">使わない</button>`}
       </div>
     `;
   }).join("");
@@ -1101,6 +1112,8 @@ function addKasanCommitteeRule() {
 
   if (!db.data.kasan_settings) db.data.kasan_settings = {};
   db.data.kasan_settings.committee_rules = settings.committee_rules;
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({ id: Date.now() + 1, at: toLocalDateTimeStr(new Date()), by: cpLoginStaffName(), kind: "加算・減算設定", action: "委員会の決まりを追加", detail: `${name}（${interval}か月に1回、出典 ${sourceUrl}）` });
   db.save();
 
   if (nameEl) nameEl.value = "";
@@ -1112,17 +1125,26 @@ function addKasanCommitteeRule() {
 }
 
 function deleteKasanCommitteeRule(ruleId) {
+  // [Claude修正] 決まりは消さずに「使わない」にして、理由・日時・人を残す
   if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
-    alert("決まりの削除は管理者および事務員のみ操作可能です。");
+    alert("決まりの変更は管理者および事務員のみ操作可能です。");
     return;
   }
-  if (!confirm("この委員会の決まりを削除しますか？")) return;
   const settings = cpGetKasanSettings();
-  settings.committee_rules = (settings.committee_rules || []).filter(r => Number(r.id) !== Number(ruleId));
+  const rule = (settings.committee_rules || []).find(r => Number(r.id) === Number(ruleId));
+  if (!rule || rule.status === "使わない") return;
+  const reason = prompt(`「${rule.name}」の決まりを「使わない」にします。記録は残ります。\n\n理由を入れてください`, "");
+  if (reason === null) return;
+  if (!reason.trim()) { alert("理由を入れてください。何も変えていません。"); return; }
+  rule.status = "使わない";
+  rule.ended_at = toLocalDateTimeStr(new Date());
+  rule.ended_by = cpLoginStaffName();
+  rule.end_reason = reason.trim();
   if (!db.data.kasan_settings) db.data.kasan_settings = {};
   db.data.kasan_settings.committee_rules = settings.committee_rules;
+  if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+  db.data.settings_logs.push({ id: Date.now(), at: rule.ended_at, by: rule.ended_by, kind: "加算・減算設定", action: "委員会の決まりを使わない", detail: `${rule.name}（理由: ${rule.end_reason}）` });
   db.save();
-
   renderKasanCommitteeRulesList();
   renderOfficeKasanTab();
 }
@@ -1142,9 +1164,15 @@ function saveKasanSettings() {
     edit_history: curSettings.edit_history || []
   };
 
+  const kasanToday = toLocalDateStr(new Date());
+  const kasanThisMonth = kasanToday.slice(0, 7);
+  let kasanError = "";
   CP_KASAN_TAISEI_DEFS.forEach(def => {
     const optKey = (document.getElementById(`kasanTaisei_${def.id}`)?.value || "").trim();
     const notifDate = (document.getElementById(`kasanTaiseiDate_${def.id}`)?.value || "").trim();
+    // [Claude修正] 届出ありは届出の日を必須に。先の日付は不可
+    if (!kasanError && optKey && optKey !== "none" && !notifDate) kasanError = `「${def.name}」の届出の日を入れてください。`;
+    if (!kasanError && notifDate && notifDate > kasanToday) kasanError = `「${def.name}」の届出の日に先の日付は入れられません。`;
     nextSettings.taisei_items[def.id] = {
       option_key: optKey,
       notified_date: notifDate
@@ -1157,10 +1185,11 @@ function saveKasanSettings() {
     const eMonth = (document.getElementById(`kasanGensanEnd_${def.id}`)?.value || "").trim();
     const reason = (document.getElementById(`kasanGensanReason_${def.id}`)?.value || "").trim();
 
-    if (hasGensan === "あり" && sMonth && eMonth && sMonth > eMonth) {
-      alert(`「${def.name}」の期間（始めの月・改善した月）の順序が正しくありません。`);
-      return;
-    }
+    // [Claude修正] forEach の中の return では保存が止まっていなかった。まとめて確かめてから止める
+    if (!kasanError && hasGensan === "あり" && !sMonth) kasanError = `「${def.name}」の始めの月を入れてください。`;
+    if (!kasanError && hasGensan === "あり" && !reason) kasanError = `「${def.name}」の理由を入れてください。`;
+    if (!kasanError && hasGensan === "あり" && sMonth && eMonth && sMonth > eMonth) kasanError = `「${def.name}」の期間（始めの月・改善した月）の順序が正しくありません。`;
+    if (!kasanError && eMonth && eMonth > kasanThisMonth) kasanError = `「${def.name}」の改善した月に先の月は入れられません。`;
 
     nextSettings.gensan_items[def.id] = {
       has_gensan: hasGensan,
@@ -1169,6 +1198,8 @@ function saveKasanSettings() {
       reason: reason
     };
   });
+
+  if (kasanError) { alert(kasanError); return; }
 
   // 変更の有無をチェック（無変更時は履歴を増やさない）
   const curJson = JSON.stringify({
@@ -1193,7 +1224,8 @@ function saveKasanSettings() {
     id: Date.now(),
     at: toLocalDateTimeStr(new Date()),
     by: cpLoginStaffName(),
-    detail: logDetail
+    detail: logDetail,
+    before: JSON.parse(curJson) // [Claude修正] 変更前の値も残す
   });
 
   if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
@@ -1232,12 +1264,12 @@ function printKasanMonthlyTable() {
     <div style="font-family:sans-serif; color:#000000; padding:4px;">
       <div style="display:flex; justify-content:space-between; align-items:baseline; border-bottom:2px solid #333; padding-bottom:4px; margin-bottom:8px;">
         <h2 style="margin:0; font-size:16px;">加算・減算の月の確認表（${escapeHtml(ym)}）</h2>
-        <div style="font-size:12px;">区分: ${escapeHtml(unitLabel)} ／ 地域区分: ${escapeHtml(regionText)} ／ 印刷: ${toLocalDateTimeStr(new Date())}</div>
+        <div style="font-size:13px;">区分: ${escapeHtml(unitLabel)} ／ 地域区分: ${escapeHtml(regionText)} ／ 印刷: ${toLocalDateTimeStr(new Date())}</div>
       </div>
-      <p style="font-size:11px; margin:0 0 8px; color:#555;">
+      <p style="font-size:13px; margin:0 0 8px; color:#555;">
         ※基本の日数および金額は目安です。国保連請求CSVデータではありません。在所日数の数え方は確認中、処遇改善加算等は第2段階除外。
       </p>
-      <table style="width:100%; border-collapse:collapse; font-size:11px;" border="1">
+      <table style="width:100%; border-collapse:collapse; font-size:13px;" border="1">
         ${tableEl.innerHTML}
       </table>
     </div>
@@ -1323,14 +1355,14 @@ function printEmergencyResidentSheets() {
             <span style="font-size:18px; font-weight:bold;">【非常時・停電時 利用者緊急シート】</span>
             <span style="font-size:14px; font-weight:bold; margin-left:10px;">${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)} 様</span>
           </div>
-          <div style="font-size:11px;">${idx + 1} / ${currentResidents.length} 名</div>
+          <div style="font-size:13px;">${idx + 1} / ${currentResidents.length} 名</div>
         </div>
 
-        <div style="background:#f0f0f0; border:1px solid #333; padding:4px 8px; font-size:11px; margin-bottom:8px;">
+        <div style="background:#f0f0f0; border:1px solid #333; padding:4px 8px; font-size:13px; margin-bottom:8px;">
           <strong>※この紙は ${escapeHtml(hourStr)} の内容です。最新はアプリで確かめてください。</strong>（印刷日時: ${escapeHtml(printTimeStr)} ／ 印刷者: ${escapeHtml(cpLoginStaffName())}）
         </div>
 
-        <table style="width:100%; border-collapse:collapse; margin-bottom:8px; font-size:12px;" border="1">
+        <table style="width:100%; border-collapse:collapse; margin-bottom:8px; font-size:13px;" border="1">
           <tr>
             <th style="width:18%; background:#f5f5f5; padding:4px 6px;">氏名 / 居室</th>
             <td style="width:32%; padding:4px 6px; font-weight:bold;">${val(r.name)}（${val(r.room_no)}号室）</td>
@@ -1367,8 +1399,8 @@ function printEmergencyResidentSheets() {
           </tr>
         </table>
 
-        <div style="font-weight:bold; font-size:12px; margin:8px 0 2px;">【服薬・点眼・外用薬の情報】</div>
-        <table style="width:100%; border-collapse:collapse; margin-bottom:8px; font-size:11px;" border="1">
+        <div style="font-weight:bold; font-size:13px; margin:8px 0 2px;">【服薬・点眼・外用薬の情報】</div>
+        <table style="width:100%; border-collapse:collapse; margin-bottom:8px; font-size:13px;" border="1">
           <tr>
             <th style="width:25%; background:#f5f5f5; padding:4px 6px;">定期処方薬</th>
             <td style="padding:4px 6px; line-height:1.5;">${medLines}</td>
@@ -1387,8 +1419,8 @@ function printEmergencyResidentSheets() {
           </tr>
         </table>
 
-        <div style="font-weight:bold; font-size:12px; margin:8px 0 2px;">【ケアプラン（実施中の目標）】</div>
-        <div style="border:1px solid #333; padding:6px 8px; font-size:11px; line-height:1.5;">
+        <div style="font-weight:bold; font-size:13px; margin:8px 0 2px;">【ケアプラン（実施中の目標）】</div>
+        <div style="border:1px solid #333; padding:6px 8px; font-size:13px; line-height:1.5;">
           ${planGoalsText}
         </div>
       </div>
