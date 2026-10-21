@@ -1669,11 +1669,11 @@ function renderKasanCsvValidation(ym) {
         const v = item.validation;
         const isOk = v.valid;
         const statusBadge = isOk
-          ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:12px; padding:2px 6px;">出せる</span>`
-          : `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:12px; padding:2px 6px;">出せない</span>`;
+          ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; padding:2px 6px;">出せる</span>`
+          : `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:2px 6px;">出せない</span>`;
         const missingText = isOk
-          ? `<span style="color:var(--pine); font-size:12px;">必要項目が揃っています</span>`
-          : `<span style="color:var(--alert); font-size:12px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
+          ? `<span style="color:var(--pine); font-size:13px;">必要項目が揃っています</span>`
+          : `<span style="color:var(--alert); font-size:13px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
 
         return `
           <tr>
@@ -1755,8 +1755,8 @@ function generateKasanCsvFile() {
     const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
 
     const totalUnits = calc.totalUnits;
-    const cost100 = Math.floor(totalUnits * regionObj.rate);
-    const hokenDemand = Math.floor(cost100 * (benefitRateInt / 100));
+    const cost100 = Math.floor(totalUnits * unitPriceInt / 100); // [Claude修正] 小数のかけ算だと誤差で1円少なくなることがあるので、整数で計算する
+    const hokenDemand = Math.floor(cost100 * benefitRateInt / 100);
     const userBurden = cost100 - hokenDemand;
 
     grandTotalUnits += totalUnits;
@@ -1932,16 +1932,10 @@ function generateKasanCsvFile() {
     content: endLine
   });
 
-  const fullCsvText = lines.join("
-
-") + "
-
-";
+  const fullCsvText = lines.join("\r\n") + "\r\n"; // [Claude修正] 改行の文字が生のまま入って、ファイル全体が読み込めなくなっていた
 
   // 全角文字チェック（半角英数字・カンマ・CRLF以外が含まれていないか機械的検証）
-  const nonAsciiMatch = fullCsvText.match(/[^ -~
-
-,]/);
+  const nonAsciiMatch = fullCsvText.match(/[^\x20-\x7E\r\n,]/); // [Claude修正] 同上
   if (nonAsciiMatch) {
     alert(`ファイル内に半角英数字・記号以外の文字が含まれています: ${nonAsciiMatch[0]}`);
     return;
@@ -1978,8 +1972,8 @@ function generateKasanCsvFile() {
     tbody.innerHTML = previewRows.map(pr => `
       <tr>
         <td style="text-align:right; font-family:monospace; color:var(--ink-2); white-space:nowrap;">${pr.lineNo}</td>
-        <td style="font-weight:bold; white-space:nowrap; font-size:12px; color:var(--pine-dark);">${pr.type}</td>
-        <td style="font-family:monospace; font-size:12px; word-break:break-all;">${escapeHtml(pr.content)}</td>
+        <td style="font-weight:bold; white-space:nowrap; font-size:13px; color:var(--pine-dark);">${pr.type}</td>
+        <td style="font-family:monospace; font-size:13px; word-break:break-all;">${escapeHtml(pr.content)}</td>
       </tr>
     `).join("");
   }
