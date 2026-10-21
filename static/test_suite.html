@@ -718,6 +718,54 @@
       assert(typeof openEditCareRecordModal === "function" && typeof updateCareRecord === "function" && typeof deleteCareRecord === "function", "Test 95: 介護記録の個別編集・更新・削除関数が存在すること");
       assert(db.data.night_turn_templates && db.data.night_turn_templates["安眠中"] && db.data.night_turn_templates["左側臥位"], "Test 96: 夜間巡視・体位変換の定型文テンプレートが正常保持されていること");
 
+
+      // 34. 加算・減算 第2段階後半（処遇改善加算・夜減・定員超過・人員基準欠如）テスト
+      // Test 97: 処遇改善計算（742単位・率21/1000で16単位（四捨五入））
+      assert(cpComputeShoguUnits(742, 21) === 16, "Test 97: 処遇改善加算: 742単位・率21/1000で16単位（四捨五入）になること");
+
+      // Test 98: 処遇改善計算（742単位・率210/1000で156単位）
+      assert(cpComputeShoguUnits(742, 210) === 156, "Test 98: 処遇改善加算: 742単位・率210/1000で156単位になること");
+
+      // Test 99: 処遇改善の区分とコードの存在
+      assert(CP_KASAN_SHOGU_DEFS["1_a"].code === "6108" && CP_KASAN_SHOGU_DEFS["1_a"].rate === 210, "Test 99: 処遇改善（Ⅰ）イ（コード6108、210/1000）の定義が存在すること");
+      assert(CP_KASAN_SHOGU_DEFS["4"].code === "6380" && CP_KASAN_SHOGU_DEFS["4"].rate === 149, "Test 100: 処遇改善（Ⅳ）（コード6380、149/1000）の定義が存在すること");
+
+      // Test 101: 減算基本サービスコードの整合性
+      assert(CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen["要介護1"].code === "1113" && CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen["要介護1"].units === 742, "Test 101: （Ⅰ）夜減・要介護1がコード1113・742単位であること");
+      assert(CP_KASAN_REDUCED_BASIC_CODES.unit1.cho["要介護1"].code === "8001" && CP_KASAN_REDUCED_BASIC_CODES.unit1.cho["要介護1"].units === 536, "Test 102: （Ⅰ）超過・要介護1がコード8001・536単位であること");
+      assert(CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen_cho["要介護1"].code === "8003" && CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen_cho["要介護1"].units === 519, "Test 103: （Ⅰ）夜減・超過・要介護1がコード8003・519単位であること");
+      assert(CP_KASAN_REDUCED_BASIC_CODES.unit1.ketsu["要介護1"].code === "9001" && CP_KASAN_REDUCED_BASIC_CODES.unit1.ketsu["要介護1"].units === 536, "Test 104: （Ⅰ）人員欠如・要介護1がコード9001・536単位であること");
+      assert(CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen_ketsu["要介護1"].code === "9003" && CP_KASAN_REDUCED_BASIC_CODES.unit1.yagen_ketsu["要介護1"].units === 519, "Test 105: （Ⅰ）夜減・欠如・要介護1がコード9003・519単位であること");
+
+      // Test 106: 減算判定ロジック（定員超過と人員基準欠如の重なりブロック判定）
+      if (!db.data.kasan_settings) db.data.kasan_settings = {};
+      const origKasanSettings = JSON.parse(JSON.stringify(db.data.kasan_settings));
+      db.data.kasan_settings.capacity = 10;
+      db.data.kasan_settings.capacity_excess = {
+        "2026-08": { confirmed: true, avg_residents: 12, capacity: 10, is_disaster_grace: false, resolved_ym: "" }
+      };
+      db.data.kasan_settings.staff_shortage = [
+        { id: "test_ss", type: "care_over_10", start_ym: "2026-08", resolved_ym: "", is_waiver: false }
+      ];
+      const testConflict = cpGetActiveReductions("2026-09");
+      assert(testConflict.has_cho === true && testConflict.has_ketsu === true && testConflict.conflict === true, "Test 106: 定員超過と人員基準欠如の同時発生でconflictがtrueになること");
+
+      // Test 107: 定員超過・人員欠如の月に対象4体制加算（夜間支援、サービス提供、口腔、栄養）が除外されること
+      const dummyRes = { id: 9999, name: "テスト利用者", care_level: "要介護1", admission_date: "2026-01-01", status: "入居中" };
+      db.data.kasan_settings.taisei_items = {
+        night_support: { option_key: "1", notified_date: "2026-01-01" },
+        service_supply: { option_key: "1", notified_date: "2026-01-01" },
+        oral: { option_key: "1", notified_date: "2026-01-01" },
+        nutrition: { option_key: "1", notified_date: "2026-01-01" }
+      };
+      const dummyCalc = cpComputeMonthlyKasan(dummyRes, "2026-09");
+      const hasExcludedNote = dummyCalc.items.some(it => it.note && it.note.includes("定員超過・人員欠如の月のため算定対象外"));
+      const activeTaiseiUnits = dummyCalc.items.filter(it => ["6161", "6099", "6122", "6200"].includes(it.code)).reduce((s, it) => s + it.subtotal, 0);
+      assert(hasExcludedNote && activeTaiseiUnits === 0, "Test 107: 定員超過・人員欠如の月に対象4体制加算が算定除外（単位数0）されること");
+
+      // 設定を復元
+      db.data.kasan_settings = origKasanSettings;
+
       // 33. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
