@@ -390,6 +390,138 @@ function cpAddMonths(ym, count) {
   return res;
 }
 
+// ==============================================================
+// 認知症の2つの加算の「対象者の割合」算定機能
+// 根拠: 厚生労働省「介護サービス関係Q&A集」施設サービス共通／認知症専門ケア加算（平成21年 Q&A vol.1 問114）
+// 「届出日の属する月の前３月の各月末時点の入所者又は利用者数の平均で算定する。」
+// ==============================================================
+
+function cpGetLastDateOfMonth(ym) {
+  if (!ym || typeof ym !== "string") return "";
+  const [yStr, mStr] = ym.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(y) || isNaN(m)) return "";
+  const lastDay = new Date(y, m, 0).getDate();
+  return `${y}-${String(m).padStart(2, "0")}-${String(lastDay).padStart(2, "0")}`;
+}
+
+function cpDementiaRatioForMonth(ym) {
+  if (!ym || typeof ym !== "string") {
+    return {
+      ym: "",
+      lastDate: "",
+      totalCount: 0,
+      rank3Count: 0,
+      rank2Count: 0,
+      unregisteredCount: 0,
+      hospitalizedCount: 0,
+      rank3Ratio: 0,
+      rank2Ratio: 0,
+      unregisteredResidentIds: []
+    };
+  }
+
+  const lastDate = cpGetLastDateOfMonth(ym);
+  const allResidents = (typeof db !== "undefined" && db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+
+  let totalCount = 0;
+  let rank3Count = 0;
+  let rank2Count = 0;
+  let unregisteredCount = 0;
+  let hospitalizedCount = 0;
+  const unregisteredResidentIds = [];
+
+  allResidents.forEach(r => {
+    if (!r) return;
+    const s = (typeof cpStatusOn === "function") ? cpStatusOn(r, lastDate) : (r.status || "在所");
+    // その月の末日に入居している人（「入居前」「退所」以外。入院中・外泊中も入居は続いているので数に入れる）
+    if (s === "入居前" || s === "退所") return;
+
+    totalCount++;
+    if (s === "入院中") {
+      hospitalizedCount++;
+    }
+
+    const assess = (typeof cpGetDementiaRankOn === "function") ? cpGetDementiaRankOn(r.id, lastDate) : null;
+    if (!assess || !assess.rank) {
+      // 未登録の人は「Ⅲ以上ではない」「Ⅱ以上ではない」として数える（推測で決めない）
+      unregisteredCount++;
+      unregisteredResidentIds.push(r.id);
+    } else {
+      const rank = String(assess.rank).trim();
+      // Ⅲ以上: Ⅲa・Ⅲb・Ⅳ・M
+      if (["Ⅲa", "Ⅲb", "Ⅳ", "M"].includes(rank)) {
+        rank3Count++;
+        rank2Count++;
+      } else if (["Ⅱa", "Ⅱb"].includes(rank)) {
+        // Ⅱ以上: Ⅱa・Ⅱb・Ⅲa・Ⅲb・Ⅳ・M
+        rank2Count++;
+      }
+    }
+  });
+
+  const rank3Ratio = totalCount > 0 ? (rank3Count / totalCount) : 0;
+  const rank2Ratio = totalCount > 0 ? (rank2Count / totalCount) : 0;
+
+  return {
+    ym,
+    lastDate,
+    totalCount,
+    rank3Count,
+    rank2Count,
+    unregisteredCount,
+    hospitalizedCount,
+    rank3Ratio,
+    rank2Ratio,
+    unregisteredResidentIds
+  };
+}
+
+function cpDementiaCareEligibility(ym) {
+  if (!ym || typeof ym !== "string") {
+    return {
+      ym: "",
+      months: [],
+      details: [],
+      avgRatio3: 0,
+      isEligible: false,
+      avgRatio2: 0,
+      totalUnregisteredResidents: 0
+    };
+  }
+
+  // ym の前3か月（例: 2026-10 なら 2026-07, 2026-08, 2026-09）
+  const m3 = cpAddMonthsBack(ym, 3);
+  const m2 = cpAddMonthsBack(ym, 2);
+  const m1 = cpAddMonthsBack(ym, 1);
+  const months = [m3, m2, m1];
+
+  const details = months.map(m => cpDementiaRatioForMonth(m));
+  const sumRatio3 = details.reduce((sum, d) => sum + d.rank3Ratio, 0);
+  const avgRatio3 = sumRatio3 / 3;
+  // 浮動小数点誤差を救済しつつ 1/2 以上かを判定（例: 1/2・2/3・1/3 の平均 1/2 で満たす）
+  const isEligible = (avgRatio3 + 1e-9) >= 0.5;
+
+  const sumRatio2 = details.reduce((sum, d) => sum + d.rank2Ratio, 0);
+  const avgRatio2 = sumRatio2 / 3;
+
+  const unregIdSet = new Set();
+  details.forEach(d => {
+    (d.unregisteredResidentIds || []).forEach(id => unregIdSet.add(id));
+  });
+
+  return {
+    ym,
+    months,
+    details,
+    avgRatio3,
+    isEligible,
+    avgRatio2,
+    totalUnregisteredResidents: unregIdSet.size
+  };
+}
+
 // 夜勤人員不足候補の判定
 function cpDetectNightShortageCandidate(yearMonth) {
   if (!yearMonth) return { shortageDays: [], count: 0, hasConsecutive2: false, consecutivePairs: [], isCandidate: false, standard: 1 };
@@ -1333,6 +1465,103 @@ function renderOfficeKasanTab() {
     `;
   }
 
+// 認知症の加算の対象者の割合（前3か月の各月末時点）の帯
+  const dementiaEligibility = cpDementiaCareEligibility(ym);
+  const isDementiaCareNotified = cpKasanIsNotified(settings.taisei_items && settings.taisei_items.dementia_care);
+
+  const dementiaMonthRowsHtml = dementiaEligibility.details.map(d => {
+    const r3Pct = d.totalCount > 0 ? (d.rank3Ratio * 100).toFixed(1) + "%" : "-";
+    const r2Pct = d.totalCount > 0 ? (d.rank2Ratio * 100).toFixed(1) + "%" : "-";
+    return `
+      <tr style="border-bottom:1px solid var(--line-2);">
+        <td style="padding:6px 10px; font-weight:bold; white-space:nowrap;">${escapeHtml(d.ym)} 末（${escapeHtml(d.lastDate)}）</td>
+        <td style="padding:6px 10px; text-align:right; white-space:nowrap;">${d.totalCount} 名</td>
+        <td style="padding:6px 10px; text-align:right; white-space:nowrap;"><strong>${d.rank3Count}</strong> 名 / ${d.totalCount} 名 (${r3Pct})</td>
+        <td style="padding:6px 10px; text-align:right; white-space:nowrap;"><strong>${d.rank2Count}</strong> 名 / ${d.totalCount} 名 (${r2Pct})</td>
+        <td style="padding:6px 10px; text-align:right; white-space:nowrap;">${d.hospitalizedCount > 0 ? `${d.hospitalizedCount} 名` : "0 名"}</td>
+        <td style="padding:6px 10px; text-align:right; white-space:nowrap;">${d.unregisteredCount > 0 ? `<span style="color:var(--alert); font-weight:bold;">${d.unregisteredCount} 名</span>` : "0 名"}</td>
+      </tr>
+    `;
+  }).join("");
+
+  const avg3Pct = (dementiaEligibility.avgRatio3 * 100).toFixed(1) + "%";
+  const avg2Pct = (dementiaEligibility.avgRatio2 * 100).toFixed(1) + "%";
+
+  let dementiaCareNoticeHtml = "";
+  if (isDementiaCareNotified) {
+    if (!dementiaEligibility.isEligible) {
+      dementiaCareNoticeHtml = `
+        <div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+          <strong>[警告] 認知症専門ケア加算</strong>: 対象者の割合が2分の1に届いていません（前3か月の各月末の平均: ${avg3Pct}）。※合計からは外していません（外すかどうかは市町村の判断のため、市町村に確かめてください）。
+        </div>
+      `;
+    } else {
+      dementiaCareNoticeHtml = `
+        <div style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+          <strong>[適合] 認知症専門ケア加算</strong>: 前3か月の各月末の平均割合は ${avg3Pct} で、基準（2分の1以上）を満たしています。
+        </div>
+      `;
+    }
+  }
+
+  const dementiaTeamNoticeHtml = `
+    <div style="background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line-2); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+      <strong>認知症チームケア推進加算（参考）</strong>: 前3か月の各月末の自立度Ⅱ以上の平均割合は ${avg2Pct} です。数え方の資料はまだ確かめていません（市町村に確かめてください）。
+    </div>
+  `;
+
+  let dementiaUnregisteredNoticeHtml = "";
+  if (dementiaEligibility.totalUnregisteredResidents > 0) {
+    dementiaUnregisteredNoticeHtml = `
+      <div style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--line-2); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+        <strong>[注意]</strong> 自立度が未登録の方が ${dementiaEligibility.totalUnregisteredResidents}名います（Ⅲ以上・Ⅱ以上に数えていません）。利用者のカルテ（利用者詳細の「認知症高齢者の日常生活自立度」）から登録できます。
+      </div>
+    `;
+  }
+
+  const dementiaRatioBandHtml = `
+    <div class="panel-card" style="margin-bottom:12px; padding:12px 14px; border:1px solid var(--line); border-radius:6px; background:var(--surface);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:8px;">
+        <div style="font-weight:bold; font-size:14px; color:var(--pine-dark);">
+          認知症の加算の対象者の割合（前3か月の各月末時点）
+        </div>
+        <div style="font-size:13px; color:var(--ink-3);">
+          確認する年月: <strong>${escapeHtml(ym)}</strong>（前3か月: ${escapeHtml(dementiaEligibility.months.join(", "))}）
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table style="width:100%; border-collapse:collapse; font-size:13px; min-width:620px;">
+          <thead>
+            <tr style="background:var(--pine-tint-2); border-bottom:1px solid var(--line);">
+              <th style="padding:6px 10px; text-align:left;">対象月（各月末時点）</th>
+              <th style="padding:6px 10px; text-align:right;">入居者総数</th>
+              <th style="padding:6px 10px; text-align:right;">自立度Ⅲ以上（割合）</th>
+              <th style="padding:6px 10px; text-align:right;">自立度Ⅱ以上（割合）</th>
+              <th style="padding:6px 10px; text-align:right;">うち入院中</th>
+              <th style="padding:6px 10px; text-align:right;">自立度未登録</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${dementiaMonthRowsHtml}
+          </tbody>
+          <tfoot>
+            <tr style="background:var(--pine-tint-2); font-weight:bold; border-top:1px solid var(--line);">
+              <td style="padding:6px 10px;">前3か月の各月末の平均</td>
+              <td style="padding:6px 10px; text-align:right;">-</td>
+              <td style="padding:6px 10px; text-align:right; color:var(--pine-dark); font-size:14px;">${avg3Pct}</td>
+              <td style="padding:6px 10px; text-align:right; color:var(--pine-dark); font-size:14px;">${avg2Pct}</td>
+              <td style="padding:6px 10px; text-align:right;">-</td>
+              <td style="padding:6px 10px; text-align:right;">${dementiaEligibility.totalUnregisteredResidents > 0 ? `<span style="color:var(--alert); font-weight:bold;">${dementiaEligibility.totalUnregisteredResidents}名</span>` : "0名"}</td>
+            </tr>
+          </tfoot>
+        </table>
+      </div>
+      ${dementiaCareNoticeHtml}
+      ${dementiaTeamNoticeHtml}
+      ${dementiaUnregisteredNoticeHtml}
+    </div>
+  `;
+
   // 対象利用者の集計（退所者でも当月在所日・入院日・死亡退所がある場合は表に出す）
   const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
   const monthlyResults = [];
@@ -1429,6 +1658,8 @@ function renderOfficeKasanTab() {
     </div>
 
     ${reductionAlertHtml}
+
+    ${dementiaRatioBandHtml}
 
     <p class="panel-note" style="margin:4px 0 12px; line-height:1.6;">
       ※月ごと・利用者ごとに算定対象となる加算・減算の目安です。基本の日数および金額は「目安」と表示しています。

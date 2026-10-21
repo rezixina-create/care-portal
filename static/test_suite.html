@@ -289,6 +289,7 @@
       <div id="dementiaHistResName"></div>
       <div id="dementiaHistoryListContainer"></div>
     </div>
+    <div id="tabOfficeKasan"></div>
   </div>
 
   <!-- [Claude整理 2026-10-19] app.js を js/ に分けた。順番を変えない -->
@@ -1041,6 +1042,94 @@
 
       // データの復元
       db.data.dementia_assessments = origDementia;
+
+      // 32c. [Antigravity実装 2026-10-22] 認知症専門ケア加算・チームケア推進加算の割合算定および確認表表示の検証
+      const origResidentsForKasan = JSON.parse(JSON.stringify(db.data.residents || []));
+      const origDementiaForKasan = JSON.parse(JSON.stringify(db.data.dementia_assessments || []));
+      const origKasanSettingsDementia = JSON.parse(JSON.stringify(db.data.kasan_settings || {}));
+
+      // Test 122: cpDementiaRatioForMonth - 各月末の在籍者判定（入院中含・退所者除外）および自立度Ⅲ以上・Ⅱ以上・未登録の正確な集計
+      db.data.residents = [
+        { id: 501, name: "在所者A", admission_date: "2026-01-01", status: "入居中" },
+        { id: 502, name: "在所者B", admission_date: "2026-01-01", status: "入居中" },
+        { id: 503, name: "入院者C", admission_date: "2026-01-01", status: "入院中", hospital_date: "2026-05-10" },
+        { id: 504, name: "退所者D", admission_date: "2026-01-01", status: "退所", discharge_date: "2026-05-20" },
+        { id: 505, name: "未登録者E", admission_date: "2026-01-01", status: "入居中" }
+      ];
+      db.data.dementia_assessments = [
+        { id: 601, resident_id: 501, rank: "Ⅲa", assessed_on: "2026-05-01", basis: "医師の判定", voided: false },
+        { id: 602, resident_id: 502, rank: "Ⅱa", assessed_on: "2026-05-01", basis: "主治医意見書", voided: false },
+        { id: 603, resident_id: 503, rank: "Ⅳ", assessed_on: "2026-05-01", basis: "医師の判定", voided: false },
+        { id: 604, resident_id: 504, rank: "Ⅲb", assessed_on: "2026-05-01", basis: "医師の判定", voided: false }
+      ];
+      const ratio5 = cpDementiaRatioForMonth("2026-05");
+      assert(ratio5.totalCount === 4 &&
+             ratio5.rank3Count === 2 &&
+             ratio5.rank2Count === 3 &&
+             ratio5.unregisteredCount === 1 &&
+             ratio5.hospitalizedCount === 1 &&
+             Math.abs(ratio5.rank3Ratio - 0.5) < 1e-6 &&
+             Math.abs(ratio5.rank2Ratio - 0.75) < 1e-6 &&
+             ratio5.unregisteredResidentIds.includes(505),
+             "Test 122: 各月末時点の在籍者判定（入院中含・退所者除外）および自立度Ⅲ以上・Ⅱ以上・未登録が正確に集計されること");
+
+      // Test 123: cpDementiaCareEligibility - 前3か月の平均算定および丸め誤差対策（1/2・2/3・1/3の平均がちょうど50%でisEligibleがtrue）
+      db.data.residents = [
+        { id: 701, name: "利用者X", admission_date: "2026-01-01", status: "入居中" },
+        { id: 702, name: "利用者Y", admission_date: "2026-01-01", status: "入居中" },
+        { id: 703, name: "利用者Z", admission_date: "2026-08-01", status: "入居中" }
+      ];
+      db.data.dementia_assessments = [
+        { id: 7001, resident_id: 701, rank: "Ⅲa", assessed_on: "2026-01-01", basis: "医師の判定", voided: false },
+        { id: 7002, resident_id: 702, rank: "自立", assessed_on: "2026-01-01", basis: "認定調査票", voided: false },
+        { id: 7003, resident_id: 703, rank: "Ⅲa", assessed_on: "2026-08-01", basis: "医師の判定", voided: false },
+        { id: 7004, resident_id: 703, rank: "Ⅱb", assessed_on: "2026-09-01", basis: "医師の判定", voided: false }
+      ];
+      const elig10Test = cpDementiaCareEligibility("2026-10");
+      assert(elig10Test.details.length === 3 &&
+             Math.abs(elig10Test.details[0].rank3Ratio - 0.5) < 1e-6 &&
+             Math.abs(elig10Test.details[1].rank3Ratio - (2/3)) < 1e-6 &&
+             Math.abs(elig10Test.details[2].rank3Ratio - (1/3)) < 1e-6 &&
+             Math.abs(elig10Test.avgRatio3 - 0.5) < 1e-6 &&
+             elig10Test.isEligible === true,
+             "Test 123: 前3か月の平均算定および丸め誤差対策（1/2・2/3・1/3の平均がちょうど50%でisEligibleがtrue）");
+
+      // Test 124: 確認表帯で届出あり＋割合不足時の警告表示、届出なし時の非表示、チームケア注記が正しく連動すること
+      const origSuiteSession = gState.session;
+      gState.session = { staffName: "木村 健一" };
+      db.data.kasan_settings = {
+        region_type: "1級地",
+        taisei_items: {
+          dementia_care: { option_key: "1", notified_date: "2026-01-01" },
+          dementia_team: { option_key: "none" }
+        },
+        gensan_items: {}
+      };
+      db.data.dementia_assessments.push({
+        id: 7005, resident_id: 701, rank: "Ⅱa", assessed_on: "2026-07-01", basis: "医師の判定", voided: false
+      });
+      gKasanSelectedMonth = "2026-10";
+      renderOfficeKasanTab();
+      const tabEl = document.getElementById("tabOfficeKasan");
+      const kasanHtml = tabEl ? tabEl.innerHTML : "";
+      const hasRatioTitle = kasanHtml.includes("認知症の加算の対象者の割合");
+      const hasCareWarning = kasanHtml.includes("対象者の割合が2分の1に届いていません");
+      const hasTeamNote = kasanHtml.includes("数え方の資料はまだ確かめていません（市町村に確かめてください）");
+
+      db.data.kasan_settings.taisei_items.dementia_care = { option_key: "none" };
+      renderOfficeKasanTab();
+      const kasanHtmlNoCare = tabEl ? tabEl.innerHTML : "";
+      const noCareWarning = !kasanHtmlNoCare.includes("対象者の割合が2分の1に届いていません");
+
+      assert(hasRatioTitle && hasCareWarning && hasTeamNote && noCareWarning,
+             "Test 124: 確認表帯で届出あり＋割合不足時の警告表示、届出なし時の非表示、チームケア注記が正しく連動すること");
+
+      // セッションおよびデータの復元
+      gState.session = origSuiteSession;
+      db.data.residents = origResidentsForKasan;
+      db.data.dementia_assessments = origDementiaForKasan;
+      db.data.kasan_settings = origKasanSettingsDementia;
+
 
       // 33. 総合結果判定
       log("====================================================");
