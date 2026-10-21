@@ -2739,3 +2739,18 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .cp-goal-need:last-child { border-bottom:none; }
 .cp-goal-need-title { font-weight:bold; color:var(--ink); }
 .cp-goal-kind { display:inline-block; min-width:2.6em; margin-right:6px; padding:0 4px; border:1px solid var(--line); border-radius:3px; font-size:13px; color:var(--ink-2); text-align:center; }
+
+
+/* [Antigravity追加 2026-10-21] 停電に備えた印刷シート（1利用者ごと1ページ、自然な改ページ、A4縦） */
+.emergency-print-sheet {
+  page-break-after: always;
+  break-after: page;
+  box-sizing: border-box;
+}
+
+@media print {
+  .emergency-print-sheet {
+    page-break-after: always;
+    break-after: page;
+  }
+}

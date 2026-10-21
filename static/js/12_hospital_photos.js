@@ -193,6 +193,17 @@ function submitHospitalModal() {
  return;
  }
 
+ const outings = (typeof cpGetOutings === "function") ? cpGetOutings(r) : (r.outings || []);
+ const outingOverlap = outings.find(o => {
+ if (!o || !o.start_date) return false;
+ const oEnd = o.end_date || "9999-12-31";
+ return admDate <= oEnd && o.start_date <= effEnd;
+ });
+ if (outingOverlap) {
+ alert(`外泊の期間（${outingOverlap.start_date}〜${outingOverlap.end_date || "外泊中"}）と入院の期間が重複しています。重複する登録はできません。日付を確かめてください。`);
+ return;
+ }
+
  const who = cpLoginStaffName();
  const nowStr = toLocalDateTimeStr(new Date());
 
@@ -316,6 +327,17 @@ function submitHospitalDischarge() {
  alert(`退院日（${disDate}）が入院日（${target.admission_date}）より前になっています。入院日以降の日付を入れてください。`);
  return;
  }
+
+ const outings = (typeof cpGetOutings === "function") ? cpGetOutings(r) : (r.outings || []);
+ const outingOverlap = outings.find(o => {
+ if (!o || !o.start_date) return false;
+ const oEnd = o.end_date || "9999-12-31";
+ return (target.admission_date || "") <= oEnd && o.start_date <= disDate;
+ });
+ if (outingOverlap) {
+ alert(`外泊の期間（${outingOverlap.start_date}〜${outingOverlap.end_date || "外泊中"}）と退院日を含む入院期間が重複しています。日付を確かめてください。`);
+ return;
+ }
  const who = cpLoginStaffName();
  const nowStr = toLocalDateTimeStr(new Date());
  target.discharge_date = disDate;
@@ -351,42 +373,94 @@ function submitHospitalDischarge() {
 }
 
 function updateResidentStatus(resId, status) {
- const r = gState.residents.find(x => x.id === resId);
- if (r && cpIsDischarged(r)) { alert("退所した方を戻すときは「退所を取り消す」から行ってください。"); renderResidentDetail(); return; }
- if (!r) return;
- // [Antigravity実装 2026-10-19] 入院中への切り替え・入院中からの復帰は、入院日・退院日を残すため専用モーダルを開く
- if (status === "入院中") {
- const ongoing = cpGetHospitalizations(r).find(h => !h.discharge_date);
- if (ongoing) {
- alert("すでに入院中です。");
- renderResidentDetail();
- return;
- }
- renderResidentDetail();
- openHospitalModal(r.id, null);
- return;
- }
- if (r.status === "入院中" && status === "在所") {
- const ongoing = cpGetHospitalizations(r).find(h => !h.discharge_date);
- if (ongoing) {
- renderResidentDetail();
- openHospitalDischargeModal(r.id, ongoing.id);
- return;
- }
- }
- if (r.status === "入院中" && status === "外泊中") {
- alert("入院中の方を外泊中に変えるときは、先に退院の手続き（退院日の入力）を行ってください。");
- renderResidentDetail();
- return;
- }
- r.status = status;
- db.save();
- renderResidentsStrip();
- initGlobalTimeSync();
- renderResidentDetail();
- if (gState.activeCareTab === "vitals") renderVitalsTable();
- if (gState.activeCareTab === "meal") renderMealsTable();
- alert(`在籍ステータスを「${status}」に更新しました`);
+  const r = gState.residents.find(x => x.id === resId);
+  if (r && cpIsDischarged(r)) { alert("退所者を戻すときは「退所取消」を行ってください。"); renderResidentDetail(); return; }
+  if (!r) return;
+
+  // 入院中への切り替え
+  if (status === "入院中") {
+    const ongoingHosp = cpGetHospitalizations(r).find(h => !h.discharge_date);
+    if (ongoingHosp) {
+      alert("既に入院中です。");
+      renderResidentDetail();
+      return;
+    }
+    const ongoingOuting = (typeof cpGetOutings === "function" ? cpGetOutings(r) : []).find(o => !o.end_date);
+    if (ongoingOuting || r.status === "外泊中") {
+      alert("外泊中の方は入院に変更できません。先に帰所（在所へ戻る）手続きを行ってください。");
+      renderResidentDetail();
+      return;
+    }
+    renderResidentDetail();
+    openHospitalModal(r.id, null);
+    return;
+  }
+
+  // 入院中から在所へ戻す
+  if (r.status === "入院中" && status === "在所") {
+    const ongoing = cpGetHospitalizations(r).find(h => !h.discharge_date);
+    if (ongoing) {
+      renderResidentDetail();
+      openHospitalDischargeModal(r.id, ongoing.id);
+      return;
+    }
+  }
+
+  // 入院中から外泊中への直接変更
+  if (r.status === "入院中" && status === "外泊中") {
+    alert("入院中の方は外泊に変更できません。先に退院の手続き（退院日の入力）を行ってください。");
+    renderResidentDetail();
+    return;
+  }
+
+  // 外泊中への切り替え
+  if (status === "外泊中") {
+    const ongoingHosp = cpGetHospitalizations(r).find(h => !h.discharge_date);
+    if (ongoingHosp || r.status === "入院中") {
+      alert("入院中の方は外泊に変更できません。先に退院の手続き（退院日の入力）を行ってください。");
+      renderResidentDetail();
+      return;
+    }
+    const ongoingOuting = (typeof cpGetOutings === "function" ? cpGetOutings(r) : []).find(o => !o.end_date);
+    if (ongoingOuting) {
+      alert("既に外泊中です。");
+      renderResidentDetail();
+      return;
+    }
+    renderResidentDetail();
+    openOutingModal(r.id, null);
+    return;
+  }
+
+  // 外泊中から在所へ戻す
+  if (r.status === "外泊中" && status === "在所") {
+    const ongoing = (typeof cpGetOutings === "function" ? cpGetOutings(r) : []).find(o => !o.end_date);
+    if (ongoing) {
+      renderResidentDetail();
+      openOutingReturnModal(r.id, ongoing.id);
+      return;
+    }
+    // 外泊レコードがない場合は出かけた日の登録へ
+    renderResidentDetail();
+    openOutingModal(r.id, null);
+    return;
+  }
+
+  // 外泊中から入院中への直接変更
+  if (r.status === "外泊中" && status === "入院中") {
+    alert("外泊中の方は入院に変更できません。先に帰所（在所へ戻る）手続きを行ってください。");
+    renderResidentDetail();
+    return;
+  }
+
+  r.status = status;
+  db.save();
+  renderResidentsStrip();
+  initGlobalTimeSync();
+  renderResidentDetail();
+  if (gState.activeCareTab === "vitals") renderVitalsTable();
+  if (gState.activeCareTab === "meal") renderMealsTable();
+  alert(`在籍ステータスを「${status}」に更新しました`);
 }
 
 function renderCareExpiryNotes() {
@@ -799,3 +873,359 @@ function openLightbox(src, caption) {
  modal.style.display = "flex";
 }
 
+
+
+// ==========================================
+// [Antigravity追加 2026-10-21] 外泊の歴（r.outings）の管理・カルテ表示・帰所手続き
+// ==========================================
+function cpGetOutings(r) {
+  if (!r || typeof r !== "object") return [];
+  if (!Array.isArray(r.outings)) return [];
+  return r.outings.filter(o => o && !o.voided);
+}
+
+function cpSyncResidentOutingFields(r) {
+  if (!r) return;
+  const list = cpGetOutings(r).slice().sort((a, b) => String(a.start_date || "").localeCompare(String(b.start_date || "")));
+  const ongoing = list.find(o => !o.end_date);
+  if (ongoing) {
+    if (!cpIsDischarged(r) && r.status !== "入院中") r.status = "外泊中";
+  } else {
+    if (r.status === "外泊中" && list.length > 0) r.status = "在所";
+  }
+}
+
+function cpOutingHistorySectionHtml(r) {
+  if (!r) return "";
+  const list = cpGetOutings(r).slice().sort((a, b) => String(b.start_date || "").localeCompare(String(a.start_date || "")));
+  const ongoing = list.find(o => !o.end_date);
+  const isStatusOuting = r.status === "外泊中";
+  const missingStartDate = isStatusOuting && !ongoing;
+
+  let summaryText = "";
+  if (ongoing) {
+    summaryText = `現在外泊中（${escapeHtml(ongoing.start_date)}〜 ・ ${escapeHtml(ongoing.destination || "行き先未登録")}）`;
+  } else if (missingStartDate) {
+    summaryText = `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-weight:bold;">外泊の始まりの日が未登録</span>`;
+  } else if (list.length > 0) {
+    summaryText = `過去 ${list.length}件`;
+  } else {
+    summaryText = "記録なし";
+  }
+
+  const rowsHtml = (list.length === 0 && !missingStartDate)
+    ? `<div style="font-size:13px; color:var(--ink-3); padding:4px 0;">外泊の記録はありません。</div>`
+    : (missingStartDate
+      ? `<div style="padding:10px; background:var(--alert-tint); border:1px solid var(--alert); border-radius:6px; margin-bottom:8px; font-size:13px; color:var(--alert); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+           <div><strong>外泊の始まりの日が未登録です。</strong> 現在ステータスが「外泊中」ですが出かけた日の記録がありません。出かけた日と行き先を登録してください。</div>
+           <button type="button" class="btn btn-primary" style="font-size:13px; padding:3px 10px;" onclick="event.preventDefault(); event.stopPropagation(); openOutingModal(${r.id}, null); return false;">出かけた日を登録する</button>
+         </div>`
+      : "") +
+      (list.length > 0
+        ? `<div class="cp-hosp-list">` + list.map(o => {
+            const isOngoing = !o.end_date;
+            const periodStr = `${escapeHtml(o.start_date || "未登録")} 〜 ${isOngoing ? "<strong>外泊中（継続）</strong>" : escapeHtml(o.end_date)}`;
+            const histCount = (o.edit_history || []).length;
+            return `<div class="cp-hosp-item ${isOngoing ? "is-ongoing" : ""}">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:6px;">
+                <div>
+                  <div style="font-size:14px;">
+                    <span class="badge" style="background:${isOngoing ? "var(--caution)" : "var(--pine-dark)"}; color:#fff; font-size:13px; padding:2px 8px; margin-right:6px;">${isOngoing ? "外泊中" : "帰所済"}</span>
+                    <span>期間: ${periodStr}</span>
+                  </div>
+                  <div style="font-size:13px; margin-top:4px; color:var(--ink);">
+                    <strong>行き先:</strong> ${escapeHtml(o.destination || "未登録")}
+                    ${o.reason ? ` / <strong>理由:</strong> ${escapeHtml(o.reason)}` : ""}
+                  </div>
+                  ${(o.created_by || histCount) ? `<div style="font-size:12px; color:var(--ink-3); margin-top:2px;">${o.created_by ? "記録: " + escapeHtml(o.created_by) + (o.created_at ? ` (${escapeHtml(o.created_at)})` : "") : ""}${o.returned_by ? " / 帰所登録: " + escapeHtml(o.returned_by) + (o.returned_at ? ` (${escapeHtml(o.returned_at)})` : "") : ""}${histCount ? ` / 訂正 ${histCount}回` : ""}</div>` : ""}
+                  ${histCount > 0 ? `
+                    <div style="font-size:11px; color:var(--ink-3); margin-top:4px; padding-left:8px; border-left:2px solid var(--line-2);">
+                      ${o.edit_history.map(h => `<div>${escapeHtml(h.at || "")} ${escapeHtml(h.by || "")}: 理由[${escapeHtml(h.reason || "")}] ${escapeHtml(h.detail || "")}</div>`).join("")}
+                    </div>
+                  ` : ""}
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                  ${isOngoing && !cpIsDischarged(r) ? `<button type="button" class="btn btn-primary" style="font-size:13px; padding:3px 10px;" onclick="event.preventDefault(); event.stopPropagation(); openOutingReturnModal(${r.id}, ${o.id}); return false;">帰所（在所へ戻る）</button>` : ""}
+                  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="event.preventDefault(); event.stopPropagation(); openOutingModal(${r.id}, ${o.id}); return false;">内容・期間を直す</button>
+                </div>
+              </div>
+            </div>`;
+          }).join("") + `</div>`
+        : "");
+
+  return `<details class="care-accordion" ${ongoing || missingStartDate || list.length ? "open" : ""} style="margin-bottom:10px; border:1px solid var(--line); border-radius:8px; background:var(--surface); overflow:hidden;">
+    <summary style="padding:10px 14px; background:var(--ground); font-weight:bold; cursor:pointer; font-size:13px; color:var(--pine-dark); border-bottom:1px solid var(--line); display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+      <span>外泊の歴（期間の一覧） <span style="font-weight:normal; color:var(--ink-2); margin-left:6px;">${summaryText}</span></span>
+      <div style="display:flex; align-items:center; gap:6px;">
+        ${!ongoing && !cpIsDischarged(r) && r.status !== "入院中" ? `<button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:13px;" onclick="event.preventDefault(); event.stopPropagation(); openOutingModal(${r.id}, null); return false;">+ 外泊の登録</button>` : ""}
+        <span style="font-size:13px; color:var(--ink-3);">(開閉)</span>
+      </div>
+    </summary>
+    <div style="padding:12px;">
+      ${rowsHtml}
+    </div>
+  </details>`;
+}
+
+function openOutingModal(resId, outingId) {
+  const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || gState.selectedResidentId));
+  if (!r) return;
+  if (cpIsDischarged(r) && !outingId) {
+    alert("退所者に新しい外泊は登録できません。");
+    return;
+  }
+  if (r.status === "入院中" && !outingId) {
+    alert("入院中の方は外泊を登録できません。先に退院手続きを行ってください。");
+    return;
+  }
+
+  const list = cpGetOutings(r);
+  const editing = (outingId !== null && outingId !== undefined && outingId !== "")
+    ? list.find(o => Number(o.id) === Number(outingId))
+    : null;
+
+  if (!editing) {
+    const ongoing = list.find(o => !o.end_date);
+    if (ongoing) {
+      alert("既に外泊中の記録があります。新しい外泊を登録する前に帰所登録を行ってください。");
+      renderResidentDetail();
+      return;
+    }
+  }
+
+  document.getElementById("outingResidentId").value = String(r.id);
+  document.getElementById("outingRecordId").value = editing ? String(editing.id) : "";
+  const titleEl = document.getElementById("outingModalTitle");
+  if (titleEl) titleEl.textContent = editing ? `外泊の期間・内容の訂正（${r.name} 様）` : `外泊の登録（${r.name} 様）`;
+
+  const today = toLocalDateStr(new Date());
+  document.getElementById("outingStartDate").value = editing ? (editing.start_date || "") : today;
+  document.getElementById("outingDestination").value = editing ? (editing.destination || "") : "";
+  document.getElementById("outingReason").value = editing ? (editing.reason || "") : "";
+
+  const endWrap = document.getElementById("outingEndDateWrap");
+  const endEl = document.getElementById("outingEndDate");
+  if (endWrap) endWrap.style.display = editing ? "block" : "none";
+  if (endEl) endEl.value = editing ? (editing.end_date || "") : "";
+
+  const reasonWrap = document.getElementById("outingEditReasonWrap");
+  const reasonEl = document.getElementById("outingEditReason");
+  if (reasonWrap) reasonWrap.style.display = editing ? "block" : "none";
+  if (reasonEl) reasonEl.value = "";
+
+  openModal("outingModal");
+}
+
+function submitOutingModal() {
+  const resId = Number((document.getElementById("outingResidentId") || {}).value);
+  const recIdRaw = ((document.getElementById("outingRecordId") || {}).value || "").trim();
+  const editingId = recIdRaw ? Number(recIdRaw) : null;
+  const r = (gState.residents || []).find(x => Number(x.id) === resId);
+  if (!r) return;
+
+  const startDate = ((document.getElementById("outingStartDate") || {}).value || "").trim();
+  const endDate = editingId !== null ? ((document.getElementById("outingEndDate") || {}).value || "").trim() : "";
+  const destination = ((document.getElementById("outingDestination") || {}).value || "").trim();
+  const reason = ((document.getElementById("outingReason") || {}).value || "").trim();
+  const editReason = ((document.getElementById("outingEditReason") || {}).value || "").trim();
+  const today = toLocalDateStr(new Date());
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(startDate)) {
+    alert("出かけた日を入力してください。");
+    return;
+  }
+  if (startDate > today) {
+    alert("出かけた日に未来の日付は指定できません。");
+    return;
+  }
+  if (r.admission_date && startDate < r.admission_date) {
+    alert(`出かけた日が施設の入居日（${r.admission_date}）より前になっています。`);
+    return;
+  }
+  if (endDate) {
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(endDate)) {
+      alert("戻った日を正しい日付（YYYY-MM-DD）で入力してください。");
+      return;
+    }
+    if (endDate > today) {
+      alert("戻った日に未来の日付は指定できません。");
+      return;
+    }
+    if (endDate < startDate) {
+      alert("戻った日は出かけた日より前にできません。");
+      return;
+    }
+  }
+  if (!destination) {
+    alert("行き先を入力してください。");
+    return;
+  }
+
+  if (editingId !== null && !editReason) {
+    alert("訂正理由を入力してください（必須です）。");
+    return;
+  }
+
+  // 1. 他の外泊との重複チェック
+  const curEnd = endDate || "9999-12-31";
+  const otherOutings = (r.outings || []).filter(o => o && !o.voided && (editingId === null || Number(o.id) !== editingId));
+  const outingOverlap = otherOutings.find(o => {
+    const oEnd = o.end_date || "9999-12-31";
+    return startDate <= oEnd && curEnd >= o.start_date;
+  });
+  if (outingOverlap) {
+    alert(`他の外泊期間（${outingOverlap.start_date}〜${outingOverlap.end_date || "外泊中"}）と期間が重複しています。日付を確かめてください。`);
+    return;
+  }
+
+  // 2. 入院期間との重複チェック
+  const hospitalizations = (typeof cpGetHospitalizations === "function") ? cpGetHospitalizations(r) : (r.hospitalizations || []);
+  const hospOverlap = hospitalizations.find(h => {
+    if (!h || !h.admission_date) return false;
+    const hEnd = h.discharge_date || "9999-12-31";
+    return startDate <= hEnd && curEnd >= h.admission_date;
+  });
+  if (hospOverlap) {
+    alert(`入院の期間（${hospOverlap.admission_date}〜${hospOverlap.discharge_date || "入院中"}）と外泊の期間が重複しています。重複する登録はできません。日付を確かめてください。`);
+    return;
+  }
+
+  const who = cpLoginStaffName();
+  const nowStr = toLocalDateTimeStr(new Date());
+  if (!Array.isArray(r.outings)) r.outings = [];
+
+  if (editingId !== null) {
+    const target = r.outings.find(o => o && Number(o.id) === editingId);
+    if (!target) return;
+    const oldRec = Object.assign({}, target);
+    if (!Array.isArray(target.edit_history)) target.edit_history = [];
+    target.edit_history.push({
+      at: nowStr,
+      by: who,
+      reason: editReason,
+      detail: `出かけた日: ${oldRec.start_date}→${startDate}, 戻った日: ${oldRec.end_date || "継続"}→${endDate || "継続"}, 行き先: ${oldRec.destination}→${destination}`
+    });
+    target.start_date = startDate;
+    target.end_date = endDate;
+    target.destination = destination;
+    target.reason = reason;
+    target.updated_by = who;
+    target.updated_at = nowStr;
+  } else {
+    let newId = Date.now();
+    while (r.outings.some(o => o && Number(o.id) === newId)) newId++;
+    r.outings.push({
+      id: newId,
+      resident_id: r.id,
+      start_date: startDate,
+      end_date: "",
+      destination: destination,
+      reason: reason,
+      created_by: who,
+      created_at: nowStr
+    });
+  }
+
+  cpSyncResidentOutingFields(r);
+  db.save();
+  closeModal("outingModal");
+  renderResidentsStrip();
+  initGlobalTimeSync();
+  renderResidentDetail();
+  if (typeof renderOfficeKasanTab === "function" && gState.activeOfficeTab === "kasan") renderOfficeKasanTab();
+  alert(editingId !== null ? "外泊の記録を訂正しました。" : "外泊を登録しステータスを「外泊中」に更新しました。");
+}
+
+function openOutingReturnModal(resId, outingId) {
+  const r = (gState.residents || []).find(x => Number(x.id) === Number(resId || gState.selectedResidentId));
+  if (!r) return;
+  const list = cpGetOutings(r);
+  const target = outingId ? list.find(o => Number(o.id) === Number(outingId)) : list.find(o => !o.end_date);
+  if (!target) {
+    alert("対象の外泊記録が見つかりません。");
+    return;
+  }
+
+  document.getElementById("outingReturnResidentId").value = String(r.id);
+  document.getElementById("outingReturnRecordId").value = String(target.id);
+  const startDisp = document.getElementById("outingReturnStartDateDisp");
+  if (startDisp) startDisp.textContent = target.start_date || "-";
+
+  const today = toLocalDateStr(new Date());
+  const returnInput = document.getElementById("outingReturnDate");
+  if (returnInput) returnInput.value = (today >= (target.start_date || "")) ? today : (target.start_date || today);
+
+  openModal("outingReturnModal");
+}
+
+function submitOutingReturnModal() {
+  const resId = Number((document.getElementById("outingReturnResidentId") || {}).value);
+  const recId = Number((document.getElementById("outingReturnRecordId") || {}).value);
+  const r = (gState.residents || []).find(x => Number(x.id) === resId);
+  if (!r) return;
+  const target = (r.outings || []).find(o => o && Number(o.id) === recId);
+  if (!target) return;
+
+  const returnDate = ((document.getElementById("outingReturnDate") || {}).value || "").trim();
+  const today = toLocalDateStr(new Date());
+
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(returnDate)) {
+    alert("戻った日を入力してください。");
+    return;
+  }
+  if (returnDate > today) {
+    alert("戻った日に未来の日付は指定できません。");
+    return;
+  }
+  if (target.start_date && returnDate < target.start_date) {
+    alert(`戻った日が出かけた日（${target.start_date}）より前になっています。`);
+    return;
+  }
+
+  // 他の外泊との重複チェック
+  const otherOutings = (r.outings || []).filter(o => o && !o.voided && Number(o.id) !== Number(target.id));
+  const outingOverlap = otherOutings.find(o => {
+    const oEnd = o.end_date || "9999-12-31";
+    return target.start_date <= oEnd && returnDate >= o.start_date;
+  });
+  if (outingOverlap) {
+    alert(`他の外泊期間（${outingOverlap.start_date}〜${outingOverlap.end_date || "外泊中"}）と期間が重複しています。日付を確かめてください。`);
+    return;
+  }
+
+  // 入院との重複チェック
+  const hospitalizations = (typeof cpGetHospitalizations === "function") ? cpGetHospitalizations(r) : (r.hospitalizations || []);
+  const hospOverlap = hospitalizations.find(h => {
+    if (!h || !h.admission_date) return false;
+    const hEnd = h.discharge_date || "9999-12-31";
+    return target.start_date <= hEnd && returnDate >= h.admission_date;
+  });
+  if (hospOverlap) {
+    alert(`入院の期間（${hospOverlap.admission_date}〜${hospOverlap.discharge_date || "入院中"}）と外泊の期間が重複しています。重複する登録はできません。日付を確かめてください。`);
+    return;
+  }
+
+  const who = cpLoginStaffName();
+  const nowStr = toLocalDateTimeStr(new Date());
+
+  target.end_date = returnDate;
+  target.returned_by = who;
+  target.returned_at = nowStr;
+
+  cpSyncResidentOutingFields(r);
+  db.save();
+  closeModal("outingReturnModal");
+  renderResidentsStrip();
+  initGlobalTimeSync();
+  renderResidentDetail();
+  if (typeof renderOfficeKasanTab === "function" && gState.activeOfficeTab === "kasan") renderOfficeKasanTab();
+  alert(`帰所日（${returnDate}）を登録し、在所ステータスに戻しました。`);
+}
+
+window.cpGetOutings = cpGetOutings;
+window.cpSyncResidentOutingFields = cpSyncResidentOutingFields;
+window.cpOutingHistorySectionHtml = cpOutingHistorySectionHtml;
+window.openOutingModal = openOutingModal;
+window.submitOutingModal = submitOutingModal;
+window.openOutingReturnModal = openOutingReturnModal;
+window.submitOutingReturnModal = submitOutingReturnModal;

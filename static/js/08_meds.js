@@ -76,6 +76,18 @@ function cpHospitalizationOn(r, dateStr) {
  return null;
 }
 
+function cpOutingOn(r, dateStr) {
+ if (!r) return null;
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
+ const list = (typeof cpGetOutings === "function") ? cpGetOutings(r) : (Array.isArray(r.outings) ? r.outings.filter(o => o && !o.voided) : []);
+ for (let i = list.length - 1; i >= 0; i--) {
+ const o = list[i];
+ if (!o || !o.start_date) continue;
+ if (d >= o.start_date && (!o.end_date || d <= o.end_date)) return o;
+ }
+ return null;
+}
+
 function cpStatusOn(r, dateStr) {
  if (!r) return "";
  const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
@@ -83,6 +95,8 @@ function cpStatusOn(r, dateStr) {
  if (r.status === "退所" && r.discharge_date && d > r.discharge_date) return "退所";
  const hosp = cpHospitalizationOn(r, d);
  if (hosp) return "入院中";
+ const outing = cpOutingOn(r, d);
+ if (outing) return "外泊中";
  const hasHospList = cpGetHospitalizations(r).length > 0;
  if (r.status === "退所") {
  if (r.discharge_date && d <= r.discharge_date) {
@@ -104,7 +118,7 @@ function cpRequireSelect(id, label) {
  if (el && !el.value) { alert(`${label}を選んでください。`); try { el.focus(); } catch (e) {} return false; }
  return true;
 }
-function cpResidentIsHere(r, dateStr) { const s = cpStatusOn(r, dateStr); return !!r && s !== "入院中" && s !== "退所" && s !== "入居前"; }
+function cpResidentIsHere(r, dateStr) { const s = cpStatusOn(r, dateStr); return !!r && s !== "入院中" && s !== "退所" && s !== "入居前" && s !== "外泊中"; }
 function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
 function cpMinutes(hhmm) { const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }
 

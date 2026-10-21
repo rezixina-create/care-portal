@@ -4,7 +4,8 @@
  <meta charset="UTF-8">
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
- <link rel="stylesheet" href="style.css?v=20261019_e4">
+ <link rel="icon" href="data:,">
+	<link rel="stylesheet" href="style.css?v=20261021_a1">
 </head>
 <body>
 
@@ -121,6 +122,7 @@
           <button type="button" class="tool-link" onclick="openAlertLogModal()">閉じたお知らせの記録・戻す</button>
           <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴</button>
           <button type="button" class="tool-link" onclick="openPeriodPrintModal()">記録の期間印刷</button>
+          <button type="button" class="tool-link" onclick="printEmergencyResidentSheets()">停電に備えた印刷</button>
         </div>
       </div>
  <!-- 共通日付選択バー (横スライドカレンダー廃止・各タブ共通連動) -->
@@ -809,6 +811,7 @@
           <button type="button" class="tool-link" onclick="openAlertLogModal()">閉じたお知らせの記録・戻す</button>
           <button type="button" class="tool-link" onclick="openAuditLogModal()">取消・訂正の履歴</button>
           <button type="button" class="tool-link" onclick="openPeriodPrintModal()">記録の期間印刷</button>
+          <button type="button" class="tool-link" onclick="printEmergencyResidentSheets()">停電に備えた印刷</button>
         </div>
       </div>
 
@@ -841,7 +844,8 @@
   <div class="care-tab-group" id="officeAdminSecurityRow">
    <span class="care-tab-label">管理者・事務</span>
    <div class="care-tab-row">
-    <button class="sub-tab-btn" id="subTabBackup" onclick="switchOfficeTab('backup')">データ保管・バックアップ</button>
+    <button class="sub-tab-btn" id="subTabKasan" onclick="switchOfficeTab('kasan')">加算・減算</button>
+     <button class="sub-tab-btn" id="subTabBackup" onclick="switchOfficeTab('backup')">データ保管・バックアップ</button>
     <button class="sub-tab-btn" id="subTabStaffAuth" onclick="switchOfficeTab('staff_auth')">職員アカウント・暗証番号管理</button>
     <button class="sub-tab-btn" id="subTabUnits" onclick="switchOfficeTab('units')">区分（ユニット・フロア）の設定</button>
    </div>
@@ -1429,6 +1433,9 @@
   </div>
 
  </div>
+
+  <!-- 加算・減算確認表タブ -->
+  <div id="tabOfficeKasan" style="display:none;" class="panel-card"><table id="kasanMonthlyTable" style="display:none;"></table></div>
 
  </div><!-- /officeTabContent -->
  </div><!-- /portalOfficeSection -->
@@ -3973,22 +3980,23 @@
  </div>
 
  <!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261019_e4"></script>
- <script src="js/02_terms.js?v=20261019_e4"></script>
- <script src="js/03_common.js?v=20261019_e4"></script>
- <script src="js/04_care_record.js?v=20261019_e4"></script>
- <script src="js/05_summary_print_audit.js?v=20261019_e4"></script>
- <script src="js/06_schema_history.js?v=20261019_e4"></script>
- <script src="js/07_daily_tables.js?v=20261019_e4"></script>
- <script src="js/08_meds.js?v=20261019_e4"></script>
- <script src="js/09_night_misc.js?v=20261019_e4"></script>
- <script src="js/10_office.js?v=20261019_e4"></script>
- <script src="js/11_karte_staff.js?v=20261019_e4"></script>
- <script src="js/12_hospital_photos.js?v=20261019_e4"></script>
- <script src="js/13_shift_units.js?v=20261019_e4"></script>
- <script src="js/14_auth_home.js?v=20261019_e4"></script>
- <script src="js/15_single_write.js?v=20261019_e4"></script>
- <script src="js/16_careplan.js?v=20261019_e4"></script>
+ <script src="js/01_core.js?v=20261021_a1"></script>
+ <script src="js/02_terms.js?v=20261021_a1"></script>
+ <script src="js/03_common.js?v=20261021_a1"></script>
+ <script src="js/04_care_record.js?v=20261021_a1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261021_a1"></script>
+ <script src="js/06_schema_history.js?v=20261021_a1"></script>
+ <script src="js/07_daily_tables.js?v=20261021_a1"></script>
+ <script src="js/08_meds.js?v=20261021_a1"></script>
+ <script src="js/09_night_misc.js?v=20261021_a1"></script>
+ <script src="js/10_office.js?v=20261021_a1"></script>
+ <script src="js/11_karte_staff.js?v=20261021_a1"></script>
+ <script src="js/12_hospital_photos.js?v=20261021_a1"></script>
+ <script src="js/13_shift_units.js?v=20261021_a1"></script>
+ <script src="js/14_auth_home.js?v=20261021_a1"></script>
+ <script src="js/15_single_write.js?v=20261021_a1"></script>
+ <script src="js/16_careplan.js?v=20261021_a1"></script>
+	<script src="js/17_kasan.js?v=20261021_a1"></script>
   
 
   <!-- ============================================================ -->
@@ -4691,6 +4699,165 @@
 			<div style="margin-top:16px; display:flex; justify-content:flex-end; gap:8px;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('periodPrintModal')">キャンセル</button>
 				<button type="button" class="btn btn-primary" onclick="printPeriodRecords()">印刷する</button>
+			</div>
+		</div>
+	</div>
+
+
+	<!-- [Antigravity追加 2026-10-21] 事業所の加算・減算設定モーダル -->
+	<div class="modal-overlay" id="kasanSettingsModal" style="display:none;">
+		<div class="modal-card" style="max-width:760px; max-height:90vh; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">事業所の加算・減算設定</h3>
+				<button type="button" class="close-btn" onclick="closeKasanSettingsModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<!-- 地域区分 -->
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">地域区分（1単位の単価）</h4>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:6px;">
+						事業所の所在地域に応じた級地を選択してください（目安金額の算出に使用します）。
+					</div>
+					<label style="font-size:13px; font-weight:bold; color:var(--ink); display:flex; align-items:center; gap:8px;">
+						地域区分:
+						<select id="kasanRegionSelect" class="form-control" style="font-size:13px; max-width:280px;"></select>
+					</label>
+				</div>
+
+				<!-- 体制等届出事項（施設加算） -->
+				<div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">体制等届出事項（事業所全体の加算）</h4>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:8px;">
+						行政に届出済みの体制加算を選択してください。同名の加算は上位・下位のいずれか1つのみ選択可能です。
+					</div>
+					<div id="kasanTaiseiContainer"></div>
+				</div>
+
+				<!-- 減算 -->
+				<div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--alert);">減算の適用（未実施・未策定など）</h4>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:8px;">
+						身体拘束廃止未実施・虐待防止未実施・BCP未策定などの減算が該当する場合、対象月と理由を設定してください。
+					</div>
+					<div id="kasanGensanContainer"></div>
+				</div>
+
+				<!-- 委員会・研修ルール（出典URL必須） -->
+				<div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
+					<h4 style="margin:0 0 8px 0; font-size:14px; color:var(--pine-dark);">委員会・研修の開催ルール（加算・減算要件）</h4>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:8px;">
+						基準・加算要件となる委員会・研修の登録（公的出典URL必須）。事務の委員会記録と自動照合されます。
+					</div>
+					<div id="kasanCommitteeRulesList" style="margin-bottom:12px;"></div>
+
+					<div style="background:var(--ground); border:1px solid var(--line-2); border-radius:4px; padding:10px;">
+						<div style="font-weight:bold; font-size:13px; margin-bottom:6px; color:var(--ink);">新しい開催ルールの追加（出典URL必須）</div>
+						<div style="display:grid; grid-template-columns:minmax(0, 1.5fr) minmax(0, 1fr); gap:8px; margin-bottom:8px;">
+							<div>
+								<label style="display:block; font-size:12px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">委員会・研修名</label>
+								<input type="text" id="kasanNewRuleName" class="form-control" style="font-size:13px;" placeholder="例: 身体拘束廃止委員会">
+							</div>
+							<div>
+								<label style="display:block; font-size:12px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">開催頻度</label>
+								<select id="kasanNewRuleInterval" class="form-control" style="font-size:13px;">
+									<option value="">選んでください</option>
+									<option value="1">1か月に1回</option>
+									<option value="2">2か月に1回</option>
+									<option value="3">3か月に1回</option>
+									<option value="6">6か月に1回</option>
+									<option value="12">1年に1回</option>
+								</select>
+							</div>
+						</div>
+						<div style="margin-bottom:8px;">
+							<label style="display:block; font-size:12px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">公的出典URL（必須）</label>
+							<input type="url" id="kasanNewRuleUrl" class="form-control" style="font-size:13px;" placeholder="https://www.mhlw.go.jp/...">
+						</div>
+						<div style="text-align:right;">
+							<button type="button" class="btn btn-secondary" style="font-size:12px;" onclick="addKasanCommitteeRule()">ルールを追加する</button>
+						</div>
+					</div>
+				</div>
+
+				<!-- 設定変更履歴 -->
+				<div style="background:var(--ground); border:1px solid var(--line-2); border-radius:6px; padding:10px;">
+					<h4 style="margin:0 0 6px 0; font-size:13px; color:var(--ink-2);">設定の変更履歴</h4>
+					<div id="kasanHistoryContainer" style="max-height:120px; overflow-y:auto;"></div>
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" onclick="closeKasanSettingsModal()">閉じる</button>
+				<button type="button" class="btn btn-primary" onclick="saveKasanSettings()">設定を保存する</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Antigravity追加 2026-10-21] 外泊の登録・変更モーダル -->
+	<div class="modal-overlay" id="outingModal" style="display:none;">
+		<div class="modal-card" style="max-width:540px;">
+			<div class="modal-header">
+				<h3 id="outingModalTitle" style="margin:0; font-size:16px;">外泊の登録</h3>
+				<button type="button" class="modal-close-btn" onclick="closeModal('outingModal')">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px;">
+				<input type="hidden" id="outingResidentId">
+				<input type="hidden" id="outingRecordId">
+
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">出かけた日（必須・未来日不可）</label>
+					<input type="date" id="outingStartDate" class="form-control" style="font-size:13px; width:100%;">
+				</div>
+
+				<div id="outingEndDateWrap" style="margin-bottom:12px; display:none;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">戻った日（帰所日）</label>
+					<input type="date" id="outingEndDate" class="form-control" style="font-size:13px; width:100%;">
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">行き先（必須）</label>
+					<input type="text" id="outingDestination" class="form-control" style="font-size:13px; width:100%;" placeholder="例: ご家族宅（長男様宅）">
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">理由・備考</label>
+					<input type="text" id="outingReason" class="form-control" style="font-size:13px; width:100%;" placeholder="例: 冠婚葬祭のため、一時帰宅など">
+				</div>
+
+				<div id="outingEditReasonWrap" style="margin-bottom:12px; display:none; background:var(--caution-tint); border:1px solid var(--sun); border-radius:4px; padding:10px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--caution); margin-bottom:4px;">訂正理由（必須）</label>
+					<input type="text" id="outingEditReason" class="form-control" style="font-size:13px; width:100%;" placeholder="例: 日付の入力誤りのため">
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('outingModal')">戻る</button>
+				<button type="button" class="btn btn-primary" onclick="submitOutingModal()">保存する</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Antigravity追加 2026-10-21] 外泊からの帰所（在所へ戻る）モーダル -->
+	<div class="modal-overlay" id="outingReturnModal" style="display:none;">
+		<div class="modal-card" style="max-width:500px;">
+			<div class="modal-header">
+				<h3 id="outingReturnModalTitle" style="margin:0; font-size:16px;">在所へ戻る（外泊からの帰所登録）</h3>
+				<button type="button" class="modal-close-btn" onclick="closeModal('outingReturnModal')">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px;">
+				<input type="hidden" id="outingReturnResidentId">
+				<input type="hidden" id="outingReturnRecordId">
+
+				<div style="font-size:13px; color:var(--ink); margin-bottom:12px;">
+					出かけた日: <strong id="outingReturnStartDateDisp">-</strong>
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">戻った日（必須・出かけた日以降・未来日不可）</label>
+					<input type="date" id="outingReturnDate" class="form-control" style="font-size:13px; width:100%;">
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('outingReturnModal')">戻る</button>
+				<button type="button" class="btn btn-primary" onclick="submitOutingReturnModal()">帰所を完了する</button>
 			</div>
 		</div>
 	</div>

@@ -467,6 +467,14 @@ function cpCollectAuditEntries() {
  });
  });
  }
+ if (src.key === "residents" && Array.isArray(rec.outings)) {
+ // [Antigravity追加 2026-10-21] 外泊の歴の訂正・変更履歴
+ rec.outings.forEach(op => {
+ (op.edit_history || []).forEach(h => {
+ out.push({ kind: "外泊の歴", resident: rn, residentId: rec.id, summary: `${op.start_date || ""}〜${op.end_date || "外泊中"} ${op.destination || ""}`, at: h.at || h.edited_at, type: "訂正・変更", by: h.by || h.edited_by, detail: `${h.reason ? "理由: " + h.reason + " / " : ""}${h.detail || ""}` });
+ });
+ });
+ }
  if (src.key === "recreations" && rec.updated_at && !(rec.edit_history || []).length) out.push(Object.assign({}, base, { at: rec.updated_at, type: "訂正・変更", by: rec.updated_by, detail: "（訂正前の内容は記録されていない古い訂正）" }));
  });
  });

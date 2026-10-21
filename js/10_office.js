@@ -19,7 +19,7 @@ function loadOfficeData() {
 }
 
 function switchOfficeTab(tab) {
- if (tab === "backup" || tab === "staff_auth" || tab === "units") {
+ if (tab === "backup" || tab === "staff_auth" || tab === "units" || tab === "kasan") {
  if (!isCurrentStaffAdminOrClerk()) {
  alert("このタブは管理者および事務員のみアクセス可能です。");
  switchOfficeTab("inventory");
@@ -45,7 +45,7 @@ function switchOfficeTab(tab) {
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits",
- contracts: "tabOfficeContracts"
+ contracts: "tabOfficeContracts", kasan: "tabOfficeKasan"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -69,6 +69,8 @@ function switchOfficeTab(tab) {
  renderOfficeContracts();
  } else if (tab === "billing") {
  renderOfficeBillingSelect(); // [Claude修正] 請求の設定を変えたあとに開いても、古い表示のままにならないように
+ } else if (tab === "kasan") {
+ if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
  }
  }
 }
