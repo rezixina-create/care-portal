@@ -522,7 +522,8 @@ function cpGetActiveReductions(yearMonth) {
   if (capacity > 0 && settings.capacity_excess) {
     Object.keys(settings.capacity_excess).forEach(ymKey => {
       const rec = settings.capacity_excess[ymKey];
-      if (!rec || !rec.confirmed) return;
+      // [Claude修正] 「定員内」で確定した月（is_excess: false）は減算しない
+      if (!rec || !rec.confirmed || rec.is_excess === false) return;
       let startRedYm = "";
       if (rec.is_disaster_grace) {
         startRedYm = cpAddMonths(ymKey, 2);
@@ -1204,13 +1205,13 @@ function renderOfficeKasanTab() {
   // 減算状態・警告バナーの作成
   const reductionItems = [];
   if (reds.has_yagen) {
-    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>夜間勤務等減算（夜減・所定単位数の10%減算）適用中</strong>: ${escapeHtml(reds.yagen_reason)}</div>`);
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>夜勤職員の基準を満たさない減算（夜減・所定単位数の97/100）適用中</strong>: ${escapeHtml(reds.yagen_reason)}</div>`);
   }
   if (reds.has_cho) {
-    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>定員超過減算（超・所定単位数の30%減算）適用中</strong>: ${escapeHtml(reds.cho_reason)}</div>`);
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>定員超過利用の減算（超・所定単位数の70/100）適用中</strong>: ${escapeHtml(reds.cho_reason)}</div>`);
   }
   if (reds.has_ketsu) {
-    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>人員基準欠如減算（欠・所定単位数の30%減算）適用中</strong>: ${escapeHtml(reds.ketsu_reason)}</div>`);
+    reductionItems.push(`<div style="margin-bottom:4px;">・<strong>人員基準欠如の減算（欠・所定単位数の70/100）適用中</strong>: ${escapeHtml(reds.ketsu_reason)}</div>`);
   }
 
   const warningItems = [];
@@ -1349,7 +1350,7 @@ function renderOfficeKasanTab() {
     <p class="panel-note" style="margin:4px 0 12px; line-height:1.6;">
       ※月ごと・利用者ごとに算定対象となる加算・減算の目安です。基本の日数および金額は「目安」と表示しています。
       入院した日・退院した日・外泊の日の基本日数への算入基準は確認中のため、確定値ではありません。
-      短期利用（38）・介護予防（37・39）はまだ入っていません。夜勤・定員超過・人員基準欠如の減算は、確定・登録の画面ができるまで反映されません。
+      短期利用（38）・介護予防（37・39）はまだ入っていません。夜勤・定員超過・人員基準欠如の減算は、上のボタンで確定・登録した内容から反映します。
     </p>
 
     <div style="overflow-x:auto;">
@@ -2681,27 +2682,16 @@ function renderKasanNightConfirmView(ym) {
   `;
 
   // フォーム値の設定
-  const isConditionMet = existing ? !!existing.condition_met : cand.isCandidate;
+  // [Claude修正] まだ確定していない月は、判定を選んでいない状態から始める（勤務表から出した結果を自動で選ばない）
   const radioMet = document.getElementById("kasanNightStatusMet");
   const radioNotMet = document.getElementById("kasanNightStatusNotMet");
-  if (isConditionMet) {
-    if (radioMet) radioMet.checked = true;
-  } else {
-    if (radioNotMet) radioNotMet.checked = true;
-  }
+  if (radioMet) radioMet.checked = !!(existing && existing.confirmed && existing.condition_met);
+  if (radioNotMet) radioNotMet.checked = !!(existing && existing.confirmed && !existing.condition_met);
 
   const reasonInput = document.getElementById("kasanNightReason");
   if (reasonInput) {
-    let defReason = "";
-    if (existing && existing.condition_reason) {
-      defReason = existing.condition_reason;
-    } else if (cand.hasConsecutive2 && cand.count >= 4) {
-      defReason = "2日連続不足および月4日以上不足";
-    } else if (cand.hasConsecutive2) {
-      defReason = "2日連続不足";
-    } else if (cand.count >= 4) {
-      defReason = "月4日以上不足";
-    }
+    // [Claude修正] 理由は自動で入れない（確定済みならその理由を出す）
+    const defReason = (existing && existing.condition_reason) ? existing.condition_reason : "";
     reasonInput.value = defReason;
   }
 
@@ -2781,6 +2771,11 @@ function submitKasanNightConfirm() {
     return;
   }
   const radioMet = document.getElementById("kasanNightStatusMet");
+  const radioNotMet = document.getElementById("kasanNightStatusNotMet");
+  if (!(radioMet && radioMet.checked) && !(radioNotMet && radioNotMet.checked)) {
+    alert("確定する判定（基準適合／夜勤不足に該当）を選んでください。");
+    return;
+  }
   const conditionMet = !!(radioMet && radioMet.checked);
   const reason = (document.getElementById("kasanNightReason")?.value || "").trim();
   const notes = (document.getElementById("kasanNightNotes")?.value || "").trim();
@@ -2877,7 +2872,7 @@ function renderKasanCapacityConfirmView(ym) {
   let statusBadge = "";
   if (capacity <= 0) {
     statusBadge = `<div style="background:var(--caution-tint); color:var(--caution); padding:8px 12px; border-radius:4px; font-weight:bold; margin-bottom:10px; font-size:13px;">
-      ※ 事業所定員が未設定です。事業所の加算・減算設定で定員（例: 18名）を登録してください。
+      ※ 事業所定員が未設定です。事業所の加算・減算設定で定員を登録してください。
     </div>`;
   } else if (isExcessCalc) {
     statusBadge = `<div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); padding:8px 12px; border-radius:4px; font-weight:bold; margin-bottom:10px; font-size:13px;">
@@ -2902,14 +2897,11 @@ function renderKasanCapacityConfirmView(ym) {
   `;
 
   // フォーム値の設定
-  const isExcessFinal = existing ? !!existing.is_excess : isExcessCalc;
+  // [Claude修正] まだ確定していない月は、判定を選んでいない状態から始める（計算の結果を自動で選ばない）
   const radioExcess = document.getElementById("kasanCapacityStatusExcess");
   const radioNormal = document.getElementById("kasanCapacityStatusNormal");
-  if (isExcessFinal) {
-    if (radioExcess) radioExcess.checked = true;
-  } else {
-    if (radioNormal) radioNormal.checked = true;
-  }
+  if (radioExcess) radioExcess.checked = !!(existing && existing.confirmed && existing.is_excess !== false);
+  if (radioNormal) radioNormal.checked = !!(existing && existing.confirmed && existing.is_excess === false);
 
   const graceCb = document.getElementById("kasanCapacityDisasterGrace");
   const graceReasonBox = document.getElementById("kasanCapacityGraceReasonBox");
@@ -3000,6 +2992,11 @@ function submitKasanCapacityConfirm() {
     return;
   }
   const radioExcess = document.getElementById("kasanCapacityStatusExcess");
+  const radioNormal = document.getElementById("kasanCapacityStatusNormal");
+  if (!(radioExcess && radioExcess.checked) && !(radioNormal && radioNormal.checked)) {
+    alert("確定する判定（定員内／定員超過に該当）を選んでください。");
+    return;
+  }
   const isExcess = !!(radioExcess && radioExcess.checked);
   const isGrace = !!document.getElementById("kasanCapacityDisasterGrace")?.checked;
   const graceReason = (document.getElementById("kasanCapacityGraceReason")?.value || "").trim();
@@ -3018,6 +3015,10 @@ function submitKasanCapacityConfirm() {
   const mCalc = cpCalcMonthlyAvgResidents(ym);
   const settings = cpGetKasanSettings();
   const capacity = (settings.capacity && parseInt(settings.capacity, 10) > 0) ? parseInt(settings.capacity, 10) : 0;
+  if (!capacity) {
+    alert("利用定員が登録されていません。「事業所の加算・減算設定」で利用定員を登録してから確定してください。");
+    return;
+  }
 
   if (!db.data.kasan_settings) db.data.kasan_settings = {};
   if (!db.data.kasan_settings.capacity_excess) db.data.kasan_settings.capacity_excess = {};
