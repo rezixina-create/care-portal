@@ -255,7 +255,8 @@ function cpHandleModalOverlayClick(e) {
   if (e.target !== modal) return;
   if (_cpBackdropPointerDownTarget !== modal) return;
   if (CP_MODAL_BACKDROP_EXCLUDED.has(modal.id)) return;
-  if (window.db && window.db._saving) return;
+  // [Claude修正] db は const で作っているので window.db にはない（今まで止まっていなかった）
+  if (typeof db !== "undefined" && db && db._saving) return;
 
   if (cpIsModalDirty(modal)) {
     if (!confirm("書きかけの内容があります。閉じますか？")) {
