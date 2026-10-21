@@ -1740,12 +1740,8 @@ function cpGetDementiaRankOn(residentId, dateStr) {
     if (recB !== recA) return recB.localeCompare(recA);
     return Number(b.id || 0) - Number(a.id || 0);
   });
-  const best = valid[0];
-  if (best && typeof best.valueOf !== "function") {
-    best.valueOf = function() { return this.rank; };
-    best.toString = function() { return this.rank; };
-  }
-  return best;
+  // [Claude修正] 保存している記録そのものに関数を足さない（返すのは判定の記録。ランクは .rank で読む）
+  return valid[0];
 }
 
 function cpDementiaSectionHtml(r) {
@@ -1761,7 +1757,7 @@ function cpDementiaSectionHtml(r) {
     bodyHtml = `
       <div style="display:flex; align-items:center; gap:10px; flex-wrap:wrap; font-size:13px;">
         <span style="display:inline-block; font-size:15px; font-weight:bold; color:var(--pine-dark); background:var(--pine-light); border:1px solid var(--pine); border-radius:4px; padding:2px 10px;">ランク ${escapeHtml(latest.rank)}</span>
-        <span style="color:var(--text);">判定日: <strong>${escapeHtml(latest.assessed_on)}</strong></span>
+        <span style="color:var(--ink);">判定日: <strong>${escapeHtml(latest.assessed_on)}</strong></span>
         <span style="color:var(--text-muted);">根拠: ${escapeHtml(latest.basis)}${doctorStr}</span>
       </div>
     `;
@@ -1959,9 +1955,9 @@ function renderDementiaAssessmentHistoryList(residentId) {
         <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
           <div>
             <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:4px;">
-              ${isVoided ? '<span style="font-size:13px; font-weight:bold; color:var(--alert); background:rgba(220,38,38,0.1); border:1px solid var(--alert); border-radius:4px; padding:1px 6px;">取消済</span>' : ""}
+              ${isVoided ? '<span style="font-size:13px; font-weight:bold; color:var(--alert); background:var(--alert-tint); border:1px solid var(--alert); border-radius:4px; padding:1px 6px;">取消済</span>' : ""}
               <strong style="font-size:15px; color:${isVoided ? "var(--text-muted)" : "var(--pine-dark)"}; ${isVoided ? "text-decoration:line-through;" : ""}">ランク ${escapeHtml(a.rank)}</strong>
-              <span style="font-size:13px; color:var(--text);">判定日: ${escapeHtml(a.assessed_on)}</span>
+              <span style="font-size:13px; color:var(--ink);">判定日: ${escapeHtml(a.assessed_on)}</span>
             </div>
             <div style="font-size:13px; color:var(--text-muted);">
               根拠: ${escapeHtml(a.basis)}${docText}
@@ -1970,7 +1966,7 @@ function renderDementiaAssessmentHistoryList(residentId) {
               登録者: ${escapeHtml(a.recorded_by || "-")} (${escapeHtml(a.recorded_at || "-")})
             </div>
             ${isVoided ? `
-              <div style="margin-top:6px; padding:6px 8px; background:rgba(220,38,38,0.06); border-left:3px solid var(--alert); font-size:13px;">
+              <div style="margin-top:6px; padding:6px 8px; background:var(--alert-tint); border-left:3px solid var(--alert); font-size:13px;">
                 <span style="font-weight:bold; color:var(--alert);">取消理由:</span> ${escapeHtml(a.void_reason || "-")}<br>
                 <span style="color:var(--text-muted);">取消者: ${escapeHtml(a.voided_by || "-")} (${escapeHtml(a.voided_at || "-")})</span>
               </div>
@@ -1987,7 +1983,7 @@ function renderDementiaAssessmentHistoryList(residentId) {
           <input type="text" id="voidReason_${a.id}" class="form-control" style="font-size:13px; margin-bottom:6px; width:100%; box-sizing:border-box;" placeholder="取消の理由を入力してください">
           <div style="display:flex; gap:6px; justify-content:flex-end;">
             <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 10px;" onclick="cancelVoidDementiaAssessment(${a.id})">戻る</button>
-            <button type="button" class="btn btn-danger" style="font-size:13px; padding:3px 10px; background:var(--alert); color:#fff; border:none;" onclick="confirmVoidDementiaAssessment(${a.id})">取消を確定</button>
+            <button type="button" class="btn btn-danger" style="font-size:13px; padding:3px 10px;" onclick="confirmVoidDementiaAssessment(${a.id})">取消を確定</button>
           </div>
         </div>
       </div>

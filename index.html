@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261021_e1">
+	<link rel="stylesheet" href="style.css?v=20261021_e2">
 </head>
 <body>
 
@@ -4060,7 +4060,7 @@
 				</div>
 
 				<div style="margin-bottom:12px;">
-					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">ランク (必須):</label>
+					<label style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">ランク (必須):</label>
 					<select id="dementiaRank" class="form-control" style="font-size:13px;">
 						<option value="">-- 選んでください --</option>
 						<option value="自立">自立</option>
@@ -4075,12 +4075,12 @@
 				</div>
 
 				<div style="margin-bottom:12px;">
-					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">判定日 (必須):</label>
+					<label style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">判定日 (必須):</label>
 					<input type="date" id="dementiaAssessedOn" class="form-control" style="font-size:13px;">
 				</div>
 
 				<div style="margin-bottom:12px;">
-					<label style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">根拠 (必須):</label>
+					<label style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">根拠 (必須):</label>
 					<select id="dementiaBasis" class="form-control" style="font-size:13px;" onchange="onDementiaBasisChange()">
 						<option value="">-- 選んでください --</option>
 						<option value="医師の判定">医師の判定</option>
@@ -4090,7 +4090,7 @@
 				</div>
 
 				<div id="dementiaDoctorRow" style="margin-bottom:12px; display:none;">
-					<label id="dementiaDoctorLabel" style="font-weight:bold; font-size:13px; color:var(--text); display:block; margin-bottom:4px;">判定医師名 (必須):</label>
+					<label id="dementiaDoctorLabel" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">判定医師名 (必須):</label>
 					<input type="text" id="dementiaDoctorName" class="form-control" style="font-size:13px;">
 				</div>
 			</div>
@@ -4119,23 +4119,23 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261021_e1"></script>
- <script src="js/02_terms.js?v=20261021_e1"></script>
- <script src="js/03_common.js?v=20261021_e1"></script>
- <script src="js/04_care_record.js?v=20261021_e1"></script>
- <script src="js/05_summary_print_audit.js?v=20261021_e1"></script>
- <script src="js/06_schema_history.js?v=20261021_e1"></script>
- <script src="js/07_daily_tables.js?v=20261021_e1"></script>
- <script src="js/08_meds.js?v=20261021_e1"></script>
- <script src="js/09_night_misc.js?v=20261021_e1"></script>
- <script src="js/10_office.js?v=20261021_e1"></script>
- <script src="js/11_karte_staff.js?v=20261021_e1"></script>
- <script src="js/12_hospital_photos.js?v=20261021_e1"></script>
- <script src="js/13_shift_units.js?v=20261021_e1"></script>
- <script src="js/14_auth_home.js?v=20261021_e1"></script>
- <script src="js/15_single_write.js?v=20261021_e1"></script>
- <script src="js/16_careplan.js?v=20261021_e1"></script>
-	<script src="js/17_kasan.js?v=20261021_e1"></script>
+ <script src="js/01_core.js?v=20261021_e2"></script>
+ <script src="js/02_terms.js?v=20261021_e2"></script>
+ <script src="js/03_common.js?v=20261021_e2"></script>
+ <script src="js/04_care_record.js?v=20261021_e2"></script>
+ <script src="js/05_summary_print_audit.js?v=20261021_e2"></script>
+ <script src="js/06_schema_history.js?v=20261021_e2"></script>
+ <script src="js/07_daily_tables.js?v=20261021_e2"></script>
+ <script src="js/08_meds.js?v=20261021_e2"></script>
+ <script src="js/09_night_misc.js?v=20261021_e2"></script>
+ <script src="js/10_office.js?v=20261021_e2"></script>
+ <script src="js/11_karte_staff.js?v=20261021_e2"></script>
+ <script src="js/12_hospital_photos.js?v=20261021_e2"></script>
+ <script src="js/13_shift_units.js?v=20261021_e2"></script>
+ <script src="js/14_auth_home.js?v=20261021_e2"></script>
+ <script src="js/15_single_write.js?v=20261021_e2"></script>
+ <script src="js/16_careplan.js?v=20261021_e2"></script>
+	<script src="js/17_kasan.js?v=20261021_e2"></script>
   
 
   <!-- ============================================================ -->
@@ -5352,10 +5352,10 @@
 								欠如の種類:
 							</label>
 							<select id="kasanStaffShortageType" class="form-control" style="font-size:13px; width:100%;" onchange="onKasanStaffShortageTypeChange()">
-								<option value="">-- 選択してください --</option>
+								<option value="">選んでください</option>
 								<option value="care_over_10">介護職員 1割超の欠如（翌月から減算）</option>
 								<option value="care_under_10">介護職員 1割以内の欠如（翌々月から減算）</option>
-								<option value="plan_maker">計画作成担当者・介護支援専門員の欠如（翌々月から減算）</option>
+								<option value="planner">計画作成担当者・介護支援専門員の欠如（翌々月から減算）</option>
 							</select>
 						</div>
 						<div>
@@ -5393,11 +5393,15 @@
 					<div style="margin-bottom:10px; padding:8px 10px; background:var(--ground); border:1px solid var(--line-2); border-radius:4px;">
 						<label style="font-size:13px; cursor:pointer; display:flex; align-items:center; gap:6px; font-weight:bold;">
 							<input type="checkbox" id="kasanStaffShortageIsWaiver" onchange="onKasanStaffShortageWaiverChange()">
-							<span>特別な事情による減算除外（監査・指導等の確認済特例）</span>
+							<span>特例: 突発的なやむを得ない事情による減算の猶予（1割以内・計画作成担当者だけ。年1回。市町村へ報告）</span>
 						</label>
 						<div id="kasanStaffShortageWaiverReasonBox" style="display:none; margin-top:8px;">
-							<label style="display:block; font-size:13px; color:var(--ink-2); margin-bottom:4px;">除外の事由・理由（必須）:</label>
+							<label style="display:block; font-size:13px; color:var(--ink-2); margin-bottom:4px;">特例の事情（必須）:</label>
 							<input type="text" id="kasanStaffShortageWaiverReason" class="form-control" style="font-size:13px; width:100%;">
+							<label style="display:block; font-size:13px; color:var(--ink-2); margin:8px 0 4px;">市町村へ報告した日（必須）:</label>
+							<input type="date" id="kasanStaffShortageWaiverReportedOn" class="form-control" style="font-size:13px; max-width:180px;">
+							<label style="display:block; font-size:13px; color:var(--ink-2); margin:8px 0 4px;">市町村が認めた猶予の終わりの月（必須。この翌月から減算）:</label>
+							<input type="month" id="kasanStaffShortageWaiverUntilYm" class="form-control" style="font-size:13px; max-width:180px;">
 						</div>
 					</div>
 

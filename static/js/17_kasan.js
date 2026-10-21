@@ -140,8 +140,19 @@ const CP_KASAN_TAISEI_DEFS = [
       { key: "none", label: "届出なし", code: null, units: 0 },
       { key: "1_a", label: "医療連携体制加算（Ⅰ）イ", code: "1602", units: 57 },
       { key: "1_b", label: "医療連携体制加算（Ⅰ）ロ", code: "1601", units: 47 },
-      { key: "1_c", label: "医療連携体制加算（Ⅰ）ハ", code: "1600", units: 37 },
-      { key: "2", label: "医療連携体制加算（Ⅱ）", code: "1603", units: 5 }
+      { key: "1_c", label: "医療連携体制加算（Ⅰ）ハ", code: "1600", units: 37 }
+    ]
+  },
+  // [Claude修正] （Ⅱ）は（Ⅰ）と一緒に付けられる（（Ⅰ）のどれかを算定していることが条件）ので、別の選択にする
+  // 岡山市「令和６年度制度改正の概要（施設・居住系サービス編）」「加算（Ⅰ）と（Ⅱ）の併算定は可。加算（Ⅰ）のイ、ロ、ハの併算定は不可。」、市川市 運営の手引き・鹿児島市 自己点検シート
+  {
+    id: "medical_coop2",
+    name: "医療連携体制加算（Ⅱ）",
+    unit_type: "日",
+    requires_medical_coop1: true,
+    options: [
+      { key: "none", label: "届出なし", code: null, units: 0 },
+      { key: "1", label: "医療連携体制加算（Ⅱ）", code: "1603", units: 5 }
     ]
   },
   {
@@ -169,6 +180,7 @@ const CP_KASAN_TAISEI_DEFS = [
     id: "coop_hospital",
     name: "協力医療機関連携加算",
     unit_type: "月",
+    requires_medical_coop1: true, // [Claude修正] 医療連携体制加算を算定していない場合は算定できない（市川市 運営の手引き）
     options: [
       { key: "none", label: "届出なし", code: null, units: 0 },
       { key: "1", label: "協力医療機関連携加算（1）", code: "6123", units: 100 },
@@ -363,6 +375,13 @@ function cpGetNextYm(ym) {
   return `${y}-${String(m).padStart(2, "0")}`;
 }
 
+// count か月前の年月
+function cpAddMonthsBack(ym, count) {
+  let res = ym;
+  for (let i = 0; i < count; i++) res = cpGetPrevYm(res);
+  return res;
+}
+
 function cpAddMonths(ym, count) {
   let res = ym;
   for (let i = 0; i < count; i++) {
@@ -485,9 +504,24 @@ function cpGetStaffShortageTypeLabel(type) {
   switch (type) {
     case "care_over_10": return "介護従業者欠如（1割超）";
     case "care_under_10": return "介護従業者欠如（1割以内）";
-    case "planner": return "計画作成担当者欠如";
+    case "planner":
+    case "plan_maker": return "計画作成担当者欠如"; // [Claude修正] 画面の選択肢が plan_maker になっていた（今は planner）
     default: return type || "人員基準欠如";
   }
+}
+
+// [Claude修正] 人員基準欠如の減算が始まる月
+// 1割超 → 翌月から／1割以内・計画作成担当者 → 翌々月から（留意事項通知 第2の1⑻、市川市 運営の手引き）
+// 特例（突発的なやむを得ない事情。1割以内と計画作成担当者だけ・年1回・市町村へ報告）は、減算をなくすのではなく猶予。
+// 猶予の終わりは市町村が認めた月を入れてもらい（アプリでは決めない）、その翌月から減算する
+function cpStaffShortageReductionStartYm(rec) {
+  if (!rec || !rec.start_ym) return "";
+  let startRedYm = (rec.type === "care_over_10") ? cpGetNextYm(rec.start_ym) : cpAddMonths(rec.start_ym, 2);
+  if (rec.is_waiver && rec.type !== "care_over_10" && rec.waiver_until_ym) {
+    const afterWaiver = cpGetNextYm(rec.waiver_until_ym);
+    if (afterWaiver > startRedYm) startRedYm = afterWaiver;
+  }
+  return startRedYm;
 }
 
 // 減算判定
@@ -554,15 +588,10 @@ function cpGetActiveReductions(yearMonth) {
   const staffShortages = Array.isArray(settings.staff_shortage) ? settings.staff_shortage : [];
   staffShortages.forEach(rec => {
     if (!rec || !rec.start_ym) return;
-    if (rec.is_waiver && rec.waiver_reason) return;
+    if (rec.voided) return;
     if (rec.type === "care_under_10" && rec.waiver_next_month_end) return;
 
-    let startRedYm = "";
-    if (rec.type === "care_over_10") {
-      startRedYm = cpGetNextYm(rec.start_ym);
-    } else {
-      startRedYm = cpAddMonths(rec.start_ym, 2);
-    }
+    const startRedYm = cpStaffShortageReductionStartYm(rec);
     const resolvedYm = rec.resolved_ym || "";
     if (yearMonth >= startRedYm && (!resolvedYm || yearMonth <= resolvedYm)) {
       has_ketsu = true;
@@ -795,6 +824,29 @@ function cpKasanBasicDays(resident, yearMonth) {
   result.valueOf = function() { return this.basicDays; };
   return result;
 }
+// [Claude修正] 前の形（医療連携体制加算の選択の中に（Ⅱ）があった）で保存された設定を、今の形で読む
+function cpKasanNormalizeTaiseiItems(rawItems) {
+  const items = Object.assign({}, rawItems || {});
+  const mc = items.medical_coop;
+  if (mc && mc.option_key === "2") {
+    if (!items.medical_coop2 || !items.medical_coop2.option_key) {
+      items.medical_coop2 = { option_key: "1", notified_date: mc.notified_date || "" };
+    }
+    items.medical_coop = { option_key: "", notified_date: "" };
+  }
+  return items;
+}
+
+// 医療連携体制加算（Ⅰ）イ・ロ・ハ のどれかを届け出ているか
+function cpKasanHasMedicalCoop1(taiseiItems) {
+  const mc = taiseiItems && taiseiItems.medical_coop;
+  return !!(mc && ["1_a", "1_b", "1_c"].includes(mc.option_key));
+}
+
+function cpKasanIsNotified(item) {
+  return !!(item && item.option_key && item.option_key !== "none");
+}
+
 function cpGetKasanSettings() {
   const raw = (db && db.data && db.data.kasan_settings) || {};
   return {
@@ -806,7 +858,7 @@ function cpGetKasanSettings() {
     night_shortage: Object.assign({}, raw.night_shortage || {}),
     capacity_excess: Object.assign({}, raw.capacity_excess || {}),
     staff_shortage: Array.isArray(raw.staff_shortage) ? raw.staff_shortage.slice() : [],
-    taisei_items: Object.assign({}, raw.taisei_items || {}),
+    taisei_items: cpKasanNormalizeTaiseiItems(raw.taisei_items),
     gensan_items: Object.assign({}, raw.gensan_items || {}),
     committee_rules: Array.isArray(raw.committee_rules) ? raw.committee_rules.slice() : [],
     edit_history: Array.isArray(raw.edit_history) ? raw.edit_history.slice() : []
@@ -1050,6 +1102,37 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     if (setItem && setItem.option_key && setItem.option_key !== "none") {
       const opt = def.options.find(o => o.key === setItem.option_key);
       if (opt && opt.code && opt.units > 0) {
+        // [Claude修正] 医療連携体制加算（Ⅰ）を届け出ていないと付けない加算（医療連携体制加算（Ⅱ）・協力医療機関連携加算）
+        if (def.requires_medical_coop1 && !cpKasanHasMedicalCoop1(settings.taisei_items)) {
+          items.push({
+            category: "体制加算",
+            code: opt.code,
+            name: opt.label,
+            unit_price: 0,
+            count: 1,
+            unit_label: def.unit_type === "日" ? "日" : "月",
+            subtotal: 0,
+            candidate: true,
+            note: "医療連携体制加算（Ⅰ）の届出がないため算定できません"
+          });
+          return;
+        }
+        // [Claude修正] 認知症専門ケア加算と認知症チームケア推進加算は一緒に付けられない（市川市 運営の手引き・鹿児島市 自己点検シート）
+        if ((def.id === "dementia_care" || def.id === "dementia_team") &&
+            cpKasanIsNotified(settings.taisei_items.dementia_care) && cpKasanIsNotified(settings.taisei_items.dementia_team)) {
+          items.push({
+            category: "体制加算",
+            code: opt.code,
+            name: opt.label,
+            unit_price: 0,
+            count: 1,
+            unit_label: def.unit_type === "日" ? "日" : "月",
+            subtotal: 0,
+            candidate: true,
+            note: "認知症専門ケア加算と認知症チームケア推進加算は一緒に算定できません。設定でどちらか一方にしてください"
+          });
+          return;
+        }
         // 定員超過または人員欠如の月は除外される4加算
         if ((reductions.has_cho || reductions.has_ketsu) &&
             ["night_support", "service_supply", "oral", "nutrition"].includes(def.id)) {
@@ -1686,6 +1769,15 @@ function saveKasanSettings() {
       notified_date: notifDate
     };
   });
+
+  // [Claude修正] 加算どうしの決まり
+  if (!kasanError) {
+    const ti = nextSettings.taisei_items;
+    const hasMc1 = cpKasanHasMedicalCoop1(ti);
+    if (cpKasanIsNotified(ti.medical_coop2) && !hasMc1) kasanError = "医療連携体制加算（Ⅱ）は、医療連携体制加算（Ⅰ）イ・ロ・ハのどれかを届け出ている場合だけ選べます。";
+    else if (cpKasanIsNotified(ti.coop_hospital) && !hasMc1) kasanError = "協力医療機関連携加算は、医療連携体制加算（Ⅰ）を届け出ている場合だけ選べます。";
+    else if (cpKasanIsNotified(ti.dementia_care) && cpKasanIsNotified(ti.dementia_team)) kasanError = "認知症専門ケア加算と認知症チームケア推進加算は一緒に算定できません。どちらか一方を「届出なし」にしてください。";
+  }
 
   CP_KASAN_GENSAN_DEFS.forEach(def => {
     const hasGensan = (document.getElementById(`kasanGensanHas_${def.id}`)?.value || "なし").trim();
@@ -3080,7 +3172,7 @@ function openKasanStaffShortageModal() {
   const typeEl = document.getElementById("kasanStaffShortageType");
   if (typeEl) typeEl.value = "";
   const sYmEl = document.getElementById("kasanStaffShortageStartYm");
-  if (sYmEl) sYmEl.value = document.getElementById("kasanYearMonth")?.value || toLocalDateStr(new Date()).slice(0, 7);
+  if (sYmEl) sYmEl.value = ""; // [Claude修正] 始まった月は自動で入れない
   const rYmEl = document.getElementById("kasanStaffShortageResolvedYm");
   if (rYmEl) rYmEl.value = "";
   const rReasonEl = document.getElementById("kasanStaffShortageReason");
@@ -3089,6 +3181,7 @@ function openKasanStaffShortageModal() {
   if (waiverCb) waiverCb.checked = false;
   const wReasonEl = document.getElementById("kasanStaffShortageWaiverReason");
   if (wReasonEl) wReasonEl.value = "";
+  ["kasanStaffShortageWaiverReportedOn", "kasanStaffShortageWaiverUntilYm"].forEach(fid => { const e = document.getElementById(fid); if (e) e.value = ""; });
   const wMonthEndCb = document.getElementById("kasanStaffShortageWaiverMonthEnd");
   if (wMonthEndCb) wMonthEndCb.checked = false;
   onKasanStaffShortageTypeChange();
@@ -3140,13 +3233,8 @@ function renderKasanStaffShortageList() {
         </thead>
         <tbody>
           ${list.map(item => {
-            let startRedYm = "";
-            if (item.type === "care_over_10") {
-              startRedYm = cpGetNextYm(item.start_ym) + "〜";
-            } else {
-              startRedYm = cpAddMonths(item.start_ym, 2) + "〜";
-            }
-            if (item.is_waiver) startRedYm = "特例除外";
+            let startRedYm = cpStaffShortageReductionStartYm(item) + "〜";
+            if (item.is_waiver) startRedYm += "（特例の猶予: " + (item.waiver_until_ym || "-") + "まで）";
             if (item.type === "care_under_10" && item.waiver_next_month_end) startRedYm = "翌月末解消除外";
 
             const resolvedText = item.resolved_ym ? escapeHtml(item.resolved_ym) : '<span style="color:var(--alert); font-weight:bold;">継続中</span>';
@@ -3159,12 +3247,14 @@ function renderKasanStaffShortageList() {
                 <td style="font-weight:bold; color:${startRedYm.includes('除外') ? 'var(--pine-dark)' : 'var(--alert)'};">${escapeHtml(startRedYm)}</td>
                 <td>
                   <div>${escapeHtml(item.reason || '-')}</div>
-                  ${item.is_waiver ? `<div style="color:var(--pine-dark); font-size:13px;">※特例理由: ${escapeHtml(item.waiver_reason || '-')}</div>` : ''}
+                  ${item.is_waiver ? `<div style="color:var(--pine-dark); font-size:13px;">※特例の事情: ${escapeHtml(item.waiver_reason || '-')}（市町村へ報告: ${escapeHtml(item.waiver_reported_on || '-')}）</div>` : ''}
                   ${item.waiver_next_month_end ? `<div style="color:var(--pine-dark); font-size:13px;">※翌月末までに充足</div>` : ''}
                 </td>
                 <td>${resolvedText}${histCount}</td>
                 <td style="text-align:center;">
+                  ${item.voided ? `<div style="font-size:13px; color:var(--ink-3);">取消済み（${escapeHtml(item.void_reason || '-')}／${escapeHtml(item.voided_by || '-')} ${escapeHtml(item.voided_at || '')}）</div>` : `
                   <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px;" onclick="openResolveStaffShortage('${escapeHtml(item.id)}')">解消月を追記/変更</button>
+                  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:3px 8px; margin-top:4px;" onclick="voidKasanStaffShortage('${escapeHtml(item.id)}')">取消</button>`}
                 </td>
               </tr>
             `;
@@ -3176,6 +3266,31 @@ function renderKasanStaffShortageList() {
 }
 
 let gResolvingStaffShortageId = null;
+
+// [Claude修正] まちがえて登録した欠如の記録は、消さずに理由をつけて取り消す
+function voidKasanStaffShortage(id) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("管理者または事務のみ操作可能です。");
+    return;
+  }
+  const list = (db.data.kasan_settings && Array.isArray(db.data.kasan_settings.staff_shortage)) ? db.data.kasan_settings.staff_shortage : [];
+  const target = list.find(x => x && x.id === id);
+  if (!target || target.voided) return;
+  const reason = (window.prompt("取り消す理由を入れてください（必須）", "") || "").trim();
+  if (!reason) {
+    alert("取り消す理由がないため、取り消していません。");
+    return;
+  }
+  target.voided = true;
+  target.void_reason = reason;
+  target.voided_by = (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "";
+  target.voided_at = toLocalDateTimeStr(new Date());
+  if (!Array.isArray(target.edit_history)) target.edit_history = [];
+  target.edit_history.push({ edited_at: target.voided_at, edited_by: target.voided_by, reason: "取消: " + reason });
+  db.save();
+  renderKasanStaffShortageList();
+  if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
+}
 
 function openResolveStaffShortage(id) {
   gResolvingStaffShortageId = id;
@@ -3222,7 +3337,7 @@ function submitResolveStaffShortage() {
 
   if (!db.data.kasan_settings || !Array.isArray(db.data.kasan_settings.staff_shortage)) return;
   const target = db.data.kasan_settings.staff_shortage.find(x => x && x.id === gResolvingStaffShortageId);
-  if (!target) return;
+  if (!target || target.voided) return;
 
   if (newResolvedYm && target.start_ym && newResolvedYm < target.start_ym) {
     alert("解消年月は発生年月以降を指定してください。");
@@ -3265,7 +3380,21 @@ function submitKasanStaffShortage() {
   if (!sYm) { alert("始まった月を入力してください。"); return; }
   if (!reason) { alert("欠如の理由を入力してください。"); return; }
   if (sYm && rYm && sYm > rYm) { alert("始まった月と解消した月の順序が不正です。"); return; }
-  if (isW && !wReason) { alert("減算除外の理由を入力してください。"); return; }
+  // [Claude修正] 特例は「1割以内」と「計画作成担当者」だけ。年1回・市町村へ報告。猶予の終わりの月は市町村が認めた月
+  const wReported = (document.getElementById("kasanStaffShortageWaiverReportedOn")?.value || "").trim();
+  const wUntil = (document.getElementById("kasanStaffShortageWaiverUntilYm")?.value || "").trim();
+  if (isW && type === "care_over_10") { alert("特例（減算の猶予）は、介護従業者が1割の範囲内で欠けたときと、計画作成担当者が欠けたときだけ使えます。"); return; }
+  if (isW && !wReason) { alert("特例の事情を入力してください。"); return; }
+  if (isW && !wReported) { alert("特例を使うときは、市町村へ報告した日を入れてください。"); return; }
+  if (isW && wReported > toLocalDateStr(new Date())) { alert("市町村へ報告した日に先の日付は入れられません。"); return; }
+  if (isW && !wUntil) { alert("特例を使うときは、市町村が認めた猶予の終わりの月を入れてください。"); return; }
+  if (isW && wUntil < sYm) { alert("猶予の終わりの月は、始まった月より後にしてください。"); return; }
+  if (isW) {
+    const all = (db.data.kasan_settings && Array.isArray(db.data.kasan_settings.staff_shortage)) ? db.data.kasan_settings.staff_shortage : [];
+    const y0 = cpAddMonths(sYm, 0);
+    const recent = all.find(x => x && !x.voided && x.is_waiver && x.start_ym && x.start_ym > cpAddMonthsBack(y0, 12) && x.start_ym <= y0);
+    if (recent) { alert(`特例は年1回までです（${recent.start_ym} に始まった欠如で使っています）。`); return; }
+  }
 
   if (!db.data.kasan_settings) db.data.kasan_settings = {};
   if (!Array.isArray(db.data.kasan_settings.staff_shortage)) db.data.kasan_settings.staff_shortage = [];
@@ -3279,6 +3408,8 @@ function submitKasanStaffShortage() {
     waiver_next_month_end: !!wMonthEnd,
     is_waiver: !!isW,
     waiver_reason: wReason,
+    waiver_reported_on: isW ? wReported : "",
+    waiver_until_ym: isW ? wUntil : "",
     created_at: toLocalDateTimeStr(new Date()),
     created_by: (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "担当職員"),
     edit_history: []
@@ -3315,3 +3446,8 @@ window.submitResolveStaffShortage = submitResolveStaffShortage;
 window.onKasanStaffShortageTypeChange = onKasanStaffShortageTypeChange;
 window.onKasanStaffShortageWaiverChange = onKasanStaffShortageWaiverChange;
 window.submitKasanStaffShortage = submitKasanStaffShortage;
+
+window.cpKasanNormalizeTaiseiItems = cpKasanNormalizeTaiseiItems;
+window.cpKasanHasMedicalCoop1 = cpKasanHasMedicalCoop1;
+window.cpStaffShortageReductionStartYm = cpStaffShortageReductionStartYm;
+window.voidKasanStaffShortage = voidKasanStaffShortage;
