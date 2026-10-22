@@ -106,12 +106,12 @@ function openCareSummaryModal(resId, summaryId) {
  // 担当職員セレクトボックス
  const staffSelect = document.getElementById("csStaff");
  if (staffSelect) {
- staffSelect.innerHTML = (gState.stamps || []).map(s => {
- const name = s.name || s;
- return `<option value="${escapeHtml(name)}">${escapeHtml(name)} (${escapeHtml(s.role || "職員")})</option>`;
- }).join("");
- const curStaff = document.getElementById("currentStaff")?.value;
- if (curStaff) staffSelect.value = curStaff;
+ // [Claude修正 2026-10-22] 作成担当はログインした本人に固定（あなた「記録者はログイン本人に固定だね」）
+ const loginName = (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || document.getElementById("currentStaff")?.value || "";
+ const me = (gState.stamps || []).find(s => (s.name || s) === loginName);
+ staffSelect.innerHTML = `<option value="${escapeHtml(loginName)}">${escapeHtml(loginName)}${me && me.role ? ` (${escapeHtml(me.role)})` : ""}</option>`;
+ staffSelect.value = loginName;
+ staffSelect.disabled = true;
  }
 
  // 過去サマリー履歴セレクト
@@ -171,7 +171,7 @@ function switchCareSummaryRecord(summaryVal) {
  if (idEl) idEl.value = s.id;
  if (typeEl) typeEl.value = s.summary_type || "新規入所時サマリー";
  if (dateEl) dateEl.value = s.created_at || toLocalDateStr(new Date());
- if (staffEl && s.staff_name) staffEl.value = s.staff_name;
+ // [Claude修正 2026-10-22] 作成担当はログインした本人のまま（前の版を書いた人は前の版に残っている）
 
  const fields = [
  "csBasicInfo", "csBackground", "csPhysicalCognitive", "csAdl",

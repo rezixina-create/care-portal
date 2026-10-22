@@ -366,7 +366,8 @@ function submitDailySchedule() {
  time: tm,
  title: title,
  content: content,
- staff_name: staff
+ staff_name: staff,
+ recorded_by: (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || "" // [Claude追加 2026-10-22] 入れた人はログインした本人
  });
 
  db.save();
@@ -427,10 +428,12 @@ function openDailyJournalAddRecordModal(prefillCategory) {
  }
 
  // 4. 職員名
+ // [Claude修正 2026-10-22] 記録者はログインした本人に固定（あなた「記録者はログイン本人に固定だね」）
  const staffInput = document.getElementById("djmStaff");
- const curStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "木村 健一";
+ const curStaff = (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "");
  if (staffInput) {
  staffInput.value = curStaff;
+ staffInput.readOnly = true;
  }
 
  // 5. 本文初期化 & 雛形セット
@@ -531,7 +534,7 @@ function submitDailyJournalRecordModal() {
  const dtVal = (dtInput && dtInput.value) ? dtInput.value : `${gState.selectedDate}T12:00`;
  const recordedAt = dtVal.replace("T", " ");
  const dateStr = dtVal.split("T")[0];
- const staff = (staffInput && staffInput.value.trim()) ? staffInput.value.trim() : "職員";
+ const staff = (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || ((staffInput && staffInput.value.trim()) ? staffInput.value.trim() : "職員"); // [Claude修正 2026-10-22] ログインした本人
 
  if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
 
