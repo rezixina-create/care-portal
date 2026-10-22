@@ -1191,6 +1191,60 @@ function cpGetResidentRecordsForPeriod(residentId, fromDate, toDate, category) {
 }
 
 // 基本日数の数え方（目安・数え方は確認中）
+// [Claude追加 2026-10-22] 初期加算の入居のときの決まり。{ allowed, days, shortDays, note } を返す
+// 同じ方の前の利用（この事業所の記録）: 被保険者番号が同じ、なければ氏名と生年月日が同じ利用者
+function cpKasanSamePersonStays(r) {
+  const ins = String(r.insured_no || "").trim();
+  return (gState.residents || (db.data && db.data.residents) || []).filter(o => {
+    if (!o || o === r || Number(o.id) === Number(r.id) || o.voided) return false;
+    const oi = String(o.insured_no || "").trim();
+    if (ins && oi) return ins === oi;
+    return !!(o.name && r.name && o.birth_date && r.birth_date && o.name === r.name && o.birth_date === r.birth_date);
+  });
+}
+function cpKasanAddMonths(dateStr, n) {
+  const [y, m, d] = dateStr.split("-").map(Number);
+  const t = new Date(y, m - 1 + n, 1);
+  const last = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+  return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, "0")}-${String(Math.min(d, last)).padStart(2, "0")}`;
+}
+function cpKasanInitialAdmissionCheck(r) {
+  const adm = r.admission_date;
+  const out = { allowed: true, days: 30, shortDays: 0, note: "" };
+  if (!adm) return out;
+  const dayDiff = (a, b) => Math.round((new Date(b) - new Date(a)) / 86400000);
+  const rankRec = (typeof cpGetDementiaRankOn === "function") ? cpGetDementiaRankOn(r.id, adm) : null;
+  const rank = rankRec && rankRec.rank ? rankRec.rank : "";
+  const high = ["Ⅲa", "Ⅲb", "Ⅳ", "M"].includes(rank);
+  const months = high ? 1 : 3;
+  const from = cpKasanAddMonths(adm, -months);
+  const notes = [];
+  const prev = cpKasanSamePersonStays(r).map(o => {
+    let end = o.discharge_date || "";
+    if (o.usage_type === "short" && o.short_end_date && (!end || o.short_end_date < end)) end = o.short_end_date;
+    return { o, start: o.admission_date || "", end };
+  }).filter(x => x.start && x.start < adm);
+  // 短期利用から日を空けずに入居（短期の終わりが入居の日か前の日）
+  const direct = prev.find(x => x.o.usage_type === "short" && x.end && x.end <= adm && dayDiff(x.end, adm) <= 1);
+  if (direct) {
+    out.shortDays = Math.max(0, dayDiff(direct.start, adm));
+    out.days = Math.max(0, 30 - out.shortDays);
+    notes.push(`短期利用（${direct.start}〜${direct.end}）から日を空けずに入居したので、30日から短期利用の${out.shortDays}日を引いた${out.days}日まで`);
+    if (out.days === 0) out.allowed = false;
+  }
+  // 過去3か月（自立度Ⅲ以上は1か月）の入居
+  const recent = prev.filter(x => x !== direct && (!x.end || x.end >= from));
+  if (recent.length) {
+    out.allowed = false;
+    const x = recent[0];
+    notes.push(`入居の日の前${months}か月（${from}〜）に、この事業所に入居していた（${x.start}〜${x.end || "続いている"}）ので付けない`);
+  }
+  const rankTxt = rank ? `入居の日の自立度 ${rank}` : "入居の日の自立度の記録なし（3か月で確かめた）";
+  notes.push(`${rankTxt}。前の利用は、被保険者番号（なければ氏名と生年月日）が同じ方の記録で確かめた`);
+  out.note = notes.join("。");
+  return out;
+}
+
 function cpKasanBasicDays(resident, yearMonth) {
   if (!resident || !yearMonth) {
     const res = { basicDays: 0, hospDays: 0, details: {} };
@@ -1594,12 +1648,17 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     // [Claude修正] 数え始める日: 入居日と、30日を超える入院から戻った日（退院した日）。それぞれから30日以内（入居日・戻った日を1日目）
     // 根拠: 市川市 運営の手引き（R8）「30日を超える病院または診療所への入院後に再入居した場合は、上記にかかわらず、初期加算が算定されます」、鹿児島市 自己点検シート（R8）
     // 入院の長さは「退院日 − 入院日」の日数で見る（数え方を名指しした資料はまだない → 表の注に出す）
-    const initStarts = [{ date: r.admission_date, label: `入居 ${r.admission_date}` }];
+    // [Claude追加 2026-10-22] 入居のときの決まり（市川市 運営の手引き R8・鹿児島市 自己点検シート R8 で一致。短期利用の日数を引くのは市川市）
+    //  - 過去3か月（認知症高齢者の日常生活自立度 Ⅲ・Ⅳ・M の方は過去1か月）の間に、この事業所に入居していたことがあれば付けない
+    //  - 短期利用から日を空けずに入居したときは、30日から直前の短期利用の日数を引いた日数だけ
+    //  同じ方の前の利用は、被保険者番号（なければ氏名と生年月日）が同じ利用者の記録で見る
+    const initInfo = cpKasanInitialAdmissionCheck(r);
+    const initStarts = initInfo.allowed ? [{ date: r.admission_date, label: `入居 ${r.admission_date}${initInfo.days < 30 ? `（短期利用 ${initInfo.shortDays}日を引いて ${initInfo.days}日まで）` : ""}`, days: initInfo.days }] : [];
     const hospList = (typeof cpGetHospitalizations === "function") ? cpGetHospitalizations(r) : (r.hospitalizations || []).filter(h => h && !h.voided);
     hospList.forEach(h => {
       if (!h || !h.admission_date || !h.discharge_date) return;
       const stay = Math.round((new Date(h.discharge_date) - new Date(h.admission_date)) / 86400000);
-      if (stay > 30) initStarts.push({ date: h.discharge_date, label: `入院 ${h.admission_date}〜${h.discharge_date}（${stay}日）のあとの再入居` });
+      if (stay > 30) initStarts.push({ date: h.discharge_date, label: `入院 ${h.admission_date}〜${h.discharge_date}（${stay}日）のあとの再入居`, days: 30 });
     });
     let initDays = 0;
     const usedStarts = new Set();
@@ -1609,7 +1668,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       const hit = initStarts.find(s => {
         if (dStr < s.date) return false;
         const diffDays = Math.round((new Date(dStr) - new Date(s.date)) / 86400000);
-        return diffDays >= 0 && diffDays < 30;
+        return diffDays >= 0 && diffDays < (s.days === undefined ? 30 : s.days);
       });
       if (hit) { initDays++; usedStarts.add(hit.label); }
     }
@@ -1622,9 +1681,16 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         count: initDays,
         unit_label: "日",
         subtotal: CP_KASAN_RESIDENT_DEFS.initial.units * initDays,
-        note: Array.from(usedStarts).join("／") + (Array.from(usedStarts).some(x => x.includes("再入居")) ? "（入院の長さの数え方は市町村に確かめてください）" : "") + "。過去3か月（自立度Ⅲ以上は1か月）にこの事業所に入居していたかは、記録がないので確かめていません"
+        note: Array.from(usedStarts).join("／") + (Array.from(usedStarts).some(x => x.includes("再入居")) ? "（入院の長さの数え方は市町村に確かめてください）" : "") + "。" + initInfo.note
       });
     }
+  }
+
+  // 入居の月で初期加算を付けないときは、基本の行の注にわけを出す（請求の明細には出さない）
+  if (!isShort && r.admission_date && r.admission_date.slice(0, 7) === yearMonth) {
+    const info = cpKasanInitialAdmissionCheck(r);
+    const basicItem = items.find(it => it && it.code === basicCodeObj.code);
+    if (!info.allowed && basicItem) basicItem.note = (basicItem.note ? basicItem.note + "。" : "") + "初期加算なし: " + info.note;
   }
 
   // b. 入院時費用 6400 246単位/日
