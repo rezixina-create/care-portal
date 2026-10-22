@@ -74,8 +74,8 @@ function cpComputeYearStats(fiscalYear) {
     const y = parseInt(yStr, 10);
     const m = parseInt(mStr, 10);
     const daysInMonth = new Date(y, m, 0).getDate();
-    const monthLabel = `${m}月`;
     const isFuture = (ym > thisMonthStr);
+    const monthLabel = (ym === thisMonthStr) ? `${m}月（見込み）` : `${m}月`; // [Claude修正] 今月は今日より後の日も今の状態が続くとして数えるので「見込み」
 
     if (isFuture) {
       monthRows.push({
@@ -164,44 +164,34 @@ function cpComputeYearStats(fiscalYear) {
           return;
         }
 
-        const missing = [];
+        // [Claude修正] 地域区分が未設定だと全員が「計算対象外」になり、単位数まで0になっていた。
+        // 単位数は要介護度があれば数える。100％の金額は地域区分、保険請求額・利用者負担は保険給付率が要る
         if (calc.levelMissing || !r.care_level) {
-          missing.push("要介護度未登録");
+          uncomputableList.push({ resident: r, reasons: ["要介護度未登録"] });
+          return;
         }
-        const bRate = parseInt(String(r.benefit_rate), 10);
-        if (isNaN(bRate) || bRate <= 0) {
-          missing.push("保険給付率未設定");
-        }
-        if (unitPriceInt === null) {
-          missing.push("地域区分未設定");
-        }
-
-        if (missing.length > 0) {
-          uncomputableList.push({
-            resident: r,
-            reasons: missing
+        const uTotal = calc.totalUnits || 0;
+        let sUnits = 0;
+        if (Array.isArray(calc.items)) {
+          calc.items.forEach(it => {
+            if (!it.candidate && (it.category === "処遇改善" || ["6108", "6183", "6107", "6184", "6104", "6380"].includes(String(it.code)))) {
+              sUnits += it.subtotal;
+            }
           });
-        } else {
-          const uTotal = calc.totalUnits || 0;
-          const c100 = Math.floor(uTotal * unitPriceInt / 100);
-          const hDemand = Math.floor(c100 * bRate / 100);
-          const uBurden = c100 - hDemand;
-
-          let sUnits = 0;
-          if (Array.isArray(calc.items)) {
-            calc.items.forEach(it => {
-              if (!it.candidate && (it.category === "処遇改善" || ["6108", "6183", "6107", "6184", "6104", "6380"].includes(String(it.code)))) {
-                sUnits += it.subtotal;
-              }
-            });
-          }
-
-          monthUnits += uTotal;
-          monthCost100 += c100;
-          monthHoken += hDemand;
-          monthBurden += uBurden;
-          monthShogu += sUnits;
         }
+        monthUnits += uTotal;
+        monthShogu += sUnits;
+        if (unitPriceInt === null) return; // 金額は出さない（画面に「地域区分未設定」）
+        const c100 = Math.floor(uTotal * unitPriceInt / 100);
+        monthCost100 += c100;
+        const bRate = parseInt(String(r.benefit_rate), 10);
+        if (![90, 80, 70].includes(bRate)) {
+          uncomputableList.push({ resident: r, reasons: ["保険給付率未設定（100％の金額には入れ、保険請求額・利用者負担には入れていません）"] });
+          return;
+        }
+        const hDemand = Math.floor(c100 * bRate / 100);
+        monthHoken += hDemand;
+        monthBurden += (c100 - hDemand);
       }
     });
 

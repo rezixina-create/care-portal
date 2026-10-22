@@ -505,6 +505,8 @@ function cpDementiaCareEligibility(ym) {
 
   const sumRatio2 = details.reduce((sum, d) => sum + d.rank2Ratio, 0);
   const avgRatio2 = sumRatio2 / 3;
+  // [Claude修正] チームケア推進加算も同じ数え方（令和６年度介護報酬改定Q&A Vol.2 問7）
+  const isEligible2 = (avgRatio2 + 1e-9) >= 0.5;
 
   const unregIdSet = new Set();
   details.forEach(d => {
@@ -518,6 +520,7 @@ function cpDementiaCareEligibility(ym) {
     avgRatio3,
     isEligible,
     avgRatio2,
+    isEligible2,
     totalUnregisteredResidents: unregIdSet.size
   };
 }
@@ -1069,16 +1072,27 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   // 2. 利用者ごとの加算
   // a. 初期加算 1550 30単位/日: 入居日より30日以内
   if (r.admission_date) {
+    // [Claude修正] 数え始める日: 入居日と、30日を超える入院から戻った日（退院した日）。それぞれから30日以内（入居日・戻った日を1日目）
+    // 根拠: 市川市 運営の手引き（R8）「30日を超える病院または診療所への入院後に再入居した場合は、上記にかかわらず、初期加算が算定されます」、鹿児島市 自己点検シート（R8）
+    // 入院の長さは「退院日 − 入院日」の日数で見る（数え方を名指しした資料はまだない → 表の注に出す）
+    const initStarts = [{ date: r.admission_date, label: `入居 ${r.admission_date}` }];
+    const hospList = (typeof cpGetHospitalizations === "function") ? cpGetHospitalizations(r) : (r.hospitalizations || []).filter(h => h && !h.voided);
+    hospList.forEach(h => {
+      if (!h || !h.admission_date || !h.discharge_date) return;
+      const stay = Math.round((new Date(h.discharge_date) - new Date(h.admission_date)) / 86400000);
+      if (stay > 30) initStarts.push({ date: h.discharge_date, label: `入院 ${h.admission_date}〜${h.discharge_date}（${stay}日）のあとの再入居` });
+    });
     let initDays = 0;
+    const usedStarts = new Set();
     for (let d = 1; d <= daysInMonth; d++) {
       const dStr = `${yStr}-${String(m).padStart(2, "0")}-${String(d).padStart(2, "0")}`;
-      if (dStr >= r.admission_date) {
-        const diffMs = new Date(dStr) - new Date(r.admission_date);
-        const diffDays = Math.floor(diffMs / 86400000);
-        if (diffDays >= 0 && diffDays < 30 && daysCalc.details && daysCalc.details[dStr] === "BASIC") {
-          initDays++;
-        }
-      }
+      if (!(daysCalc.details && daysCalc.details[dStr] === "BASIC")) continue;
+      const hit = initStarts.find(s => {
+        if (dStr < s.date) return false;
+        const diffDays = Math.round((new Date(dStr) - new Date(s.date)) / 86400000);
+        return diffDays >= 0 && diffDays < 30;
+      });
+      if (hit) { initDays++; usedStarts.add(hit.label); }
     }
     if (initDays > 0) {
       items.push({
@@ -1089,7 +1103,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         count: initDays,
         unit_label: "日",
         subtotal: CP_KASAN_RESIDENT_DEFS.initial.units * initDays,
-        note: `入居 ${r.admission_date}`
+        note: Array.from(usedStarts).join("／") + (Array.from(usedStarts).some(x => x.includes("再入居")) ? "（入院の長さの数え方は市町村に確かめてください）" : "") + "。過去3か月（自立度Ⅲ以上は1か月）にこの事業所に入居していたかは、記録がないので確かめていません"
       });
     }
   }
@@ -1504,9 +1518,25 @@ function renderOfficeKasanTab() {
     }
   }
 
-  const dementiaTeamNoticeHtml = `
-    <div style="background:var(--surface-2); color:var(--ink-2); border:1px solid var(--line-2); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
-      <strong>認知症チームケア推進加算（参考）</strong>: 前3か月の各月末の自立度Ⅱ以上の平均割合は ${avg2Pct} です。数え方の資料はまだ確かめていません（市町村に確かめてください）。
+  // [Claude修正] チームケア推進加算も前3か月の各月末の平均で判定する（厚生労働省 令和６年度介護報酬改定に関するＱ＆Ａ（Vol.２）問7）
+  const isDementiaTeamNotified = cpKasanIsNotified(settings.taisei_items && settings.taisei_items.dementia_team);
+  let dementiaTeamNoticeHtml = "";
+  if (isDementiaTeamNotified) {
+    dementiaTeamNoticeHtml = dementiaEligibility.isEligible2
+      ? `
+    <div style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+      <strong>[適合] 認知症チームケア推進加算</strong>: 前3か月の各月末の自立度Ⅱ以上の平均割合は ${avg2Pct} で、基準（2分の1以上）を満たしています。
+    </div>
+  `
+      : `
+    <div style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); border-radius:4px; padding:8px 12px; margin-top:8px; font-size:13px; line-height:1.6;">
+      <strong>[警告] 認知症チームケア推進加算</strong>: 自立度Ⅱ以上の割合が2分の1に届いていません（前3か月の各月末の平均: ${avg2Pct}）。※合計からは外していません（外すかどうかは市町村の判断のため、市町村に確かめてください）。
+    </div>
+  `;
+  }
+  dementiaTeamNoticeHtml += `
+    <div style="color:var(--ink-3); font-size:13px; margin-top:6px; line-height:1.6;">
+      数え方の根拠: 専門ケア加算 介護保険最新情報 vol.69（平成21年）問114、チームケア推進加算 令和６年度介護報酬改定に関するＱ＆Ａ（Vol.２）問7（どちらも「届出日の属する月の前３月の各月末時点の入所者等数の平均」）
     </div>
   `;
 
@@ -2377,8 +2407,8 @@ function cpValidateResidentForKasanCsv(r, ym) {
   const insurerNo = (r.insurer_no || "").trim();
   if (!insurerNo) {
     missing.push("証記載保険者番号");
-  } else if (!/^\d{8}$/.test(insurerNo)) {
-    missing.push("証記載保険者番号（数字8桁）");
+  } else if (!/^\d{6}$/.test(insurerNo)) { // [Claude修正] 証記載保険者番号は数字6桁（共通編 1.4 コード一覧）
+    missing.push("証記載保険者番号（数字6桁）");
   }
 
   if (!r.gender || (r.gender !== "1" && r.gender !== "2")) {
