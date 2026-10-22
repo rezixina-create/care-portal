@@ -1624,7 +1624,7 @@
       };
       const res157_38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
       assert(res157_38.isShort === true, "Test 157a: 短期利用判定 isShort === true であること");
-      assert(res157_38.items[0].code === "1231" && res157_38.items[0].unit_price === 824 && res157_38.items[0].count === 15, "Test 157b: 要介護3の基本コード38-1231 (824単位) 15日分算定");
+      assert(res157_38.items[0].code === "1231" && res157_38.items[0].unit_price === 854 && res157_38.items[0].count === 15, "Test 157b: 要介護3の基本コード38-1231 (854単位) 15日分算定");
 
       const shortRes157_39 = {
         id: "test_short_res_157_39",
@@ -1647,22 +1647,22 @@
         short_plan_units: [{ ym: "2026-10", units: 5000 }]
       };
       const res157_39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
-      assert(res157_39.items[0].code === "1221" && res157_39.items[0].unit_price === 442 && res157_39.items[0].count === 10, "Test 157c: 要支援2の基本コード39-1221 (442単位) 10日分算定");
+      assert(res157_39.items[0].code === "1221" && res157_39.items[0].unit_price === 789 && res157_39.items[0].count === 10, "Test 157c: 要支援2の基本コード39-1221 (789単位) 10日分算定");
 
       // 夜勤減算コード（前月の夜勤人員不足確定あり）
       db.data.kasan_settings.night_shortage = { "2026-09": { confirmed: true, condition_met: true } };
       const res157_night38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
-      assert(res157_night38.items[0].code === "1233" && res157_night38.items[0].unit_price === 799, "Test 157d: 要介護3 短期夜勤減算コード 1233 (799単位)");
+      assert(res157_night38.items[0].code === "1233" && res157_night38.items[0].unit_price === 828, "Test 157d: 要介護3 短期夜勤減算コード 1233 (828単位)");
       const res157_night39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
-      assert(res157_night39.items[0].code === "1223" && res157_night39.items[0].unit_price === 429, "Test 157e: 要支援2 短期夜勤減算コード 1223 (429単位)");
+      assert(res157_night39.items[0].code === "1223" && res157_night39.items[0].unit_price === 765, "Test 157e: 要支援2 短期夜勤減算コード 1223 (765単位)");
       db.data.kasan_settings.night_shortage = {};
 
       // 定員超過コード（前月の定員超過確定あり）
       db.data.kasan_settings.capacity_excess = { "2026-09": { confirmed: true, is_excess: true } };
       const res157_cap38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
-      assert(res157_cap38.items[0].code === "8121" && res157_cap38.items[0].unit_price === 577, "Test 157f: 要介護3 短期定員超過コード 8121 (577単位)");
+      assert(res157_cap38.items[0].code === "8121" && res157_cap38.items[0].unit_price === 598, "Test 157f: 要介護3 短期定員超過コード 8121 (598単位)");
       const res157_cap39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
-      assert(res157_cap39.items[0].code === "8111" && res157_cap39.items[0].unit_price === 309, "Test 157g: 要支援2 短期定員超過コード 8111 (309単位)");
+      assert(res157_cap39.items[0].code === "8111" && res157_cap39.items[0].unit_price === 552, "Test 157g: 要支援2 短期定員超過コード 8111 (552単位)");
       db.data.kasan_settings.capacity_excess = {};
 
       // Test 158: 短期利用対象外の加算（初期加算・入院時加算・看取り・退所時相談・LIFE加算）が除外されること
@@ -1677,8 +1677,8 @@
       const res158 = cpComputeMonthlyKasan(shortRes158, "2026-10");
       assert(!res158.items.some(d => d.code === "1550"), "Test 158a: 短期利用では初期加算（1550）が算定されないこと");
       assert(!res158.items.some(d => d.code === "6400"), "Test 158b: 短期利用では入院時費用（6400）が算定されないこと");
-      assert(!res158.items.some(d => d.code === "6350"), "Test 158c: 短期利用では看取り介護加算が算定されないこと");
-      assert(!res158.items.some(d => d.code === "6370"), "Test 158d: 短期利用では退所時相談援助加算が算定されないこと");
+      assert(!res158.items.some(d => ["6140", "6142", "6143", "6144"].includes(d.code)), "Test 158c: 短期利用では看取り介護加算（6140〜6144）が算定されないこと");
+      assert(!res158.items.some(d => d.code === "6502"), "Test 158d: 短期利用では退居時相談援助加算（6502）が算定されないこと");
       assert(!res158.items.some(d => d.code === "6361"), "Test 158e: 短期利用ではLIFE加算（6361）が算定されないこと");
       db.data.kasan_settings.initial_kasan = false;
       db.data.kasan_settings.taisei_items = {};
@@ -1753,7 +1753,7 @@
       assert(line161_10 !== undefined, "Test 161a: CSVに様式7175レコード10が存在すること");
       const f161_10 = (line161_10 || "").split(",").slice(2);
       assert(f161_10[7] === "15" && f161_10[8] === "15000", "Test 161b: 7175レコード10の項目8基本日数=15、項目9計画単位数=15000");
-      assert(parseInt(f161_10[9], 10) === 12360, "Test 161c: 7175レコード10の項目10限度額管理対象単位数=12360");
+      assert(parseInt(f161_10[9], 10) === 12810, "Test 161c: 7175レコード10の項目10限度額管理対象単位数=12810（854×15）");
       assert(parseInt(f161_10[10], 10) === 0, "Test 161d: 加算未設定時の項目11限度額管理対象外単位数=0");
 
       // サービス提供体制強化＋処遇改善加算がある場合の対象外単位数の計算検証
@@ -1778,7 +1778,7 @@
       const csvLines161_addons = (gKasanGeneratedCsvText || "").split("\r\n");
       const line161_addons_10 = csvLines161_addons.find(l => l.includes(",7175,10,"));
       const f161_addons_10 = (line161_addons_10 || "").split(",").slice(2);
-      assert(parseInt(f161_addons_10[10], 10) === 2995, "Test 161e: サ提供強化加算＋処遇改善加算が項目11（対象外単位数: 2995単位）に正しく集計されること");
+      assert(parseInt(f161_addons_10[10], 10) === 3089, "Test 161e: サ提供強化加算＋処遇改善加算が項目11（対象外単位数: 330＋2759＝3089単位）に正しく集計されること");
 
       window.isCurrentStaffAdminOrClerk = origCsvAdminPerm;
 
@@ -1789,7 +1789,17 @@
         short_plan_units: [{ ym: "2026-10", units: 10000 }]
       });
       const res162_over = cpComputeMonthlyKasan(shortRes162_over, "2026-10");
-      assert(res162_over.isLimitExceeded === true && res162_over.excessUnits === 2360, "Test 162a: 管理対象単位数が計画単位数を超過したとき isLimitExceeded === true, excessUnits = 2360");
+      assert(res162_over.isLimitExceeded === true && res162_over.excessUnits === 2810, "Test 162a: 管理対象単位数が計画単位数を超過したとき isLimitExceeded === true, excessUnits = 2810");
+      // [Claude追加] 要支援2 の要介護状態区分コードは 13、入居の人の減算（「あり」）が今までどおりかかること
+      assert(CP_KASAN_CARE_LEVEL_CODES["要支援2"] === "13", "Test 162d: 要支援2 の要介護状態区分コードは 13");
+      const gBk162 = JSON.stringify(db.data.kasan_settings.gensan_items || {});
+      db.data.kasan_settings.gensan_items = { restraint: { has_gensan: "あり", start_month: "2026-01", end_month: "", reason: "テスト" } };
+      const resRes162 = Object.assign({}, shortRes157_38, { usage_type: "resident", short_end_date: "", pre_admission_status: "1" });
+      const g162 = cpComputeMonthlyKasan(resRes162, "2026-10").items.find(d => d.category === "減算");
+      assert(!!g162 && g162.unit_price < 0, "Test 162e: 入居の人に身体拘束廃止未実施減算（あり）がかかること");
+      const gs162 = cpComputeMonthlyKasan(shortRes157_38, "2026-10").items.find(d => d.category === "減算");
+      assert(!!gs162 && gs162.code === "E203" && gs162.unit_price === -9, "Test 162f: 短期利用（要介護3・Ⅰ）の身体拘束廃止未実施減算は E203（-9単位）");
+      db.data.kasan_settings.gensan_items = JSON.parse(gBk162);
 
       const shortRes162_under = Object.assign({}, shortRes157_38, {
         short_plan_units: [{ ym: "2026-10", units: 15000 }]

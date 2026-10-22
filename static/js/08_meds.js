@@ -92,6 +92,8 @@ function cpStatusOn(r, dateStr) {
  if (!r) return "";
  const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
  if (r.admission_date && d < r.admission_date) return "入居前";
+ // [Claude修正] 短期利用の人は、終了予定日を過ぎた日は退所として扱う（退所の手続きを待たずに集計・稼働率から外す）
+ if (r.usage_type === "short" && r.short_end_date && d > r.short_end_date) return "退所";
  if (r.status === "退所" && r.discharge_date && d > r.discharge_date) return "退所";
  const hosp = cpHospitalizationOn(r, d);
  if (hosp) return "入院中";

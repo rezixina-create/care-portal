@@ -105,11 +105,9 @@ function cpComputeYearStats(fiscalYear) {
         const isShort = (r.usage_type === "short");
         const st = (typeof cpStatusOn === "function") ? cpStatusOn(r, dStr) : (r.status || "");
         if (st !== "入居前" && st !== "退所") {
-          if (isShort) {
-            monthShortStayDays++;
-          } else {
-            monthStayDays++;
-          }
+          // [Claude修正] 短期利用の人も定員の中で居室を使うので、延べ入居日数・稼働率に含め、「うち短期利用」を別に出す
+          monthStayDays++;
+          if (isShort) monthShortStayDays++;
           if (typeof cpResidentIsHere === "function" && cpResidentIsHere(r, dStr)) {
             monthPresentDays++;
           }
@@ -458,7 +456,6 @@ function renderOfficeStatsTab() {
           <td style="text-align:right;">-</td>
           <td style="text-align:right;">-</td>
           <td style="text-align:right;">-</td>
-          <td style="text-align:right;">-</td>
         </tr>
       `;
     }
@@ -497,7 +494,7 @@ function renderOfficeStatsTab() {
       <tr>
         <td style="font-weight:bold; white-space:nowrap; text-align:center;">${escapeHtml(r.monthLabel)}</td>
         <td style="text-align:right; white-space:nowrap;">${r.endOfMonthCount}名</td>
-        <td style="text-align:right; white-space:nowrap;">${r.stayDays}日</td>
+        <td style="text-align:right; white-space:nowrap;">${r.stayDays}日${r.shortStayDays > 0 ? `<div style="font-size:13px; color:var(--ink-3);">うち短期 ${r.shortStayDays}日</div>` : ""}</td>
         <td style="text-align:right; white-space:nowrap;">${r.presentDays}日</td>
         <td style="text-align:right; font-weight:bold; color:var(--pine-dark); white-space:nowrap;">${stayRateStr}</td>
         <td style="text-align:right; font-weight:bold; color:var(--sun); white-space:nowrap;">${presRateStr}</td>
@@ -564,7 +561,7 @@ function renderOfficeStatsTab() {
       <div style="font-weight:bold; color:var(--pine-dark); margin-bottom:4px;">集計の基準と留意事項</div>
       ・<strong>稼働率は国が決めた数え方ではありません。この画面では上の式で数えています。</strong><br>
       ・<strong>金額は介護保険の分の目安です。家賃・食費・光熱水費などはまだ入っていません。月遅れ・返戻は入っていません。</strong><br>
-      ・<strong>介護予防（要支援）・短期利用の請求はまだ入っていません。</strong><br>
+      ・<strong>介護予防（要支援2）の入居（37）の請求はまだ入っていません。短期利用（38・39）は入っています。</strong><br>
       ※入居延べ日数は入院中・外泊中の日数も含み、在所延べ日数は施設内に滞在していた実日数です。
     </div>
 
@@ -605,7 +602,7 @@ function renderOfficeStatsTab() {
           <tr style="background:var(--pine-tint); font-weight:bold;">
             <td style="text-align:center;">年度計・平均</td>
             <td style="text-align:right;">平均 ${tot.avgEndOfMonth}名</td>
-            <td style="text-align:right;">${tot.stayDays.toLocaleString()}日</td>
+            <td style="text-align:right;">${tot.stayDays.toLocaleString()}日${tot.shortStayDays > 0 ? `<div style="font-size:13px; color:var(--ink-3);">うち短期 ${tot.shortStayDays}日</div>` : ""}</td>
             <td style="text-align:right;">${tot.presentDays.toLocaleString()}日</td>
             <td style="text-align:right; color:var(--pine-dark); font-size:14px;">${totStayRateStr}</td>
             <td style="text-align:right; color:var(--sun); font-size:14px;">${totPresRateStr}</td>
@@ -632,7 +629,7 @@ function renderOfficeStatsTab() {
         <li>正式な請求額は、国保連に送る請求データ（CSV）と、国保連からの支払決定通知書で確かめてください</li>
         <li>稼働率は概算ではありません。この画面では毎日の実績で数えています</li>
         <li>金額は介護保険の分の目安です。家賃・食費・水光熱費などは入っていません。立替・返金は入っていません</li>
-        <li>予防（要支援）や短期利用の金額は入っていません</li>
+        <li>介護予防（要支援2）の入居（37）の金額は入っていません。短期利用（38・39）は入っています</li>
         <li>入居日は入院・外泊の日を含み、在所日は施設内に滞在していた日です</li>
       </ul>
     </div>
@@ -709,6 +706,7 @@ function cpExportStatsCsv() {
     "利用定員",
     "月末入居者数",
     "延べ入居日数",
+    "うち短期利用の延べ日数",
     "延べ在所日数",
     "稼働率（入居）",
     "稼働率（在所）",
@@ -731,7 +729,7 @@ function cpExportStatsCsv() {
       lines.push([
         r.monthLabel,
         r.capacity !== null ? String(r.capacity) : "未登録",
-        "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"
+        "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-", "-"
       ].join(","));
     } else {
       lines.push([
@@ -739,6 +737,7 @@ function cpExportStatsCsv() {
         r.capacity !== null ? String(r.capacity) : "未登録",
         String(r.endOfMonthCount),
         String(r.stayDays),
+        String(r.shortStayDays || 0),
         String(r.presentDays),
         r.occupancyStay !== null ? `${r.occupancyStay.toFixed(1)}%` : "未登録",
         r.occupancyPresent !== null ? `${r.occupancyPresent.toFixed(1)}%` : "未登録",
@@ -763,6 +762,7 @@ function cpExportStatsCsv() {
     tot.capacity !== null ? String(tot.capacity) : "未登録",
     String(tot.avgEndOfMonth),
     String(tot.stayDays),
+    String(tot.shortStayDays || 0),
     String(tot.presentDays),
     tot.occupancyStay !== null ? `${tot.occupancyStay.toFixed(1)}%` : "未登録",
     tot.occupancyPresent !== null ? `${tot.occupancyPresent.toFixed(1)}%` : "未登録",
@@ -843,7 +843,7 @@ function cpPrintStats() {
       <tr>
         <td style="text-align:center; font-weight:bold;">${escapeHtml(r.monthLabel)}</td>
         <td style="text-align:right;">${r.endOfMonthCount}名</td>
-        <td style="text-align:right;">${r.stayDays}日</td>
+        <td style="text-align:right;">${r.stayDays}日${r.shortStayDays > 0 ? `<div style="font-size:13px; color:var(--ink-3);">うち短期 ${r.shortStayDays}日</div>` : ""}</td>
         <td style="text-align:right;">${r.presentDays}日</td>
         <td style="text-align:right;">${stayRate}</td>
         <td style="text-align:right;">${presRate}</td>
@@ -902,7 +902,7 @@ function cpPrintStats() {
     <div>・介護保険の売上は、事業所の体制の加算・減算と利用者の区分から計算した「目安」です。実際の請求・入金とは異なる場合があります</div>
     <div>・1円未満の端数の処理（四捨五入か切り捨てか）や、保険請求と利用者負担の端数の合わせ方によって、1円〜数円ずれることがあります</div>
     <div>・正式な請求額は、国保連に送る請求データ（CSV）と、国保連からの支払決定通知書で確かめてください</div>
-    <div>・稼働率は概算ではありません。毎日の実績で数えています。予防（要支援）や短期利用、食費・居住費などは含まれません。</div>
+    <div>・稼働率は概算ではありません。毎日の実績で数えています。介護予防の入居（37）、食費・居住費などは含まれません。短期利用は延べ入居日数・稼働率に含めています。</div>
   </div>
   <div style="margin-bottom:12px;">
     ${svgHtml}
@@ -933,7 +933,7 @@ function cpPrintStats() {
       <tr>
         <td style="text-align:center;">年度計・平均</td>
         <td style="text-align:right;">平均 ${tot.avgEndOfMonth}名</td>
-        <td style="text-align:right;">${tot.stayDays.toLocaleString()}日</td>
+        <td style="text-align:right;">${tot.stayDays.toLocaleString()}日${tot.shortStayDays > 0 ? `<div style="font-size:13px; color:var(--ink-3);">うち短期 ${tot.shortStayDays}日</div>` : ""}</td>
         <td style="text-align:right;">${tot.presentDays.toLocaleString()}日</td>
         <td style="text-align:right;">${totStayRate}</td>
         <td style="text-align:right;">${totPresRate}</td>

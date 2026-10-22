@@ -21,97 +21,97 @@ const CP_KASAN_BASIC_CODES = {
   }
 };
 
-// 短期利用（サービス種類38: 要介護1〜5）基本サービスコード
+// 短期利用（サービス種類38: 要介護1〜5）基本サービスコード [Claude修正] 単位は WAM サービスコード表（令和8年6月・8月施行）38 の表どおり
 const CP_KASAN_SHORT_BASIC_CODES_38 = {
   unit1: {
-    "要介護1": { code: "1211", units: 765, name: "短期認知症対応型（Ⅰ）要介護1" },
-    "要介護2": { code: "1221", units: 801, name: "短期認知症対応型（Ⅰ）要介護2" },
-    "要介護3": { code: "1231", units: 824, name: "短期認知症対応型（Ⅰ）要介護3" },
-    "要介護4": { code: "1241", units: 841, name: "短期認知症対応型（Ⅰ）要介護4" },
-    "要介護5": { code: "1251", units: 859, name: "短期認知症対応型（Ⅰ）要介護5" }
+    "要介護1": { code: "1211", units: 793, name: "短期認知症対応型（Ⅰ）・要介護1" },
+    "要介護2": { code: "1221", units: 829, name: "短期認知症対応型（Ⅰ）・要介護2" },
+    "要介護3": { code: "1231", units: 854, name: "短期認知症対応型（Ⅰ）・要介護3" },
+    "要介護4": { code: "1241", units: 870, name: "短期認知症対応型（Ⅰ）・要介護4" },
+    "要介護5": { code: "1251", units: 887, name: "短期認知症対応型（Ⅰ）・要介護5" }
   },
   unit2: {
-    "要介護1": { code: "2211", units: 753, name: "短期認知症対応型（Ⅱ）要介護1" },
-    "要介護2": { code: "2221", units: 788, name: "短期認知症対応型（Ⅱ）要介護2" },
-    "要介護3": { code: "2231", units: 812, name: "短期認知症対応型（Ⅱ）要介護3" },
-    "要介護4": { code: "2241", units: 828, name: "短期認知症対応型（Ⅱ）要介護4" },
-    "要介護5": { code: "2251", units: 845, name: "短期認知症対応型（Ⅱ）要介護5" }
+    "要介護1": { code: "2211", units: 781, name: "短期認知症対応型（Ⅱ）・要介護1" },
+    "要介護2": { code: "2221", units: 817, name: "短期認知症対応型（Ⅱ）・要介護2" },
+    "要介護3": { code: "2231", units: 841, name: "短期認知症対応型（Ⅱ）・要介護3" },
+    "要介護4": { code: "2241", units: 858, name: "短期認知症対応型（Ⅱ）・要介護4" },
+    "要介護5": { code: "2251", units: 874, name: "短期認知症対応型（Ⅱ）・要介護5" }
   }
 };
 
 const CP_KASAN_SHORT_REDUCED_CODES_38 = {
   unit1: {
     yagen: {
-      "要介護1": { code: "1213", units: 742, name: "短期認知症対応型（Ⅰ）夜減・要介護1" },
-      "要介護2": { code: "1223", units: 777, name: "短期認知症対応型（Ⅰ）夜減・要介護2" },
-      "要介護3": { code: "1233", units: 799, name: "短期認知症対応型（Ⅰ）夜減・要介護3" },
-      "要介護4": { code: "1243", units: 816, name: "短期認知症対応型（Ⅰ）夜減・要介護4" },
-      "要介護5": { code: "1253", units: 833, name: "短期認知症対応型（Ⅰ）夜減・要介護5" }
+      "要介護1": { code: "1213", units: 769, name: "短期認知症対応型（Ⅰ）夜減・要介護1" },
+      "要介護2": { code: "1223", units: 804, name: "短期認知症対応型（Ⅰ）夜減・要介護2" },
+      "要介護3": { code: "1233", units: 828, name: "短期認知症対応型（Ⅰ）夜減・要介護3" },
+      "要介護4": { code: "1243", units: 844, name: "短期認知症対応型（Ⅰ）夜減・要介護4" },
+      "要介護5": { code: "1253", units: 860, name: "短期認知症対応型（Ⅰ）夜減・要介護5" }
     },
     cho: {
-      "要介護1": { code: "8101", units: 536, name: "短期認知症対応型（Ⅰ）超過・要介護1" },
-      "要介護2": { code: "8111", units: 561, name: "短期認知症対応型（Ⅰ）超過・要介護2" },
-      "要介護3": { code: "8121", units: 577, name: "短期認知症対応型（Ⅰ）超過・要介護3" },
-      "要介護4": { code: "8131", units: 589, name: "短期認知症対応型（Ⅰ）超過・要介護4" },
-      "要介護5": { code: "8141", units: 601, name: "短期認知症対応型（Ⅰ）超過・要介護5" }
+      "要介護1": { code: "8101", units: 555, name: "短期認知症対応型（Ⅰ）超過・要介護1" },
+      "要介護2": { code: "8111", units: 580, name: "短期認知症対応型（Ⅰ）超過・要介護2" },
+      "要介護3": { code: "8121", units: 598, name: "短期認知症対応型（Ⅰ）超過・要介護3" },
+      "要介護4": { code: "8131", units: 609, name: "短期認知症対応型（Ⅰ）超過・要介護4" },
+      "要介護5": { code: "8141", units: 621, name: "短期認知症対応型（Ⅰ）超過・要介護5" }
     },
     yagen_cho: {
-      "要介護1": { code: "8103", units: 519, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護1" },
-      "要介護2": { code: "8113", units: 544, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護2" },
-      "要介護3": { code: "8123", units: 559, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護3" },
-      "要介護4": { code: "8133", units: 571, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護4" },
-      "要介護5": { code: "8143", units: 583, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護5" }
+      "要介護1": { code: "8103", units: 538, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護1" },
+      "要介護2": { code: "8113", units: 563, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護2" },
+      "要介護3": { code: "8123", units: 580, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護3" },
+      "要介護4": { code: "8133", units: 591, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護4" },
+      "要介護5": { code: "8143", units: 602, name: "短期認知症対応型（Ⅰ）夜減・超過・要介護5" }
     },
     ketsu: {
-      "要介護1": { code: "9101", units: 536, name: "短期認知症対応型（Ⅰ）欠如・要介護1" },
-      "要介護2": { code: "9111", units: 561, name: "短期認知症対応型（Ⅰ）欠如・要介護2" },
-      "要介護3": { code: "9121", units: 577, name: "短期認知症対応型（Ⅰ）欠如・要介護3" },
-      "要介護4": { code: "9131", units: 589, name: "短期認知症対応型（Ⅰ）欠如・要介護4" },
-      "要介護5": { code: "9141", units: 601, name: "短期認知症対応型（Ⅰ）欠如・要介護5" }
+      "要介護1": { code: "9101", units: 555, name: "短期認知症対応型（Ⅰ）欠如・要介護1" },
+      "要介護2": { code: "9111", units: 580, name: "短期認知症対応型（Ⅰ）欠如・要介護2" },
+      "要介護3": { code: "9121", units: 598, name: "短期認知症対応型（Ⅰ）欠如・要介護3" },
+      "要介護4": { code: "9131", units: 609, name: "短期認知症対応型（Ⅰ）欠如・要介護4" },
+      "要介護5": { code: "9141", units: 621, name: "短期認知症対応型（Ⅰ）欠如・要介護5" }
     },
     yagen_ketsu: {
-      "要介護1": { code: "9103", units: 519, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護1" },
-      "要介護2": { code: "9113", units: 544, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護2" },
-      "要介護3": { code: "9123", units: 559, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護3" },
-      "要介護4": { code: "9133", units: 571, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護4" },
-      "要介護5": { code: "9143", units: 583, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護5" }
+      "要介護1": { code: "9103", units: 538, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護1" },
+      "要介護2": { code: "9113", units: 563, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護2" },
+      "要介護3": { code: "9123", units: 580, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護3" },
+      "要介護4": { code: "9133", units: 591, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護4" },
+      "要介護5": { code: "9143", units: 602, name: "短期認知症対応型（Ⅰ）夜減・欠如・要介護5" }
     }
   },
   unit2: {
     yagen: {
-      "要介護1": { code: "2213", units: 730, name: "短期認知症対応型（Ⅱ）夜減・要介護1" },
-      "要介護2": { code: "2223", units: 764, name: "短期認知症対応型（Ⅱ）夜減・要介護2" },
-      "要介護3": { code: "2233", units: 788, name: "短期認知症対応型（Ⅱ）夜減・要介護3" },
-      "要介護4": { code: "2243", units: 803, name: "短期認知症対応型（Ⅱ）夜減・要介護4" },
-      "要介護5": { code: "2253", units: 820, name: "短期認知症対応型（Ⅱ）夜減・要介護5" }
+      "要介護1": { code: "2213", units: 758, name: "短期認知症対応型（Ⅱ）夜減・要介護1" },
+      "要介護2": { code: "2223", units: 792, name: "短期認知症対応型（Ⅱ）夜減・要介護2" },
+      "要介護3": { code: "2233", units: 816, name: "短期認知症対応型（Ⅱ）夜減・要介護3" },
+      "要介護4": { code: "2243", units: 832, name: "短期認知症対応型（Ⅱ）夜減・要介護4" },
+      "要介護5": { code: "2253", units: 848, name: "短期認知症対応型（Ⅱ）夜減・要介護5" }
     },
     cho: {
-      "要介護1": { code: "8201", units: 527, name: "短期認知症対応型（Ⅱ）超過・要介護1" },
-      "要介護2": { code: "8211", units: 552, name: "短期認知症対応型（Ⅱ）超過・要介護2" },
-      "要介護3": { code: "8221", units: 568, name: "短期認知症対応型（Ⅱ）超過・要介護3" },
-      "要介護4": { code: "8231", units: 580, name: "短期認知症対応型（Ⅱ）超過・要介護4" },
-      "要介護5": { code: "8241", units: 592, name: "短期認知症対応型（Ⅱ）超過・要介護5" }
+      "要介護1": { code: "8201", units: 547, name: "短期認知症対応型（Ⅱ）超過・要介護1" },
+      "要介護2": { code: "8211", units: 572, name: "短期認知症対応型（Ⅱ）超過・要介護2" },
+      "要介護3": { code: "8221", units: 589, name: "短期認知症対応型（Ⅱ）超過・要介護3" },
+      "要介護4": { code: "8231", units: 601, name: "短期認知症対応型（Ⅱ）超過・要介護4" },
+      "要介護5": { code: "8241", units: 612, name: "短期認知症対応型（Ⅱ）超過・要介護5" }
     },
     yagen_cho: {
-      "要介護1": { code: "8203", units: 511, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護1" },
-      "要介護2": { code: "8213", units: 535, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護2" },
-      "要介護3": { code: "8223", units: 552, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護3" },
-      "要介護4": { code: "8233", units: 562, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護4" },
-      "要介護5": { code: "8243", units: 574, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護5" }
+      "要介護1": { code: "8203", units: 531, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護1" },
+      "要介護2": { code: "8213", units: 554, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護2" },
+      "要介護3": { code: "8223", units: 571, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護3" },
+      "要介護4": { code: "8233", units: 582, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護4" },
+      "要介護5": { code: "8243", units: 594, name: "短期認知症対応型（Ⅱ）夜減・超過・要介護5" }
     },
     ketsu: {
-      "要介護1": { code: "9201", units: 527, name: "短期認知症対応型（Ⅱ）欠如・要介護1" },
-      "要介護2": { code: "9211", units: 552, name: "短期認知症対応型（Ⅱ）欠如・要介護2" },
-      "要介護3": { code: "9221", units: 568, name: "短期認知症対応型（Ⅱ）欠如・要介護3" },
-      "要介護4": { code: "9231", units: 580, name: "短期認知症対応型（Ⅱ）欠如・要介護4" },
-      "要介護5": { code: "9241", units: 592, name: "短期認知症対応型（Ⅱ）欠如・要介護5" }
+      "要介護1": { code: "9201", units: 547, name: "短期認知症対応型（Ⅱ）欠如・要介護1" },
+      "要介護2": { code: "9211", units: 572, name: "短期認知症対応型（Ⅱ）欠如・要介護2" },
+      "要介護3": { code: "9221", units: 589, name: "短期認知症対応型（Ⅱ）欠如・要介護3" },
+      "要介護4": { code: "9231", units: 601, name: "短期認知症対応型（Ⅱ）欠如・要介護4" },
+      "要介護5": { code: "9241", units: 612, name: "短期認知症対応型（Ⅱ）欠如・要介護5" }
     },
     yagen_ketsu: {
-      "要介護1": { code: "9203", units: 511, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護1" },
-      "要介護2": { code: "9213", units: 535, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護2" },
-      "要介護3": { code: "9223", units: 552, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護3" },
-      "要介護4": { code: "9233", units: 562, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護4" },
-      "要介護5": { code: "9243", units: 574, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護5" }
+      "要介護1": { code: "9203", units: 531, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護1" },
+      "要介護2": { code: "9213", units: 554, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護2" },
+      "要介護3": { code: "9223", units: 571, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護3" },
+      "要介護4": { code: "9233", units: 582, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護4" },
+      "要介護5": { code: "9243", units: 594, name: "短期認知症対応型（Ⅱ）夜減・欠如・要介護5" }
     }
   }
 };
@@ -119,20 +119,20 @@ const CP_KASAN_SHORT_REDUCED_CODES_38 = {
 // 短期利用（サービス種類39: 要支援2のみ）基本サービスコード
 const CP_KASAN_SHORT_CODES_39 = {
   unit1: {
-    normal: { code: "1221", units: 442, name: "介護予防短期認知症対応型（Ⅰ）" },
-    yagen: { code: "1223", units: 429, name: "介護予防短期認知症対応型（Ⅰ）夜減" },
-    cho: { code: "8111", units: 309, name: "介護予防短期認知症対応型（Ⅰ）超過" },
-    yagen_cho: { code: "8113", units: 300, name: "介護予防短期認知症対応型（Ⅰ）夜減・超過" },
-    ketsu: { code: "9111", units: 309, name: "介護予防短期認知症対応型（Ⅰ）欠如" },
-    yagen_ketsu: { code: "9113", units: 300, name: "介護予防短期認知症対応型（Ⅰ）夜減・欠如" }
+    normal: { code: "1221", units: 789, name: "介護予防短期認知症対応型（Ⅰ）" },
+    yagen: { code: "1223", units: 765, name: "介護予防短期認知症対応型（Ⅰ）夜減" },
+    cho: { code: "8111", units: 552, name: "介護予防短期認知症対応型（Ⅰ）超過" },
+    yagen_cho: { code: "8113", units: 536, name: "介護予防短期認知症対応型（Ⅰ）夜減・超過" },
+    ketsu: { code: "9111", units: 552, name: "介護予防短期認知症対応型（Ⅰ）欠如" },
+    yagen_ketsu: { code: "9113", units: 536, name: "介護予防短期認知症対応型（Ⅰ）夜減・欠如" }
   },
   unit2: {
-    normal: { code: "2221", units: 436, name: "介護予防短期認知症対応型（Ⅱ）" },
-    yagen: { code: "2223", units: 423, name: "介護予防短期認知症対応型（Ⅱ）夜減" },
-    cho: { code: "8211", units: 305, name: "介護予防短期認知症対応型（Ⅱ）超過" },
-    yagen_cho: { code: "8213", units: 296, name: "介護予防短期認知症対応型（Ⅱ）夜減・超過" },
-    ketsu: { code: "9211", units: 305, name: "介護予防短期認知症対応型（Ⅱ）欠如" },
-    yagen_ketsu: { code: "9213", units: 296, name: "介護予防短期認知症対応型（Ⅱ）夜減・欠如" }
+    normal: { code: "2221", units: 777, name: "介護予防短期認知症対応型（Ⅱ）" },
+    yagen: { code: "2223", units: 754, name: "介護予防短期認知症対応型（Ⅱ）夜減" },
+    cho: { code: "8211", units: 544, name: "介護予防短期認知症対応型（Ⅱ）超過" },
+    yagen_cho: { code: "8213", units: 528, name: "介護予防短期認知症対応型（Ⅱ）夜減・超過" },
+    ketsu: { code: "9211", units: 544, name: "介護予防短期認知症対応型（Ⅱ）欠如" },
+    yagen_ketsu: { code: "9213", units: 528, name: "介護予防短期認知症対応型（Ⅱ）夜減・欠如" }
   }
 };
 
@@ -140,50 +140,50 @@ const CP_KASAN_SHORT_CODES_39 = {
 const CP_KASAN_SHORT_GENSAN_38 = {
   restraint: {
     unit1: {
-      "要介護1": { code: "E201", units: -77 },
-      "要介護2": { code: "E202", units: -80 },
-      "要介護3": { code: "E203", units: -82 },
-      "要介護4": { code: "E204", units: -84 },
-      "要介護5": { code: "E205", units: -86 }
+      "要介護1": { code: "E201", units: -8 },
+      "要介護2": { code: "E202", units: -8 },
+      "要介護3": { code: "E203", units: -9 },
+      "要介護4": { code: "E204", units: -9 },
+      "要介護5": { code: "E205", units: -9 }
     },
     unit2: {
-      "要介護1": { code: "E206", units: -75 },
-      "要介護2": { code: "E207", units: -79 },
-      "要介護3": { code: "E208", units: -81 },
-      "要介護4": { code: "E209", units: -83 },
-      "要介護5": { code: "E210", units: -85 }
+      "要介護1": { code: "E206", units: -8 },
+      "要介護2": { code: "E207", units: -8 },
+      "要介護3": { code: "E208", units: -8 },
+      "要介護4": { code: "E209", units: -9 },
+      "要介護5": { code: "E210", units: -9 }
     }
   },
   abuse: {
     unit1: {
       "要介護1": { code: "C201", units: -8 },
       "要介護2": { code: "C202", units: -8 },
-      "要介護3": { code: "C203", units: -8 },
-      "要介護4": { code: "C204", units: -8 },
+      "要介護3": { code: "C203", units: -9 },
+      "要介護4": { code: "C204", units: -9 },
       "要介護5": { code: "C205", units: -9 }
     },
     unit2: {
       "要介護1": { code: "C206", units: -8 },
       "要介護2": { code: "C207", units: -8 },
       "要介護3": { code: "C208", units: -8 },
-      "要介護4": { code: "C209", units: -8 },
-      "要介護5": { code: "C210", units: -8 }
+      "要介護4": { code: "C209", units: -9 },
+      "要介護5": { code: "C210", units: -9 }
     }
   },
   bcp: {
     unit1: {
-      "要介護1": { code: "D201", units: -23 },
-      "要介護2": { code: "D202", units: -24 },
-      "要介護3": { code: "D203", units: -25 },
-      "要介護4": { code: "D204", units: -25 },
-      "要介護5": { code: "D205", units: -26 }
+      "要介護1": { code: "D201", units: -24 },
+      "要介護2": { code: "D202", units: -25 },
+      "要介護3": { code: "D203", units: -26 },
+      "要介護4": { code: "D204", units: -26 },
+      "要介護5": { code: "D205", units: -27 }
     },
     unit2: {
       "要介護1": { code: "D206", units: -23 },
-      "要介護2": { code: "D207", units: -24 },
-      "要介護3": { code: "D208", units: -24 },
-      "要介護4": { code: "D209", units: -25 },
-      "要介護5": { code: "D210", units: -25 }
+      "要介護2": { code: "D207", units: -25 },
+      "要介護3": { code: "D208", units: -25 },
+      "要介護4": { code: "D209", units: -26 },
+      "要介護5": { code: "D210", units: -26 }
     }
   }
 };
@@ -191,16 +191,16 @@ const CP_KASAN_SHORT_GENSAN_38 = {
 // 短期利用（サービス種類39: 要支援2）減算コード
 const CP_KASAN_SHORT_GENSAN_39 = {
   restraint: {
-    unit1: { code: "E202", units: -44 },
-    unit2: { code: "E204", units: -44 }
+    unit1: { code: "E202", units: -8 },
+    unit2: { code: "E204", units: -8 }
   },
   abuse: {
-    unit1: { code: "C202", units: -4 },
-    unit2: { code: "C204", units: -4 }
+    unit1: { code: "C202", units: -8 },
+    unit2: { code: "C204", units: -8 }
   },
   bcp: {
-    unit1: { code: "D202", units: -13 },
-    unit2: { code: "D204", units: -13 }
+    unit1: { code: "D202", units: -24 },
+    unit2: { code: "D204", units: -23 }
   }
 };
 
@@ -1159,7 +1159,9 @@ function cpKasanBasicDays(resident, yearMonth) {
   const hospitalizations = (typeof cpGetHospitalizations === "function") ? cpGetHospitalizations(resident) : (resident.hospitalizations || []);
   const outings = (typeof cpGetOutings === "function") ? cpGetOutings(resident) : (resident.outings || []);
   const admDate = resident.admission_date || resident.entry_date || "";
-  const disDate = (resident.usage_type === "short" ? (resident.short_end_date || resident.discharge_date) : resident.discharge_date) || "";
+  // [Claude修正] 短期利用は終了予定日まで。ただし先に退所の手続きをしたときは退所日まで
+  let disDate = resident.discharge_date || "";
+  if (resident.usage_type === "short" && resident.short_end_date && (!disDate || resident.short_end_date < disDate)) disDate = resident.short_end_date;
 
   // 1. 各入院の算定適格日を事前計算
   // 1回の入院について、初日(admission_date)翌日から起算
@@ -1454,7 +1456,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     } else if (reductions.has_yagen) {
       basicCodeObj = def38Red.yagen[careLevel] || null;
       basicCategory = "基本（夜減）";
-      basicNote = "3ユニット夜勤2人以上減算（97%）";
+      basicNote = "夜勤減算（97/100）";
     } else {
       basicCodeObj = def38Norm[careLevel] || null;
       basicCategory = "基本";
@@ -1782,7 +1784,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   // 4. 既存個別減算（身体拘束廃止未実施減算等）
   CP_KASAN_GENSAN_DEFS.forEach(def => {
     const gSet = settings.gensan_items[def.id];
-    if (gSet && gSet.has_gensan === "有" && basicDays > 0) {
+    if (gSet && gSet.has_gensan === "あり" && basicDays > 0) { // [Claude修正] 設定の値は「あり」（c5992cc で「有」になり、入居の人も含めて減算がかからなくなっていた）
       const inRange = (!gSet.start_month || yearMonth >= gSet.start_month) &&
                       (!gSet.end_month || yearMonth <= gSet.end_month);
       if (inRange) {
@@ -1828,7 +1830,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
             count: basicDays,
             unit_label: "日",
             subtotal: reductionObj.units * basicDays,
-            note: `${careLevel}`
+            note: gSet.reason || "未実施"
           });
         }
       }
@@ -3007,7 +3009,7 @@ const CP_KASAN_CARE_LEVEL_CODES = {
   "要介護3": "23",
   "要介護4": "24",
   "要介護5": "25",
-  "要支援2": "05"
+  "要支援2": "13" // [Claude修正] 要支援2 は 13（共通編 コード一覧。05 ではない）
 };
 
 // モーダルを開く（権限チェック & 初期検証）
@@ -3069,9 +3071,9 @@ function cpValidateResidentForKasanCsv(r, ym) {
 
   const insurerNo = (r.insurer_no || "").trim();
   if (!insurerNo) {
-    missing.push("記号記載保険者番号");
+    missing.push("証記載保険者番号");
   } else if (!/^\d{6}$/.test(insurerNo)) {
-    missing.push("記号記載保険者番号（数字6桁）");
+    missing.push("証記載保険者番号（数字6桁）");
   }
 
   if (!r.gender || (r.gender !== "1" && r.gender !== "2")) {
