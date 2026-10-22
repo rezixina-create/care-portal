@@ -2669,7 +2669,7 @@ namespace CarePortal
             t.Start();
         }
 
-        // [Claude追加 2026-10-22] 外部接続（トンネル）のURLは待たずに起動し、出てきたら tunnel_url.txt に書いて黒い画面にも出す
+        // [Claude追加 2026-10-22] 外部接続（トンネル）のURLは待たずに起動し、出てきたら tunnel_url.txt に書く（黒い画面には出さない。あなた「準備ができましたの記載はしたらだめ。中のWi-Fiのところで見ればいい」）
         //（前は URL が出るまで最大5秒待ってからサーバーの準備を始めていた。画面の「接続案内」は tunnel_url.txt を読む）
         private System.Threading.Timer _tunnelTimer;
         private int _tunnelTicks;
@@ -2689,8 +2689,7 @@ namespace CarePortal
                         System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(txt, "https://[a-zA-Z0-9-]+\\.trycloudflare\\.com");
                         if (m.Success)
                         {
-                            File.WriteAllText(urlPath, m.Value, Encoding.UTF8);
-                            Console.WriteLine(" [外部接続] スマホ・他端末の外部接続用のURLが準備できました（画面右上の「接続案内」にも出ています）: " + m.Value);
+                            File.WriteAllText(urlPath, m.Value, Encoding.UTF8);   // 黒い画面には出さない（画面の「接続案内」で見る）
                             _tunnelTimer.Dispose();
                             return;
                         }
@@ -3246,7 +3245,7 @@ if (-not $NoTunnel -and (Test-Path $cloudflared)) {
         # WindowStyle Hidden で起動（パイプハンドルを継承させず独立プロセスとして起動）
         $tunnelProc = Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:$port" -RedirectStandardError $tunnelLog -PassThru -WindowStyle Hidden
         
-        # [Claude修正 2026-10-22] URL は待たない。出てきたらサーバー（WatchTunnelLog）が tunnel_url.txt と黒い画面に出す
+        # [Claude修正 2026-10-22] URL は待たない。出てきたらサーバー（WatchTunnelLog）が tunnel_url.txt に書く
     } catch {
         Write-Host "※トンネルの自動起動に失敗しました（ローカルサーバーとして継続します）" -ForegroundColor Gray
     }
@@ -3263,18 +3262,9 @@ Write-Host " [PC (Host)]:" -ForegroundColor White
 Write-Host "   http://localhost:$port" -ForegroundColor Cyan
 Write-Host ""
 
-$latestTunnelUrl = $null
-if (Test-Path $tunnelUrlFile) {
-    try { $latestTunnelUrl = (Get-Content $tunnelUrlFile -Raw -ErrorAction SilentlyContinue).Trim() } catch { }
-}
-if ($latestTunnelUrl) {
-    Write-Host " [スマホ・他端末 外部接続用 (統一案内URL)]:" -ForegroundColor Green
-    Write-Host "   $latestTunnelUrl" -ForegroundColor Yellow -BackgroundColor Black
-    Write-Host "   ※ 自宅Wi-Fi・学校・外出先スマホ(4G/5G)どこからでもこのURLで繋がります。" -ForegroundColor Gray
-} else {
-    Write-Host " [外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
-    Write-Host "   バックグラウンドで接続準備中... (URLが出たら、この画面と画面右上の「接続案内」に出ます)" -ForegroundColor Gray
-}
+# [Claude修正 2026-10-22] 外部接続のURLは黒い画面に出さない（ポータルの画面の「接続案内」で見る）
+Write-Host " [外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
+Write-Host "   外部接続のURLは、ポータルの画面右上の「接続案内」で確かめてください。" -ForegroundColor Gray
 Write-Host ""
 Write-Host " [Tablet (同一Wi-Fi / LAN直接アクセス用)]:" -ForegroundColor White
 foreach ($ip in $ipList) {
