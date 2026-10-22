@@ -340,6 +340,9 @@ function renderResidentDetail() {
  <!-- [Antigravity実装 2026-10-21] 認知症高齢者の日常生活自立度 -->
  ${typeof cpDementiaSectionHtml === "function" ? cpDementiaSectionHtml(r) : ""}
 
+ <!-- [LIFE評価] 科学的介護推進体制加算 -->
+ ${typeof cpLifeSectionHtml === "function" ? cpLifeSectionHtml(r) : ""}
+
  <!-- 2. 身体状況・病歴・食形態・口腔状態 (アコーディオン) -->
  <details class="care-accordion" open style="margin-bottom:10px; border:1px solid #dfe5e1; border-radius:8px; background:#fff; overflow:hidden;">
  <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">

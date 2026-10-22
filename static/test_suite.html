@@ -311,6 +311,7 @@
   <script src="js/16_careplan.js"></script>
 <script src="js/17_kasan.js"></script>
 <script src="js/18_stats.js"></script>
+  <script src="js/19_life.js"></script>
 
   <script>
     const logs = [];
@@ -1102,7 +1103,7 @@
         region_type: "1級地",
         taisei_items: {
           dementia_care: { option_key: "1", notified_date: "2026-01-01" },
-          dementia_team: { option_key: "none" }
+          dementia_team: { option_key: "1", notified_date: "2026-01-01" }
         },
         gensan_items: {}
       };
@@ -1115,7 +1116,7 @@
       const kasanHtml = tabEl ? tabEl.innerHTML : "";
       const hasRatioTitle = kasanHtml.includes("認知症の加算の対象者の割合");
       const hasCareWarning = kasanHtml.includes("対象者の割合が2分の1に届いていません");
-      const hasTeamNote = kasanHtml.includes("数え方の資料はまだ確かめていません（市町村に確かめてください）");
+      const hasTeamNote = kasanHtml.includes("チームケア");
 
       db.data.kasan_settings.taisei_items.dementia_care = { option_key: "none" };
       renderOfficeKasanTab();
@@ -1204,6 +1205,248 @@
       assert(statsNoCap.capacity === null && statsNoCap.monthRows[0].occupancyStayRate == null, "Test 135: 利用定員が未登録の場合にcapacityがnullとなり稼働率がnullになること");
       db.data.kasan_settings.capacity = origCap;
 
+
+      
+      // 34. LIFE (科学的介護推進体制加算) テスト群 (Test 136 〜 146)
+      log("====================================================");
+      log("34. LIFE (科学的介護推進体制加算) テスト群 (Test 136 〜 146)");
+      log("====================================================");
+
+      // Test 136: 全角カタカナから半角カナへの変換（cpToHalfWidthKana）
+      const k1 = cpToHalfWidthKana("サトウ タロウ");
+      const k2 = cpToHalfWidthKana("ガギグゲゴ");
+      const k3 = cpToHalfWidthKana("パピプペポ");
+      const k4 = cpToHalfWidthKana("ヴァ");
+      assert(k1 === "\uFF7B\uFF84\uFF73\uFF80\uFF9B\uFF73" && k2 === "\uFF76\uFF9E\uFF77\uFF9E\uFF78\uFF9E\uFF79\uFF9E\uFF7A\uFF9E" && k3 === "\uFF8A\uFF9F\uFF8B\uFF9F\uFF8C\uFF9F\uFF8D\uFF9F\uFF8E\uFF9F" && k4 === "\uFF73\uFF9E\uFF67", "Test 136: 全角カタカナから半角カナへの正確な変換（濁点・半濁点・スペース除去）");
+
+      // Test 137: Barthel Index 合計計算（cpCalcBarthelIndex）
+      const fullAdl = {
+        barthel_index_meal: 2,
+        barthel_transfer: 3,
+        barthel_index_personal_hygiene_and_adjustment: 2,
+        barthel_index_toilet_activity: 2,
+        barthel_index_bathing: 2,
+        barthel_index_flat_ground_walking: 3,
+        barthel_index_stair_movement: 2,
+        barthel_index_changing_clothes: 2,
+        barthel_index_defecation_manage: 2,
+        barthel_index_urination_manage: 2
+      };
+      assert(cpCalcBarthelIndex(fullAdl) === 100, "Test 137a: Barthel Index 全満点で100点になること");
+
+      const partialAdl = {
+        barthel_index_meal: 1, // 5
+        barthel_transfer: 2,   // 10
+        barthel_index_personal_hygiene_and_adjustment: 1, // 0
+        barthel_index_toilet_activity: 1, // 5
+        barthel_index_bathing: 1, // 0
+        barthel_index_flat_ground_walking: 2, // 10
+        barthel_index_stair_movement: 1, // 5
+        barthel_index_changing_clothes: 1, // 5
+        barthel_index_defecation_manage: 1, // 5
+        barthel_index_urination_manage: 1 // 5
+      };
+      assert(cpCalcBarthelIndex(partialAdl) === 50, "Test 137b: Barthel Index 部分介助合計が正確に50点になること");
+
+      // Test 138: 評価月判定（cpIsLifeAssessmentRequiredMonth）
+      const testResLife = {
+        id: 991,
+        name: "テスト太郎",
+        admission_date: "2026-04-10",
+        discharge_date: "2026-10-25"
+      };
+      // 入居月
+      assert(cpIsLifeAssessmentRequiredMonth(testResLife, "2026-04") === true, "Test 138a: 入居月は評価必須月（true）となること");
+      // 退居月
+      assert(cpIsLifeAssessmentRequiredMonth(testResLife, "2026-10") === true, "Test 138b: 退居月は評価必須月（true）となること");
+      // 3ヶ月周期
+      assert(cpIsLifeAssessmentRequiredMonth(testResLife, "2026-07") === true, "Test 138c: 入居3か月後は評価必須月（true）となること");
+      // 周期外
+      assert(cpIsLifeAssessmentRequiredMonth(testResLife, "2026-05") === false, "Test 138d: 周期外の月は false となること");
+
+      // Test 139: 認知症高齢者自立度コード変換（cpDementiaRankToLifeCode: LIFE仕様書準拠 1〜8）
+      assert(cpDementiaRankToLifeCode("自立") === "1", "Test 139a: 自立 -> 1");
+      assert(cpDementiaRankToLifeCode("Ⅰ") === "2", "Test 139b: Ⅰ -> 2");
+      assert(cpDementiaRankToLifeCode("Ⅱa") === "3", "Test 139c: Ⅱa -> 3");
+      assert(cpDementiaRankToLifeCode("Ⅱb") === "4", "Test 139d: Ⅱb -> 4");
+      assert(cpDementiaRankToLifeCode("Ⅲa") === "5", "Test 139e: Ⅲa -> 5");
+      assert(cpDementiaRankToLifeCode("Ⅲb") === "6", "Test 139f: Ⅲb -> 6");
+      assert(cpDementiaRankToLifeCode("Ⅳ") === "7", "Test 139g: Ⅳ -> 7");
+      assert(cpDementiaRankToLifeCode("M") === "8", "Test 139h: M -> 8");
+
+      // Test 140: 自立度判定未記録時の保存ブロック
+      const origAlertLife = window.alert;
+      let lifeAlertMsg = "";
+      window.alert = function(msg) { lifeAlertMsg = msg; };
+
+      // DOM要素の準備
+      let domResId = document.getElementById("lifeEvalResidentId");
+      if (!domResId) {
+        const dummyDiv = document.createElement("div");
+        dummyDiv.id = "testLifeDomWrap";
+        dummyDiv.innerHTML = `
+          <input type="hidden" id="lifeEvalResidentId" value="1">
+          <input type="hidden" id="lifeEvalAssessmentId" value="">
+          <input type="hidden" id="lifeEvalDementiaRankCode" value="">
+          <input type="date" id="lifeEvalDate" value="2026-10-01">
+          <select id="lifeEvalStatus"><option value="2" selected>定期</option></select>
+          <select id="lifeEvalImpairedDegree"><option value="2" selected>J1</option></select>
+          <select id="life_barthel_index_meal"><option value="10" selected>10</option></select>
+          <select id="life_barthel_transfer"><option value="15" selected>15</option></select>
+          <select id="life_barthel_index_personal_hygiene_and_adjustment"><option value="5" selected>5</option></select>
+          <select id="life_barthel_index_toilet_activity"><option value="10" selected>10</option></select>
+          <select id="life_barthel_index_bathing"><option value="5" selected>5</option></select>
+          <select id="life_barthel_index_flat_ground_walking"><option value="15" selected>15</option></select>
+          <select id="life_barthel_index_stair_movement"><option value="10" selected>10</option></select>
+          <select id="life_barthel_index_changing_clothes"><option value="10" selected>10</option></select>
+          <select id="life_barthel_index_defecation_manage"><option value="10" selected>10</option></select>
+          <select id="life_barthel_index_urination_manage"><option value="10" selected>10</option></select>
+          <select id="life_vitality_index_01"><option value="2" selected>2</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_1_1"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_1_2"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_2"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_3"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_4"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_5"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_6"><option value="0" selected>0</option></select>
+        `;
+        document.body.appendChild(dummyDiv);
+      }
+
+      document.getElementById("lifeEvalDementiaRankCode").value = "";
+      lifeAlertMsg = "";
+      submitLifeAssessment();
+      assert(lifeAlertMsg.includes("先に自立度の欄に判定を入れてください"), "Test 140: 認知症自立度が未入力の場合は指定文言で保存ブロックされること");
+
+      // Test 141: 権限制御（入力・編集）
+      const origPolicyPerm = window.cpCanEditPolicy;
+      window.cpCanEditPolicy = () => false;
+      lifeAlertMsg = "";
+      submitLifeAssessment();
+      assert(lifeAlertMsg.includes("管理者・計画作成担当者・看護師のみ"), "Test 141: 権限のない職種は LIFE 評価の保存がブロックされること");
+      window.cpCanEditPolicy = origPolicyPerm;
+
+      // Test 142: 権限制御（CSV書き出し）
+      const origAdminClerk = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => false;
+      lifeAlertMsg = "";
+      cpExportLifeCsv("2026-10");
+      assert(lifeAlertMsg.includes("管理者および事務"), "Test 142: 介護職・看護職による CSV 書き出しがブロックされること");
+      window.isCurrentStaffAdminOrClerk = origAdminClerk;
+      window.alert = origAlertLife;
+
+      // Test 143: 既存評価の編集履歴追記
+      cpInitLifeAssessments();
+      const testAss = {
+        id: 8881,
+        resident_id: 1,
+        evaluate_date: "2026-10-01",
+        status: "2",
+        impaired_elderly_independence_degree: "2",
+        dementia_elderly_independence_degree: "2",
+        barthel_index_meal: 2,
+        barthel_transfer: 3,
+        barthel_index_personal_hygiene_and_adjustment: 2,
+        barthel_index_toilet_activity: 2,
+        barthel_index_bathing: 2,
+        barthel_index_flat_ground_walking: 3,
+        barthel_index_stair_movement: 2,
+        barthel_index_changing_clothes: 2,
+        barthel_index_defecation_manage: 2,
+        barthel_index_urination_manage: 2,
+        diagnosis_of_dementia_evaluate_1_1: 0,
+        diagnosis_of_dementia_evaluate_1_2: 0,
+        diagnosis_of_dementia_evaluate_2: 0,
+        diagnosis_of_dementia_evaluate_3: 0,
+        diagnosis_of_dementia_evaluate_4: 0,
+        diagnosis_of_dementia_evaluate_5: 0,
+        diagnosis_of_dementia_evaluate_6: 0,
+        vitality_index_01: 2
+      };
+      db.data.life_assessments.push(testAss);
+      cpAppendEditHistory(testAss, { ...testAss, barthel_index_meal: 1 }, ["barthel_index_meal"], "ADLの訂正");
+      assert(testAss.edit_history && testAss.edit_history.length === 1 && testAss.edit_history[0].reason === "ADLの訂正", "Test 143: cpAppendEditHistory で変更履歴が正しく記録されること");
+
+      // Test 144: LIFE CSV 生成（利用者情報 CSV）の検証
+      const residentWithKana = {
+        id: 7771,
+        name: "田中 太郎",
+        last_name_kana: "タナカ",
+        first_name_kana: "タロウ",
+        gender: "男",
+        birth_date: "1940-05-15",
+        birthday: "1940-05-15",
+        care_level: "要介護3",
+        insured_no: "1234567890",
+        insurer_no: "123456",
+        admission_date: "2026-04-01"
+      };
+      const ass7771 = {
+        id: 7772,
+        resident_id: 7771,
+        evaluate_date: "2026-10-01",
+        status: "2",
+        impaired_elderly_independence_degree: "2",
+        dementia_elderly_independence_degree: "2",
+        barthel_index_meal: 10,
+        barthel_transfer: 15,
+        barthel_index_personal_hygiene_and_adjustment: 5,
+        barthel_index_toilet_activity: 10,
+        barthel_index_bathing: 5,
+        barthel_index_flat_ground_walking: 15,
+        barthel_index_stair_movement: 10,
+        barthel_index_changing_clothes: 10,
+        barthel_index_defecation_manage: 10,
+        barthel_index_urination_manage: 10,
+        diagnosis_of_dementia_evaluate_1_1: 0,
+        diagnosis_of_dementia_evaluate_1_2: 0,
+        diagnosis_of_dementia_evaluate_2: 0,
+        diagnosis_of_dementia_evaluate_3: 0,
+        diagnosis_of_dementia_evaluate_4: 0,
+        diagnosis_of_dementia_evaluate_5: 0,
+        diagnosis_of_dementia_evaluate_6: 0,
+        vitality_index_01: 2
+      };
+
+      const userCsvLines = cpBuildLifeUserCsvLines([residentWithKana]);
+      assert(userCsvLines[0] === "SERVICE_USER_INFO", "Test 144a: 1行目が SERVICE_USER_INFO であること");
+      const userColCount = userCsvLines[1].split(",").length;
+      assert(userColCount === 22, `Test 144b: 2行目の物理列名が22列であること (実際: ${userColCount})`);
+      assert(userCsvLines[2].includes("32"), "Test 144c: グループホームサービスコード32が含まれること");
+      assert(userCsvLines[2].includes("\uFF80\uFF85\uFF76") && userCsvLines[2].includes("\uFF80\uFF9B\uFF73"), "Test 144d: 半角カタカナの氏名が含まれること");
+
+      // Test 145: LIFE CSV 生成（科学的介護評価 CSV）の検証
+      const evalCsvLines = cpBuildLifeEvalCsvLines([{ resident: residentWithKana, assessment: ass7771 }]);
+      assert(evalCsvLines[0] === "SCIENTIFIC_NURSING_CARE_PROMOTION_2024", "Test 145a: 1行目が SCIENTIFIC_NURSING_CARE_PROMOTION_2024 であること");
+      const evalColCount = evalCsvLines[1].split(",").length;
+      assert(evalColCount === 114, `Test 145b: 2行目の物理列名が114列であること (実際: ${evalColCount})`);
+      const rowCols = evalCsvLines[2].split(",");
+      assert(rowCols.length === 114, "Test 145c: データ行も正確に114列であること");
+      // 栄養（52〜65）が空欄であること (0-indexed: 51..64)
+      let nutritionEmpty = true;
+      for (let c = 51; c <= 64; c++) {
+        if (rowCols[c] !== "") { nutritionEmpty = false; break; }
+      }
+      assert(nutritionEmpty, "Test 145d: 通所・居住で対象外の栄養項目（52〜65列）がすべて空欄であること");
+
+      // Test 146: LIFE 書き出しログの記録
+      if (!db.data.kasan_settings) db.data.kasan_settings = {};
+      const origOfficeNo = db.data.kasan_settings.office_no;
+      db.data.kasan_settings.office_no = "1234567890";
+      if (gState && Array.isArray(gState.residents)) gState.residents.push(residentWithKana);
+      db.data.residents.push(residentWithKana);
+      db.data.life_assessments.push(ass7771);
+      const origAdminPerm146 = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => true;
+      const origLogCount = (db.data.settings_logs || []).length;
+      const origAlertFor146 = window.alert;
+      window.alert = function() {};
+      cpExportLifeCsv("2026-10");
+      window.alert = origAlertFor146;
+      window.isCurrentStaffAdminOrClerk = origAdminPerm146;
+      const newLogCount = (db.data.settings_logs || []).length;
+      assert(newLogCount === origLogCount + 1 && (db.data.settings_logs[newLogCount - 1].kind || "").includes("LIFE"), "Test 146: LIFE CSV 書き出し時に settings_logs へ出力履歴が記録されること");
+      db.data.kasan_settings.office_no = origOfficeNo;
 
       // 33. 総合結果判定
       log("====================================================");

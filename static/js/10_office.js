@@ -19,7 +19,7 @@ function loadOfficeData() {
 }
 
 function switchOfficeTab(tab) {
- if (tab === "backup" || tab === "staff_auth" || tab === "units" || tab === "kasan" || tab === "stats") {
+ if (tab === "backup" || tab === "staff_auth" || tab === "units" || tab === "kasan" || tab === "stats" || tab === "life") {
  if (!isCurrentStaffAdminOrClerk()) {
  alert("このタブは管理者および事務員のみアクセス可能です。");
  switchOfficeTab("inventory");
@@ -45,7 +45,7 @@ function switchOfficeTab(tab) {
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits",
- contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats"
+ contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats", life: "tabOfficeLife"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -73,6 +73,8 @@ function switchOfficeTab(tab) {
  if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab();
  } else if (tab === "stats") {
  if (typeof renderOfficeStatsTab === "function") renderOfficeStatsTab();
+ } else if (tab === "life") {
+ if (typeof renderOfficeLifeTab === "function") renderOfficeLifeTab();
  }
  }
 }
@@ -3144,6 +3146,8 @@ function openAddResidentModal() {
  document.getElementById("resRoomNo").value = "";
   if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml("", cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = "";
+ if (document.getElementById("resLastNameKana")) document.getElementById("resLastNameKana").value = "";
+ if (document.getElementById("resFirstNameKana")) document.getElementById("resFirstNameKana").value = "";
  document.getElementById("resCareLevel").value = ""; // [Claude修正] 未選択のまま「要介護3」で登録されないように
  document.getElementById("resStatus").value = "在所";
  document.getElementById("resBirthDate").value = "";
@@ -3190,6 +3194,8 @@ function openEditResidentModal(id) {
  document.getElementById("resRoomNo").value = r.room_no || "";
   if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml(r.unit_id, cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = r.name || "";
+ if (document.getElementById("resLastNameKana")) document.getElementById("resLastNameKana").value = r.last_name_kana || "";
+ if (document.getElementById("resFirstNameKana")) document.getElementById("resFirstNameKana").value = r.first_name_kana || "";
  document.getElementById("resCareLevel").value = r.care_level || ""; // [Claude修正 2026-10-18] 空のときに「要介護3」を入れない
  document.getElementById("resStatus").value = r.status || "在所";
  document.getElementById("resBirthDate").value = r.birth_date || "";
@@ -3298,10 +3304,14 @@ function submitResidentForm() {
    return;
   }
  }
+ const lastNameKana = (document.getElementById("resLastNameKana")?.value || "").trim();
+ const firstNameKana = (document.getElementById("resFirstNameKana")?.value || "").trim();
  const residentData = {
  room_no: roomNo,
  unit_id: (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null,
  name: name,
+ last_name_kana: lastNameKana,
+ first_name_kana: firstNameKana,
  care_level: document.getElementById("resCareLevel").value,
  status: document.getElementById("resStatus").value,
  birth_date: document.getElementById("resBirthDate").value,
@@ -3351,7 +3361,7 @@ function submitResidentForm() {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
 
- cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min", "insured_no", "insurer_no", "gender", "benefit_rate", "care_start_date", "pre_admission_status", "post_discharge_status"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "last_name_kana", "first_name_kana", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min", "insured_no", "insurer_no", "gender", "benefit_rate", "care_start_date", "pre_admission_status", "post_discharge_status"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();

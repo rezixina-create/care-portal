@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_d2">
+	<link rel="stylesheet" href="style.css?v=20261022_e1">
 </head>
 <body>
 
@@ -846,6 +846,7 @@
    <div class="care-tab-row">
     <button class="sub-tab-btn" id="subTabKasan" onclick="switchOfficeTab('kasan')">加算・減算</button>
     <button class="sub-tab-btn" id="subTabStats" onclick="switchOfficeTab('stats')">集計</button>
+     <button class="sub-tab-btn" id="subTabLife" onclick="switchOfficeTab('life')">LIFE</button>
      <button class="sub-tab-btn" id="subTabBackup" onclick="switchOfficeTab('backup')">データ保管・バックアップ</button>
     <button class="sub-tab-btn" id="subTabStaffAuth" onclick="switchOfficeTab('staff_auth')">職員アカウント・暗証番号管理</button>
     <button class="sub-tab-btn" id="subTabUnits" onclick="switchOfficeTab('units')">区分（ユニット・フロア）の設定</button>
@@ -1438,6 +1439,7 @@
   <!-- 加算・減算確認表タブ -->
   <div id="tabOfficeKasan" style="display:none;" class="panel-card"><table id="kasanMonthlyTable" style="display:none;"></table></div>
   <div id="tabOfficeStats" style="display:none;" class="panel-card"></div>
+  <div id="tabOfficeLife" style="display:none;" class="panel-card"></div>
 
  </div><!-- /officeTabContent -->
  </div><!-- /portalOfficeSection -->
@@ -1908,6 +1910,16 @@
  <div class="form-group">
  <label>氏名 <span style="color:#dc2626;">*</span>:</label>
  <input type="text" id="resName" class="form-control">
+ </div>
+ <div class="form-group" style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+  <div>
+   <label>氏名カナ（姓） <span style="font-size:13px; color:var(--ink-2); font-weight:normal;">全角カナ</span>:</label>
+   <input type="text" id="resLastNameKana" class="form-control">
+  </div>
+  <div>
+   <label>氏名カナ（名） <span style="font-size:13px; color:var(--ink-2); font-weight:normal;">全角カナ</span>:</label>
+   <input type="text" id="resFirstNameKana" class="form-control">
+  </div>
  </div>
  <div class="form-group">
  <label>要介護度:</label>
@@ -4121,27 +4133,487 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_d2"></script>
- <script src="js/02_terms.js?v=20261022_d2"></script>
- <script src="js/03_common.js?v=20261022_d2"></script>
- <script src="js/04_care_record.js?v=20261022_d2"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_d2"></script>
- <script src="js/06_schema_history.js?v=20261022_d2"></script>
- <script src="js/07_daily_tables.js?v=20261022_d2"></script>
- <script src="js/08_meds.js?v=20261022_d2"></script>
- <script src="js/09_night_misc.js?v=20261022_d2"></script>
- <script src="js/10_office.js?v=20261022_d2"></script>
- <script src="js/11_karte_staff.js?v=20261022_d2"></script>
- <script src="js/12_hospital_photos.js?v=20261022_d2"></script>
- <script src="js/13_shift_units.js?v=20261022_d2"></script>
- <script src="js/14_auth_home.js?v=20261022_d2"></script>
- <script src="js/15_single_write.js?v=20261022_d2"></script>
- <script src="js/16_careplan.js?v=20261022_d2"></script>
-	<script src="js/17_kasan.js?v=20261022_d2"></script>
-	<script src="js/18_stats.js?v=20261022_d2"></script>
+ <script src="js/01_core.js?v=20261022_e1"></script>
+ <script src="js/02_terms.js?v=20261022_e1"></script>
+ <script src="js/03_common.js?v=20261022_e1"></script>
+ <script src="js/04_care_record.js?v=20261022_e1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261022_e1"></script>
+ <script src="js/06_schema_history.js?v=20261022_e1"></script>
+ <script src="js/07_daily_tables.js?v=20261022_e1"></script>
+ <script src="js/08_meds.js?v=20261022_e1"></script>
+ <script src="js/09_night_misc.js?v=20261022_e1"></script>
+ <script src="js/10_office.js?v=20261022_e1"></script>
+ <script src="js/11_karte_staff.js?v=20261022_e1"></script>
+ <script src="js/12_hospital_photos.js?v=20261022_e1"></script>
+ <script src="js/13_shift_units.js?v=20261022_e1"></script>
+ <script src="js/14_auth_home.js?v=20261022_e1"></script>
+ <script src="js/15_single_write.js?v=20261022_e1"></script>
+ <script src="js/16_careplan.js?v=20261022_e1"></script>
+	<script src="js/17_kasan.js?v=20261022_e1"></script>
+	<script src="js/18_stats.js?v=20261022_e1"></script>
+	<script src="js/19_life.js?v=20261022_e1"></script>
   
 
   <!-- ============================================================ -->
+  
+  <!-- ============================================================ -->
+  <!-- LIFE (科学的介護推進体制加算) モーダル群 -->
+  <!-- ============================================================ -->
+
+  <!-- LIFE 評価入力・編集モーダル -->
+  <div class="modal-overlay" id="lifeAssessmentModal" style="display:none;">
+    <div class="modal-card" style="max-width:760px; max-height:92vh; overflow-y:auto;">
+      <div class="modal-header">
+        <h3 id="lifeEvalModalTitle" style="font-size:16px; margin:0;">LIFE 評価入力</h3>
+        <button class="modal-close-btn" onclick="closeModal('lifeAssessmentModal')">×</button>
+      </div>
+
+      <input type="hidden" id="lifeEvalResidentId" value="">
+      <input type="hidden" id="lifeEvalAssessmentId" value="">
+      <input type="hidden" id="lifeEvalDementiaRankCode" value="">
+
+      <!-- 基本情報セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">基本情報・評価時点</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label>評価日 <span style="color:var(--alert);">*</span>:</label>
+            <input type="date" id="lifeEvalDate" class="form-control" onchange="onLifeEvalDateChange(this.value)">
+          </div>
+          <div class="form-group">
+            <label>評価時点 <span style="color:var(--alert);">*</span>:</label>
+            <select id="lifeEvalStatus" class="form-control" onchange="onLifeStatusChange()">
+              <option value="">選んでください</option>
+              <option value="1">利用開始時（入居時）</option>
+              <option value="2">サービス利用中（定期評価）</option>
+              <option value="3">利用終了時（退居時）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>要介護度（利用者登録値）:</label>
+            <div style="padding:8px 12px; background:var(--ground); border:1px solid var(--line); border-radius:4px; font-size:13px; font-weight:bold;">
+              <span id="lifeEvalCareLevelDisplay">-</span>
+            </div>
+          </div>
+          <div class="form-group">
+            <label>障害高齢者の日常生活自立度 <span style="color:var(--alert);">*</span>:</label>
+            <select id="lifeEvalImpairedDegree" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">自立</option>
+              <option value="2">J1（交通機関等を利用して外出）</option>
+              <option value="3">J2（隣近所へ外出）</option>
+              <option value="4">A1（介助により外出・日中ベッド外）</option>
+              <option value="5">A2（外出頻度少なく寝たり起きたりの生活）</option>
+              <option value="6">B1（車いすに移乗・食事排泄はベッドから離れる）</option>
+              <option value="7">B2（介助により車いすに移乗）</option>
+              <option value="8">C1（自力寝返り・自力起き上がり不可）</option>
+              <option value="9">C2（自力寝返りもできず全面介助）</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="form-group" style="margin-top:8px;">
+          <label>認知症高齢者の日常生活自立度（カルテの自立度判定を参照）:</label>
+          <div style="padding:8px 12px; background:var(--ground); border:1px solid var(--line); border-radius:4px; font-size:13px;">
+            <span id="lifeEvalDementiaRankDisplay" style="font-weight:bold;">-</span>
+          </div>
+          <div id="lifeEvalDementiaRankWarning" style="margin-top:4px;"></div>
+        </div>
+      </div>
+
+      <!-- ADL (Barthel Index) セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+          <div style="font-weight:bold; font-size:14px; color:var(--ink);">ADL 評価（Barthel Index 全10項目） <span style="color:var(--alert);">*</span></div>
+          <div style="font-size:13px; font-weight:bold; color:var(--pine-dark); background:var(--pine-tint); padding:4px 8px; border-radius:4px;">
+            合計点: <span id="lifeAdlTotalScoreDisplay">0 / 100</span>
+          </div>
+        </div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label>1. 食事:</label>
+            <select id="life_barthel_index_meal" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">自立（10点）</option>
+              <option value="1">部分介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>2. 車いす・ベッド移乗:</label>
+            <select id="life_barthel_transfer" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="3">自立（15点）</option>
+              <option value="2">軽度の介助または監視（10点）</option>
+              <option value="1">座ることは可能だが立ち上がり等に多くの介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>3. 整容:</label>
+            <select id="life_barthel_index_personal_hygiene_and_adjustment" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">自立（5点）</option>
+              <option value="1">介助を要する（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>4. トイレ動作:</label>
+            <select id="life_barthel_index_toilet_activity" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">自立（10点）</option>
+              <option value="1">部分介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>5. 入浴:</label>
+            <select id="life_barthel_index_bathing" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">自立（5点）</option>
+              <option value="1">介助を要する（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>6. 歩行（平地移動）:</label>
+            <select id="life_barthel_index_flat_ground_walking" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="3">45m以上の歩行自立（15点）</option>
+              <option value="2">45m以上の介助歩行または歩行器自立（10点）</option>
+              <option value="1">歩行不能だが車いす操作自立（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>7. 階段昇降:</label>
+            <select id="life_barthel_index_stair_movement" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">手すり等を使い自立昇降（10点）</option>
+              <option value="1">介助または監視を要する（5点）</option>
+              <option value="0">昇降不能（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>8. 着替え（更衣）:</label>
+            <select id="life_barthel_index_changing_clothes" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">自立（10点）</option>
+              <option value="1">部分介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>9. 排便管理:</label>
+            <select id="life_barthel_index_defecation_manage" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">失禁なし・自立（10点）</option>
+              <option value="1">時に失禁ありまたは浣腸・座薬に介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>10. 排尿管理:</label>
+            <select id="life_barthel_index_urination_manage" class="form-control" onchange="updateLifeAdlScoreDisplay()">
+              <option value="">選んでください</option>
+              <option value="2">失禁なし・自立（10点）</option>
+              <option value="1">時に失禁ありまたは収尿器装着に介助（5点）</option>
+              <option value="0">全介助（0点）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 身体状況（身長・体重）セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">身体状況</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+          <div class="form-group">
+            <label>身長 (cm):</label>
+            <input type="number" step="0.1" id="life_height" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>体重 (kg) <span style="font-size:13px; color:var(--ink-2); font-weight:normal;">最新記録より補完可</span>:</label>
+            <input type="number" step="0.1" id="life_weight" class="form-control">
+          </div>
+        </div>
+      </div>
+
+      <!-- 口腔・栄養セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">口腔・嚥下状態</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label>義歯の使用:</label>
+            <select id="life_denture" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">義歯なし</option>
+              <option value="2">義歯あり</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>むせの有無:</label>
+            <select id="life_choke" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">むせなし</option>
+              <option value="2">むせあり</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>歯の汚れ:</label>
+            <select id="life_stains_on_teeth" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">歯の汚れなし</option>
+              <option value="2">歯の汚れあり</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>歯肉の腫れ・出血:</label>
+            <select id="life_condition_of_gums" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">歯肉の腫れ・出血なし</option>
+              <option value="2">歯肉の腫れ・出血あり</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 認知症診断・行動心理症状 (DBD13) セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">認知症の診断・行動心理症状（DBD13）</div>
+        <div class="form-group" style="margin-bottom:10px;">
+          <label>認知症の診断（該当するものを選択）:</label>
+          <div style="display:flex; flex-wrap:wrap; gap:14px; margin-top:4px;">
+            <label style="font-size:13px; font-weight:normal; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="life_diagnosis_of_dementia_01"> アルツハイマー型認知症
+            </label>
+            <label style="font-size:13px; font-weight:normal; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="life_diagnosis_of_dementia_02"> 血管性認知症
+            </label>
+            <label style="font-size:13px; font-weight:normal; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="life_diagnosis_of_dementia_03"> レビー小体型認知症
+            </label>
+            <label style="font-size:13px; font-weight:normal; display:flex; align-items:center; gap:4px;">
+              <input type="checkbox" id="life_diagnosis_of_dementia_other"> その他
+            </label>
+          </div>
+          <div style="margin-top:6px;">
+            <input type="text" id="life_diagnosis_of_dementia_other_name" class="form-control" style="font-size:13px;">
+          </div>
+        </div>
+
+        <div style="font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:6px;">DBD13 評価（7項目） <span style="color:var(--alert);">*</span></div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label>記憶障害（同じことを何度も尋ねる等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_1_1" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>見当識障害（時間や場所がわからない等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_1_2" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>判断力低下（適切な判断ができない等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_2" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>無気力・無関心（自発的に動かない等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_3" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>徘徊・落ち着きのなさ（歩き回り等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_4" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>妄想・作話（盗られた等の物盗られ妄想等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_5" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>攻撃的言動・暴言（大声を出す・怒りっぽい等）:</label>
+            <select id="life_diagnosis_of_dementia_evaluate_6" class="form-control">
+              <option value="">選んでください</option>
+              <option value="0">0: 全くない</option>
+              <option value="1">1: まれにある（月1〜2回）</option>
+              <option value="2">2: ときどきある（週1〜2回）</option>
+              <option value="3">3: よくある（週3日以上）</option>
+              <option value="4">4: いつもある（ほぼ毎日）</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- Vitality Index (意欲) セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">Vitality Index（意欲の指標）</div>
+        <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px;">
+          <div class="form-group">
+            <label>1. 意思疎通（挨拶・返事） <span style="color:var(--alert);">*</span>:</label>
+            <select id="life_vitality_index_01" class="form-control">
+              <option value="">選んでください</option>
+              <option value="2">2: 自発的に挨拶・意思疎通ができる</option>
+              <option value="1">1: 挨拶をされれば返答する</option>
+              <option value="0">0: 挨拶をしても反応がない</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>2. 起床:</label>
+            <select id="life_vitality_index_02" class="form-control">
+              <option value="">選んでください</option>
+              <option value="2">2: 決められた時間に自発的に起きる</option>
+              <option value="1">1: 声をかければ起きる</option>
+              <option value="0">0: 声をかけても起きない・寝たきり</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>3. 食事:</label>
+            <select id="life_vitality_index_03" class="form-control">
+              <option value="">選んでください</option>
+              <option value="2">2: 食事の時間を楽しみにし自発的に食べる</option>
+              <option value="1">1: 促せば食べる</option>
+              <option value="0">0: 促しても食べない・拒絶がある</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>4. 排泄:</label>
+            <select id="life_vitality_index_04" class="form-control">
+              <option value="">選んでください</option>
+              <option value="2">2: 自発的にトイレに行く・知らせる</option>
+              <option value="1">1: 誘導すればトイレで排泄する</option>
+              <option value="0">0: 全面おむつ・排泄意欲なし</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>5. 活動（リハビリ・日中活動・趣味）:</label>
+            <select id="life_vitality_index_05" class="form-control">
+              <option value="">選んでください</option>
+              <option value="2">2: 自発的に参加・楽しむ</option>
+              <option value="1">1: 勧められれば参加する</option>
+              <option value="0">0: 全く参加しない・関心がない</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 家族・退居セクション -->
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+        <div style="font-weight:bold; font-size:14px; margin-bottom:8px; color:var(--ink);">家族・退居情報</div>
+        <div class="form-group">
+          <label>入居前の生活状況（家族同居等）:</label>
+          <select id="life_family" class="form-control">
+            <option value="">選んでください</option>
+            <option value="1">家族等と同居</option>
+            <option value="2">一人暮らし（単身）</option>
+            <option value="3">その他</option>
+          </select>
+        </div>
+        <div id="lifeDepartureFieldsRow" style="display:none; grid-template-columns:1fr 1fr; gap:12px; margin-top:10px;">
+          <div class="form-group">
+            <label>退居日（利用終了日）:</label>
+            <input type="date" id="life_departure_date" class="form-control">
+          </div>
+          <div class="form-group">
+            <label>退居先（終了理由）:</label>
+            <select id="life_departure" class="form-control">
+              <option value="">選んでください</option>
+              <option value="1">医療機関へ入院</option>
+              <option value="2">介護保険施設へ入所</option>
+              <option value="3">他の事業所・施設へ移動</option>
+              <option value="4">自宅へ退居</option>
+              <option value="5">死亡</option>
+              <option value="6">その他</option>
+            </select>
+          </div>
+        </div>
+      </div>
+
+      <!-- 編集理由（既存評価の変更時のみ表示） -->
+      <div id="lifeEvalEditReasonWrap" style="display:none; background:var(--caution-tint); border:1px solid var(--caution); border-radius:6px; padding:10px 12px; margin-bottom:14px;">
+        <label style="font-weight:bold; color:var(--caution); font-size:13px;">変更理由 <span style="color:var(--alert);">*</span>:</label>
+        <input type="text" id="lifeEvalEditReason" class="form-control" style="font-size:13px; margin-top:4px;">
+      </div>
+
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; gap:8px;">
+        <button class="btn btn-secondary" onclick="closeModal('lifeAssessmentModal')">閉じる</button>
+        <button class="btn btn-primary" onclick="submitLifeAssessment()">登録・保存する</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIFE 評価履歴モーダル -->
+  <div class="modal-overlay" id="lifeAssessmentHistoryModal" style="display:none;">
+    <div class="modal-card" style="max-width:680px; max-height:85vh; overflow-y:auto;">
+      <div class="modal-header">
+        <h3 id="lifeAssessmentHistoryTitle" style="font-size:16px; margin:0;">LIFE 評価履歴</h3>
+        <button class="modal-close-btn" onclick="closeModal('lifeAssessmentHistoryModal')">×</button>
+      </div>
+      <div id="lifeAssessmentHistoryContainer" style="padding:10px 0;"></div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; margin-top:12px;">
+        <button class="btn btn-secondary" onclick="closeModal('lifeAssessmentHistoryModal')">閉じる</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIFE CSV書き出し未入力一覧モーダル -->
+  <div class="modal-overlay" id="lifeExportMissingModal" style="display:none;">
+    <div class="modal-card" style="max-width:560px; max-height:80vh; overflow-y:auto;">
+      <div class="modal-header">
+        <h3 style="font-size:16px; margin:0; color:var(--alert);">LIFE CSV 書き出し未入力のお知らせ</h3>
+        <button class="modal-close-btn" onclick="closeLifeExportMissingModal()">×</button>
+      </div>
+      <div style="padding:10px 0;">
+        <div id="lifeExportMissingCountDisplay" style="font-weight:bold; margin-bottom:8px; font-size:14px; color:var(--alert);"></div>
+        <div style="font-size:13px; color:var(--ink-2); margin-bottom:10px;">
+          ※ 厚生労働省 LIFE 仕様により、評価必須項目（または氏名カナ等の基本情報）が未入力の利用者は CSV に出力できません。下記の不足項目を入力してから再出力してください。
+        </div>
+        <div id="lifeExportMissingListContainer" style="max-height:300px; overflow-y:auto; border:1px solid var(--line); border-radius:4px; padding:8px 12px; background:var(--ground);"></div>
+      </div>
+      <div class="modal-footer" style="display:flex; justify-content:flex-end; margin-top:12px;">
+        <button class="btn btn-secondary" onclick="closeLifeExportMissingModal()">確認して閉じる</button>
+      </div>
+    </div>
+  </div>
+
   <!-- 新規モーダル群 (アラート確認, アラートログ, ID・PW設定, 初期化) -->
   <!-- ============================================================ -->
 

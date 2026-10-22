@@ -1460,6 +1460,23 @@ function renderOfficeKasanTab() {
   if (reds.conflict) {
     warningItems.push(`<div style="margin-bottom:4px; font-weight:bold; color:var(--alert);">[警告] <strong>市町村確認注意</strong>: 定員超過減算と人員基準欠如減算が同時に該当しています。重複時の算定ルールや減算の適用順について、市町村に確かめてください。</div>`);
   }
+  // LIFE 未入力の警告（科学的介護推進体制加算）
+  if (settings.taisei_items && settings.taisei_items.life && settings.taisei_items.life.option_key === "1") {
+    const residents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+    const assessments = (db && db.data && Array.isArray(db.data.life_assessments)) ? db.data.life_assessments : [];
+    let unassessedLifeCount = 0;
+    for (const r of residents) {
+      if (typeof cpIsLifeAssessmentRequiredMonth === "function" && cpIsLifeAssessmentRequiredMonth(r, ym)) {
+        const hasAss = assessments.some(a => String(a.resident_id) === String(r.id) && String(a.evaluate_date || "").startsWith(ym));
+        if (!hasAss) {
+          unassessedLifeCount++;
+        }
+      }
+    }
+    if (unassessedLifeCount > 0) {
+      warningItems.push(`<div style="margin-bottom:4px;">[警告] <strong>科学的介護推進体制加算</strong>: LIFE の評価が未入力: ${unassessedLifeCount}名（算定には厚生労働省への提出が必要です。合計からは外していません）</div>`);
+    }
+  }
 
   let reductionAlertHtml = "";
   if (reductionItems.length > 0) {
@@ -1473,7 +1490,7 @@ function renderOfficeKasanTab() {
   if (warningItems.length > 0) {
     reductionAlertHtml += `
       <div style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--line); border-radius:6px; padding:10px 14px; margin-bottom:10px; font-size:13px; line-height:1.6;">
-        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">減算に関する確認・警告事項:</div>
+        <div style="font-weight:bold; font-size:14px; margin-bottom:4px;">加算・減算に関する確認・警告事項:</div>
         ${warningItems.join("")}
       </div>
     `;
