@@ -2117,7 +2117,8 @@ function getDailyShiftRoster(targetDateStr) {
  const day = parseInt(dStr, 10);
 
  if (!db.data.monthly_shifts) db.data.monthly_shifts = {};
- if (!db.data.monthly_shifts[ym] || Object.keys(db.data.monthly_shifts[ym]).length === 0) {
+ // [Claude修正] 職員がいないとき（ログイン前の空のデータなど）は作らない（作る→表示→作る…と止まらなくなる）
+ if ((!db.data.monthly_shifts[ym] || Object.keys(db.data.monthly_shifts[ym]).length === 0) && (db.data.stamps || []).length > 0) {
   generateMonthlyShiftData(ym);
  }
  const monthShifts = db.data.monthly_shifts[ym] || {};

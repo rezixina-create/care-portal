@@ -734,6 +734,23 @@ function checkGlobalAlerts() {
     }
   }
 
+  // [Claude追加] 短期利用の終了予定日を過ぎたのに、退所の手続きがされていない人
+  {
+    const realToday = getRealTodayStr();
+    const overdue = (gState.residents || []).filter(r => r && r.usage_type === "short" && r.short_end_date && r.short_end_date < realToday && !cpIsDischarged(r));
+    const ssKey = `short_overdue_${realToday}_${overdue.map(r => r.id).join("_")}`;
+    if (overdue.length > 0 && !isAlertDismissed(ssKey)) {
+      const names = overdue.map(r => `${escapeHtml(r.name || "")}（終了予定日 ${escapeHtml(r.short_end_date)}）`).join("、");
+      const ssHtml = `
+        <div class="alert-banner alert-warning notice-card-warning">
+          <span><strong>【短期利用】</strong> 利用の終了予定日を過ぎた方がいます: ${names}。退所の手続きをしてください（手続きをするまで、居室と一覧に残ります）。</span>
+          <button class="btn btn-secondary" style="padding:2px 8px; font-size:13px;" onclick="requestDismissAlertFromButton(this, '${ssKey}')">確認済・閉じる</button>
+        </div>
+      `;
+      careAlertHtml += ssHtml;
+      officeAlertHtml += ssHtml;
+    }
+  }
   // 0. 【管理者専用：発注・在庫認証アラート (上司承認待ち)】
   const isAdmin = isCurrentStaffAdmin();
   const pendingOrders = (db.data.orders || []).filter(o => o.status === "申請中");

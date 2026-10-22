@@ -415,7 +415,8 @@
       assert(db.data.incidents.length === incidentInitialCount + 1, "Test 13: 事故・ヒヤリハット報告書の保存が正常");
 
       // 9. 消耗品在庫管理・自動出庫テスト
-      const initialPaperDiaper = (db.data.inventory || []).find(i => (i.name || i.item_name || "").includes("パンツ"));
+      // [Claude修正] 見本の消耗品は「テープ止めオムツ」など（「パンツ」の品目は見本にない）
+      const initialPaperDiaper = (db.data.inventory || []).find(i => (i.name || i.item_name || "").includes("オムツ"));
       assert(initialPaperDiaper && initialPaperDiaper.current_stock > 0, "Test 14: 消耗品マスターおよび初期在庫が正常保持されていること");
       const hasGloveS = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 S");
       const hasGloveL = (db.data.inventory || []).some(i => i.name === "使い捨てプラスチック手袋 L");
@@ -484,7 +485,8 @@
 
       // 16. B5用紙1枚分対応・文字数カウンター・全画面エディタ・日報印刷テスト
       assert(typeof updateRecordCharCount === "function", "Test 30: リアルタイム文字数カウンター (updateRecordCharCount) が存在すること");
-      assert(typeof insertB5Template === "function", "Test 31: B5日報フォーマット雛形挿入関数 (insertB5Template) が存在すること");
+      // [Claude修正] 日報雛形（insertB5Template）は 2026-10-16（e5738bf）になくした（チェック表と経過記録から反映されるので、文章で打ち直すと二重入力になる）
+      assert(typeof insertB5Template === "undefined", "Test 31: なくした日報雛形（insertB5Template）が残っていないこと");
       assert(typeof openFullscreenRecord === "function" && typeof closeFullscreenRecord === "function", "Test 32: 全画面集中エディタ開閉関数 (open/closeFullscreenRecord) が存在すること");
       assert(typeof syncFromFullscreen === "function" && typeof submitCareRecordFromFullscreen === "function", "Test 33: 全画面エディタ双方向同期・保存関数が存在すること");
       assert(typeof printSelectedDateRecords === "function", "Test 34: 本日の記録一覧の日報書類形式印刷関数 (printSelectedDateRecords) が存在すること");
@@ -494,14 +496,16 @@
       const area = document.getElementById("recordContent");
       area.value = "あ".repeat(850);
       updateRecordCharCount();
-      const badgeText = document.getElementById("recordB5Badge").textContent;
-      assert(badgeText.includes("B5用紙1枚適量"), "Test 36: B5目安判定ゲージが850文字で『B5用紙1枚適量』と判定されること");
+      // [Claude修正] B5用紙の目安は 2026-10-16（e5738bf）に外し、文字数だけ出す
+      const cntEl = document.getElementById("recordCharCount");
+      assert(!cntEl || cntEl.textContent === "850", "Test 36: 文字数カウンターが850文字を表示すること");
 
       // 17. 新改善要件（全16項目関連）の機能・関数完全性テスト
       assert(typeof isCurrentStaffAdmin === "function", "Test 37: 管理者認証判定関数 (isCurrentStaffAdmin) が存在すること");
       assert(typeof renderWeightChart === "function", "Test 38: 月次体重表 1年間SVG折れ線グラフ描画関数 (renderWeightChart) が存在すること");
-      assert(Array.isArray(db.data.daily_schedules) && db.data.daily_schedules.length >= 10, "Test 39: 業務日誌日課スケジュール (daily_schedules) が正常保持されていること");
-      assert(Array.isArray(db.data.monthly_notices) && db.data.monthly_notices.length >= 2, "Test 40: 月間業務連絡表 (monthly_notices) が正常保持されていること");
+      // [Claude修正] 日課・月の連絡の見本は本番のデータに入れない（2026-10-08 ebf2089）。入れ物があることだけ見る
+      assert(Array.isArray(db.data.daily_schedules), "Test 39: 業務日誌日課スケジュール (daily_schedules) の入れ物があること");
+      assert(Array.isArray(db.data.monthly_notices), "Test 40: 月間業務連絡表 (monthly_notices) の入れ物があること");
       assert(typeof renderOfficeCommittees === "function" && typeof submitCommittee === "function", "Test 41: 法定委員会・研修記録管理関数 (renderOfficeCommittees, submitCommittee) が存在すること");
       assert(typeof toggleNightTurnAction === "function" && typeof submitNightTurnsBatch === "function" && typeof clearAllNightTurnsForDate === "function", "Test 43: 夜間体位変換トグル＆一括確定・一括解除関数が存在すること");
       // 夜間体位変換のチェック全解除テスト (全解除後に復活しないことの検証)
@@ -598,7 +602,7 @@
           else if (sym === "明") akeCount++;
           else if (sym === "休") offCount++;
         });
-        if (earlyCount !== 2 || lateCount !== 2 || dayCount !== 2 || nightCount !== 2 || akeCount !== 2 || offCount !== 4) {
+        if (earlyCount !== 2 || lateCount !== 2 || dayCount !== 2 || nightCount !== 2 || akeCount !== 2 || offCount !== careStaffList.length - 10) { // [Claude修正] 介護職員の人数が変わったので、公休は「人数−10」
           allDaysAllTwoCompliant = false;
           mismatchDetails.push(`Day ${d}: 早=${earlyCount}, 遅=${lateCount}, 日=${dayCount}, 夜=${nightCount}, 明=${akeCount}, 休=${offCount}`);
         }
@@ -606,7 +610,7 @@
       if (mismatchDetails.length > 0) {
         log(`[Test 66 Mismatches]: ${mismatchDetails.slice(0, 5).join(" | ")}`);
       }
-      assert(allDaysAllTwoCompliant, "Test 66: 看護師・事務・施設長を除く介護職員で毎日『日勤2名・早出2名・遅出2名・夜勤2名・明け2名 (公休4名)』と全て2名体制で完全配置されていること");
+      assert(allDaysAllTwoCompliant, "Test 66: 看護師・事務・施設長を除く介護職員で毎日『日勤2名・早出2名・遅出2名・夜勤2名・明け2名（残りは公休）』と全て2名体制で完全配置されていること");
 
       // 手動修正テスト
       const origYamada15 = shiftOct["山田 孝之"] ? shiftOct["山田 孝之"][15] : "日";
@@ -705,7 +709,8 @@
       assert(isAdminKimura && isClerkMatsumoto && !isCareYamada, "Test 81: 管理者・事務員ロールのみ正しく認証・識別されること");
 
       // 27. パスワードリセット・ツーマンルール初期化・事務所専用タブテスト
-      assert(typeof resetStaffPin === "function" && typeof submitTwoPersonReset === "function" && typeof selectTargetForReset === "function" && typeof renderOfficeStaffAuth === "function", "Test 82: 2名承認パスワード初期化リセット関数 (resetStaffPin, submitTwoPersonReset, selectTargetForReset, renderOfficeStaffAuth) が存在すること");
+      // [Claude修正] 初期化の対象選び（selectTargetForReset）は 2026-10-08（4413821）に、サーバーで判定する形にしてなくした
+      assert(typeof resetStaffPin === "function" && typeof submitTwoPersonReset === "function" && typeof renderOfficeStaffAuth === "function", "Test 82: 2名承認パスワード初期化リセット関数 (resetStaffPin, submitTwoPersonReset, renderOfficeStaffAuth) が存在すること");
       renderOfficeStaffAuth();
       const staffAuthRows = document.querySelectorAll("#staffAuthTable tbody tr");
       assert(staffAuthRows.length > 0, "Test 83: 事務所ポータルの職員アカウント・暗証番号管理テーブルが正常に描画されること");

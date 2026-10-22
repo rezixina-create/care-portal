@@ -745,6 +745,9 @@ class LocalDB {
  "中村": "中村 大輔",
  "小林": "小林 亮"
  };
+ // [Claude修正] 短い名前の置き換えと見本の職員の追加は、職員が0人のとき（初めて起動したとき。ログインできるように）と、短い名前の職員がいる古い形のデータのときだけにする（毎回だと、削除した職員が読み込みのたびに戻っていた）
+ const cpLegacyShortNames = ["施設長", "木村", "田中", "鈴木", "山田", "佐藤", "高橋", "伊藤", "渡辺", "中村", "小林"];
+ if (d.stamps.length === 0 || d.stamps.some(s => cpLegacyShortNames.includes(s && (s.name || s)))) {
  // 既存の短縮名をフルネームに置換
  d.stamps.forEach(s => {
  const curName = s.name || s;
@@ -777,23 +780,19 @@ class LocalDB {
  d.stamps.push(s);
  }
  });
+ }
  d.stamps = sortStaffList(d.stamps);
  }
 
  if (!d.monthly_shifts || typeof d.monthly_shifts !== "object") {
  d.monthly_shifts = {};
  }
+ // [Claude修正] 希望休・同じ日に入れない組の見本を本番のデータに入れない（見本は initSeedData へ。実在しない職員の希望休も入っていた）
  if (!Array.isArray(d.shift_hope_offs)) {
-  d.shift_hope_offs = [
-   { id: 1, year_month: "2026-10", staff_name: "佐藤 健太", day: 15, reason: "通院のため" },
-   { id: 2, year_month: "2026-10", staff_name: "小林 誠", day: 25, reason: "冠婚葬祭" },
-   { id: 3, year_month: "2026-10", staff_name: "渡辺 拓也", day: 8, reason: "家族行事" }
-  ];
+  d.shift_hope_offs = [];
  }
  if (!Array.isArray(d.shift_ng_pairs)) {
- d.shift_ng_pairs = [
- { id: 1, staff1: "佐藤 健太", staff2: "高橋 直樹", reason: "相性配慮 (同日夜勤NG)" }
- ];
+ d.shift_ng_pairs = [];
  } else {
  // 既存の短縮名をフルネームに更新
  d.shift_ng_pairs.forEach(p => {
@@ -805,7 +804,8 @@ class LocalDB {
  }
 
  // 消耗品マスター・アイテム同期＆移行 (手袋S/L追加、尿取りパッド名称統一、ワイドパッド追加)
- if (Array.isArray(d.inventory)) {
+ // [Claude修正] 手袋S/L・ワイドパッドの追加は、古い名前（尿取りパッド 4回分）が残っている古いデータのときだけ（毎回だと、消した品目が読み込みのたびに戻っていた）
+ if (Array.isArray(d.inventory) && d.inventory.some(i => i && i.name === "尿取りパッド 4回分")) {
  d.inventory.forEach(i => {
  if (i.name === "尿取りパッド 4回分") i.name = "尿取りパッド";
  });
@@ -1953,6 +1953,13 @@ class LocalDB {
     care_plans: [] // [Antigravity実装 2026-10-19] ケアプラン（版ごとの記録）
  };
  this.storeLocalCopy(JSON.stringify(seed));
+  // [Claude修正] 希望休・同じ日に入れない組の見本は、初めて起動したデモのときだけ
+  seed.shift_hope_offs = [
+   { id: 1, year_month: "2026-10", staff_name: "佐藤 健太", day: 15, reason: "通院のため" },
+   { id: 2, year_month: "2026-10", staff_name: "小林 亮", day: 25, reason: "冠婚葬祭" },
+   { id: 3, year_month: "2026-10", staff_name: "渡辺 拓也", day: 8, reason: "家族行事" }
+  ];
+  seed.shift_ng_pairs = [{ id: 1, staff1: "佐藤 健太", staff2: "高橋 直樹", reason: "相性配慮 (同日夜勤NG)" }];
  return this.ensureDefaultArrays(seed);
  }
 }
