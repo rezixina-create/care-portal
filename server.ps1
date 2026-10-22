@@ -978,13 +978,35 @@ namespace CarePortal
         }
         // _fileLock の中で呼ぶ。portal_database.json が外から書き換えられていれば取り込み（git で取り込んだ・控えから戻した など）、
         // そうでなければデータベースの中身を書き出す（GitHub での受け渡し・バックアップ用）
-        private void SyncJsonFile()
+        // [Claude追加 2026-10-22] 書き出しファイルの大きさと更新日時（前に書き出した・取り込んだときのもの）
+        private string _exportMeta;
+        private string FileMeta()
+        {
+            if (!File.Exists(_dbFile)) return "";
+            FileInfo fi = new FileInfo(_dbFile);
+            return fi.Length.ToString() + "|" + fi.LastWriteTimeUtc.Ticks.ToString();
+        }
+        private void RememberFileMeta()
+        {
+            _exportMeta = FileMeta();
+            try { _store.SetSys("json_export_meta", _exportMeta); } catch { }
+        }
+        private void SyncJsonFile() { SyncJsonFile(false); }
+        // startup = true は起動のとき。書き出しファイルが前と同じ（大きさ・更新日時）なら、約38MBを読まずにすぐ戻る。
+        // データベースの方が新しいか（落ちる直前の保存など）は、30秒後の1回目の確かめで書き出す（起動を待たせない）
+        // あなた「黒い画面が開いてからリンクに飛ぶまで」が遅い（学校のPC）→ 起動のたびに 38MB を読んでハッシュを計算し、データベースもまるごと読み出して比べていた
+        private void SyncJsonFile(bool startup)
         {
             if (_store == null) return;
-            byte[] fileBytes = File.Exists(_dbFile) ? File.ReadAllBytes(_dbFile) : null;
-            string fileHash = fileBytes != null ? HashBytes(fileBytes) : null;
             if (_exportedHash == null) _exportedHash = _store.GetSys("json_export_hash");
-            if (fileHash != null && fileHash != _exportedHash)
+            if (_exportMeta == null) _exportMeta = _store.GetSys("json_export_meta") ?? "";
+            string meta = FileMeta();
+            bool fileSame = meta != "" && meta == _exportMeta && _exportedHash != null && !_store.IsEmpty;
+            if (fileSame && startup) return;
+            if (fileSame && _store.Stamp == _exportedStamp) return;   // 30秒ごと: 外からもデータベースも変わっていなければ何も読まない
+            byte[] fileBytes = (!fileSame && File.Exists(_dbFile)) ? File.ReadAllBytes(_dbFile) : null;
+            string fileHash = fileSame ? _exportedHash : (fileBytes != null ? HashBytes(fileBytes) : null);
+            if (!fileSame && fileHash != null && fileHash != _exportedHash)
             {
                 string txt = Encoding.UTF8.GetString(fileBytes);
                 if (txt.Length > 0 && txt[0] == '\uFEFF') txt = txt.Substring(1);
@@ -1013,7 +1035,7 @@ namespace CarePortal
             }
             if (_store.IsEmpty) return;
             long st = _store.Stamp;
-            if (st == _exportedStamp && fileHash != null && fileHash == _exportedHash) return;
+            if (st == _exportedStamp && fileHash != null && fileHash == _exportedHash) { if (!fileSame) RememberFileMeta(); return; }
             string outTxt = _store.Read();
             byte[] pre = Encoding.UTF8.GetPreamble();
             byte[] body = Encoding.UTF8.GetBytes(outTxt);
@@ -1040,6 +1062,7 @@ namespace CarePortal
             _exportedHash = h;
             _store.SetSys("json_export_hash", h);
             _exportedStamp = st;
+            RememberFileMeta();
         }
         private void OnJsonSyncTick(object state)
         {
@@ -2615,7 +2638,7 @@ namespace CarePortal
                 _storeWhy = why;
                 if (_store != null)
                 {
-                    try { lock (_fileLock) { SyncJsonFile(); LoadChangeLog(); } WarmCaches(); }
+                    try { lock (_fileLock) { SyncJsonFile(true); LoadChangeLog(); } WarmCaches(); }
                     catch (Exception ex)
                     {
                         // 取り込みに失敗したら、データベースは使わず JSON ファイルで動く（データを失わないことを優先）
@@ -2644,6 +2667,38 @@ namespace CarePortal
             });
             t.IsBackground = true;
             t.Start();
+        }
+
+        // [Claude追加 2026-10-22] 外部接続（トンネル）のURLは待たずに起動し、出てきたら tunnel_url.txt に書いて黒い画面にも出す
+        //（前は URL が出るまで最大5秒待ってからサーバーの準備を始めていた。画面の「接続案内」は tunnel_url.txt を読む）
+        private System.Threading.Timer _tunnelTimer;
+        private int _tunnelTicks;
+        public void WatchTunnelLog(string logPath, string urlPath)
+        {
+            _tunnelTicks = 0;
+            _tunnelTimer = new System.Threading.Timer(delegate(object st)
+            {
+                try
+                {
+                    _tunnelTicks++;
+                    if (File.Exists(logPath))
+                    {
+                        string txt;
+                        using (FileStream fs = new FileStream(logPath, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+                        using (StreamReader sr = new StreamReader(fs)) { txt = sr.ReadToEnd(); }
+                        System.Text.RegularExpressions.Match m = System.Text.RegularExpressions.Regex.Match(txt, "https://[a-zA-Z0-9-]+\\.trycloudflare\\.com");
+                        if (m.Success)
+                        {
+                            File.WriteAllText(urlPath, m.Value, Encoding.UTF8);
+                            Console.WriteLine(" [外部接続] スマホ・他端末の外部接続用のURLが準備できました（画面右上の「接続案内」にも出ています）: " + m.Value);
+                            _tunnelTimer.Dispose();
+                            return;
+                        }
+                    }
+                    if (_tunnelTicks >= 90) _tunnelTimer.Dispose();   // 3分たっても出なければやめる
+                }
+                catch { }
+            }, null, 2000, 2000);
         }
 
         public void Start()
@@ -3184,22 +3239,14 @@ if (-not $NoTunnel -and (Test-Path $cloudflared)) {
     # 既存の古いトンネルプロセスを念のため整理
     Get-Process -Name "cloudflared" -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
     if (Test-Path $tunnelLog) { Remove-Item $tunnelLog -Force -ErrorAction SilentlyContinue }
+    # [Claude追加 2026-10-22] 前回の古いURL（もうつながらない）が「接続案内」に出ないように消す
+    if (Test-Path $tunnelUrlFile) { Remove-Item $tunnelUrlFile -Force -ErrorAction SilentlyContinue }
 
     try {
         # WindowStyle Hidden で起動（パイプハンドルを継承させず独立プロセスとして起動）
         $tunnelProc = Start-Process -FilePath $cloudflared -ArgumentList "tunnel --url http://localhost:$port" -RedirectStandardError $tunnelLog -PassThru -WindowStyle Hidden
         
-        # トンネルURLの自動取得（最大5秒待機）
-        for ($i = 0; $i -lt 10; $i++) {
-            Start-Sleep -Milliseconds 500
-            if (Test-Path $tunnelLog) {
-                $content = Get-Content $tunnelLog -Raw -ErrorAction SilentlyContinue
-                if ($content -match "https://[a-zA-Z0-9-]+\.trycloudflare\.com") {
-                    Set-Content -Path $tunnelUrlFile -Value $matches[0] -Encoding UTF8
-                    break
-                }
-            }
-        }
+        # [Claude修正 2026-10-22] URL は待たない。出てきたらサーバー（WatchTunnelLog）が tunnel_url.txt と黒い画面に出す
     } catch {
         Write-Host "※トンネルの自動起動に失敗しました（ローカルサーバーとして継続します）" -ForegroundColor Gray
     }
@@ -3226,7 +3273,7 @@ if ($latestTunnelUrl) {
     Write-Host "   ※ 自宅Wi-Fi・学校・外出先スマホ(4G/5G)どこからでもこのURLで繋がります。" -ForegroundColor Gray
 } else {
     Write-Host " [外部接続トンネル (Cloudflare Tunnel)]:" -ForegroundColor Yellow
-    Write-Host "   バックグラウンドで接続準備中... (画面右上の「接続案内」に自動反映されます)" -ForegroundColor Gray
+    Write-Host "   バックグラウンドで接続準備中... (URLが出たら、この画面と画面右上の「接続案内」に出ます)" -ForegroundColor Gray
 }
 Write-Host ""
 Write-Host " [Tablet (同一Wi-Fi / LAN直接アクセス用)]:" -ForegroundColor White
@@ -3251,6 +3298,7 @@ $cleanup = {
 Write-Host "データを読み込んでいます。準備ができたらブラウザが開きます..." -ForegroundColor Green
 try {
     $server = New-Object CarePortal.SimpleServer ($ScriptDir, $port)
+    if ($tunnelProc) { $server.WatchTunnelLog($tunnelLog, $tunnelUrlFile) }
     if (-not $NoBrowser -and -not [Environment]::GetEnvironmentVariable("CI")) {
         $server.OpenBrowserWhenReady("http://localhost:$port")
     }
