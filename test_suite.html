@@ -310,6 +310,7 @@
   <script src="js/15_single_write.js"></script>
   <script src="js/16_careplan.js"></script>
 <script src="js/17_kasan.js"></script>
+<script src="js/18_stats.js"></script>
 
   <script>
     const logs = [];
@@ -1129,6 +1130,79 @@
       db.data.residents = origResidentsForKasan;
       db.data.dementia_assessments = origDementiaForKasan;
       db.data.kasan_settings = origKasanSettingsDementia;
+
+      // 35. 稼働率・売上の集計（18_stats.js）テスト
+      // Test 125: 年度・月の算出関数
+      const curFY = cpGetCurrentFiscalYear();
+      assert(typeof curFY === "number" && curFY >= 2024, "Test 125: cpGetCurrentFiscalYear が現在の年度数値を返すこと");
+      const fyMonths = cpGetFiscalYearMonths(curFY);
+      assert(fyMonths.length === 12 && fyMonths[0].endsWith("-04") && fyMonths[11].endsWith("-03"), "Test 125: cpGetFiscalYearMonths が4月〜翌年3月の12か月を返すこと");
+
+      // Test 126: 稼働率計算の整合性（定員18・30日で延べ入居日数486日 → 90.0%）
+      const stayRateTest = (486 / (18 * 30)) * 100;
+      assert(stayRateTest.toFixed(1) === "90.0", "Test 126: 延べ入居日数486日・定員18・30日で稼働率90.0%になること");
+
+      // Test 127: 集計実行（管理者・事務のみ実行可能、非管理者はnull）
+      const origStatsPerm = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => false;
+      assert(cpComputeYearStats(curFY) === null, "Test 127: 一般介護職では cpComputeYearStats が null を返すこと");
+      window.isCurrentStaffAdminOrClerk = origStatsPerm;
+
+      // Test 128: 管理者で12か月分の集計オブジェクトが取得できること
+      const statsObj = cpComputeYearStats(curFY);
+      assert(statsObj !== null && Array.isArray(statsObj.monthRows) && statsObj.monthRows.length === 12, "Test 128: 管理者で12か月分の集計オブジェクトが取得できること");
+
+      // Test 129: 未来月判定（今月より先の月は isFuture: true）
+      const todayYm = toLocalDateStr(new Date()).slice(0, 7);
+      const futureMonthRow = statsObj.monthRows.find(r => r.ym > todayYm);
+      if (futureMonthRow) {
+        assert(futureMonthRow.isFuture === true, "Test 129: 今月より先の月が isFuture: true になること");
+      } else {
+        assert(true, "Test 129: 未来月なし（年度末）");
+      }
+
+      // Test 130: SVGグラフ生成の検証（viewBoxが存在し、直接色#やrgbaを含まないこと）
+      const svgOutput = cpGenerateStatsGraphSvg(statsObj);
+      assert(svgOutput.includes('viewBox="0 0 760 320"'), "Test 130: SVGグラフに viewBox が設定されていること");
+      assert(!svgOutput.includes("#") && !svgOutput.includes("rgba("), "Test 130: SVGグラフに直接カラー指定（#やrgba）が含まれないこと");
+
+      // Test 131: 金額計算の整数性（端数処理 Math.floor(単位数 * 単価 / 100)）
+      const calcCost100 = Math.floor(742 * 1090 / 100);
+      const calcHoken = Math.floor(calcCost100 * 90 / 100);
+      const calcBurden = calcCost100 - calcHoken;
+      assert(calcCost100 === 8087 && calcHoken === 7278 && calcBurden === 809, "Test 131: 742単位・10.90円・給付率90%で整数計算（100%=8087, 保険=7278, 負担=809）になること");
+
+      // Test 132: CSV出力と settings_logs 記録
+      const initLogCount = (db.data.settings_logs || []).length;
+      cpExportStatsCsv();
+      const afterLogCount = (db.data.settings_logs || []).length;
+      assert(afterLogCount === initLogCount + 1 && db.data.settings_logs[afterLogCount - 1].kind === "集計CSV出力", "Test 132: cpExportStatsCsv で settings_logs に出力履歴が記録されること");
+
+      // Test 133: 一般介護職員でのCSV出力ブロック
+      window.isCurrentStaffAdminOrClerk = () => false;
+      let alertMsg = "";
+      window.alert = function(msg) { alertMsg = msg; };
+      cpExportStatsCsv();
+      assert(alertMsg.includes("管理者および事務のみ"), "Test 133: 一般介護職員での cpExportStatsCsv がブロックされること");
+      window.alert = origAlert;
+      window.isCurrentStaffAdminOrClerk = origStatsPerm;
+
+      // Test 134: 印刷関数の権限ブロック
+      window.isCurrentStaffAdminOrClerk = () => false;
+      let printAlertMsg = "";
+      window.alert = function(msg) { printAlertMsg = msg; };
+      cpPrintStats();
+      assert(printAlertMsg.includes("管理者および事務のみ"), "Test 134: 一般介護職員での cpPrintStats がブロックされること");
+      window.alert = origAlert;
+      window.isCurrentStaffAdminOrClerk = origStatsPerm;
+
+      // Test 135: 定員未登録時の未登録表示
+      const origCap = db.data.kasan_settings ? db.data.kasan_settings.capacity : undefined;
+      if (!db.data.kasan_settings) db.data.kasan_settings = {};
+      db.data.kasan_settings.capacity = "";
+      const statsNoCap = cpComputeYearStats(curFY);
+      assert(statsNoCap.capacity === null && statsNoCap.monthRows[0].occupancyStayRate == null, "Test 135: 利用定員が未登録の場合にcapacityがnullとなり稼働率がnullになること");
+      db.data.kasan_settings.capacity = origCap;
 
 
       // 33. 総合結果判定

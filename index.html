@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_c1">
+	<link rel="stylesheet" href="style.css?v=20261022_c2">
 </head>
 <body>
 
@@ -845,6 +845,7 @@
    <span class="care-tab-label">管理者・事務</span>
    <div class="care-tab-row">
     <button class="sub-tab-btn" id="subTabKasan" onclick="switchOfficeTab('kasan')">加算・減算</button>
+    <button class="sub-tab-btn" id="subTabStats" onclick="switchOfficeTab('stats')">集計</button>
      <button class="sub-tab-btn" id="subTabBackup" onclick="switchOfficeTab('backup')">データ保管・バックアップ</button>
     <button class="sub-tab-btn" id="subTabStaffAuth" onclick="switchOfficeTab('staff_auth')">職員アカウント・暗証番号管理</button>
     <button class="sub-tab-btn" id="subTabUnits" onclick="switchOfficeTab('units')">区分（ユニット・フロア）の設定</button>
@@ -1436,6 +1437,7 @@
 
   <!-- 加算・減算確認表タブ -->
   <div id="tabOfficeKasan" style="display:none;" class="panel-card"><table id="kasanMonthlyTable" style="display:none;"></table></div>
+  <div id="tabOfficeStats" style="display:none;" class="panel-card"></div>
 
  </div><!-- /officeTabContent -->
  </div><!-- /portalOfficeSection -->
@@ -4119,23 +4121,24 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_c1"></script>
- <script src="js/02_terms.js?v=20261022_c1"></script>
- <script src="js/03_common.js?v=20261022_c1"></script>
- <script src="js/04_care_record.js?v=20261022_c1"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_c1"></script>
- <script src="js/06_schema_history.js?v=20261022_c1"></script>
- <script src="js/07_daily_tables.js?v=20261022_c1"></script>
- <script src="js/08_meds.js?v=20261022_c1"></script>
- <script src="js/09_night_misc.js?v=20261022_c1"></script>
- <script src="js/10_office.js?v=20261022_c1"></script>
- <script src="js/11_karte_staff.js?v=20261022_c1"></script>
- <script src="js/12_hospital_photos.js?v=20261022_c1"></script>
- <script src="js/13_shift_units.js?v=20261022_c1"></script>
- <script src="js/14_auth_home.js?v=20261022_c1"></script>
- <script src="js/15_single_write.js?v=20261022_c1"></script>
- <script src="js/16_careplan.js?v=20261022_c1"></script>
-	<script src="js/17_kasan.js?v=20261022_c1"></script>
+ <script src="js/01_core.js?v=20261022_c2"></script>
+ <script src="js/02_terms.js?v=20261022_c2"></script>
+ <script src="js/03_common.js?v=20261022_c2"></script>
+ <script src="js/04_care_record.js?v=20261022_c2"></script>
+ <script src="js/05_summary_print_audit.js?v=20261022_c2"></script>
+ <script src="js/06_schema_history.js?v=20261022_c2"></script>
+ <script src="js/07_daily_tables.js?v=20261022_c2"></script>
+ <script src="js/08_meds.js?v=20261022_c2"></script>
+ <script src="js/09_night_misc.js?v=20261022_c2"></script>
+ <script src="js/10_office.js?v=20261022_c2"></script>
+ <script src="js/11_karte_staff.js?v=20261022_c2"></script>
+ <script src="js/12_hospital_photos.js?v=20261022_c2"></script>
+ <script src="js/13_shift_units.js?v=20261022_c2"></script>
+ <script src="js/14_auth_home.js?v=20261022_c2"></script>
+ <script src="js/15_single_write.js?v=20261022_c2"></script>
+ <script src="js/16_careplan.js?v=20261022_c2"></script>
+	<script src="js/17_kasan.js?v=20261022_c2"></script>
+	<script src="js/18_stats.js?v=20261022_c2"></script>
   
 
   <!-- ============================================================ -->
@@ -5416,5 +5419,25 @@
 		</div>
 	</div>
 
+
+	<!-- 集計計算対象外詳細モーダル -->
+	<div class="modal-overlay" id="statsUncomputableModal" style="display:none;">
+		<div class="modal-card" style="max-width:540px; max-height:90vh; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;" id="statsUncomputableModalTitle">計算対象外の利用者詳細</h3>
+				<button type="button" class="close-btn" onclick="closeStatsUncomputableModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<div style="font-size:13px; color:var(--ink-2); margin-bottom:12px; line-height:1.6;">
+					介護保険売上を計算するために必要な情報（要介護度・保険給付率など）が不足しているため、売上合計から除外されています。<br>
+					「利用者の登録・変更」画面から必要な情報を登録してください。
+				</div>
+				<div id="statsUncomputableListContainer"></div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
+				<button type="button" class="btn btn-secondary" onclick="closeStatsUncomputableModal()">閉じる</button>
+			</div>
+		</div>
+	</div>
 </body>
 </html>
