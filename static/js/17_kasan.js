@@ -2710,6 +2710,11 @@ function cpValidateResidentForKasanCsv(r, ym) {
     missing.push("入所年月日（入居日）");
   }
 
+  // [Claude修正] 23 入所（院）前の状況コードは様式第六で必須（事業所編 p.51-1 注*2: 平成21年4月サービス以降は必須）
+  if (!/^[1-9]$/.test(String(r.pre_admission_status || ""))) {
+    missing.push("入所前の状況");
+  }
+
   // 退所月の場合、退所後の状態が必要
   const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === ym);
   if (isDischargeMonth) {
@@ -2952,7 +2957,7 @@ function generateKasanCsvFile() {
       birthRaw, genderCode, careCode, "", // 13..16 (16: 空)
       careStartRaw, careExpiryRaw, // 17..18
       "", "", "", "", // 19..22 居宅サービス計画（空）
-      "", admissionRaw, dischargeRaw, inResidenceDaysStr, outingDaysStr, postStatus, // 23..28 (23: 空, 24: 入居, 25: 退居, 26: 入居実日数, 27: 外泊日数, 28: 退居後状態)
+      preStatus, admissionRaw, dischargeRaw, inResidenceDaysStr, outingDaysStr, postStatus, // 23..28 (23: 入居前の状況 [Claude修正: 様式第六で必須], 24: 入居, 25: 退居, 26: 入居実日数, 27: 外泊日数, 28: 退居後状態)
       String(benefitRateInt), "", "", "", // 29..32 給付率
       String(totalUnits), String(hokenDemand), String(userBurden), "", "", "" // 33..38 (36..38: 空)
       // 39..56 公費の欄（18項目空。42..44, 48..50, 54..56 も空）
