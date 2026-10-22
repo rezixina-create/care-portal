@@ -626,6 +626,18 @@ function openTermExplanation(termKey) {
  card.style.display = "block";
 }
 
+// [Claude追加] 用語の説明カードは、カードの外を押すか Esc でも閉じる（×を押さないと閉じられなかった）
+document.addEventListener("click", (ev) => {
+ const card = document.getElementById("termExplainCard");
+ if (!card || card.style.display === "none" || card.style.display === "") return;
+ if (card.contains(ev.target)) return;
+ if (ev.target.closest && ev.target.closest(".term-link")) return; // 別の用語を押したときは、その用語に切り替える
+ closeTermExplanation();
+});
+document.addEventListener("keydown", (ev) => {
+ if (ev.key === "Escape") closeTermExplanation();
+});
+
 function closeTermExplanation() {
  const card = document.getElementById("termExplainCard");
  if (card) {

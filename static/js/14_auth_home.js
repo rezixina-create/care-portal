@@ -527,6 +527,24 @@ function cpHideAppForLogout() {
   document.querySelectorAll(".modal-overlay").forEach(m => { m.style.display = "none"; });
 }
 
+// [Claude追加] ログアウトを押してから、記録を親機へ送り切るまで数秒〜十数秒かかることがあり、何も出ないので「押しても無反応」に見えていた
+function cpShowLogoutBusy(show) {
+ let el = document.getElementById("cpLogoutBusy");
+ if (show) {
+  if (!el) {
+   el = document.createElement("div");
+   el.id = "cpLogoutBusy";
+   el.className = "cp-busy-overlay";
+   el.setAttribute("role", "status");
+   el.innerHTML = `<div class="cp-busy-box">ログアウトしています…<div class="cp-busy-sub">入力した記録を親機へ送っています。画面を閉じずにお待ちください。</div></div>`;
+   document.body.appendChild(el);
+  }
+  el.style.display = "flex";
+ } else if (el) {
+  el.style.display = "none";
+ }
+}
+
 function cpLogoutNoticeText(reason, unsentLost) {
   const parts = [];
   if (reason === "auto") parts.push("一定時間（15分）操作がなかったため、自動でログアウトしました。");
@@ -548,7 +566,9 @@ async function handleLogout(opts) {
     let unsentLost = false;
     if (serverMode) {
       if (reason === "manual") {
-        const sent = await db.flushUnsentChanges();
+        cpShowLogoutBusy(true);
+        let sent = false;
+        try { sent = await db.flushUnsentChanges(); } finally { cpShowLogoutBusy(false); }
         if (!sent) {
           const go = confirm("まだ親機に送れていない記録があります（通信が切れている可能性があります）。\n\nこのままログアウトすると、この端末で入力した未送信の記録は消えます。\n\n［OK］ログアウトする\n［キャンセル］ログアウトせずに戻る（通信を確かめてから、もう一度ログアウトしてください）");
           if (!go) {

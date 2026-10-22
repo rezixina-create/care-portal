@@ -1166,3 +1166,41 @@ function switchCareTab(tab) {
  if (tab === "careplan" && typeof renderCarePlanTab === "function") renderCarePlanTab(); // [Antigravity実装 2026-10-19]
 }
 
+
+// [Claude追加 2026-10-22] 横に並んだ一覧（利用者カードなど）を、マウスで押したまま左右に動かしてスクロールできるようにする
+// - 押して5px以上動かしたときだけスクロール。そのときはカードを選ばない（ただのクリックは今までどおり選ぶ）
+// - スマホ・タブレットの指のスクロールは今までどおり（マウスのときだけ動く）
+const CP_DRAG_SCROLL_SELECTORS = [".residents-strip"];
+let cpDragScroll = null;
+let cpDragScrollSuppressClick = false;
+document.addEventListener("mousedown", (e) => {
+ if (e.button !== 0) return;
+ const box = e.target && e.target.closest ? e.target.closest(CP_DRAG_SCROLL_SELECTORS.join(",")) : null;
+ if (!box || box.scrollWidth <= box.clientWidth) return;
+ if (e.target.closest("input, select, textarea")) return;
+ cpDragScroll = { box: box, startX: e.clientX, startLeft: box.scrollLeft, moved: false };
+});
+document.addEventListener("mousemove", (e) => {
+ if (!cpDragScroll) return;
+ const dx = e.clientX - cpDragScroll.startX;
+ if (!cpDragScroll.moved && Math.abs(dx) < 5) return;
+ cpDragScroll.moved = true;
+ cpDragScroll.box.classList.add("cp-drag-scrolling");
+ cpDragScroll.box.scrollLeft = cpDragScroll.startLeft - dx;
+ e.preventDefault(); // 文字が選ばれないように
+});
+document.addEventListener("mouseup", () => {
+ if (!cpDragScroll) return;
+ if (cpDragScroll.moved) {
+  cpDragScrollSuppressClick = true;
+  setTimeout(() => { cpDragScrollSuppressClick = false; }, 0);
+ }
+ cpDragScroll.box.classList.remove("cp-drag-scrolling");
+ cpDragScroll = null;
+});
+document.addEventListener("click", (e) => {
+ if (!cpDragScrollSuppressClick) return;
+ cpDragScrollSuppressClick = false;
+ e.stopPropagation();
+ e.preventDefault();
+}, true);
