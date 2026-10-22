@@ -90,7 +90,7 @@ def generate():
         if "補聴器" in tx and not p["t"].get("deaf"): tx = f"{first(p['name'])}（{p['room_no']}号室）の居室の電球を交換しました。"
         st = rng.choice(stfs)
         conf = rng.sample([s for s in G.STAFF_UNIT[1] + G.STAFF_UNIT[2]], 3)
-        done = d < G.END - DT.timedelta(days=3)
+        done = d < G.REC_END - DT.timedelta(days=3)
         o["notebooks"].append({"id": nid(), "date": d.isoformat(), "category": "申し送り", "content": tx, "status": "完了" if done else "未対応",
                                "staff_name": st, "resolved_staff": st if done else "", "confirmed_staff": conf if done else conf[:1],
                                "confirmed_versions": {c: f"{d.isoformat()} 1{i}:00" for i, c in enumerate(conf if done else conf[:1])}})
@@ -112,7 +112,7 @@ def generate():
             t_, c_ = NOTICE[d.month]
             o["monthly_notices"].append({"id": nid(), "month": d.isoformat()[:7], "priority": "重要" if d.month in (1, 5, 7) else "通常",
                                          "title": f"{d.month}月 {t_}", "content": c_, "staff_name": "木村 健一", "created_at": f"{d.isoformat()} 09:00",
-                                         "confirmed_staff": rng.sample(G.STAFF_UNIT[1] + G.STAFF_UNIT[2], 9 if d < G.END - DT.timedelta(days=10) else 3)})
+                                         "confirmed_staff": rng.sample(G.STAFF_UNIT[1] + G.STAFF_UNIT[2], 9 if d < G.REC_END - DT.timedelta(days=10) else 3)})
     # ---------------- 事故・ヒヤリハット ----------------
     INC = [
         ("事故報告書", "2025-12-03 02:40", 6, "居室 (ベッドサイド)", "2時40分、センサーマットの音で訪室すると、ベッドの横で床に座り込んでおられた。右の脚の付け根を痛がり、立てない。看護師へ電話し、主治医の指示で救急車を呼んだ。病院で右大腿骨の骨折と分かり、そのまま入院。",

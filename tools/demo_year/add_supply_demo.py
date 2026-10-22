@@ -89,7 +89,7 @@ def biz_after(day, n):
     x = day
     while n > 0:
         x += DT.timedelta(days=1)
-        if x.weekday() < 5: n -= 1
+        if x.weekday() < 5 and not G.is_newyear(x): n -= 1   # 年末年始（12/29〜1/3）は事務・業者も休み
     return x
 by_day = collections.defaultdict(list)
 for e in events: by_day[e[0]].append(e)
@@ -121,7 +121,7 @@ for day in G.DAYS:
         if name in pending: continue
         if stock[name] <= int(it["safety_stock"]):
             od = day + DT.timedelta(days=1)
-            while od.weekday() >= 5: od += DT.timedelta(days=1)
+            while od.weekday() >= 5 or G.is_newyear(od): od += DT.timedelta(days=1)
             qty = max(1, int(it["normal_stock"]) - stock[name])
             o = {"id": nid(), "ordered_at": od.isoformat(), "order_date": od.isoformat(), "supplier_id": it.get("supplier_id") or 1,
                  "supplier_name": it.get("supplier_name") or "ケアサポート商事", "item_name": name, "quantity": qty, "unit_price": it["unit_price"],
@@ -130,7 +130,7 @@ for day in G.DAYS:
             orders.append(o); pending[name] = o
 # 期間の終わりにまだ届いていない発注は、そのまま（承認済 → 届いたら受け取り）。最後の日に出した発注は申請中にする
 for o in orders:
-    if o["ordered_at"] > G.END.isoformat():
+    if o["ordered_at"] > G.REC_END.isoformat():
         o.update({"status": "申請中", "approver": None, "approved_at": None})
     o.pop("_arrive", None)
 for name, it in BYNAME.items(): it["current_stock"] = stock[name]

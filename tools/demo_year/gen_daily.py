@@ -5,7 +5,10 @@ import roster
 
 START = DT.date(2025, 10, 18)
 END = DT.date(2026, 10, 17)
-DAYS = [(START + DT.timedelta(days=i)) for i in range((END - START).days + 1)]
+# 記録を作る最後の日。ふだんは END と同じ。発表の日まで延ばすとき（extend_demo.py）は CP_DEMO_TO で前の日まで
+# 勤務表（ROSTER）は END のまま（前から入っている 2027-02 までの勤務表と同じ人が記録を書くように）
+REC_END = DT.date.fromisoformat(os.environ["CP_DEMO_TO"]) if os.environ.get("CP_DEMO_TO") else END
+DAYS = [(START + DT.timedelta(days=i)) for i in range((REC_END - START).days + 1)]
 # 勤務表だけ先まで作る（加算・減算の確認用。発表 2026-12-07・2027-02 上旬まで）
 ROSTER_END = DT.date(2027, 2, 28)
 ROSTER_DAYS = [(START + DT.timedelta(days=i)) for i in range((ROSTER_END - START).days + 1)]
@@ -607,7 +610,7 @@ def generate():
             pos = ["左側臥位", "仰臥位", "右側臥位"]
             for i, nt in enumerate(["22:00", "00:00", "02:00", "04:00", "06:00"]):
                 dd_ = d if nt >= "12:00" else d + DT.timedelta(days=1)  # 0〜6時は次の日の日付
-                if dd_ > END: continue
+                if dd_ > REC_END: continue
                 if not here(rid, dd_, nt): continue
                 if turn: action = pos[(i + d.toordinal()) % 3]
                 elif t["toilet"] == "おむつ" and nt in ("00:00", "04:00"): action = "おむつ交換"
