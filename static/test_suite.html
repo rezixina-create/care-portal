@@ -1816,6 +1816,188 @@
       assert(typeof onResidentUsageTypeChange === "function" && typeof onResidentShortPlanTypeChange === "function", "Test 163b: 短期利用UI連動関数（onResidentUsageTypeChange, onResidentShortPlanTypeChange）が存在すること");
       assert(typeof renderResidentPlanUnitsList === "function" && typeof addResidentPlanUnitsRow === "function" && typeof deleteResidentPlanUnit === "function", "Test 163c: 短期利用計画単位数リスト管理関数が存在すること");
 
+      // Test 164: 介護予防認知症対応型共同生活介護（サービス種類37: 入居・要支援2）の計算と様式第六の二（7172）
+      const prevRes164_u1 = {
+        id: "prev_test_u1",
+        name: "予防入居テスト一",
+        room_no: "101",
+        care_level: "要支援2",
+        usage_type: "resident",
+        admission_date: "2026-10-01",
+        entry_date: "2026-10-01",
+        status: "入居中",
+        benefit_rate: 90,
+        insured_no: "0012345678",
+        insurer_no: "123456",
+        gender: "1",
+        birth_date: "1940-01-01",
+        care_start_date: "2026-04-01",
+        care_expiry_date: "2027-03-31",
+        pre_admission_status: "1"
+      };
+
+      const prevRes164_u2 = Object.assign({}, prevRes164_u1, {
+        id: "prev_test_u2",
+        name: "予防入居テスト二",
+        room_no: "201"
+      });
+
+      // 設定を初期化（ユニット1）
+      db.data.units = [{ id: 1, name: "1F" }];
+      db.data.kasan_settings = {
+        office_no: "1270001234",
+        media_code: "1",
+        region_type: "その他",
+        shogu_type: "none",
+        taisei_items: {},
+        gensan_items: {}
+      };
+
+      // Test 164a: 基本サービスコード（ユニット1: 1121 / 761単位、ユニット2: 2121 / 749単位）
+      const calc164_u1 = cpComputeMonthlyKasan(prevRes164_u1, "2026-10");
+      assert(calc164_u1.serviceType === "37" && calc164_u1.isShort === false, "Test 164a-1: 入居・要支援2のserviceTypeは37、isShortはfalseであること");
+      const base164_u1 = calc164_u1.items.find(it => it.category.startsWith("基本"));
+      assert(!!base164_u1 && base164_u1.code === "1121" && base164_u1.unit_price === 761, "Test 164a-2: ユニット1の基本コードは1121（761単位）");
+
+      // ユニット2のテスト用に2ユニット構成に設定
+      db.data.units = [{ id: 1, name: "1F" }, { id: 2, name: "2F" }];
+      const calc164_u2 = cpComputeMonthlyKasan(prevRes164_u2, "2026-10");
+      const base164_u2 = calc164_u2.items.find(it => it.category.startsWith("基本"));
+      assert(!!base164_u2 && base164_u2.code === "2121" && base164_u2.unit_price === 749, "Test 164a-3: ユニット2の基本コードは2121（749単位）");
+      db.data.units = [{ id: 1, name: "1F" }];
+
+      // Test 164b: 減算基本サービスコード（夜減、超過、欠員、夜減超過、夜減欠員）
+      assert(CP_KASAN_REDUCED_CODES_37.unit1.yagen.code === "1123" && CP_KASAN_REDUCED_CODES_37.unit1.yagen.units === 738, "Test 164b-1: 37 ユニット1 夜減は1123（738単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit2.yagen.code === "2123" && CP_KASAN_REDUCED_CODES_37.unit2.yagen.units === 727, "Test 164b-2: 37 ユニット2 夜減は2123（727単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit1.cho.code === "8011" && CP_KASAN_REDUCED_CODES_37.unit1.cho.units === 533, "Test 164b-3: 37 ユニット1 超過は8011（533単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit2.cho.code === "8111" && CP_KASAN_REDUCED_CODES_37.unit2.cho.units === 524, "Test 164b-4: 37 ユニット2 超過は8111（524単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit1.ketsu.code === "9011" && CP_KASAN_REDUCED_CODES_37.unit1.ketsu.units === 533, "Test 164b-5: 37 ユニット1 欠員は9011（533単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit2.ketsu.code === "9111" && CP_KASAN_REDUCED_CODES_37.unit2.ketsu.units === 524, "Test 164b-6: 37 ユニット2 欠員は9111（524単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit1.yagen_cho.code === "8013" && CP_KASAN_REDUCED_CODES_37.unit1.yagen_cho.units === 517, "Test 164b-7: 37 ユニット1 夜減超過は8013（517単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit2.yagen_cho.code === "8113" && CP_KASAN_REDUCED_CODES_37.unit2.yagen_cho.units === 509, "Test 164b-8: 37 ユニット2 夜減超過は8113（509単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit1.yagen_ketsu.code === "9013" && CP_KASAN_REDUCED_CODES_37.unit1.yagen_ketsu.units === 517, "Test 164b-9: 37 ユニット1 夜減欠員は9013（517単位）");
+      assert(CP_KASAN_REDUCED_CODES_37.unit2.yagen_ketsu.code === "9113" && CP_KASAN_REDUCED_CODES_37.unit2.yagen_ketsu.units === 509, "Test 164b-10: 37 ユニット2 夜減欠員は9113（509単位）");
+
+      // Test 164c: 個別減算コード（身体拘束6304/6305、虐待防止C201/C203、BCP D201/D203）
+      db.data.kasan_settings.gensan_items = {
+        restraint: { has_gensan: "あり", reason: "未策定" },
+        abuse: { has_gensan: "あり", reason: "未策定" },
+        bcp: { has_gensan: "あり", reason: "未策定" }
+      };
+      const calc164_g1 = cpComputeMonthlyKasan(prevRes164_u1, "2026-10");
+      const gRest1 = calc164_g1.items.find(it => it.code === "6304");
+      const gAbuse1 = calc164_g1.items.find(it => it.code === "C201");
+      const gBcp1 = calc164_g1.items.find(it => it.code === "D201");
+      assert(!!gRest1 && gRest1.unit_price === -76, "Test 164c-1: 37 ユニット1 身体拘束減算は6304（-76単位）");
+      assert(!!gAbuse1 && gAbuse1.unit_price === -8, "Test 164c-2: 37 ユニット1 虐待防止減算はC201（-8単位）");
+      assert(!!gBcp1 && gBcp1.unit_price === -23, "Test 164c-3: 37 ユニット1 BCP未策定減算はD201（-23単位）");
+
+      db.data.units = [{ id: 1, name: "1F" }, { id: 2, name: "2F" }];
+      const calc164_g2 = cpComputeMonthlyKasan(prevRes164_u2, "2026-10");
+      const gRest2 = calc164_g2.items.find(it => it.code === "6305");
+      const gAbuse2 = calc164_g2.items.find(it => it.code === "C203");
+      const gBcp2 = calc164_g2.items.find(it => it.code === "D203");
+      assert(!!gRest2 && gRest2.unit_price === -75, "Test 164c-4: 37 ユニット2 身体拘束減算は6305（-75単位）");
+      assert(!!gAbuse2 && gAbuse2.unit_price === -7, "Test 164c-5: 37 ユニット2 虐待防止減算はC203（-7単位）");
+      assert(!!gBcp2 && gBcp2.unit_price === -22, "Test 164c-6: 37 ユニット2 BCP未策定減算はD203（-22単位）");
+      db.data.units = [{ id: 1, name: "1F" }];
+      db.data.kasan_settings.gensan_items = {};
+
+      // Test 164d: 加算の除外（看取り・医療連携・協力医療機関は介護のみのため算定不可）
+      db.data.kasan_settings.taisei_items = {
+        medical_coop: { option_key: "1_a" },
+        medical_coop2: { option_key: "1" },
+        coop_hospital: { option_key: "1" },
+        night_support: { option_key: "1" },
+        productivity: { option_key: "1" }
+      };
+      const prevRes164_dead = Object.assign({}, prevRes164_u1, {
+        status: "退所",
+        discharge_reason: "死亡退所",
+        discharge_date: "2026-10-31"
+      });
+      const calc164_ex = cpComputeMonthlyKasan(prevRes164_dead, "2026-10");
+      const hasMitori = calc164_ex.items.some(it => it.category === "看取り");
+      const hasMedCoop = calc164_ex.items.some(it => ["1600", "1601", "1602", "1603"].includes(it.code));
+      const hasCoopHosp = calc164_ex.items.some(it => ["6123", "6124"].includes(it.code));
+      assert(hasMitori === false, "Test 164d-1: 37では死亡退所であっても看取り介護加算は算定されないこと（介護のみ）");
+      assert(hasMedCoop === false, "Test 164d-2: 37では医療連携体制加算は算定されないこと（介護のみ）");
+      assert(hasCoopHosp === false, "Test 164d-3: 37では協力医療機関連携加算は算定されないこと（介護のみ）");
+
+      // Test 164e: 加算の適用（初期加算・夜間支援・生産性向上体制加算などは算定可能）
+      const hasNightSupport = calc164_ex.items.some(it => it.code === "6161");
+      const hasProd = calc164_ex.items.some(it => it.code === "6237");
+      const hasInit = calc164_ex.items.some(it => it.code === "1550");
+      assert(hasNightSupport === true, "Test 164e-1: 37で夜間支援体制加算（6161）が算定されること");
+      assert(hasProd === true, "Test 164e-2: 37で生産性向上推進体制加算（6237）が算定されること");
+      assert(hasInit === true, "Test 164e-3: 37で入居30日以内の初期加算（1550）が算定されること");
+
+      // Test 164f: 限度額管理の非適用（通常入居のため限度額管理は対象外）
+      assert(calc164_u1.isLimitExceeded === false && calc164_u1.excessUnits === 0, "Test 164f: 37入居では限度額管理超過判定なし（isLimitExceeded === false）");
+
+      // Test 164g: バリデーション（通常入居の要支援2がエラーなく適格と判定されること）
+      const val164 = cpValidateResidentForKasanCsv(prevRes164_u1, "2026-10");
+      assert(val164.valid === true, "Test 164g: 必須項目を満たした要支援2の入居者が適格（valid === true）と判定されること");
+
+      // Test 164h: 請求ファイル（様式第六の二 7172）の出力
+      const origAdminPerm164 = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => true;
+
+      gKasanCsvValidationResult = {
+        ym: "2026-10",
+        settings: {
+          office_no: "1270001234",
+          media_code: "1",
+          region_type: "その他"
+        },
+        officeErrors: [],
+        candidates: [{
+          resident: prevRes164_u1,
+          calc: calc164_u1,
+          validation: { valid: true, missing: [] }
+        }],
+        eligibleCount: 1,
+        ineligibleCount: 0
+      };
+
+      generateKasanCsvFile();
+      window.isCurrentStaffAdminOrClerk = origAdminPerm164;
+
+      const csvLines164 = (gKasanGeneratedCsvText || "").split("\r\n");
+      const line164_01 = csvLines164.find(l => l.includes(",7172,01,"));
+      const line164_02 = csvLines164.find(l => l.includes(",7172,02,"));
+      const line164_10 = csvLines164.find(l => l.includes(",7172,10,"));
+      const line164_7111 = csvLines164.find(l => l.includes(",7111,"));
+
+      assert(line164_01 !== undefined, "Test 164h-1: 様式7172の01レコードが出力されること");
+      if (line164_01) {
+        const fields01 = line164_01.split(",").slice(2);
+        assert(fields01[0] === "7172" && fields01[1] === "01", "Test 164h-2: 01レコードの様式番号は7172");
+        assert(fields01[14] === "13", "Test 164h-3: 要支援2の要介護状態区分コードは13（共通編）");
+        assert(fields01[22] === "1", "Test 164h-4: 基本情報23（入所前状況コード）が出力されること");
+        assert(fields01[25] === String(calc164_u1.basicDays), "Test 164h-5: 基本情報26（入所実日数）が出力されること");
+      }
+
+      assert(line164_02 !== undefined, "Test 164h-6: 様式7172の02レコードが出力されること");
+      if (line164_02) {
+        const fields02 = line164_02.split(",").slice(2);
+        assert(fields02[0] === "7172" && fields02[6] === "37", "Test 164h-7: 02レコードのサービス種類コードは37");
+        assert(fields02[7] === "1121", "Test 164h-8: 02レコードのサービスコードは1121");
+      }
+
+      assert(line164_10 !== undefined, "Test 164h-9: 様式7172の10レコードが出力されること");
+      if (line164_10) {
+        const fields10 = line164_10.split(",").slice(2);
+        assert(fields10[0] === "7172" && fields10[6] === "37", "Test 164h-10: 10レコードのサービス種類コードは37");
+      }
+
+      assert(line164_7111 !== undefined, "Test 164h-11: 7111請求書レコードが出力されること");
+      if (line164_7111) {
+        const fields7111 = line164_7111.split(",").slice(2);
+        assert(fields7111[6] === "1", "Test 164h-12: 7111レコードの件数は1件");
+        assert(fields7111[7] === String(calc164_u1.totalUnits), "Test 164h-13: 7111レコードの単位数合計が一致すること");
+      }
+
       // 設定およびユニット構成を元に戻す
       db.data.kasan_settings = origSettingsBefore157;
       db.data.units = origUnitsBefore157;

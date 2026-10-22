@@ -21,6 +21,29 @@ const CP_KASAN_BASIC_CODES = {
   }
 };
 
+// 介護予防認知症対応型共同生活介護（サービス種類37: 要支援2）基本サービスコード
+const CP_KASAN_BASIC_CODES_37 = {
+  unit1: { code: "1121", units: 761, name: "予認知症共同生活介護（Ⅰ）" },
+  unit2: { code: "2121", units: 749, name: "予認知症共同生活介護（Ⅱ）" }
+};
+
+const CP_KASAN_REDUCED_CODES_37 = {
+  unit1: {
+    yagen: { code: "1123", units: 738, name: "予認知症共同生活介護（Ⅰ）夜減" },
+    cho: { code: "8011", units: 533, name: "予認知症共同生活介護（Ⅰ）超" },
+    yagen_cho: { code: "8013", units: 517, name: "予認知症共同生活介護（Ⅰ）夜減・超" },
+    ketsu: { code: "9011", units: 533, name: "予認知症共同生活介護（Ⅰ）欠" },
+    yagen_ketsu: { code: "9013", units: 517, name: "予認知症共同生活介護（Ⅰ）夜減・欠" }
+  },
+  unit2: {
+    yagen: { code: "2123", units: 727, name: "予認知症共同生活介護（Ⅱ）夜減" },
+    cho: { code: "8111", units: 524, name: "予認知症共同生活介護（Ⅱ）超" },
+    yagen_cho: { code: "8113", units: 509, name: "予認知症共同生活介護（Ⅱ）夜減・超" },
+    ketsu: { code: "9111", units: 524, name: "予認知症共同生活介護（Ⅱ）欠" },
+    yagen_ketsu: { code: "9113", units: 509, name: "予認知症共同生活介護（Ⅱ）夜減・欠" }
+  }
+};
+
 // 短期利用（サービス種類38: 要介護1〜5）基本サービスコード [Claude修正] 単位は WAM サービスコード表（令和8年6月・8月施行）38 の表どおり
 const CP_KASAN_SHORT_BASIC_CODES_38 = {
   unit1: {
@@ -204,6 +227,22 @@ const CP_KASAN_SHORT_GENSAN_39 = {
   }
 };
 
+
+// 介護予防認知症対応型共同生活介護（サービス種類37: 要支援2）減算コード
+const CP_KASAN_GENSAN_37 = {
+  restraint: {
+    unit1: { code: "6304", units: -76 },
+    unit2: { code: "6305", units: -75 }
+  },
+  abuse: {
+    unit1: { code: "C201", units: -8 },
+    unit2: { code: "C203", units: -7 }
+  },
+  bcp: {
+    unit1: { code: "D201", units: -23 },
+    unit2: { code: "D203", units: -22 }
+  }
+};
 
 // 処遇改善加算の定義（WAM/市川市手引き準拠）
 const CP_KASAN_SHOGU_DEFS = {
@@ -709,6 +748,18 @@ const CP_KASAN_SOURCES = [
   {
     label: "市川市「令和８年度 運営の手引き 認知症対応型共同生活介護」（令和8年6月時点）短期利用の基準・認知症行動・心理症状緊急対応加算・サービス提供体制強化加算の注",
     url: "https://www.city.ichikawa.lg.jp/uploaded/attachment/55858.pdf"
+  },
+  {
+    label: "WAM 介護給付費単位数等サービスコード表（令和8年6月・8月施行）介護予防認知症対応型共同生活介護（37）",
+    url: "https://www.wam.go.jp/"
+  },
+  {
+    label: "市川市「令和８年度 運営の手引き 認知症対応型共同生活介護」（令和8年6月時点）看取り介護加算・協力医療機関連携加算・医療連携体制加算は「介護のみ」、ほかの加算・減算は介護・介護予防対応",
+    url: "https://www.city.ichikawa.lg.jp/"
+  },
+  {
+    label: "国保中央会「インタフェース仕様書 サービス事業所編」（令和6年4月）様式第六の二（7172）介護予防認知症対応型共同生活介護",
+    url: "https://www.kokuho.or.jp/"
   },
   {
     label: "老発0313第６号（処遇改善加算は区分支給限度基準額の算定対象から除外）",
@@ -1401,7 +1452,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
 
   // 1. 基本サービスコード（減算コード置換）
   const isShort = (r.usage_type === "short");
-  const serviceType = isShort ? (r.care_level === "要支援2" ? "39" : "38") : "32";
+  const serviceType = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
 
   // 1. 基本サービスコード（減算コード含む）
   const careLevel = r.care_level || "";
@@ -1461,6 +1512,33 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       basicCodeObj = def38Norm[careLevel] || null;
       basicCategory = "基本";
       basicNote = "";
+    }
+  } else if (!isShort && serviceType === "37") {
+    if (careLevel !== "要支援2") {
+      return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: 0, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: false, serviceType: "37", managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
+    }
+    const def37Norm = CP_KASAN_BASIC_CODES_37[unitKey];
+    const def37Red = CP_KASAN_REDUCED_CODES_37[unitKey];
+    if (reductions.has_cho && reductions.has_ketsu) {
+      basicCodeObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
+      basicCategory = "基本（減算）";
+      basicNote = reductions.has_yagen ? "定員超過・人員欠如・夜減重複（要支援2）" : "定員超過・人員欠如重複（要支援2）";
+    } else if (reductions.has_cho) {
+      basicCodeObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
+      basicCategory = "基本（減算）";
+      basicNote = reductions.has_yagen ? "定員超過減算・夜勤減算（要支援2）" : "定員超過減算（要支援2）";
+    } else if (reductions.has_ketsu) {
+      basicCodeObj = reductions.has_yagen ? def37Red.yagen_ketsu : def37Red.ketsu;
+      basicCategory = "基本（減算）";
+      basicNote = reductions.has_yagen ? "人員基準欠如減算・夜勤減算（要支援2）" : "人員基準欠如減算（要支援2）";
+    } else if (reductions.has_yagen) {
+      basicCodeObj = def37Red.yagen;
+      basicCategory = "基本（夜減）";
+      basicNote = "夜勤減算（97/100）";
+    } else {
+      basicCodeObj = def37Norm;
+      basicCategory = "基本";
+      basicNote = "通常（要支援2）";
     }
   } else {
     // 32 通常入居
@@ -1587,7 +1665,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         else if (offset >= 30 && offset <= 44) d31_45Count++;
       }
 
-      if (!isShort && dCount > 0) {
+      if (!isShort && serviceType !== "37" && dCount > 0) {
         items.push({
           category: "看取り",
           code: CP_KASAN_RESIDENT_DEFS.mitori_death.code,
@@ -1599,7 +1677,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
           note: `死亡日: ${r.discharge_date}（届出・医療連携の算定・同意などの要件は確認してください）`
         });
       }
-      if (!isShort && d2_3Count > 0) {
+      if (!isShort && serviceType !== "37" && d2_3Count > 0) {
         items.push({
           category: "看取り",
           code: CP_KASAN_RESIDENT_DEFS.mitori_2_3.code,
@@ -1611,7 +1689,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
           note: "死亡日前日・前々日"
         });
       }
-      if (!isShort && d4_30Count > 0) {
+      if (!isShort && serviceType !== "37" && d4_30Count > 0) {
         items.push({
           category: "看取り",
           code: CP_KASAN_RESIDENT_DEFS.mitori_4_30.code,
@@ -1623,7 +1701,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
           note: "死亡日前4〜30日"
         });
       }
-      if (!isShort && d31_45Count > 0) {
+      if (!isShort && serviceType !== "37" && d31_45Count > 0) {
         items.push({
           category: "看取り",
           code: CP_KASAN_RESIDENT_DEFS.mitori_31_45.code,
@@ -1700,6 +1778,12 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       }
       // 要支援2（39）では医療連携体制加算は算定不可
       if (serviceType === "39" && (def.id === "medical_coop" || def.id === "medical_coop2")) {
+        return;
+      }
+    }
+    if (serviceType === "37") {
+      // 介護予防（37）では看取り・協力医療機関連携・医療連携体制加算は算定不可（市川市手引き: 介護のみ）
+      if (def.id === "medical_coop" || def.id === "medical_coop2" || def.id === "coop_hospital") {
         return;
       }
     }
@@ -1788,6 +1872,22 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
       const inRange = (!gSet.start_month || yearMonth >= gSet.start_month) &&
                       (!gSet.end_month || yearMonth <= gSet.end_month);
       if (inRange) {
+        if (!isShort && serviceType === "37") {
+          const gObj = CP_KASAN_GENSAN_37[def.id] && CP_KASAN_GENSAN_37[def.id][unitKey];
+          if (gObj) {
+            items.push({
+              category: "減算",
+              code: gObj.code,
+              name: `${def.name}（要支援2）`,
+              unit_price: gObj.units,
+              count: basicDays,
+              unit_label: "日",
+              subtotal: gObj.units * basicDays,
+              note: gSet.reason || "未実施"
+            });
+          }
+          return;
+        }
         if (isShort && serviceType === "39") {
           const gObj = CP_KASAN_SHORT_GENSAN_39[def.id] && CP_KASAN_SHORT_GENSAN_39[def.id][unitKey];
           if (gObj) {
@@ -2197,7 +2297,7 @@ function renderOfficeKasanTab() {
   // 表の各行HTML
   const rowsHtml = monthlyResults.map(res => {
     const r = res.resident;
-    const codesHtml = (res.levelMissing ? `<div style="font-size:13px; color:var(--caution); font-weight:bold;">要介護度が未登録か要介護1〜5ではないため、数えていません（${escapeHtml(res.careLevel || "未登録")}）</div>` : "") + res.items.map(it => {
+    const codesHtml = (res.levelMissing ? `<div style="font-size:13px; color:var(--caution); font-weight:bold;">要介護度が未登録か対象（要介護1〜5・要支援2）ではないため、数えていません（${escapeHtml(res.careLevel || "未登録")}）</div>` : "") + res.items.map(it => {
       if (it.candidate) {
         return `<div style="font-size:13px; margin-bottom:2px; color:var(--caution);"><span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:1px 5px;">${escapeHtml(it.code)}</span> <strong>${escapeHtml(it.name)}</strong>: ${it.unit_price}単位（${escapeHtml(it.note)}）</div>`;
       }
@@ -2223,7 +2323,7 @@ function renderOfficeKasanTab() {
       <tr>
         <td style="font-weight:bold; white-space:nowrap;">
           ${escapeHtml(r.room_no || "-")}号 ${escapeHtml(r.name)}
-          ${res.isShort ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">短期利用（${res.serviceType}）</span>` : ""}
+          ${res.isShort ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">短期利用（${res.serviceType}）</span>` : (res.serviceType === "37" ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">介護予防（37）</span>` : "")}
           ${r.status === "退所" ? `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:13px; margin-left:4px;">退所</span>` : ""}
         </td>
         <td style="text-align:center; white-space:nowrap;">${escapeHtml(r.care_level || "-")}</td>
@@ -3133,16 +3233,10 @@ function cpValidateResidentForKasanCsv(r, ym) {
     }
   }
 
-  // 要介護度（通常入居は要介護1〜5、短期利用は要支援2または要介護1〜5）
+  // 要介護度（通常入居・短期利用ともに要支援2または要介護1〜5）
   const careCode = CP_KASAN_CARE_LEVEL_CODES[r.care_level || ""];
-  if (r.usage_type === "short") {
-    if (!careCode && r.care_level !== "要支援2") {
-      missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${r.care_level || "未登録"}）`);
-    }
-  } else {
-    if (!careCode || r.care_level === "要支援2") {
-      missing.push(`要介護度（要介護1〜5が必要: 現在 ${r.care_level || "未登録"}）`);
-    }
+  if (!careCode) {
+    missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${r.care_level || "未登録"}）`);
   }
 
   return {
@@ -3323,8 +3417,8 @@ function generateKasanCsvFile() {
     const r = item.resident;
     const calc = item.calc;
     const isShort = (r.usage_type === "short");
-    const formCode = isShort ? (r.care_level === "要支援2" ? "7176" : "7175") : "7171";
-    const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : "32";
+    const formCode = isShort ? (r.care_level === "要支援2" ? "7176" : "7175") : (r.care_level === "要支援2" ? "7172" : "7171");
+    const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
     const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
 
     const totalUnits = calc.totalUnits;
@@ -3597,6 +3691,9 @@ window.cpSetCurrentServiceType = cpSetCurrentServiceType;
 window.cpGetShoguRoTableForService = cpGetShoguRoTableForService;
 window.cpCheckShoguRoRequirements = cpCheckShoguRoRequirements;
 window.CP_KASAN_BASIC_CODES = CP_KASAN_BASIC_CODES;
+window.CP_KASAN_BASIC_CODES_37 = CP_KASAN_BASIC_CODES_37;
+window.CP_KASAN_REDUCED_CODES_37 = CP_KASAN_REDUCED_CODES_37;
+window.CP_KASAN_GENSAN_37 = CP_KASAN_GENSAN_37;
 window.CP_KASAN_RESIDENT_DEFS = CP_KASAN_RESIDENT_DEFS;
 window.CP_KASAN_TAISEI_DEFS = CP_KASAN_TAISEI_DEFS;
 window.CP_KASAN_GENSAN_DEFS = CP_KASAN_GENSAN_DEFS;
