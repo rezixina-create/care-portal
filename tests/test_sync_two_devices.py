@@ -1,13 +1,16 @@
 # 画面側の保存・受け取りの作り変え（2026-10-18）の確認: 2台の端末で同時に使う
 import asyncio, json, sys, time, subprocess, urllib.request
+# [Claude修正 2026-10-23] 今のログイン画面（職員IDとパスワードだけ）に合わせた。設定の変更は管理者から（保存のときもサーバーが職種を見るため）
+LOGIN_ID = {'木村 健一': 'aaaa', '井上 蓮': 'dddd'}
 from playwright.async_api import async_playwright
 results=[]
 def check(n,ok,info=''): results.append((n,ok)); print(('OK  ' if ok else 'NG  ')+n, info)
 async def login(ctx,name):
     pg=await ctx.new_page(); errs=[]
     pg.on('pageerror',lambda e:errs.append(str(e)[:150])); pg.on('dialog',lambda d: asyncio.ensure_future(d.dismiss()))
+    pg.on('console',lambda m: errs.append('console:'+m.text[:150]) if m.type=='error' and '403' not in m.text else None)
     await pg.goto('http://localhost:8888/'); await pg.wait_for_timeout(1200)
-    await pg.select_option('#loginStaffSelect',value=name); await pg.fill('#loginStaffIdInput','aaaa'); await pg.fill('#loginPasswordInput','0000')
+    await pg.fill('#loginStaffIdInput',LOGIN_ID[name]); await pg.fill('#loginPasswordInput','0000')
     await pg.click('.login-submit')
     await pg.wait_for_function('typeof db!=="undefined" && db.hasSyncedWithServer && db.data.care_records.length>0',timeout=60000)
     await pg.evaluate('''()=>{window.__full=0; const of=window.fetch; window.fetch=function(u,...a){ if(String(u).includes('/api/data')) window.__full++; return of.call(this,u,...a);} }''')
@@ -40,10 +43,15 @@ async def main():
     await settle(A,B)
     ka=await A.evaluate('()=>db.data.care_records.some(r=>r.id===880001)'); kb=await B.evaluate('()=>db.data.care_records.some(r=>r.id===880001)')
     check('3 消した記録を別の端末で直していたら残る', ka and kb, (ka,kb))
-    # 4 設定（一覧でない項目）
-    await B.evaluate('''()=>{db.data.shift_staffing = Object.assign({}, db.data.shift_staffing||{}, {night: 2}); db.save();}''')
+    # 4 設定（一覧でない項目）: 管理者の A が変える → B に届く
+    await A.evaluate('''()=>{db.data.shift_staffing = Object.assign({}, db.data.shift_staffing||{}, {night: 2}); db.save();}''')
     await settle(A,B)
-    check('4 設定の変更が届く', await A.evaluate('()=>db.data.shift_staffing && db.data.shift_staffing.night===2'))
+    check('4 設定の変更が届く', await B.evaluate('()=>db.data.shift_staffing && db.data.shift_staffing.night===2'))
+    # 4b 介護職員の B が同じ設定を変えようとしても、サーバーが止めて B の画面でも元に戻る
+    await B.evaluate('''()=>{db.data.shift_staffing = Object.assign({}, db.data.shift_staffing||{}, {night: 3}); db.save();}''')
+    await settle(A,B)
+    vb=await B.evaluate('()=>db.data.shift_staffing.night'); va=await A.evaluate('()=>db.data.shift_staffing.night')
+    check('4b 介護職員の設定の変更は止まり、元に戻る', va==2 and vb==2, (va,vb))
     # 5 続けて同時に保存
     for i in range(15):
         await A.evaluate(f'''()=>{{db.data.vitals.push({{id:870000+{i},resident_id:2,date:'2026-10-18',time:'10:00',temperature:36.5,staff_name:'木村 健一'}}); db.save();}}''')
