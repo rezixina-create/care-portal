@@ -1174,7 +1174,7 @@ function renderOfficeOrders() {
  <td>${o.supplier_name || '-'}</td>
  <td>${o.reason || '-'}</td>
  <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${o.status}</span></td>
- <td>${o.applicant} / ${o.approver || '-'}</td>
+ <td>${escapeHtml(o.applicant || '未記録')} / ${escapeHtml(o.approver || '-')}</td>
  <td>${actionButtons}</td>
  `;
  tbody.appendChild(tr);
