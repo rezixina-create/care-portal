@@ -4,6 +4,8 @@
 # 使い方（サーバーを止めてから）:
 #   python tools/demo_year/extend_demo.py data/portal_database.json --to 2026-12-06
 #   python tools/demo_year/extend_demo.py data/portal_database.json --to 2027-02-04     （2月の発表が 2/5 のとき）
+#   python tools/demo_year/extend_demo.py data/portal_database.json --until "2026-12-07 08:30"   （発表の日の朝 8:30 までの記録も入れる。夜勤の巡視・起床・朝食・朝の服薬など）
+#     ※ --until を使ったあとにもっと先へ延ばすと、発表の日の残り（8:30 より後）は入らない
 #   --out 別のファイル  … 書き出し先を変える（ふだんは同じファイルに上書き。前の中身は .before_extend_日付 に残す）
 #
 # すること
@@ -19,10 +21,17 @@ import sys, os, json, shutil, argparse, datetime as DT, runpy, collections
 HERE = os.path.dirname(os.path.abspath(__file__))
 ap = argparse.ArgumentParser()
 ap.add_argument("path")
-ap.add_argument("--to", required=True, help="最後の日（発表の前の日）YYYY-MM-DD")
+ap.add_argument("--to", default=None, help="最後の日（発表の前の日）YYYY-MM-DD")
+ap.add_argument("--until", default=None, help="発表の日の朝まで入れるとき: 'YYYY-MM-DD HH:MM'（その日のその時刻より後の記録は入れない）")
 ap.add_argument("--out", default=None)
 a = ap.parse_args()
-TO = DT.date.fromisoformat(a.to)
+if not a.to and not a.until: ap.error("--to か --until のどちらかを入れてください")
+CUT = None
+if a.until:
+    CUT = a.until.strip().replace("T", " ")
+    TO = DT.date.fromisoformat(CUT[:10])
+else:
+    TO = DT.date.fromisoformat(a.to)
 OUT = a.out or a.path
 
 d = json.load(open(a.path, encoding="utf-8-sig"))
@@ -263,4 +272,47 @@ print("足したもの:", dict(added))
 for tool in ("add_daily_schedules.py", "add_supply_demo.py"):
     sys.argv = [tool, OUT]
     runpy.run_path(os.path.join(HERE, tool), run_name="__main__")
+
+# ---- 発表の日の朝まで（--until）: その日のその時刻より後の記録を外す ----
+# 時刻のない記録（身だしなみ・シーツ・体重・連絡ノート・レク・車両・預り金など）は、その日の分を入れない。口腔ケア・塗り薬は「朝食後」「朝」だけ残す
+if CUT:
+    cday, ctime = CUT[:10], CUT[11:16]
+    MORNING = {"oral_cares": ("朝食後",), "topical_records": ("朝",)}
+    def rec_time(k, x):
+        if x.get("time"): return x["time"]
+        if x.get("given_time"): return x["given_time"]
+        for f in ("recorded_at", "done_at", "timestamp", "consumed_at", "occurred_at", "created_at"):
+            v = x.get(f)
+            if isinstance(v, str) and len(v) >= 16: return v[11:16]
+        if k in MORNING: return "08:30" if x.get("timing") in MORNING[k] else "23:59"
+        return None
+    dd = json.load(open(OUT, encoding="utf-8-sig"))
+    cut_n = 0
+    undo = {}   # 外した在庫の出し入れ（品物名 → 戻す数）
+    for k, lst in list(dd.items()):
+        if not isinstance(lst, list): continue
+        keep = []
+        for x in lst:
+            if isinstance(x, dict):
+                ds_ = rec_date(x) or (x.get("ordered_at") or "")[:10]
+                drop = False
+                if ds_ == cday:
+                    t = rec_time(k, x)
+                    drop = (t is None or t > ctime)
+                elif ds_ and ds_ > cday: drop = True
+                if drop:
+                    cut_n += 1
+                    if k == "inventory_logs" and isinstance(x.get("change_qty"), (int, float)):
+                        undo[x.get("item_name")] = undo.get(x.get("item_name"), 0) - x["change_qty"]
+                    continue
+            keep.append(x)
+        dd[k] = keep
+    # 在庫の数は、外した使用・入庫の分を戻す（その時刻より後の出し入れは、まだないことにする）
+    for it in dd.get("inventory", []):
+        if it.get("name") in undo: it["current_stock"] = int(it.get("current_stock") or 0) + int(undo[it["name"]])
+    tmp = OUT + ".tmp_write"
+    with open(tmp, "w", encoding="utf-8-sig", newline="") as f:
+        f.write(json.dumps(dd, ensure_ascii=False, separators=(",", ":")))
+    os.replace(tmp, OUT)
+    print(f"{cday} の {ctime} より後の記録を外した:", cut_n, "件")
 print("できました:", OUT)
