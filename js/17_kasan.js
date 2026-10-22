@@ -142,9 +142,10 @@ function cpCheckShoguRoRequirements(settings, serviceType) {
   const prodMet = (prodNotified || prodPledged);
 
   // （ウ）社会福祉連携推進法人
+  // [Claude修正] （ウ）には誓約での扱いがない（老発0313第６号 3⑴⑧（ウ））。所属しているときだけ満たす
   const socialJoined = (s.social_welfare === "joined");
-  const socialPledged = (s.social_welfare === "pledged");
-  const socialMet = (socialJoined || socialPledged);
+  const socialPledged = false;
+  const socialMet = socialJoined;
 
   const satisfiedAllowed = [];
   const satisfiedDisallowed = [];
@@ -2219,8 +2220,10 @@ function saveKasanSettings() {
   const careplanDateVal = (document.getElementById("kasanCareplanLinkPledgedDate")?.value || "").trim();
   const prodPledgeVal = (document.getElementById("kasanProductivityPledge")?.value || "").trim();
   const prodPledgeDateVal = (document.getElementById("kasanProductivityPledgedDate")?.value || "").trim();
-  const socialVal = (document.getElementById("kasanSocialWelfare")?.value || "").trim();
-  const socialDateVal = (document.getElementById("kasanSocialWelfarePledgedDate")?.value || "").trim();
+  // [Claude修正] （ウ）は誓約の扱いがないので「誓約中」は受け付けない。誓約していない要件の誓約日は残さない
+  const socialValRaw = (document.getElementById("kasanSocialWelfare")?.value || "").trim();
+  const socialVal = (socialValRaw === "pledged") ? "" : socialValRaw;
+  const socialDateVal = "";
 
   let kasanError = "";
   if (capValRaw && (isNaN(capVal) || capVal <= 0)) {
@@ -2237,9 +2240,9 @@ function saveKasanSettings() {
     capacity: capVal,
     shogu_type: shoguVal,
     careplan_link: careplanVal,
-    careplan_link_pledged_date: careplanDateVal,
+    careplan_link_pledged_date: careplanVal === "pledged" ? careplanDateVal : "",
     productivity_pledge: prodPledgeVal,
-    productivity_pledged_date: prodPledgeDateVal,
+    productivity_pledged_date: prodPledgeVal === "pledged" ? prodPledgeDateVal : "",
     social_welfare: socialVal,
     social_welfare_pledged_date: socialDateVal,
     night_shortage: curSettings.night_shortage || {},
@@ -2280,12 +2283,6 @@ function saveKasanSettings() {
     kasanError = "生産性向上推進体制加算の誓約した日に先の日付は入れられません。";
   }
 
-  if (!kasanError && socialVal === "pledged" && !socialDateVal) {
-    kasanError = "社会福祉連携推進法人の誓約した日を入力してください。";
-  }
-  if (!kasanError && socialDateVal && socialDateVal > kasanToday) {
-    kasanError = "社会福祉連携推進法人の誓約した日に先の日付は入れられません。";
-  }
 
   // [Claude修正] 加算どうしの決まり
   if (!kasanError) {

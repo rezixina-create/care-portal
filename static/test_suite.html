@@ -1461,6 +1461,8 @@
       assert(CP_SHOGU_RO_SERVICE_TABLES.table_1_3.allowed.includes("careplan") && CP_SHOGU_RO_SERVICE_TABLES.table_1_3.allowed.includes("productivity"), "Test 147b: 表1-3はケアプラン連携・生産性向上ともに可");
       assert(!CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("careplan") && CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("productivity"), "Test 147c: 表1-4は生産性向上のみ（ケアプラン連携は不可）");
       assert(CP_SHOGU_RO_SERVICE_TABLES.table_1_2.allowed.includes("social_welfare") && CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("social_welfare"), "Test 147d: 社会福祉連携推進法人は全表共通で利用可");
+      // [Claude追加] （ウ）社会福祉連携推進法人は誓約での扱いがない（老発0313第６号 3⑴⑧（ウ））
+      assert(cpCheckShoguRoRequirements({ shogu_type: "1_b", social_welfare: "pledged", taisei_items: {} }, "（介護予防）認知症対応型共同生活介護").isSatisfied === false, "Test 147e: 社会福祉連携推進法人の『誓約中』では要件を満たさないこと");
 
       // Test 148: グループホーム（表1-4）で生産性向上推進体制加算（ⅠまたはⅡ）届出あり → 警告なし
       cpSetCurrentServiceType("（介護予防）認知症対応型共同生活介護");
@@ -1567,7 +1569,6 @@
         <select id="kasanProductivityPledge"><option value="none" selected>none</option></select>
         <input id="kasanProductivityPledgedDate" value="">
         <select id="kasanSocialWelfare"><option value="none" selected>none</option></select>
-        <input id="kasanSocialWelfarePledgedDate" value="">
         <div id="kasanTaiseiContainer"></div>
       `;
       sb.appendChild(testModalDiv);

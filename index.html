@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_f1">
+	<link rel="stylesheet" href="style.css?v=20261022_f2">
 </head>
 <body>
 
@@ -4133,25 +4133,25 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_f1"></script>
- <script src="js/02_terms.js?v=20261022_f1"></script>
- <script src="js/03_common.js?v=20261022_f1"></script>
- <script src="js/04_care_record.js?v=20261022_f1"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_f1"></script>
- <script src="js/06_schema_history.js?v=20261022_f1"></script>
- <script src="js/07_daily_tables.js?v=20261022_f1"></script>
- <script src="js/08_meds.js?v=20261022_f1"></script>
- <script src="js/09_night_misc.js?v=20261022_f1"></script>
- <script src="js/10_office.js?v=20261022_f1"></script>
- <script src="js/11_karte_staff.js?v=20261022_f1"></script>
- <script src="js/12_hospital_photos.js?v=20261022_f1"></script>
- <script src="js/13_shift_units.js?v=20261022_f1"></script>
- <script src="js/14_auth_home.js?v=20261022_f1"></script>
- <script src="js/15_single_write.js?v=20261022_f1"></script>
- <script src="js/16_careplan.js?v=20261022_f1"></script>
-	<script src="js/17_kasan.js?v=20261022_f1"></script>
-	<script src="js/18_stats.js?v=20261022_f1"></script>
-	<script src="js/19_life.js?v=20261022_f1"></script>
+ <script src="js/01_core.js?v=20261022_f2"></script>
+ <script src="js/02_terms.js?v=20261022_f2"></script>
+ <script src="js/03_common.js?v=20261022_f2"></script>
+ <script src="js/04_care_record.js?v=20261022_f2"></script>
+ <script src="js/05_summary_print_audit.js?v=20261022_f2"></script>
+ <script src="js/06_schema_history.js?v=20261022_f2"></script>
+ <script src="js/07_daily_tables.js?v=20261022_f2"></script>
+ <script src="js/08_meds.js?v=20261022_f2"></script>
+ <script src="js/09_night_misc.js?v=20261022_f2"></script>
+ <script src="js/10_office.js?v=20261022_f2"></script>
+ <script src="js/11_karte_staff.js?v=20261022_f2"></script>
+ <script src="js/12_hospital_photos.js?v=20261022_f2"></script>
+ <script src="js/13_shift_units.js?v=20261022_f2"></script>
+ <script src="js/14_auth_home.js?v=20261022_f2"></script>
+ <script src="js/15_single_write.js?v=20261022_f2"></script>
+ <script src="js/16_careplan.js?v=20261022_f2"></script>
+	<script src="js/17_kasan.js?v=20261022_f2"></script>
+	<script src="js/18_stats.js?v=20261022_f2"></script>
+	<script src="js/19_life.js?v=20261022_f2"></script>
   
 
   <!-- ============================================================ -->
@@ -5401,6 +5401,9 @@
 							<div style="font-weight:bold; font-size:13px; color:var(--ink); margin-bottom:4px;">
 								（ア）ケアプランデータ連携システム（別紙1 表1-2・表1-3のサービスのみ有効）
 							</div>
+							<div style="font-size:13px; color:var(--ink-3); margin-bottom:4px;">
+								※誓約した場合は、令和9年3月末までに利用し、実績報告書で利用実績を報告します（老発0313第６号 3⑴⑧（ア））。
+							</div>
 							<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
 								<label style="font-size:13px; color:var(--ink-2); display:flex; align-items:center; gap:4px;">
 									利用状況:
@@ -5424,7 +5427,7 @@
 								（イ）生産性向上推進体制加算（別紙1 表1-3・表1-4のサービスのみ有効）
 							</div>
 							<div style="font-size:13px; color:var(--ink-3); margin-bottom:4px;">
-								※本加算（Ⅰ）又は（Ⅱ）を届け出ている場合は自動で要件充足と判定されます。未届出で取得を誓約する場合に「誓約中」を選んでください。
+								※本加算（Ⅰ）又は（Ⅱ）を届け出ている場合は自動で要件充足と判定されます。未届出で算定を誓約する場合に「誓約中」を選んでください。誓約した場合は、実績報告書で算定について報告します（老発0313第６号 3⑴⑧（イ））。
 							</div>
 							<div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap;">
 								<label style="font-size:13px; color:var(--ink-2); display:flex; align-items:center; gap:4px;">
@@ -5453,14 +5456,10 @@
 									<select class="form-control" id="kasanSocialWelfare" style="font-size:13px; width:160px;">
 										<option value="">選んでください</option>
 										<option value="joined">所属している</option>
-										<option value="pledged">誓約中</option>
 										<option value="none">所属していない</option>
 									</select>
 								</label>
-								<label style="font-size:13px; color:var(--ink-2); display:flex; align-items:center; gap:4px;">
-									誓約した日:
-									<input type="date" class="form-control" id="kasanSocialWelfarePledgedDate" style="font-size:13px; width:150px;">
-								</label>
+								<span style="font-size:13px; color:var(--ink-3);">（ウ）は誓約での扱いがありません（老発0313第６号 3⑴⑧（ウ））。所属していることが要件です。</span>
 							</div>
 						</div>
 					</div>
