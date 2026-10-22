@@ -153,6 +153,13 @@ function renderOfficeBillingSettings() {
   const container = document.getElementById("officeBillingSettingsContainer");
   if (!container) return;
   const canEdit = isCurrentStaffAdminOrClerk();
+  // [Claude修正 2026-10-22] 請求の設定は管理者・事務員だけが変えるので、見るのも管理者・事務員だけにする（ほかの職員には出さない）
+  if (!canEdit) {
+    container.innerHTML = "";
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "";
   const settings = cpGetBillingSettings();
 
   // 1. 施設形態ラベル
@@ -1174,7 +1181,9 @@ function renderOfficeOrders() {
  <td>${o.supplier_name || '-'}</td>
  <td>${o.reason || '-'}</td>
  <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${o.status}</span></td>
- <td>${escapeHtml(o.applicant || '未記録')} / ${escapeHtml(o.approver || '-')}</td>
+ <td>${escapeHtml(o.applicant || '未記録')}</td>
+ <td>${escapeHtml(o.approver || '-')}</td>
+ <td>${escapeHtml(o.received_by || '-')}</td>
  <td>${actionButtons}</td>
  `;
  tbody.appendChild(tr);
@@ -1186,7 +1195,8 @@ function approveOrder(id, status) {
  alert(" 発注申請の承認・差戻しは管理者（施設長）のみが行えます。\n担当職員を管理者に切り替えてください。");
  return;
  }
- const staff = document.getElementById("currentStaff").value;
+ // [Claude修正] 承認した人はログインした本人（記録者の選ぶ欄ではなく）
+ const staff = (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || document.getElementById("currentStaff").value;
  const o = db.data.orders.find(x => x.id === id);
  if (!o) return;
 
@@ -1206,7 +1216,7 @@ function approveOrder(id, status) {
 
 function receiveOrder(id) {
  const o = db.data.orders.find(x => x.id === id);
- const staff = document.getElementById("currentStaff").value;
+ const staff = (typeof cpLoginStaffName === "function" && cpLoginStaffName()) || document.getElementById("currentStaff").value; // [Claude修正] 受け取った人はログインした本人
  const now = new Date();
  const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 

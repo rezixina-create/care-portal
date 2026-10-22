@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_h4">
+	<link rel="stylesheet" href="style.css?v=20261022_h7">
 </head>
 <body>
 
@@ -918,7 +918,7 @@
  </div>
  <table class="data-table" id="ordersTable">
  <thead>
- <tr><th>発注日 / 受取日</th><th>品名</th><th>数量</th><th>合計金額</th><th>取引先</th><th>理由</th><th>ステータス</th><th>申請/承認</th><th>操作</th></tr>
+ <tr><th>発注日 / 受取日</th><th>品名</th><th>数量</th><th>合計金額</th><th>取引先</th><th>理由</th><th>ステータス</th><th>発注者</th><th>承認者</th><th>受取者</th><th>操作</th></tr>
  </thead>
  <tbody></tbody>
  </table>
@@ -1645,7 +1645,7 @@
      </div>
     </div>
     <div style="font-weight:bold; font-size:14px; margin-bottom:6px; color:var(--ink);">登録済み職員一覧（各職員の「変更・資格」から入社日・常勤/非常勤・資格と研修を記録できます）</div>
-    <div id="staffModalList" style="display:flex; flex-direction:column; gap:6px; max-height:360px; overflow-y:auto;"></div>
+    <div id="staffModalList" style="display:flex; flex-direction:column; gap:6px;"></div>
    </div>
   </div>
  </div>
@@ -1657,7 +1657,7 @@
     <h3 id="staffEditModalTitle" style="margin:0; font-size:16px;">職員情報の変更・資格と研修の記録</h3>
     <button type="button" class="close-btn" onclick="closeModal('staffEditModal')">×</button>
    </div>
-   <div class="modal-body" style="padding:16px; max-height:82vh; overflow-y:auto;">
+   <div class="modal-body" style="padding:16px;">
     <input type="hidden" id="editStaffTargetName">
     <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
      <div style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">1. 基本情報（役職・常勤/非常勤・入社日）の変更</div>
@@ -1763,7 +1763,7 @@
     <h3 style="margin:0; font-size:16px;">資格・研修の一覧（マスタ）の管理</h3>
     <button type="button" class="close-btn" onclick="closeModal('qualificationMasterModal')">×</button>
    </div>
-   <div class="modal-body" style="padding:16px; max-height:82vh; overflow-y:auto;">
+   <div class="modal-body" style="padding:16px;">
     <div id="qmFormContainer" style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:16px;">
      <div id="qmFormModeTitle" style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">＋ マスタに資格・研修を追加</div>
      <input type="hidden" id="qmEditId">
@@ -3518,7 +3518,7 @@
  <h4 style="margin:0; font-size:14px; color:#22302b;">登録中の定型文一覧 (<span id="tplCountLabel">0</span>件)</h4>
  <button type="button" class="btn btn-outline" style="font-size:13px; padding:3px 8px; color:#4a5852;" onclick="resetDefaultTemplates()">初期定型文にリセット</button>
  </div>
- <div id="templateManageListContainer" style="max-height:280px; overflow-y:auto; border:1px solid #dfe5e1; border-radius:6px; background:#ffffff;">
+ <div id="templateManageListContainer" style="border:1px solid #dfe5e1; border-radius:6px; background:#ffffff;">
  <table class="data-table" style="font-size:13px; margin:0;">
  <thead>
  <tr>
@@ -4201,25 +4201,25 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_h4"></script>
- <script src="js/02_terms.js?v=20261022_h4"></script>
- <script src="js/03_common.js?v=20261022_h4"></script>
- <script src="js/04_care_record.js?v=20261022_h4"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_h4"></script>
- <script src="js/06_schema_history.js?v=20261022_h4"></script>
- <script src="js/07_daily_tables.js?v=20261022_h4"></script>
- <script src="js/08_meds.js?v=20261022_h4"></script>
- <script src="js/09_night_misc.js?v=20261022_h4"></script>
- <script src="js/10_office.js?v=20261022_h4"></script>
- <script src="js/11_karte_staff.js?v=20261022_h4"></script>
- <script src="js/12_hospital_photos.js?v=20261022_h4"></script>
- <script src="js/13_shift_units.js?v=20261022_h4"></script>
- <script src="js/14_auth_home.js?v=20261022_h4"></script>
- <script src="js/15_single_write.js?v=20261022_h4"></script>
- <script src="js/16_careplan.js?v=20261022_h4"></script>
-	<script src="js/17_kasan.js?v=20261022_h4"></script>
-	<script src="js/18_stats.js?v=20261022_h4"></script>
-	<script src="js/19_life.js?v=20261022_h4"></script>
+ <script src="js/01_core.js?v=20261022_h7"></script>
+ <script src="js/02_terms.js?v=20261022_h7"></script>
+ <script src="js/03_common.js?v=20261022_h7"></script>
+ <script src="js/04_care_record.js?v=20261022_h7"></script>
+ <script src="js/05_summary_print_audit.js?v=20261022_h7"></script>
+ <script src="js/06_schema_history.js?v=20261022_h7"></script>
+ <script src="js/07_daily_tables.js?v=20261022_h7"></script>
+ <script src="js/08_meds.js?v=20261022_h7"></script>
+ <script src="js/09_night_misc.js?v=20261022_h7"></script>
+ <script src="js/10_office.js?v=20261022_h7"></script>
+ <script src="js/11_karte_staff.js?v=20261022_h7"></script>
+ <script src="js/12_hospital_photos.js?v=20261022_h7"></script>
+ <script src="js/13_shift_units.js?v=20261022_h7"></script>
+ <script src="js/14_auth_home.js?v=20261022_h7"></script>
+ <script src="js/15_single_write.js?v=20261022_h7"></script>
+ <script src="js/16_careplan.js?v=20261022_h7"></script>
+	<script src="js/17_kasan.js?v=20261022_h7"></script>
+	<script src="js/18_stats.js?v=20261022_h7"></script>
+	<script src="js/19_life.js?v=20261022_h7"></script>
   
 
   <!-- ============================================================ -->
@@ -5349,7 +5349,7 @@
 				<button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="printAuditLog()">この一覧を印刷</button>
 			</div>
 			<div id="auditLogCount" style="font-size:13px; color:#4a5852; margin-bottom:4px;"></div>
-			<div style="max-height:60vh; overflow:auto; border:1px solid #dfe5e1; border-radius:6px;">
+			<div style="overflow-x:auto; border:1px solid #dfe5e1; border-radius:6px;">
 				<table class="data-table" style="margin:0; font-size:13px;">
 					<thead><tr style="background:#f6f8f6;"><th style="width:120px;">操作日時</th><th style="width:90px;">操作</th><th style="width:120px;">記録の種類</th><th style="width:120px;">利用者</th><th style="width:100px;">操作した職員</th><th>記録の内容</th><th>理由・訂正前の内容</th></tr></thead>
 					<tbody id="auditLogTableBody"></tbody>
