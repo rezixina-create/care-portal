@@ -3306,6 +3306,11 @@ function submitResidentForm() {
  }
  const lastNameKana = (document.getElementById("resLastNameKana")?.value || "").trim();
  const firstNameKana = (document.getElementById("resFirstNameKana")?.value || "").trim();
+ // [Claude修正] カナはカタカナ（ひらがなも可）と長音だけ。LIFE の書き出しで半角カナにする
+ if ((lastNameKana && !/^[\u30A1-\u30FC\u3041-\u3096\s\u3000]+$/.test(lastNameKana)) || (firstNameKana && !/^[\u30A1-\u30FC\u3041-\u3096\s\u3000]+$/.test(firstNameKana))) {
+  alert("氏名カナは、カタカナで入れてください。");
+  return;
+ }
  const residentData = {
  room_no: roomNo,
  unit_id: (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null,

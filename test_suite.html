@@ -1302,13 +1302,13 @@
           <select id="life_barthel_index_defecation_manage"><option value="10" selected>10</option></select>
           <select id="life_barthel_index_urination_manage"><option value="10" selected>10</option></select>
           <select id="life_vitality_index_01"><option value="2" selected>2</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_1_1"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_1_2"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_2"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_3"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_4"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_5"><option value="0" selected>0</option></select>
-          <select id="life_diagnosis_of_dementia_evaluate_6"><option value="0" selected>0</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_1_1"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_1_2"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_2"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_3"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_4"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_5"><option value="3" selected>3</option></select>
+          <select id="life_diagnosis_of_dementia_evaluate_6"><option value="3" selected>3</option></select>
         `;
         document.body.appendChild(dummyDiv);
       }
@@ -1354,13 +1354,13 @@
         barthel_index_changing_clothes: 2,
         barthel_index_defecation_manage: 2,
         barthel_index_urination_manage: 2,
-        diagnosis_of_dementia_evaluate_1_1: 0,
-        diagnosis_of_dementia_evaluate_1_2: 0,
-        diagnosis_of_dementia_evaluate_2: 0,
-        diagnosis_of_dementia_evaluate_3: 0,
-        diagnosis_of_dementia_evaluate_4: 0,
-        diagnosis_of_dementia_evaluate_5: 0,
-        diagnosis_of_dementia_evaluate_6: 0,
+        diagnosis_of_dementia_evaluate_1_1: 3,
+        diagnosis_of_dementia_evaluate_1_2: 3,
+        diagnosis_of_dementia_evaluate_2: 3,
+        diagnosis_of_dementia_evaluate_3: 3,
+        diagnosis_of_dementia_evaluate_4: 3,
+        diagnosis_of_dementia_evaluate_5: 3,
+        diagnosis_of_dementia_evaluate_6: 3,
         vitality_index_01: 2
       };
       db.data.life_assessments.push(testAss);
@@ -1388,23 +1388,23 @@
         status: "2",
         impaired_elderly_independence_degree: "2",
         dementia_elderly_independence_degree: "2",
-        barthel_index_meal: 10,
-        barthel_transfer: 15,
-        barthel_index_personal_hygiene_and_adjustment: 5,
-        barthel_index_toilet_activity: 10,
-        barthel_index_bathing: 5,
-        barthel_index_flat_ground_walking: 15,
-        barthel_index_stair_movement: 10,
-        barthel_index_changing_clothes: 10,
-        barthel_index_defecation_manage: 10,
-        barthel_index_urination_manage: 10,
-        diagnosis_of_dementia_evaluate_1_1: 0,
-        diagnosis_of_dementia_evaluate_1_2: 0,
-        diagnosis_of_dementia_evaluate_2: 0,
-        diagnosis_of_dementia_evaluate_3: 0,
-        diagnosis_of_dementia_evaluate_4: 0,
-        diagnosis_of_dementia_evaluate_5: 0,
-        diagnosis_of_dementia_evaluate_6: 0,
+        barthel_index_meal: 2, // [Claude修正] 点数ではなく項目一覧のコード（2=自立）
+        barthel_transfer: 3,
+        barthel_index_personal_hygiene_and_adjustment: 2,
+        barthel_index_toilet_activity: 2,
+        barthel_index_bathing: 2,
+        barthel_index_flat_ground_walking: 3,
+        barthel_index_stair_movement: 2,
+        barthel_index_changing_clothes: 2,
+        barthel_index_defecation_manage: 2,
+        barthel_index_urination_manage: 2,
+        diagnosis_of_dementia_evaluate_1_1: 3,
+        diagnosis_of_dementia_evaluate_1_2: 3,
+        diagnosis_of_dementia_evaluate_2: 3,
+        diagnosis_of_dementia_evaluate_3: 3,
+        diagnosis_of_dementia_evaluate_4: 3,
+        diagnosis_of_dementia_evaluate_5: 3,
+        diagnosis_of_dementia_evaluate_6: 3,
         vitality_index_01: 2
       };
 
@@ -1428,6 +1428,11 @@
         if (rowCols[c] !== "") { nutritionEmpty = false; break; }
       }
       assert(nutritionEmpty, "Test 145d: 通所・居住で対象外の栄養項目（52〜65列）がすべて空欄であること");
+      // [Claude追加] 外部システム管理番号は半角英数だけ・姓名を分けていない人は名＝００・死亡退所は死亡日
+      assert(/^[0-9A-Z]+$/.test(rowCols[4]), "Test 145e: 評価の外部システム管理番号が半角英数だけであること");
+      const noSpace = Object.assign({}, residentWithKana, { name: "田中太郎", discharge_date: "2026-10-03", discharge_reason: "死亡退所" });
+      const nsCols = cpBuildLifeUserCsvLines([noSpace])[2].split(",");
+      assert(nsCols[5] === "田中太郎" && nsCols[6] === "００" && nsCols[19] === "20261003" && nsCols[11] === "", "Test 145f: 姓名を分けていない人は名＝００、死亡退所は死亡日、認定日は空");
 
       // Test 146: LIFE 書き出しログの記録
       if (!db.data.kasan_settings) db.data.kasan_settings = {};

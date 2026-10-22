@@ -1467,7 +1467,7 @@ function renderOfficeKasanTab() {
     let unassessedLifeCount = 0;
     for (const r of residents) {
       if (typeof cpIsLifeAssessmentRequiredMonth === "function" && cpIsLifeAssessmentRequiredMonth(r, ym)) {
-        const hasAss = assessments.some(a => String(a.resident_id) === String(r.id) && String(a.evaluate_date || "").startsWith(ym));
+        const hasAss = assessments.some(a => !a.cancelled && String(a.resident_id) === String(r.id) && String(a.evaluate_date || "").startsWith(ym)); // [Claude修正] 取り消した評価は数えない
         if (!hasAss) {
           unassessedLifeCount++;
         }

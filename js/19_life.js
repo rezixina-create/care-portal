@@ -876,16 +876,30 @@ function submitLifeAssessment() {
       alert("サービス利用終了時（状態3）の場合は終了日を入力してください。");
       return;
     }
+    // [Claude修正] 項目一覧: 終了日が評価日より後だと取り込みでエラーになる
+    if (depDate > evalDate) {
+      alert("サービス利用終了日は、評価日と同じ日か、それより前の日にしてください（評価日より後だと LIFE の取り込みでエラーになります）。");
+      return;
+    }
   }
 
   // 身長・体重
   const heightVal = parseFloat(document.getElementById("life_height")?.value) || null;
   const weightVal = parseFloat(document.getElementById("life_weight")?.value) || null;
+  // [Claude修正] 項目一覧の範囲（身長 10.0〜300.0cm・体重 10.0〜200.0kg）。小数は1桁に丸める
+  if (heightVal !== null && (heightVal < 10 || heightVal > 300)) { alert("身長は 10.0〜300.0 cm の間で入れてください。"); return; }
+  if (weightVal !== null && (weightVal < 10 || weightVal > 200)) { alert("体重は 10.0〜200.0 kg の間で入れてください。"); return; }
 
   // 利用者情報取得
   const allResidents = (gState && gState.residents) ? gState.residents : ((db && db.data && db.data.residents) || []);
   const r = allResidents.find(x => Number(x.id) === resId);
   const careLevelCode = cpCareLevelToLifeCode(r ? r.care_level : "");
+  // [Claude修正] 入居日より前の評価日は入れない
+  if (r && r.admission_date && evalDate < r.admission_date) {
+    alert("評価日が入居日（" + r.admission_date + "）より前になっています。");
+    return;
+  }
+  const otherChecked = !!document.getElementById("life_diagnosis_of_dementia_other")?.checked;
 
   // ADL合計点
   const adlVals = {};
@@ -919,8 +933,8 @@ function submitLifeAssessment() {
     barthel_index_defecation_manage: parseInt(document.getElementById("life_barthel_index_defecation_manage").value, 10),
     barthel_index_urination_manage: parseInt(document.getElementById("life_barthel_index_urination_manage").value, 10),
     adl_total_score: totalAdlScore,
-    height: heightVal,
-    weight: weightVal,
+    height: heightVal === null ? null : Math.round(heightVal * 10) / 10,
+    weight: weightVal === null ? null : Math.round(weightVal * 10) / 10,
     denture: document.getElementById("life_denture")?.value !== "" ? parseInt(document.getElementById("life_denture").value, 10) : null,
     choke: document.getElementById("life_choke")?.value !== "" ? parseInt(document.getElementById("life_choke").value, 10) : null,
     stains_on_teeth: document.getElementById("life_stains_on_teeth")?.value !== "" ? parseInt(document.getElementById("life_stains_on_teeth").value, 10) : null,
@@ -929,7 +943,7 @@ function submitLifeAssessment() {
     diagnosis_of_dementia_02: document.getElementById("life_diagnosis_of_dementia_02")?.checked ? 1 : 0,
     diagnosis_of_dementia_03: document.getElementById("life_diagnosis_of_dementia_03")?.checked ? 1 : 0,
     diagnosis_of_dementia_other: document.getElementById("life_diagnosis_of_dementia_other")?.checked ? 1 : 0,
-    diagnosis_of_dementia_other_name: (document.getElementById("life_diagnosis_of_dementia_other_name")?.value || "").trim(),
+    diagnosis_of_dementia_other_name: otherChecked ? (document.getElementById("life_diagnosis_of_dementia_other_name")?.value || "").trim().slice(0, 50) : "",
     diagnosis_of_dementia_evaluate_1_1: parseInt(document.getElementById("life_diagnosis_of_dementia_evaluate_1_1").value, 10),
     diagnosis_of_dementia_evaluate_1_2: parseInt(document.getElementById("life_diagnosis_of_dementia_evaluate_1_2").value, 10),
     diagnosis_of_dementia_evaluate_2: parseInt(document.getElementById("life_diagnosis_of_dementia_evaluate_2").value, 10),
@@ -1137,6 +1151,13 @@ function cpFormatDateToYmd8(dStr) {
   return String(dStr).replace(/[^0-9]/g, "").slice(0, 8);
 }
 
+// [Claude追加] 身長・体重は小数1桁（項目一覧: 身長 10.0〜300.0、体重 10.0〜200.0）。範囲外は空にする
+function cpLifeFormatBody(v, min, max) {
+  const n = parseFloat(v);
+  if (!isFinite(n) || n < min || n > max) return "";
+  return n.toFixed(1);
+}
+
 function cpEscapeLifeCsvValue(val) {
   if (val === null || val === undefined) return "";
   const s = String(val).trim();
@@ -1169,13 +1190,16 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
       lName = parts[0] || "";
       fName = parts.slice(1).join("") || "";
     }
+    // [Claude修正] 姓と名を分けていないときは、姓に全部を入れ、名は「００」（項目一覧 利用者名の備考）
+    if (lName && !fName) fName = "００";
 
     const lKanaHan = cpToHalfWidthKana(r.last_name_kana);
     const fKanaHan = cpToHalfWidthKana(r.first_name_kana);
 
     const genderVal = (r.gender === "男" || r.gender === "1") ? "1" : "2";
     const bDayVal = cpFormatDateToYmd8(r.birth_date || r.birthday);
-    const certDateVal = cpFormatDateToYmd8(r.care_start_date);
+    // [Claude修正] 認定日は有効期間の開始日と同じとは限らないので、登録の欄ができるまで空にする（必須ではない）
+    const certDateVal = cpFormatDateToYmd8(r.certified_date || "");
     const startPeriodVal = cpFormatDateToYmd8(r.care_start_date);
     const endPeriodVal = cpFormatDateToYmd8(r.care_expiry_date);
     const careLevelVal = cpCareLevelToLifeCode(r.care_level);
@@ -1185,7 +1209,8 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
 
     // 死亡退所判定
     let deathDateVal = "";
-    if (r.discharge_date && (r.discharge_reason === "死亡" || r.post_discharge_status === "死亡退所")) {
+    // [Claude修正] このアプリの退所の理由は「死亡退所」と入るので、「死亡」を含むかで見る
+    if (r.discharge_date && (String(r.discharge_reason || "").includes("死亡") || String(r.post_discharge_status || "").includes("死亡"))) {
       deathDateVal = cpFormatDateToYmd8(r.death_date || r.discharge_date);
     }
 
@@ -1235,7 +1260,8 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
 
     const isPrevGH = (r.care_level && r.care_level.includes("要支援2"));
     const serviceCode = isPrevGH ? CP_LIFE_SERVICE_CODE_PREV : CP_LIFE_SERVICE_CODE_GH;
-    const extNo = `${officeNo}${serviceCode}${r.id}_${a.id || 0}`;
+    // [Claude修正] 外部システム管理番号は半角英数（項目一覧）。「_」をやめ、区切りは英字の A にする
+    const extNo = `${officeNo}${serviceCode}${r.id}A${a.id || 0}`;
     const paddedInsuredNo = String(r.insured_no || "").trim().padStart(10, "0");
     const evalDateVal = cpFormatDateToYmd8(a.evaluate_date);
 
@@ -1290,8 +1316,8 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
       barthel_index_urination_manage: a.barthel_index_urination_manage !== undefined ? String(a.barthel_index_urination_manage) : "",
       departure_date: a.status === "3" ? cpFormatDateToYmd8(a.departure_date) : "",
       departure: a.status === "3" ? (a.departure || "") : "",
-      height: a.height ? String(a.height) : "",
-      weight: a.weight ? String(a.weight) : "",
+      height: cpLifeFormatBody(a.height, 10, 300),
+      weight: cpLifeFormatBody(a.weight, 10, 200),
       // 52〜65: 栄養の項目（グループホームでは空）
       low_operating_risk_level: "",
       food_form_ingestion: "",
@@ -1315,7 +1341,7 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
       diagnosis_of_dementia_02: a.diagnosis_of_dementia_02 !== undefined ? String(a.diagnosis_of_dementia_02) : "0",
       diagnosis_of_dementia_03: a.diagnosis_of_dementia_03 !== undefined ? String(a.diagnosis_of_dementia_03) : "0",
       diagnosis_of_dementia_other: a.diagnosis_of_dementia_other !== undefined ? String(a.diagnosis_of_dementia_other) : "0",
-      diagnosis_of_dementia_other_name: a.diagnosis_of_dementia_other_name || "",
+      diagnosis_of_dementia_other_name: String(a.diagnosis_of_dementia_other) === "1" ? (a.diagnosis_of_dementia_other_name || "") : "",
       diagnosis_of_dementia_evaluate_1_1: a.diagnosis_of_dementia_evaluate_1_1 !== undefined ? String(a.diagnosis_of_dementia_evaluate_1_1) : "",
       diagnosis_of_dementia_evaluate_1_2: a.diagnosis_of_dementia_evaluate_1_2 !== undefined ? String(a.diagnosis_of_dementia_evaluate_1_2) : "",
       diagnosis_of_dementia_evaluate_2: a.diagnosis_of_dementia_evaluate_2 !== undefined ? String(a.diagnosis_of_dementia_evaluate_2) : "",
@@ -1393,11 +1419,13 @@ function cpExportLifeCsv(targetMonth) {
 
     // 氏名・カナ
     if (!r.name) missing.push("氏名");
-    if (!r.last_name_kana) missing.push("姓カナ");
-    if (!r.first_name_kana) missing.push("名カナ");
+    // [Claude修正] カナは半角カナにしたあと、半角カナ・英数字だけになっているかも見る
+    const kanaOk = v => { const s = cpToHalfWidthKana(v); return !!s && s.length <= 30 && /^[\uFF61-\uFF9F0-9A-Za-z]+$/.test(s); };
+    if (!r.last_name_kana) missing.push("姓カナ"); else if (!kanaOk(r.last_name_kana)) missing.push("姓カナ（カタカナで）");
+    if (!r.first_name_kana) missing.push("名カナ"); else if (!kanaOk(r.first_name_kana)) missing.push("名カナ（カタカナで）");
     // 保険者・被保険者番号
-    if (!r.insurer_no || String(r.insurer_no).trim().length !== 6) missing.push("保険者番号（6桁）");
-    if (!r.insured_no || String(r.insured_no).trim().length === 0) missing.push("被保険者番号");
+    if (!/^\d{6}$/.test(String(r.insurer_no || "").trim())) missing.push("保険者番号（数字6桁）");
+    if (!/^[0-9A-Za-z]{1,10}$/.test(String(r.insured_no || "").trim())) missing.push("被保険者番号（10桁以内の英数字）");
     // 性別・生年月日
     if (!r.gender) missing.push("性別");
     if (!r.birth_date && !r.birthday) missing.push("生年月日");
