@@ -1198,7 +1198,14 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   }
 
   // d. 退居時相談援助加算（候補提示）
-  if (r.status === "退所" && r.discharge_date) {
+  // [Claude修正] 利用期間が1か月を超えること・死亡退居は対象外（33c3910 で抜けていた）
+  let consultOverOneMonth = false;
+  if (r.admission_date && r.discharge_date) {
+    const a = new Date(r.admission_date + "T00:00:00");
+    const oneMonthLater = new Date(a.getFullYear(), a.getMonth() + 1, a.getDate());
+    consultOverOneMonth = new Date(r.discharge_date + "T00:00:00") > oneMonthLater;
+  }
+  if (r.status === "退所" && r.discharge_date && r.discharge_reason !== "死亡退所" && consultOverOneMonth) {
     const disMonth = r.discharge_date.slice(0, 7);
     if (disMonth === yearMonth) {
       items.push({
@@ -1210,7 +1217,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         unit_label: "回",
         subtotal: 0,
         candidate: true,
-        note: `（退所日 ${r.discharge_date}）。退所前2週間以内に相談を行い、退所先（病院・他の介護保険施設は対象外）を確かめてから算定。合計には入れていません`
+        note: `候補（退居日 ${r.discharge_date}）。退居の日から2週間以内に、市町村と地域包括支援センター等へ情報を提供したか、退居先（病院・診療所への入院、介護保険施設・グループホーム・特定施設などは対象外）を確かめてから請求する。合計には入れていません`
       });
     }
   }
