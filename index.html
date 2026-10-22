@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_j5">
+	<link rel="stylesheet" href="style.css?v=20261023_k1">
 </head>
 <body>
 
@@ -838,6 +838,7 @@
   <div class="care-tab-group" id="officeAdminSecurityRow">
    <span class="care-tab-label">管理者・事務</span>
    <div class="care-tab-row">
+    <button class="sub-tab-btn" id="subTabInvoice" onclick="switchOfficeTab('invoice')">利用者への請求書</button>
     <button class="sub-tab-btn" id="subTabKasan" onclick="switchOfficeTab('kasan')">加算・減算</button>
     <button class="sub-tab-btn" id="subTabStats" onclick="switchOfficeTab('stats')">集計</button>
      <button class="sub-tab-btn" id="subTabLife" onclick="switchOfficeTab('life')">LIFE</button>
@@ -1434,6 +1435,7 @@
   <div id="tabOfficeKasan" style="display:none;" class="panel-card"><table id="kasanMonthlyTable" style="display:none;"></table></div>
   <div id="tabOfficeStats" style="display:none;" class="panel-card"></div>
   <div id="tabOfficeLife" style="display:none;" class="panel-card"></div>
+  <div id="tabOfficeInvoice" style="display:none;" class="panel-card"></div>
 
  </div><!-- /officeTabContent -->
  </div><!-- /portalOfficeSection -->
@@ -4195,25 +4197,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_j5"></script>
- <script src="js/02_terms.js?v=20261022_j5"></script>
- <script src="js/03_common.js?v=20261022_j5"></script>
- <script src="js/04_care_record.js?v=20261022_j5"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_j5"></script>
- <script src="js/06_schema_history.js?v=20261022_j5"></script>
- <script src="js/07_daily_tables.js?v=20261022_j5"></script>
- <script src="js/08_meds.js?v=20261022_j5"></script>
- <script src="js/09_night_misc.js?v=20261022_j5"></script>
- <script src="js/10_office.js?v=20261022_j5"></script>
- <script src="js/11_karte_staff.js?v=20261022_j5"></script>
- <script src="js/12_hospital_photos.js?v=20261022_j5"></script>
- <script src="js/13_shift_units.js?v=20261022_j5"></script>
- <script src="js/14_auth_home.js?v=20261022_j5"></script>
- <script src="js/15_single_write.js?v=20261022_j5"></script>
- <script src="js/16_careplan.js?v=20261022_j5"></script>
-	<script src="js/17_kasan.js?v=20261022_j5"></script>
-	<script src="js/18_stats.js?v=20261022_j5"></script>
-	<script src="js/19_life.js?v=20261022_j5"></script>
+ <script src="js/01_core.js?v=20261023_k1"></script>
+ <script src="js/02_terms.js?v=20261023_k1"></script>
+ <script src="js/03_common.js?v=20261023_k1"></script>
+ <script src="js/04_care_record.js?v=20261023_k1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261023_k1"></script>
+ <script src="js/06_schema_history.js?v=20261023_k1"></script>
+ <script src="js/07_daily_tables.js?v=20261023_k1"></script>
+ <script src="js/08_meds.js?v=20261023_k1"></script>
+ <script src="js/09_night_misc.js?v=20261023_k1"></script>
+ <script src="js/10_office.js?v=20261023_k1"></script>
+ <script src="js/11_karte_staff.js?v=20261023_k1"></script>
+ <script src="js/12_hospital_photos.js?v=20261023_k1"></script>
+ <script src="js/13_shift_units.js?v=20261023_k1"></script>
+ <script src="js/14_auth_home.js?v=20261023_k1"></script>
+ <script src="js/15_single_write.js?v=20261023_k1"></script>
+ <script src="js/16_careplan.js?v=20261023_k1"></script>
+	<script src="js/17_kasan.js?v=20261023_k1"></script>
+	<script src="js/18_stats.js?v=20261023_k1"></script>
+	<script src="js/19_life.js?v=20261023_k1"></script>
+	<script src="js/20_invoice.js?v=20261023_k1"></script>
   
 
   <!-- ============================================================ -->

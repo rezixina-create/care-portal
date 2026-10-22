@@ -19,7 +19,7 @@ function loadOfficeData() {
 }
 
 function switchOfficeTab(tab) {
- if (tab === "backup" || tab === "staff_auth" || tab === "units" || tab === "kasan" || tab === "stats" || tab === "life") {
+ if (tab === "backup" || tab === "staff_auth" || tab === "units" || tab === "kasan" || tab === "stats" || tab === "life" || tab === "invoice") {
  if (!isCurrentStaffAdminOrClerk()) {
  alert("このタブは管理者および事務員のみアクセス可能です。");
  switchOfficeTab("inventory");
@@ -45,7 +45,7 @@ function switchOfficeTab(tab) {
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits",
- contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats", life: "tabOfficeLife"
+ contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats", life: "tabOfficeLife", invoice: "tabOfficeInvoice"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -75,6 +75,8 @@ function switchOfficeTab(tab) {
  if (typeof renderOfficeStatsTab === "function") renderOfficeStatsTab();
  } else if (tab === "life") {
  if (typeof renderOfficeLifeTab === "function") renderOfficeLifeTab();
+ } else if (tab === "invoice") {
+ if (typeof renderOfficeInvoiceTab === "function") renderOfficeInvoiceTab(); // [Claude追加 2026-10-23] 利用者への請求書
  }
  }
 }

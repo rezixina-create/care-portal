@@ -1273,7 +1273,7 @@ class LocalDB {
   shift_ng_pairs: "勤務の組み合わせの配慮", shift_staffing: "勤務の人数", shift_events: "勤務表の行事", monthly_shift_units: "勤務の区分",
   monthly_shifts: "勤務表", resident_medications: "処方薬", eyedrop_orders: "点眼の指示", dementia_assessments: "認知症の自立度",
   life_assessments: "LIFE の評価", residents: "利用者の情報（バイタルの目安・ケアプラン目標・基本方針）", care_plans: "ケアプラン",
-  stamps: "職員の登録", staff_accounts: "ID・パスワード", shift_hope_offs: "希望休" };
+  stamps: "職員の登録", staff_accounts: "ID・パスワード", shift_hope_offs: "希望休", invoices: "利用者への請求書", invoice_fee_tables: "利用者への請求の料金表" };
  const label = LABEL[k] || k;
  const who = (info && info.who) || "決まった職種の方";
  if (!this._forbidShown) this._forbidShown = {};

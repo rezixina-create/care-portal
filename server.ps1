@@ -2408,7 +2408,7 @@ namespace CarePortal
             return p;
         }
         private static readonly string[] PermAdminKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
-            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units" };
+            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "invoices", "invoice_fee_tables" };
         private static readonly string[] PermNurseKeys = new string[] { "resident_medications", "eyedrop_orders" };
         private static readonly string[] PermPolicyKeys = new string[] { "dementia_assessments", "life_assessments" };
         private static readonly string[] PermResNurseFields = new string[] { "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min" };
@@ -2416,7 +2416,7 @@ namespace CarePortal
         private static readonly string[] PermResPolicyFields = new string[] { "policy_stamp" };
         private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
             "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
-            "dementia_assessments", "life_assessments", "residents", "care_plans", "stamps", "staff_accounts", "shift_hope_offs" };
+            "dementia_assessments", "life_assessments", "residents", "care_plans", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
 
         private static bool PermEmpty(object v)
         {

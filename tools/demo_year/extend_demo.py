@@ -234,6 +234,19 @@ plans.sort(key=lambda p: (p["resident_id"], -p["version"]))
 
 import fix_on_duty
 added["連絡ノート・運転の人を出勤の人に"] = fix_on_duty.apply(d)
+# 利用者への請求書: 前からある請求書で、入金待ちのものは、翌月27日ごろ（事務員の出勤日）の口座振替・振込で入金済にする
+# （延ばした月の請求書は作らない。発表のときに画面で「確定」するところを見せられるように）
+for inv in d.get("invoices", []) or []:
+    if inv.get("voided") or [p for p in inv.get("payments", []) if not p.get("voided")]: continue
+    y, m = map(int, inv["ym"].split("-")); y, m = (y + 1, 1) if m == 12 else (y, m + 1)
+    day = DT.date(y, m, 27)
+    for _ in range(15):
+        if day.weekday() < 5 and not G.is_newyear(day) and (((d.get("monthly_shifts") or {}).get(day.isoformat()[:7], {}).get("松本 陽子", {}) or {}).get(str(day.day)) in ("早", "日", "遅")): break
+        day += DT.timedelta(days=1)
+    if day.isoformat() > toS: continue
+    inv.setdefault("payments", []).append({"id": nid(), "date": day.isoformat(), "amount": inv["total"], "method": "振込" if int(inv["resident_id"]) % 5 == 0 else "口座振替",
+                                           "recorded_by": "松本 陽子", "recorded_at": day.isoformat() + " 15:00"})
+    added["請求書の入金"] += 1
 import fix_vehicles
 fix_vehicles.apply(d)   # 車を2台に分けて、メーターをつなげ直す（足した日の分も）
 if isinstance(d.get("_rev"), int): d["_rev"] += 1

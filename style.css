@@ -2761,3 +2761,24 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .cp-busy-sub { font-size: 13px; font-weight: normal; margin-top: 6px; }
 .residents-strip { cursor: grab; }
 .residents-strip.cp-drag-scrolling { cursor: grabbing; user-select: none; }
+
+/* [Claude追加 2026-10-23] 利用者への請求書（色は :root の値） */
+.inv-bar { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; margin: 0 0 12px; font-size: 14px; }
+.inv-month { width: 180px; }
+.inv-btn { font-size: 13px; padding: 6px 10px; margin: 2px 4px 2px 0; }
+.inv-state { font-size: 13px; font-weight: bold; }
+.inv-paid { color: var(--success-color); }
+.inv-part, .inv-issued { color: var(--caution); }
+.inv-none { color: var(--ink-3); }
+.inv-warn { font-size: 13px; color: var(--alert); background: var(--alert-tint); padding: 4px 8px; border-radius: 4px; margin-top: 4px; }
+.inv-detail { margin-top: 16px; }
+.inv-pay-form { display: flex; gap: 12px; flex-wrap: wrap; align-items: flex-end; margin-bottom: 12px; font-size: 14px; }
+.inv-pay-form label { display: flex; flex-direction: column; gap: 4px; }
+.inv-fee { margin-top: 20px; border-top: 1px solid var(--line); padding-top: 12px; }
+.inv-fee h4 { font-size: 15px; margin: 0 0 8px; }
+.inv-fee-list { font-size: 14px; padding-left: 18px; }
+.inv-fee-list li { margin-bottom: 6px; }
+.inv-fee-by { color: var(--ink-3); font-size: 13px; }
+.inv-fee-form summary { cursor: pointer; font-size: 14px; color: var(--pine); font-weight: bold; padding: 6px 0; }
+.inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 12px; font-size: 14px; }
+.inv-grid label { display: flex; flex-direction: column; gap: 4px; }
