@@ -910,25 +910,8 @@ class LocalDB {
  // [Claude修正] 空のときに見本データ（架空の記録・指示）を本番のデータへ書き込んでいたのをやめる
  if (!Array.isArray(d.eyedrop_orders)) d.eyedrop_orders = [];
 
- // [Antigravity実装 2026-10-19] 入院の期間リスト (r.hospitalizations) の互換読み込み（今の r.hospital_date 等を1件目として扱う）
- if (Array.isArray(d.residents)) {
- d.residents.forEach(r => {
- if (!r || typeof r !== "object") return;
- if (!Array.isArray(r.hospitalizations)) r.hospitalizations = [];
- if (r.hospital_date && r.hospitalizations.length === 0 && (r.status === "入院中" || (r.status === "退所" && r.status_before_discharge === "入院中"))) { // [Claude修正] 在所の方に残った古い入院日で、今日まで入院中にしない
- r.hospitalizations.push({
- id: Number(r.id) * 10000 + 1,
- resident_id: r.id,
- admission_date: r.hospital_date,
- discharge_date: "",
- hospital_name: r.hospital_name || "",
- reason: r.hospital_reason || "",
- created_by: r.updated_by || "",
- created_at: r.hospital_date
- });
- }
- });
- }
+ // [Claude修正 2026-10-22] 入院の期間リストは、読み込んだときには作らない（見るだけでは cpGetHospitalizations が前の形の入院日を1件目として扱う）。
+ // 読み込んだときに足すと、前に同期した中身とサーバーの中身がずれて、利用者の情報の保存が毎回「競合」になっていた
 
  // [Antigravity実装 2026-10-19] 資格・研修の一覧（マスタ）の初期設定（読み込んだだけで差分が出ないよう固定値で用意）
  if (!Array.isArray(d.qualification_master) || d.qualification_master.length === 0) {
@@ -1106,6 +1089,13 @@ class LocalDB {
  body: JSON.stringify({ base_rev: this.baseRev, ops: ops })
  });
  if (res.status === 404) { this._diffUnsupported = true; fallback = true; break; }
+ if (res.status === 403) {
+ // [Claude追加 2026-10-22] サーバーが職種で止めた変更は、この端末でも元に戻してから、ほかの変更を送り直す
+ let info = null;
+ try { info = await res.json(); } catch (e) { info = null; }
+ if (!this._revertForbiddenKey(info)) { fallback = true; break; }
+ continue;
+ }
  if (res.status === 409) {
  // ほかの端末が同じ記録を先に変えていた（またはサーバーにデータがない）。最新を取得して合流してからやり直す
  const pulled = await this._pullForSave();
@@ -1116,6 +1106,7 @@ class LocalDB {
  if (!res.ok) { fallback = true; break; }
  const resp = await res.json();
  this.data._rev = resp.rev;
+ this._forbidCount = 0;
  const othersSavedBetween = Number(resp.prev_rev) !== Number(this.baseRev);
  const revBeforeSave = this.baseRev;
  this.applyOpsToBase(ops, resp.rev);
@@ -1219,6 +1210,12 @@ class LocalDB {
  headers: { 'Content-Type': 'application/json' },
  body: payload
  });
+ if (res.status === 403) {
+ let info = null;
+ try { info = await res.json(); } catch (e) { info = null; }
+ if (!this._revertForbiddenKey(info)) { this.updateSyncBadge(false); return false; }
+ continue;
+ }
  if (res.status === 409) {
  // 取得から保存までの間に他端末が保存した。少し待って取得・合流からやり直す
  await new Promise(r => setTimeout(r, 150 * attempt));
@@ -1250,6 +1247,42 @@ class LocalDB {
  } finally {
  this._saving = false;
  }
+ }
+
+ // [Claude追加 2026-10-22] 職種で保存できない変更（サーバーが 403 で返した項目）を、前に同期した中身に戻す
+ _revertForbiddenKey(info) {
+ const k = info && info.key;
+ if (!k || k === "_rev") return false;
+ this._forbidCount = (this._forbidCount || 0) + 1;
+ if (this._forbidCount > 20) return false; // 戻しても同じ変更が続くとき（止まらないようにする）
+ const base = this.baseObj || {};
+ const sameId = (x, id) => x && typeof x === "object" && String(x.id) === String(id);
+ if (info.id !== undefined && info.id !== null && Array.isArray(this.data[k])) {
+  // その1件だけ戻す（同じ項目のほかの記録の変更は残して送り直す）
+  const arr = this.data[k];
+  const li = arr.findIndex(x => sameId(x, info.id));
+  const bv = Array.isArray(base[k]) ? base[k].find(x => sameId(x, info.id)) : undefined;
+  if (bv !== undefined) { if (li >= 0) arr[li] = cpClone(bv); else arr.push(cpClone(bv)); }
+  else if (li >= 0) arr.splice(li, 1);
+ } else {
+  this.assignMergedKey(k, Object.prototype.hasOwnProperty.call(base, k) ? cpClone(base[k]) : undefined);
+ }
+ this.storeLocalCopy();
+ const LABEL = { kasan_settings: "加算・減算の設定", billing_settings: "請求の設定", billing_overrides: "請求の個別の設定", units: "区分",
+  contract_docs: "契約の書類", contract_doc_types: "契約の書類の種類", office_info: "事業所の情報", staff_archive: "職員の記録（削除した方）",
+  shift_ng_pairs: "勤務の組み合わせの配慮", shift_staffing: "勤務の人数", shift_events: "勤務表の行事", monthly_shift_units: "勤務の区分",
+  monthly_shifts: "勤務表", resident_medications: "処方薬", eyedrop_orders: "点眼の指示", dementia_assessments: "認知症の自立度",
+  life_assessments: "LIFE の評価", residents: "利用者の情報（バイタルの目安・ケアプラン目標・基本方針）", care_plans: "ケアプラン",
+  stamps: "職員の登録", staff_accounts: "ID・パスワード", shift_hope_offs: "希望休" };
+ const label = LABEL[k] || k;
+ const who = (info && info.who) || "決まった職種の方";
+ if (!this._forbidShown) this._forbidShown = {};
+ if (!this._forbidShown[k]) {
+  this._forbidShown[k] = true;
+  setTimeout(() => alert(`保存できない変更がありました。\n「${label}」を変えられるのは${who}です。\nこの端末での変更は元に戻しました。`), 0);
+ }
+ this.refreshViewAfterRemoteMerge();
+ return true;
  }
 
  // 他端末の変更を、このページが持つ配列・オブジェクトを置き換えずに (参照を保ったまま) 取り込む

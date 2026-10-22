@@ -179,7 +179,7 @@ function submitHospitalModal() {
  return;
  }
 
- const list = cpGetHospitalizations(r);
+ const list = cpMaterializeHospitalizations(r); // [Claude修正 2026-10-22] 書き換えるときだけ入院の期間リストを作る
  // ほかの入院期間との重なりを確かめる
  const effEnd = disDate || "9999-12-31";
  const overlap = list.find(h => {
@@ -302,7 +302,7 @@ function submitHospitalDischarge() {
  const recId = Number((document.getElementById("hospDisRecordId") || {}).value);
  const r = (gState.residents || []).find(x => Number(x.id) === resId);
  if (!r) return;
- cpGetHospitalizations(r);
+ cpMaterializeHospitalizations(r);
  const target = (r.hospitalizations || []).find(h => h && Number(h.id) === recId);
  if (!target) {
  alert("対象の入院記録が見つかりません。");

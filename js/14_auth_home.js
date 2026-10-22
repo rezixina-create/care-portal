@@ -1384,6 +1384,7 @@ window.onGlobalTimeChange = onGlobalTimeChange;
 window.initGlobalTimeSync = initGlobalTimeSync;
 // 行事・予定の登録モーダル
 function openShiftEventModal(yearMonth, day) {
+  if (typeof cpShiftAdminOnly === "function" && !cpShiftAdminOnly("勤務表の行事・予定")) return; // [Claude追加 2026-10-22]
   const ym = yearMonth || getShiftYearMonth();
   const [yearStr, monthStr] = ym.split("-");
   const year = parseInt(yearStr, 10);
@@ -1424,6 +1425,7 @@ function cpClearShiftHelp(ym, staffName, day) {
 
 // 勤務マスごとの担当区分（応援）変更
 function changeShiftCellUnit(staffName, day, unitId) {
+  if (typeof cpShiftAdminOnly === "function" && !cpShiftAdminOnly("勤務の区分（応援）")) return; // [Claude追加 2026-10-22]
   const ym = getShiftYearMonth();
   // [Claude修正] 勤務でない日には応援を付けない
   const curSym = (((db.data.monthly_shifts || {})[ym] || {})[staffName] || {})[day] || "";

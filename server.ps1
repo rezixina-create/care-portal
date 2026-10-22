@@ -2374,7 +2374,265 @@ namespace CarePortal
             return v is bool && (bool)v;
         }
 
-        private void HandleSaveDiff(NetworkStream stream, string body)
+        // [Claude追加 2026-10-22] 保存のときもサーバーで職種を見る（画面で止めるだけでなく）
+        // あなた「３．サーバー側の権限チェック（画面だけでなく保存でも職種を見る）」
+        // 決まりは画面と同じ: 加算・請求・区分・契約・勤務表づくり＝管理者・事務員、処方薬・点眼＝看護師、
+        // 自立度・LIFE の評価＝管理者・計画作成担当者・看護師、ケアプラン＝計画作成担当者（話し合いの意見の追記はだれでも）、
+        // 職員の登録・役職＝管理者・事務員（暗証番号の変更は本人）、ID・パスワード＝本人、希望休＝本人（管理者・事務員はだれの分でも）
+        // まだ何も入っていない項目に初めて入れるときは止めない（最初の設定・見本の入れ物づくり）
+        private class PermCtx
+        {
+            public string Staff = "";
+            public bool Admin, Director, Cm, Nurse;
+        }
+        private static bool PermHas(string role, params string[] words)
+        {
+            foreach (string w in words) if (role.IndexOf(w, StringComparison.Ordinal) >= 0) return true;
+            return false;
+        }
+        private static PermCtx MakePerm(JObj db, string staff)
+        {
+            PermCtx p = new PermCtx();
+            p.Staff = staff ?? "";
+            string role = "";
+            List<object> stamps = db != null ? db.Get("stamps") as List<object> : null;
+            if (stamps != null && staff != null)
+            {
+                JObj st = FindStamp(stamps, staff);
+                if (st != null) role = st.GetStr("role") ?? "";
+            }
+            p.Admin = PermHas(role, "管理者", "施設長", "事務", "所長", "ホーム長", "院長", "理事");
+            p.Director = PermHas(role, "施設長", "管理者");
+            p.Cm = PermHas(role, "計画作成", "介護支援専門員", "ケアマネ");
+            p.Nurse = role.IndexOf("看護", StringComparison.Ordinal) >= 0;
+            return p;
+        }
+        private static readonly string[] PermAdminKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
+            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units" };
+        private static readonly string[] PermNurseKeys = new string[] { "resident_medications", "eyedrop_orders" };
+        private static readonly string[] PermPolicyKeys = new string[] { "dementia_assessments", "life_assessments" };
+        private static readonly string[] PermResNurseFields = new string[] { "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min" };
+        private static readonly string[] PermResCmFields = new string[] { "care_plan_goal", "care_plan_consent_date" };
+        private static readonly string[] PermResPolicyFields = new string[] { "policy_stamp" };
+        private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
+            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
+            "dementia_assessments", "life_assessments", "residents", "care_plans", "stamps", "staff_accounts", "shift_hope_offs" };
+
+        private static bool PermEmpty(object v)
+        {
+            if (v == null) return true;
+            List<object> l = v as List<object>;
+            if (l != null) return l.Count == 0;
+            JObj o = v as JObj;
+            if (o != null) return o.Map.Count == 0;
+            return false;
+        }
+        private static bool PermSame(object a, object b)
+        {
+            return DiffMasked(a) == DiffMasked(b);
+        }
+        // その項目を除いて同じか
+        private static bool PermSameExcept(JObj a, JObj b, string[] skip)
+        {
+            JObj x = new JObj(); JObj y = new JObj();
+            foreach (string k in a.Keys) if (Array.IndexOf(skip, k) < 0) x.Set(k, a.Get(k));
+            foreach (string k in b.Keys) if (Array.IndexOf(skip, k) < 0) y.Set(k, b.Get(k));
+            // 並び順の違いは見ない
+            x.Keys.Sort(StringComparer.Ordinal); y.Keys.Sort(StringComparer.Ordinal);
+            return PermSame(x, y);
+        }
+        private static bool PermFieldChanged(JObj a, JObj b, string f)
+        {
+            object x = a != null ? a.Get(f) : null, y = b != null ? b.Get(f) : null;
+            if ((x == null || (x is string && (string)x == "")) && (y == null || (y is string && (string)y == ""))) return false;
+            return !PermSame(x, y);
+        }
+        private static string PermRoleOnly(PermCtx p, string k)
+        {
+            if (Array.IndexOf(PermAdminKeys, k) >= 0) return p.Admin ? null : "管理者・事務員";
+            if (Array.IndexOf(PermNurseKeys, k) >= 0) return p.Nurse ? null : "看護師";
+            if (Array.IndexOf(PermPolicyKeys, k) >= 0) return (p.Director || p.Cm || p.Nurse) ? null : "管理者・計画作成担当者・看護師";
+            return null;
+        }
+
+        // 1件分の変更（cur: 今の記録・なければ null、nv: 新しい記録・消すときは null）。止めるときは「だれができるか」を返す
+        private static string PermElem(PermCtx p, string k, bool listWasEmpty, JObj cur, JObj nv)
+        {
+            if (listWasEmpty) return null;
+            if (cur != null && nv != null && PermSame(cur, nv)) return null;
+            string ro = PermRoleOnly(p, k);
+            if (ro != null || Array.IndexOf(PermAdminKeys, k) >= 0 || Array.IndexOf(PermNurseKeys, k) >= 0 || Array.IndexOf(PermPolicyKeys, k) >= 0) return ro;
+            if (k == "residents")
+            {
+                if (cur == null || nv == null) return null;
+                foreach (string f in PermResNurseFields) if (!p.Nurse && PermFieldChanged(cur, nv, f)) return "看護師";
+                foreach (string f in PermResCmFields) if (!p.Cm && PermFieldChanged(cur, nv, f)) return "計画作成担当者";
+                foreach (string f in PermResPolicyFields) if (!(p.Director || p.Cm || p.Nurse) && PermFieldChanged(cur, nv, f)) return "管理者・計画作成担当者・看護師";
+                return null;
+            }
+            if (k == "care_plans")
+            {
+                if (p.Cm) return null;
+                if (cur == null || nv == null) return "計画作成担当者";
+                return PermSameExcept(cur, nv, new string[] { "meetings", "edit_history" }) ? null : "計画作成担当者";
+            }
+            if (k == "staff_accounts")
+            {
+                if (p.Admin) return null;
+                JObj a = cur ?? nv;
+                bool own = (a.GetStr("id") == p.Staff || a.GetStr("staff_name") == p.Staff) && (nv == null || nv.GetStr("staff_name") == p.Staff || nv.GetStr("id") == p.Staff);
+                return (own && cur != null && nv != null) ? null : "本人（ほかの方の分は管理者・事務員）";
+            }
+            if (k == "shift_hope_offs")
+            {
+                if (p.Admin) return null;
+                bool own = (cur == null || cur.GetStr("staff_name") == p.Staff) && (nv == null || nv.GetStr("staff_name") == p.Staff);
+                return own ? null : "本人（ほかの方の分は管理者・事務員）";
+            }
+            return null;
+        }
+
+        // 職員の一覧（id がないので丸ごと届く）: 管理者・事務員でなければ、暗証番号のほかは変えられない
+        private static string PermStamps(PermCtx p, object curVal, object newVal)
+        {
+            if (p.Admin) return null;
+            List<object> a = curVal as List<object>, b = newVal as List<object>;
+            if (a == null || b == null || a.Count != b.Count) return "管理者・事務員";
+            string[] pinKeys = new string[] { "pin", "is_initial_pin", "pin_updated_at", "pin_changed_at" };
+            for (int i = 0; i < a.Count; i++)
+            {
+                JObj x = a[i] as JObj, y = b[i] as JObj;
+                if (x == null || y == null) { if (!PermSame(a[i], b[i])) return "管理者・事務員"; continue; }
+                if (!PermSameExcept(x, y, pinKeys)) return "管理者・事務員";
+            }
+            return null;
+        }
+
+        // 勤務表: 管理者・事務員でなければ、自分の行を「休」にする（希望休）のと、まだない月を作る（画面が開いたときの下書き）だけ
+        private static string PermMonthlyShifts(PermCtx p, object curVal, object newVal)
+        {
+            if (p.Admin) return null;
+            JObj a = curVal as JObj, b = newVal as JObj;
+            if (a == null) return null;
+            if (b == null) return "管理者・事務員";
+            foreach (string ym in a.Keys)
+            {
+                JObj am = a.Get(ym) as JObj;
+                if (PermEmpty(a.Get(ym))) continue;
+                JObj bm = b.Get(ym) as JObj;
+                if (bm == null) return "管理者・事務員";
+                if (am == null) { if (!PermSame(a.Get(ym), b.Get(ym))) return "管理者・事務員"; continue; }
+                List<string> names = new List<string>(am.Keys);
+                foreach (string n in bm.Keys) if (!am.Map.ContainsKey(n)) names.Add(n);
+                foreach (string n in names)
+                {
+                    object ar = am.Get(n), br = bm.Get(n);
+                    if (PermSame(ar, br)) continue;
+                    if (n != p.Staff) return "管理者・事務員";
+                    JObj arr = ar as JObj, brr = br as JObj;
+                    if (arr == null || brr == null) return "管理者・事務員";
+                    foreach (string day in arr.Keys)
+                        if (!brr.Map.ContainsKey(day)) return "管理者・事務員";
+                    foreach (string day in brr.Keys)
+                    {
+                        if (PermSame(arr.Get(day), brr.Get(day))) continue;
+                        if (brr.GetStr(day) != "休") return "管理者・事務員";
+                    }
+                }
+            }
+            return null;
+        }
+
+        // ひとつの項目の丸ごとの変更（差分の set と、全体の保存のとき）
+        private static string PermWhole(PermCtx p, string k, object curVal, object newVal)
+        {
+            if (Array.IndexOf(PermWatchKeys, k) < 0) return null;
+            if (PermEmpty(curVal)) return null;
+            if (PermSame(curVal, newVal)) return null;
+            if (k == "stamps") return PermStamps(p, curVal, newVal);
+            if (k == "monthly_shifts") return PermMonthlyShifts(p, curVal, newVal);
+            List<object> a = curVal as List<object>, b = newVal as List<object>;
+            if (a != null && (b != null || newVal == null))
+            {
+                // id ごとに比べる
+                Dictionary<string, JObj> A = new Dictionary<string, JObj>(), B = new Dictionary<string, JObj>();
+                bool idOk = true;
+                foreach (object o in a) { JObj j = o as JObj; string id = j != null ? j.GetStr("id") : null; if (id == null || A.ContainsKey(id)) { idOk = false; break; } A[id] = j; }
+                if (idOk && b != null) foreach (object o in b) { JObj j = o as JObj; string id = j != null ? j.GetStr("id") : null; if (id == null || B.ContainsKey(id)) { idOk = false; break; } B[id] = j; }
+                if (idOk)
+                {
+                    foreach (KeyValuePair<string, JObj> kv in A)
+                    {
+                        JObj nv; B.TryGetValue(kv.Key, out nv);
+                        string r = PermElem(p, k, false, kv.Value, nv);
+                        if (r != null) return r;
+                    }
+                    foreach (KeyValuePair<string, JObj> kv in B)
+                    {
+                        if (A.ContainsKey(kv.Key)) continue;
+                        string r = PermElem(p, k, false, null, kv.Value);
+                        if (r != null) return r;
+                    }
+                    return null;
+                }
+            }
+            string ro = PermRoleOnly(p, k);
+            if (ro != null) return ro;
+            if (Array.IndexOf(PermAdminKeys, k) >= 0 || Array.IndexOf(PermNurseKeys, k) >= 0 || Array.IndexOf(PermPolicyKeys, k) >= 0) return null;
+            // residents・care_plans などで id がそろっていないとき: 役職のある人だけ
+            if (k == "care_plans") return p.Cm ? null : "計画作成担当者";
+            if (k == "staff_accounts" || k == "shift_hope_offs") return p.Admin ? null : "管理者・事務員";
+            return null;
+        }
+
+        // 差分の保存の全部の操作を確かめる。止めるときは {key, who} を返す
+        private static string[] PermCheckOps(JObj db, string staff, List<object> ops)
+        {
+            PermCtx p = MakePerm(db, staff);
+            foreach (object o in ops)
+            {
+                JObj op = o as JObj;
+                if (op == null) continue;
+                string k = op.GetStr("k");
+                if (Array.IndexOf(PermWatchKeys, k) < 0) continue;
+                string t = op.GetStr("t");
+                string who = null;
+                if (t == "set")
+                {
+                    who = PermWhole(p, k, db.Get(k), DiffFlag(op, "del") ? null : op.Get("v"));
+                }
+                else if (t == "up" || t == "rm")
+                {
+                    List<object> list = db.Get(k) as List<object>;
+                    int idx = DiffFindIndex(list, op.GetStr("id"));
+                    JObj cur = idx >= 0 ? list[idx] as JObj : null;
+                    JObj nv = t == "up" ? op.Get("v") as JObj : null;
+                    if (t == "rm" && cur == null) continue;
+                    who = PermElem(p, k, PermEmpty(list), cur, nv);
+                    if (who != null) return new string[] { k, who, op.GetStr("id") };
+                }
+                if (who != null) return new string[] { k, who };
+            }
+            return null;
+        }
+        // 全体の保存のとき
+        private static string[] PermCheckWhole(JObj curDb, JObj newDb, string staff)
+        {
+            if (curDb == null || newDb == null) return null;
+            PermCtx p = MakePerm(curDb, staff);
+            foreach (string k in PermWatchKeys)
+            {
+                string who = PermWhole(p, k, curDb.Get(k), newDb.Get(k));
+                if (who != null) return new string[] { k, who };
+            }
+            return null;
+        }
+        private static string PermDeniedJson(string[] r)
+        {
+            return "{\"error\":\"forbidden\",\"key\":" + MiniJson.Quote(r[0]) + ",\"who\":" + MiniJson.Quote(r[1]) + (r.Length > 2 && r[2] != null ? ",\"id\":" + MiniJson.Quote(r[2]) : "") + "}";
+        }
+
+        private void HandleSaveDiff(NetworkStream stream, string body, string sessStaff)
         {
             JObj req = null;
             try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
@@ -2437,9 +2695,15 @@ namespace CarePortal
                             }
                             else { conflictKey = "?"; break; }
                         }
+                        string[] denied = conflictKey == null ? PermCheckOps(db, sessStaff, ops) : null;
                         if (conflictKey != null)
                         {
                             status = 409; resp = "{\"error\":\"conflict\",\"key\":" + MiniJson.Quote(conflictKey) + "}";
+                        }
+                        else if (denied != null)
+                        {
+                            // [Claude追加 2026-10-22] 職種で変えられない記録が入っていた。何も変えない
+                            status = 403; resp = PermDeniedJson(denied);
                         }
                         else
                         {
@@ -3003,7 +3267,7 @@ namespace CarePortal
                     }
                     if (urlPath == "/api/save-diff" && method == "POST")
                     {
-                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes));
+                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
                         return;
                     }
 
@@ -3013,6 +3277,7 @@ namespace CarePortal
                         if (!string.IsNullOrEmpty(postData))
                         {
                             bool revConflict = false;
+                            string[] permDenied = null;
                             lock (_fileLock)
                             {
                                 // [Claude修正] 版番号 (_rev) の照合。保存データの _rev は「取得時の版 + 1」でなければならない。
@@ -3030,7 +3295,12 @@ namespace CarePortal
                                 {
                                     revConflict = true;
                                 }
-                                if (!revConflict)
+                                if (!revConflict && currentJson != null)
+                                {
+                                    // [Claude追加 2026-10-22] 全体の保存でも、職種で変えられない記録が変わっていないか確かめる
+                                    try { permDenied = PermCheckWhole(MiniJson.Parse(currentJson) as JObj, MiniJson.Parse(postData) as JObj, sessStaff); } catch { permDenied = null; }
+                                }
+                                if (!revConflict && permDenied == null)
                                 {
                                 // [Claude修正] 伏せ字で届いたパスワードを、サーバー側の本物で補う
                                 try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
@@ -3043,6 +3313,11 @@ namespace CarePortal
                             if (revConflict)
                             {
                                 SendJsonResponse(stream, 409, "{\"error\":\"conflict\"}");
+                                return;
+                            }
+                            if (permDenied != null)
+                            {
+                                SendJsonResponse(stream, 403, PermDeniedJson(permDenied));
                                 return;
                             }
                             string nowTime = DateTime.Now.ToString("HH:mm");

@@ -1831,7 +1831,22 @@ function applyShiftCellEdit(symbol) {
 }
 
 // 特例配慮設定 (同番NG) モーダル
+// [Claude追加 2026-10-22] 保存のときもサーバーが職種を見るので、画面でも先に止める（勤務表づくりは管理者・事務員、希望休は本人）
+function cpShiftAdminOnly(what) {
+ if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+  alert(`${what}は、管理者と事務員だけが変更できます。`);
+  return false;
+ }
+ return true;
+}
+function cpHopeOffOwnOnly(staffName) {
+ if (typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk()) return true;
+ if (staffName && staffName === cpLoginStaffName()) return true;
+ alert("希望休は、ご本人の分だけ登録・解除できます（ほかの方の分は管理者・事務員）。");
+ return false;
+}
 function openShiftNgModal() {
+ if (!cpShiftAdminOnly("同じ勤務にしない組み合わせ")) return;
  const stamps = sortStaffList(db.data.stamps || []);
  const staffList = stamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
 
@@ -1881,6 +1896,7 @@ function renderShiftNgList() {
 }
 
 function submitShiftNgPair() {
+ if (!cpShiftAdminOnly("同じ勤務にしない組み合わせ")) return;
  const sel1 = document.getElementById("shiftNgStaff1");
  const sel2 = document.getElementById("shiftNgStaff2");
  const reasonInput = document.getElementById("shiftNgReason");
@@ -1920,6 +1936,7 @@ function submitShiftNgPair() {
 }
 
 function deleteShiftNgPair(id) {
+ if (!cpShiftAdminOnly("同じ勤務にしない組み合わせ")) return;
  if (!confirm("この配慮ルールを削除しますか？")) return;
  db.data.shift_ng_pairs = (db.data.shift_ng_pairs || []).filter(p => p.id !== id);
  db.save();
@@ -1939,7 +1956,10 @@ function openShiftHopeModal() {
 
  const staffSel = document.getElementById("shiftHopeStaff");
  if (staffSel) {
-  staffSel.innerHTML = staffList.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)} (${escapeHtml(s.role || "介護職員")})</option>`).join("");
+  const canAll = typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk();
+  const me = cpLoginStaffName();
+  const shown = canAll ? staffList : staffList.filter(s => s.name === me); // 管理者・事務員でなければ本人だけ
+  staffSel.innerHTML = shown.map(s => `<option value="${escapeHtml(s.name)}">${escapeHtml(s.name)} (${escapeHtml(s.role || "介護職員")})</option>`).join("");
  }
 
  const daySel = document.getElementById("shiftHopeDay");
@@ -2017,6 +2037,7 @@ function submitShiftHopeOff() {
 
  if (!staffSel || !daySel) return;
  const staffName = staffSel.value;
+ if (!cpHopeOffOwnOnly(staffName)) return;
  const day = parseInt(daySel.value, 10);
  const reason = reasonInput ? (reasonInput.value.trim() || "希望休申請") : "希望休申請";
  const ym = getShiftYearMonth();
@@ -2055,6 +2076,8 @@ function submitShiftHopeOff() {
 }
 
 function deleteShiftHopeOff(id) {
+ const hx = (db.data.shift_hope_offs || []).find(h => h.id === id);
+ if (hx && !cpHopeOffOwnOnly(hx.staff_name)) return;
  if (!confirm("この希望休設定を削除しますか？")) return;
  const ym = getShiftYearMonth();
  db.data.shift_hope_offs = (db.data.shift_hope_offs || []).filter(h => h.id !== id);
@@ -2065,6 +2088,7 @@ function deleteShiftHopeOff(id) {
 }
 
 function toggleShiftHopeOff(staffName, day) {
+ if (!cpHopeOffOwnOnly(staffName)) return;
  const ym = getShiftYearMonth();
  if (!Array.isArray(db.data.shift_hope_offs)) db.data.shift_hope_offs = [];
 

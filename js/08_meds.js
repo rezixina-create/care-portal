@@ -46,11 +46,11 @@ function cpIsCurrentNurse() { return cpIsNurseStaff(cpLoginStaffName()); }
 // [Claude修正 2026-10-18] その日の在所状況。以前は今の状況（status）だけで決めていたため、
 // 過去の日付の表でも、いま入院中の方が「入院中」になったり、入居前・退所後の方が出たりしていた
 // [Antigravity実装 2026-10-19] 入院の期間リスト (r.hospitalizations) を見て、過去の入院期間もその日は「入院中」、退院後は「在所」と判定する
-function cpGetHospitalizations(r) {
- if (!r || typeof r !== "object") return [];
- if (!Array.isArray(r.hospitalizations)) r.hospitalizations = [];
- if (r.hospital_date && r.hospitalizations.length === 0 && (r.status === "入院中" || (r.status === "退所" && r.status_before_discharge === "入院中"))) { // [Claude修正] 在所の方に残った古い入院日で、今日まで入院中にしない
- r.hospitalizations.push({
+// [Claude修正 2026-10-22] 見るだけのときは利用者の記録を書き換えない。以前は見るたびに hospitalizations: [] を足していたため、
+// 前に同期した中身とサーバーの中身がずれて、利用者の情報を保存するたびに「ほかの端末と競合」になり、全体の保存にまわっていた
+function cpLegacyHospitalization(r) {
+ if (r.hospital_date && (r.status === "入院中" || (r.status === "退所" && r.status_before_discharge === "入院中"))) { // [Claude修正] 在所の方に残った古い入院日で、今日まで入院中にしない
+ return {
  id: Number(r.id) * 10000 + 1,
  resident_id: r.id,
  admission_date: r.hospital_date,
@@ -59,11 +59,28 @@ function cpGetHospitalizations(r) {
  reason: r.hospital_reason || "",
  created_by: r.updated_by || "",
  created_at: r.hospital_date
- });
+ };
+ }
+ return null;
+}
+function cpGetHospitalizations(r) {
+ if (!r || typeof r !== "object") return [];
+ if (!Array.isArray(r.hospitalizations) || r.hospitalizations.length === 0) {
+ const lg = cpLegacyHospitalization(r);
+ return lg ? [lg] : [];
  }
  return r.hospitalizations.filter(h => h && !h.voided);
 }
-
+// 入院の記録を変えるときだけ、利用者の記録に入院の期間リストを作る（前の形のデータの入院日も1件目として入れる）
+function cpMaterializeHospitalizations(r) {
+ if (!r || typeof r !== "object") return [];
+ if (!Array.isArray(r.hospitalizations)) r.hospitalizations = [];
+ if (r.hospitalizations.length === 0) {
+ const lg = cpLegacyHospitalization(r);
+ if (lg) r.hospitalizations.push(lg);
+ }
+ return r.hospitalizations.filter(h => h && !h.voided);
+}
 function cpHospitalizationOn(r, dateStr) {
  if (!r) return null;
  const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
