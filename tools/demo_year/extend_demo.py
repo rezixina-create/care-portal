@@ -234,6 +234,8 @@ plans.sort(key=lambda p: (p["resident_id"], -p["version"]))
 
 import fix_on_duty
 added["連絡ノート・運転の人を出勤の人に"] = fix_on_duty.apply(d)
+import fix_vehicles
+fix_vehicles.apply(d)   # 車を2台に分けて、メーターをつなげ直す（足した日の分も）
 if isinstance(d.get("_rev"), int): d["_rev"] += 1
 if OUT == a.path:
     bk = a.path + ".before_extend_" + DT.date.today().strftime("%Y%m%d")

@@ -879,18 +879,21 @@ window.cpEmgUseTypeChanged = cpEmgUseTypeChanged;
 function renderOfficeVehicleLogs() {
  const tbody = document.querySelector("#vehicleLogsTable tbody");
  tbody.innerHTML = "";
- (db.data.vehicle_logs || []).forEach(l => {
+ // [Claude修正 2026-10-22] 運転者はログインした本人を入れておく（ほかの人が運転したときは書き換える）。新しい日付を上に
+ const drv = document.getElementById("vehDriver");
+ if (drv && !drv.value) drv.value = cpLoginStaffName();
+ (db.data.vehicle_logs || []).slice().sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.id) || 0) - (Number(a.id) || 0)).forEach(l => {
  const tr = document.createElement("tr");
  tr.innerHTML = `
- <td>${l.date}</td>
- <td><strong>${l.vehicle_name}</strong></td>
- <td>${l.driver_name}</td>
- <td>${l.purpose}</td>
+ <td>${escapeHtml(l.date || "")}</td>
+ <td><strong>${escapeHtml(l.vehicle_name || "")}</strong></td>
+ <td>${escapeHtml(l.driver_name || "")}</td>
+ <td>${escapeHtml(l.purpose || "")}</td>
  <td>${l.start_km} km</td>
  <td>${l.end_km} km</td>
  <td><strong style="color:#0284c7;">${l.distance_km} km</strong></td>
  <td>${l.key_returned ? ' 返却確認済' : '未返却'}</td>
- <td>${l.notes || '-'}</td>
+ <td>${escapeHtml(l.notes || '-')}</td>
  `;
  tbody.appendChild(tr);
  });
