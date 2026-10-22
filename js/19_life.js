@@ -309,6 +309,7 @@ function cpCalcBarthelIndex(vals) {
 // ----------------------------------------------------------------------
 function cpIsLifeAssessmentRequiredMonth(resident, yearMonth, optSettings) {
   if (!resident || !yearMonth) return false;
+  if (resident.usage_type === "short") return false;
   const ym = String(yearMonth).trim();
   const settings = optSettings || (typeof cpGetKasanSettings === "function" ? cpGetKasanSettings() : ((db && db.data && db.data.kasan_settings) || {}));
 
@@ -1396,6 +1397,7 @@ function cpExportLifeCsv(targetMonth) {
   // 対象月に評価がある、または要る月で評価済みの利用者を抽出
   const targetCandidates = [];
   allResidents.forEach(r => {
+    if (r.usage_type === "short") return;
     const isReq = cpIsLifeAssessmentRequiredMonth(r, ym, settings);
     const a = cpGetLifeAssessmentForResidentInMonth(r.id, ym);
     if (a) {

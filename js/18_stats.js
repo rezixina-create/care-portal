@@ -56,6 +56,7 @@ function cpComputeYearStats(fiscalYear) {
   let sumStayDays = 0;
   let sumPresentDays = 0;
   let sumHospDays = 0;
+  let sumShortStayDays = 0;
   let sumCapacityDays = 0;
   let sumNewAdmissions = 0;
   let sumDischarges = 0;
@@ -83,6 +84,7 @@ function cpComputeYearStats(fiscalYear) {
         monthLabel: monthLabel,
         daysInMonth: daysInMonth,
         isFuture: true,
+        shortStayDays: 0,
         capacity: capacity,
         unitPriceInt: unitPriceInt
       });
@@ -91,17 +93,23 @@ function cpComputeYearStats(fiscalYear) {
 
     elapsedMonthCount++;
 
-    // 入居数・在所数・入院数の日次集計
+    // 入居数・在所数・入院数・短期利用数の日次集計
     let monthStayDays = 0;
     let monthPresentDays = 0;
     let monthHospDays = 0;
+    let monthShortStayDays = 0;
 
     for (let d = 1; d <= daysInMonth; d++) {
       const dStr = `${ym}-${String(d).padStart(2, "0")}`;
       allResidents.forEach(r => {
+        const isShort = (r.usage_type === "short");
         const st = (typeof cpStatusOn === "function") ? cpStatusOn(r, dStr) : (r.status || "");
         if (st !== "入居前" && st !== "退所") {
-          monthStayDays++;
+          if (isShort) {
+            monthShortStayDays++;
+          } else {
+            monthStayDays++;
+          }
           if (typeof cpResidentIsHere === "function" && cpResidentIsHere(r, dStr)) {
             monthPresentDays++;
           }
@@ -111,6 +119,7 @@ function cpComputeYearStats(fiscalYear) {
         }
       });
     }
+    sumShortStayDays += monthShortStayDays;
 
     // 月末入居者数
     const lastDayStr = `${ym}-${String(daysInMonth).padStart(2, "0")}`;
@@ -220,6 +229,7 @@ function cpComputeYearStats(fiscalYear) {
       stayDays: monthStayDays,
       presentDays: monthPresentDays,
       hospDays: monthHospDays,
+      shortStayDays: monthShortStayDays,
       occupancyStay: occupancyStay,
       occupancyPresent: occupancyPresent,
       newAdmissions: newAdmissions,
@@ -247,6 +257,7 @@ function cpComputeYearStats(fiscalYear) {
     stayDays: sumStayDays,
     presentDays: sumPresentDays,
     hospDays: sumHospDays,
+    shortStayDays: sumShortStayDays,
     occupancyStay: yearOccupancyStay,
     occupancyPresent: yearOccupancyPresent,
     newAdmissions: sumNewAdmissions,
@@ -433,6 +444,7 @@ function renderOfficeStatsTab() {
       return `
         <tr>
           <td style="font-weight:bold; white-space:nowrap; text-align:center;">${escapeHtml(r.monthLabel)}</td>
+          <td style="text-align:right;">-</td>
           <td style="text-align:right;">-</td>
           <td style="text-align:right;">-</td>
           <td style="text-align:right;">-</td>

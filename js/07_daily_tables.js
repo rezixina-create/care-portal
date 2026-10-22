@@ -1740,12 +1740,17 @@ function cpVoidMedRecord(rec, label) {
 // [Antigravity実装 2026-10-16] 訂正理由（reason）も edit_history に保存できるように拡張
 function cpAppendEditHistory(target, old, fields, reason) {
  if (!target || !old) return;
- const norm = v => (v === undefined || v === "" ? null : v);
+ const norm = (v, f) => {
+  if (f === "usage_type") return (v === undefined || v === "" || v === "resident") ? "resident" : v;
+  if (f === "short_emergency_confirmed") return (!v) ? false : true;
+  if (f === "short_plan_units") return (Array.isArray(v) && v.length === 0) ? null : (v === undefined || v === "" ? null : v);
+  return (v === undefined || v === "" ? null : v);
+ };
  const before = {};
- fields.forEach(f => { const x = norm(old[f]); before[f] = (x !== null && typeof x === "object") ? JSON.parse(JSON.stringify(x)) : x; });
- if (old.staff_name !== undefined) before.staff_name = norm(old.staff_name);
- const key = v => { const x = norm(v); return (x !== null && typeof x === "object") ? JSON.stringify(x) : String(x); };
- const changed = fields.some(f => key(old[f]) !== key(target[f]));
+ fields.forEach(f => { const x = norm(old[f], f); before[f] = (x !== null && typeof x === "object") ? JSON.parse(JSON.stringify(x)) : x; });
+ if (old.staff_name !== undefined) before.staff_name = norm(old.staff_name, "staff_name");
+ const key = (v, f) => { const x = norm(v, f); return (x !== null && typeof x === "object") ? JSON.stringify(x) : String(x); };
+ const changed = fields.some(f => key(old[f], f) !== key(target[f], f));
  const hist = Array.isArray(old.edit_history) ? old.edit_history.slice() : [];
  if (changed) {
   const entry = { edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), before: before };

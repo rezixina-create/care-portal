@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261022_f3">
+	<link rel="stylesheet" href="style.css?v=20261022_g1">
 </head>
 <body>
 
@@ -1935,13 +1935,81 @@
  <option value="要介護5">要介護5</option>
  </select>
  </div>
+			<div class="form-group">
+				<label>利用の区分 <span style="color:var(--alert);">*</span>:</label>
+				<select id="resUsageType" class="form-control" onchange="onResidentUsageTypeChange(this.value)">
+					<option value="">選んでください</option>
+					<option value="resident">入居</option>
+					<option value="short">短期利用</option>
+				</select>
+			</div>
+
+			<!-- 短期利用専用項目（利用の区分が「短期利用」のときのみ表示） -->
+			<div id="resShortStayFields" style="display:none; grid-column: 1 / -1; background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:12px;">
+				<div style="font-size:13px; font-weight:bold; color:var(--pine-dark); margin-bottom:6px;">
+					短期利用（ショートステイ）専用設定:
+				</div>
+				<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+					<div class="form-group">
+						<label>利用終了予定日 <span style="color:var(--alert);">*</span> <span style="font-size:13px; color:var(--ink-3); font-weight:normal;">（開始日から30日以内）</span>:</label>
+						<input type="date" id="resShortEndDate" class="form-control">
+					</div>
+					<div class="form-group">
+						<label>居宅サービス計画作成区分 <span style="color:var(--alert);">*</span>:</label>
+						<select id="resShortPlanType" class="form-control" onchange="onResidentShortPlanTypeChange(this.value)">
+							<option value="">選んでください</option>
+							<option value="1">1 居宅介護支援事業所作成</option>
+							<option value="2">2 自己作成</option>
+							<option value="3">3 介護予防支援事業所・地域包括支援センター作成</option>
+						</select>
+					</div>
+					<div class="form-group" id="resShortPlanOfficeNoGroup">
+						<label>居宅介護支援事業所等の事業所番号（英数字10桁） <span style="color:var(--alert);">*</span>:</label>
+						<input type="text" id="resShortPlanOfficeNo" class="form-control" maxlength="10">
+					</div>
+					<div class="form-group">
+						<label>当月計画単位数 <span style="font-size:13px; color:var(--ink-3); font-weight:normal;">（ケアマネ提供票）</span>:</label>
+						<div style="display:flex; gap:6px; align-items:center;">
+							<input type="month" id="resShortPlanYm" class="form-control" style="width:140px; font-size:13px;">
+							<input type="number" id="resShortPlanUnitsVal" class="form-control" style="width:130px; font-size:13px;" min="0">
+							<button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="addResidentPlanUnitsRow()">設定</button>
+						</div>
+						<div id="resShortPlanUnitsList" style="margin-top:6px; font-size:13px; color:var(--ink-2);"></div>
+					</div>
+				</div>
+
+				<!-- 緊急受入（認知症行動・心理症状緊急対応加算） -->
+				<div style="border-top:1px dashed var(--line); padding-top:10px; margin-top:10px;">
+					<div style="font-size:13px; font-weight:bold; color:var(--pine-dark); margin-bottom:6px;">
+						認知症行動・心理症状緊急対応加算（緊急受け入れ時の算定要件）:
+					</div>
+					<div style="font-size:13px; color:var(--ink-3); margin-bottom:8px;">
+						※利用開始日から7日を限度として算定（200単位/日）。直前の入院・施設入所・他事業所利用中がないことが要件です。
+					</div>
+					<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+						<div class="form-group">
+							<label>判断した医師名:</label>
+							<input type="text" id="resShortEmergencyDoctor" class="form-control" style="font-size:13px;">
+						</div>
+						<div class="form-group">
+							<label>判断日:</label>
+							<input type="date" id="resShortEmergencyDate" class="form-control" style="font-size:13px;">
+						</div>
+					</div>
+					<div class="form-group" style="margin-top:6px;">
+						<label style="display:flex; align-items:center; gap:6px; font-size:13px; color:var(--ink); cursor:pointer;">
+							<input type="checkbox" id="resShortEmergencyConfirmed" style="width:16px; height:16px;">
+							直前に病院・診療所や介護保険施設・地域密着型特養に入っておらず、他事業所を利用中でないことを確認した（手引き基準）
+						</label>
+					</div>
+				</div>
+			</div>
  <div class="form-group">
  <label>在所状況:</label>
  <select id="resStatus" class="form-control">
  <option value="在所" selected>在所</option>
  <option value="入院中">入院中（カルテの「入院の歴」から）</option>
  <option value="外泊中">外泊中</option>
- <option value="ショート利用">ショート利用</option>
  <option value="退所" disabled>退所（カルテの「退所の手続き」から）</option>
  </select>
  </div>
@@ -4133,25 +4201,25 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261022_f3"></script>
- <script src="js/02_terms.js?v=20261022_f3"></script>
- <script src="js/03_common.js?v=20261022_f3"></script>
- <script src="js/04_care_record.js?v=20261022_f3"></script>
- <script src="js/05_summary_print_audit.js?v=20261022_f3"></script>
- <script src="js/06_schema_history.js?v=20261022_f3"></script>
- <script src="js/07_daily_tables.js?v=20261022_f3"></script>
- <script src="js/08_meds.js?v=20261022_f3"></script>
- <script src="js/09_night_misc.js?v=20261022_f3"></script>
- <script src="js/10_office.js?v=20261022_f3"></script>
- <script src="js/11_karte_staff.js?v=20261022_f3"></script>
- <script src="js/12_hospital_photos.js?v=20261022_f3"></script>
- <script src="js/13_shift_units.js?v=20261022_f3"></script>
- <script src="js/14_auth_home.js?v=20261022_f3"></script>
- <script src="js/15_single_write.js?v=20261022_f3"></script>
- <script src="js/16_careplan.js?v=20261022_f3"></script>
-	<script src="js/17_kasan.js?v=20261022_f3"></script>
-	<script src="js/18_stats.js?v=20261022_f3"></script>
-	<script src="js/19_life.js?v=20261022_f3"></script>
+ <script src="js/01_core.js?v=20261022_g1"></script>
+ <script src="js/02_terms.js?v=20261022_g1"></script>
+ <script src="js/03_common.js?v=20261022_g1"></script>
+ <script src="js/04_care_record.js?v=20261022_g1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261022_g1"></script>
+ <script src="js/06_schema_history.js?v=20261022_g1"></script>
+ <script src="js/07_daily_tables.js?v=20261022_g1"></script>
+ <script src="js/08_meds.js?v=20261022_g1"></script>
+ <script src="js/09_night_misc.js?v=20261022_g1"></script>
+ <script src="js/10_office.js?v=20261022_g1"></script>
+ <script src="js/11_karte_staff.js?v=20261022_g1"></script>
+ <script src="js/12_hospital_photos.js?v=20261022_g1"></script>
+ <script src="js/13_shift_units.js?v=20261022_g1"></script>
+ <script src="js/14_auth_home.js?v=20261022_g1"></script>
+ <script src="js/15_single_write.js?v=20261022_g1"></script>
+ <script src="js/16_careplan.js?v=20261022_g1"></script>
+	<script src="js/17_kasan.js?v=20261022_g1"></script>
+	<script src="js/18_stats.js?v=20261022_g1"></script>
+	<script src="js/19_life.js?v=20261022_g1"></script>
   
 
   <!-- ============================================================ -->

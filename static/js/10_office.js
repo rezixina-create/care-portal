@@ -3140,9 +3140,89 @@ function submitFamilyHistory() {
 
 
 // 新規利用者登録・編集
+// 短期利用（ショートステイ）入力補助
+let gResidentPlanUnitsTemp = [];
+
+function onResidentUsageTypeChange(val) {
+ const box = document.getElementById("resShortStayFields");
+ if (box) box.style.display = (val === "short") ? "block" : "none";
+}
+
+function onResidentShortPlanTypeChange(val) {
+ const grp = document.getElementById("resShortPlanOfficeNoGroup");
+ if (!grp) return;
+ const req = grp.querySelector("span");
+ if (req) req.style.display = (val === "1" || val === "3") ? "inline" : "none";
+}
+
+function renderResidentPlanUnitsList() {
+ const el = document.getElementById("resShortPlanUnitsList");
+ if (!el) return;
+ if (!gResidentPlanUnitsTemp || gResidentPlanUnitsTemp.length === 0) {
+  el.innerHTML = '<span style="color:var(--ink-3); font-size:13px;">（登録された計画単位数はありません）</span>';
+  return;
+ }
+ gResidentPlanUnitsTemp.sort((a, b) => (a.ym || "").localeCompare(b.ym || ""));
+ let html = '<div style="display:flex; flex-direction:column; gap:4px; margin-top:4px;">';
+ gResidentPlanUnitsTemp.forEach((item, idx) => {
+  const ymText = item.ym ? `${item.ym.slice(0, 4)}年${item.ym.slice(5, 7)}月` : "-";
+  const uText = Number(item.units || 0).toLocaleString();
+  html += `<div style="display:flex; align-items:center; justify-content:space-between; background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:4px 8px; font-size:13px;">`
+   + `<span><strong>${escapeHtml(ymText)}</strong>: ${escapeHtml(uText)} 単位</span>`
+   + `<button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px; color:var(--alert);" onclick="deleteResidentPlanUnit(${idx})">削除</button>`
+   + `</div>`;
+ });
+ html += '</div>';
+ el.innerHTML = html;
+}
+
+function addResidentPlanUnitsRow() {
+ const ymInput = document.getElementById("resShortPlanYm");
+ const valInput = document.getElementById("resShortPlanUnitsVal");
+ if (!ymInput || !valInput) return;
+ const ym = ymInput.value.trim();
+ const valStr = valInput.value.trim();
+ if (!ym) {
+  alert("計画単位数の対象月を選んでください。");
+  return;
+ }
+ if (!valStr || isNaN(Number(valStr)) || Number(valStr) < 0) {
+  alert("計画単位数を0以上の整数で入力してください。");
+  return;
+ }
+ const units = parseInt(valStr, 10);
+ if (!Array.isArray(gResidentPlanUnitsTemp)) gResidentPlanUnitsTemp = [];
+ const existingIdx = gResidentPlanUnitsTemp.findIndex(x => x.ym === ym);
+ if (existingIdx >= 0) {
+  gResidentPlanUnitsTemp[existingIdx].units = units;
+ } else {
+  gResidentPlanUnitsTemp.push({ ym: ym, units: units });
+ }
+ valInput.value = "";
+ renderResidentPlanUnitsList();
+}
+
+function deleteResidentPlanUnit(idx) {
+ if (!Array.isArray(gResidentPlanUnitsTemp)) return;
+ gResidentPlanUnitsTemp.splice(idx, 1);
+ renderResidentPlanUnitsList();
+}
+
 function openAddResidentModal() {
  document.getElementById("resModalTitle").textContent = " 新規利用者の登録";
  document.getElementById("resEditId").value = "";
+ if (document.getElementById("resUsageType")) document.getElementById("resUsageType").value = "";
+ if (document.getElementById("resShortStayFields")) document.getElementById("resShortStayFields").style.display = "none";
+ if (document.getElementById("resShortEndDate")) document.getElementById("resShortEndDate").value = "";
+ if (document.getElementById("resShortPlanType")) document.getElementById("resShortPlanType").value = "";
+ if (document.getElementById("resShortPlanOfficeNo")) document.getElementById("resShortPlanOfficeNo").value = "";
+ if (document.getElementById("resShortPlanYm")) document.getElementById("resShortPlanYm").value = "";
+ if (document.getElementById("resShortPlanUnitsVal")) document.getElementById("resShortPlanUnitsVal").value = "";
+ if (document.getElementById("resShortEmergencyDoctor")) document.getElementById("resShortEmergencyDoctor").value = "";
+ if (document.getElementById("resShortEmergencyDate")) document.getElementById("resShortEmergencyDate").value = "";
+ if (document.getElementById("resShortEmergencyConfirmed")) document.getElementById("resShortEmergencyConfirmed").checked = false;
+ gResidentPlanUnitsTemp = [];
+ renderResidentPlanUnitsList();
  document.getElementById("resRoomNo").value = "";
   if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml("", cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = "";
@@ -3191,6 +3271,20 @@ function openEditResidentModal(id) {
 
  document.getElementById("resModalTitle").textContent = ` 利用者情報の編集 (${r.name} 様)`;
  document.getElementById("resEditId").value = r.id;
+ const curUsageType = r.usage_type || "resident";
+ if (document.getElementById("resUsageType")) document.getElementById("resUsageType").value = curUsageType;
+ if (document.getElementById("resShortStayFields")) document.getElementById("resShortStayFields").style.display = (curUsageType === "short") ? "block" : "none";
+ if (document.getElementById("resShortEndDate")) document.getElementById("resShortEndDate").value = r.short_end_date || "";
+ if (document.getElementById("resShortPlanType")) document.getElementById("resShortPlanType").value = r.short_plan_type || "";
+ if (typeof onResidentShortPlanTypeChange === "function") onResidentShortPlanTypeChange(r.short_plan_type || "");
+ if (document.getElementById("resShortPlanOfficeNo")) document.getElementById("resShortPlanOfficeNo").value = r.short_plan_office_no || "";
+ if (document.getElementById("resShortPlanYm")) document.getElementById("resShortPlanYm").value = "";
+ if (document.getElementById("resShortPlanUnitsVal")) document.getElementById("resShortPlanUnitsVal").value = "";
+ if (document.getElementById("resShortEmergencyDoctor")) document.getElementById("resShortEmergencyDoctor").value = r.short_emergency_doctor || "";
+ if (document.getElementById("resShortEmergencyDate")) document.getElementById("resShortEmergencyDate").value = r.short_emergency_date || "";
+ if (document.getElementById("resShortEmergencyConfirmed")) document.getElementById("resShortEmergencyConfirmed").checked = !!r.short_emergency_confirmed;
+ gResidentPlanUnitsTemp = Array.isArray(r.short_plan_units) ? JSON.parse(JSON.stringify(r.short_plan_units)) : [];
+ renderResidentPlanUnitsList();
  document.getElementById("resRoomNo").value = r.room_no || "";
   if (document.getElementById("resUnit")) document.getElementById("resUnit").innerHTML = cpUnitOptionsHtml(r.unit_id, cpUnits().length ? "選んでください" : "区分なし（区分の設定で追加できます）");
  document.getElementById("resName").value = r.name || "";
@@ -3252,6 +3346,11 @@ function submitResidentForm() {
  alert("要介護度を選んでください。");
  return;
  }
+ const usageType = (document.getElementById("resUsageType")?.value || "").trim();
+ if (!usageType) {
+  alert("利用の区分を選んでください。");
+  return;
+ }
  if (cpCanEditPolicy() && !document.getElementById("resPolicyStamp").value) {
  alert("基本方針（緊急搬送・看取りなど）を選んでください。");
  return;
@@ -3304,6 +3403,73 @@ function submitResidentForm() {
    return;
   }
  }
+ let shortEndDate = "";
+ let shortPlanType = "";
+ let shortPlanOfficeNo = "";
+ let shortPlanUnits = [];
+ let shortEmergencyDoctor = "";
+ let shortEmergencyDate = "";
+ let shortEmergencyConfirmed = false;
+
+ if (usageType === "short") {
+  shortEndDate = (document.getElementById("resShortEndDate")?.value || "").trim();
+  const ad = (document.getElementById("resAdmissionDate")?.value || "").trim();
+  if (!shortEndDate) {
+   alert("利用終了予定日を入れてください。");
+   return;
+  }
+  if (ad && shortEndDate < ad) {
+   alert("利用終了予定日は、利用開始日以降の日付を入れてください。");
+   return;
+  }
+  if (ad && shortEndDate) {
+   const dStart = new Date(ad);
+   const dEnd = new Date(shortEndDate);
+   const diffDays = Math.round((dEnd - dStart) / 86400000) + 1;
+   if (diffDays > 30) {
+    alert("短期利用の利用期間はあらかじめ30日以内と定められています（手引き基準）。利用終了予定日を開始日から30日以内の日付にしてください。");
+    return;
+   }
+  }
+
+  shortPlanType = (document.getElementById("resShortPlanType")?.value || "").trim();
+  if (!shortPlanType) {
+   alert("居宅サービス計画作成区分を選んでください。");
+   return;
+  }
+  shortPlanOfficeNo = (document.getElementById("resShortPlanOfficeNo")?.value || "").trim();
+  if (shortPlanType === "1" || shortPlanType === "3") {
+   if (!shortPlanOfficeNo || !/^[A-Za-z0-9]{10}$/.test(shortPlanOfficeNo)) {
+    alert("居宅介護支援事業所等の事業所番号を半角英数字10桁で入れてください。");
+    return;
+   }
+  }
+
+  shortEmergencyDoctor = (document.getElementById("resShortEmergencyDoctor")?.value || "").trim();
+  shortEmergencyDate = (document.getElementById("resShortEmergencyDate")?.value || "").trim();
+  shortEmergencyConfirmed = !!document.getElementById("resShortEmergencyConfirmed")?.checked;
+  shortPlanUnits = Array.isArray(gResidentPlanUnitsTemp) ? JSON.parse(JSON.stringify(gResidentPlanUnitsTemp)) : [];
+
+  // 同じユニットに短期利用の人が同じ日に2人以上いたら警告（手引き: 1ユニット1名。緊急で定員を超える場合はユニットごとに1人まで）
+  const curUnitId = (cpUnitSel && cpUnitSel.value) ? Number(cpUnitSel.value) : null;
+  if (curUnitId !== null && ad && shortEndDate) {
+   const overlaps = (gState.residents || []).filter(other => {
+    if (editId && other.id === parseInt(editId, 10)) return false;
+    if (other.usage_type !== "short") return false;
+    if (cpIsDischarged(other)) return false;
+    if (other.unit_id !== curUnitId) return false;
+    const otherStart = other.admission_date;
+    const otherEnd = other.short_end_date || other.discharge_date || otherStart;
+    if (!otherStart || !otherEnd) return false;
+    return !(shortEndDate < otherStart || ad > otherEnd);
+   });
+   if (overlaps.length > 0) {
+    const names = overlaps.map(o => o.name).join("、");
+    alert(`【注意】同じユニットに利用期間が重複する短期利用の利用者（${names} 様）が登録されています。\n手引き基準: 短期利用は1ユニット原則1名です（緊急時の受入れ等を除く）。`);
+   }
+  }
+ }
+
  const lastNameKana = (document.getElementById("resLastNameKana")?.value || "").trim();
  const firstNameKana = (document.getElementById("resFirstNameKana")?.value || "").trim();
  // [Claude修正] カナはカタカナ（ひらがなも可）と長音だけ。LIFE の書き出しで半角カナにする
@@ -3348,7 +3514,15 @@ function submitResidentForm() {
  temp_max: document.getElementById("resTempMax").value ? parseFloat(document.getElementById("resTempMax").value) : null,
  spo2_min: document.getElementById("resSpo2Min").value ? parseInt(document.getElementById("resSpo2Min").value, 10) : null,
  pulse_max: document.getElementById("resPulseMax").value ? parseInt(document.getElementById("resPulseMax").value, 10) : null,
- pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null
+ pulse_min: document.getElementById("resPulseMin").value ? parseInt(document.getElementById("resPulseMin").value, 10) : null,
+  usage_type: usageType,
+  short_end_date: shortEndDate,
+  short_plan_type: shortPlanType,
+  short_plan_office_no: shortPlanOfficeNo,
+  short_plan_units: shortPlanUnits,
+  short_emergency_doctor: shortEmergencyDoctor,
+  short_emergency_date: shortEmergencyDate,
+  short_emergency_confirmed: shortEmergencyConfirmed
  };
  // [Claude修正 2026-10-18] 変える権限のない欄は、前の値のまま（新しく登録するときは空）にする。ケアプラン目標はカルテの欄から（説明と同意の日を入れるため）
  { const prev = editId ? (gState.residents.find(x => x.id === parseInt(editId)) || {}) : {};
@@ -3366,7 +3540,7 @@ function submitResidentForm() {
  const cpOld = gState.residents[idx];
  gState.residents[idx] = Object.assign({}, gState.residents[idx], residentData);
 
- cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "last_name_kana", "first_name_kana", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min", "insured_no", "insurer_no", "gender", "benefit_rate", "care_start_date", "pre_admission_status", "post_discharge_status"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
+ cpAppendEditHistory(gState.residents[idx], cpOld, ["name", "last_name_kana", "first_name_kana", "room_no", "unit_id", "care_level", "status", "birth_date", "admission_date", "policy_stamp", "emergency_contact", "family_wishes", "life_history", "diseases", "paralysis", "allergies", "diet_type", "oral_state", "dr_instructions", "care_plan_goal", "sensor_alert", "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min", "insured_no", "insurer_no", "gender", "benefit_rate", "care_start_date", "pre_admission_status", "post_discharge_status", "usage_type", "short_end_date", "short_plan_type", "short_plan_office_no", "short_plan_units", "short_emergency_doctor", "short_emergency_date", "short_emergency_confirmed"]); // [Claude修正] 変更前の登録内容を利用者の変更履歴に残す
  }
  } else {
  targetId = Date.now();

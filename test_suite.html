@@ -1586,6 +1586,230 @@
       window.isCurrentStaffAdminOrClerk = origAdmin156;
       window.alert = origAlert156;
 
+      // 34. 短期利用（ショートステイ: サービス種類コード38・39）の単位数計算・加算適用除外・限度額管理・請求ファイル（7175/7176）テスト
+      log("34. 短期利用（ショートステイ）の計算・加算除外・限度額管理・請求ファイルテスト");
+
+      const origSettingsBefore157 = JSON.parse(JSON.stringify(db.data.kasan_settings || {}));
+      const origUnitsBefore157 = JSON.parse(JSON.stringify(db.data.units || []));
+      db.data.units = [{ id: 1, name: "1F" }]; // 1ユニット構成（unit1）
+
+      // Test 157: 基本単位数（38: 要介護1〜5、39: 要支援2）の計算と、夜減・定員超過コードの適用
+      const shortRes157_38 = {
+        id: "test_short_res_157_38",
+        name: "短期テスト要介護3",
+        name_kana: "タンキテストヨウカイゴサン",
+        insured_no: "0000000001",
+        insurer_no: "123456",
+        birth_date: "1940-01-01",
+        gender: "1",
+        care_level: "要介護3",
+        care_start_date: "2026-04-01",
+        care_expiry_date: "2028-03-31",
+        status: "入居中",
+        benefit_rate: 90,
+        usage_type: "short",
+        admission_date: "2026-10-01",
+        short_end_date: "2026-10-15",
+        short_plan_type: "1",
+        short_plan_office_no: "1234567890",
+        short_plan_units: [{ ym: "2026-10", units: 15000 }]
+      };
+      db.data.kasan_settings = {
+        office_no: "1234567890",
+        media_code: "1",
+        region_type: "その他",
+        capacity: 18,
+        shogu_type: "none",
+        taisei_items: {}
+      };
+      const res157_38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
+      assert(res157_38.isShort === true, "Test 157a: 短期利用判定 isShort === true であること");
+      assert(res157_38.items[0].code === "1231" && res157_38.items[0].unit_price === 824 && res157_38.items[0].count === 15, "Test 157b: 要介護3の基本コード38-1231 (824単位) 15日分算定");
+
+      const shortRes157_39 = {
+        id: "test_short_res_157_39",
+        name: "短期テスト要支援2",
+        name_kana: "タンキテストヨウシエンニ",
+        insured_no: "0000000002",
+        insurer_no: "123456",
+        birth_date: "1942-02-02",
+        gender: "2",
+        care_level: "要支援2",
+        care_start_date: "2026-04-01",
+        care_expiry_date: "2028-03-31",
+        status: "入居中",
+        benefit_rate: 90,
+        usage_type: "short",
+        admission_date: "2026-10-01",
+        short_end_date: "2026-10-10",
+        short_plan_type: "3",
+        short_plan_office_no: "1234567890",
+        short_plan_units: [{ ym: "2026-10", units: 5000 }]
+      };
+      const res157_39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
+      assert(res157_39.items[0].code === "1221" && res157_39.items[0].unit_price === 442 && res157_39.items[0].count === 10, "Test 157c: 要支援2の基本コード39-1221 (442単位) 10日分算定");
+
+      // 夜勤減算コード（前月の夜勤人員不足確定あり）
+      db.data.kasan_settings.night_shortage = { "2026-09": { confirmed: true, condition_met: true } };
+      const res157_night38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
+      assert(res157_night38.items[0].code === "1233" && res157_night38.items[0].unit_price === 799, "Test 157d: 要介護3 短期夜勤減算コード 1233 (799単位)");
+      const res157_night39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
+      assert(res157_night39.items[0].code === "1223" && res157_night39.items[0].unit_price === 429, "Test 157e: 要支援2 短期夜勤減算コード 1223 (429単位)");
+      db.data.kasan_settings.night_shortage = {};
+
+      // 定員超過コード（前月の定員超過確定あり）
+      db.data.kasan_settings.capacity_excess = { "2026-09": { confirmed: true, is_excess: true } };
+      const res157_cap38 = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
+      assert(res157_cap38.items[0].code === "8121" && res157_cap38.items[0].unit_price === 577, "Test 157f: 要介護3 短期定員超過コード 8121 (577単位)");
+      const res157_cap39 = cpComputeMonthlyKasan(shortRes157_39, "2026-10");
+      assert(res157_cap39.items[0].code === "8111" && res157_cap39.items[0].unit_price === 309, "Test 157g: 要支援2 短期定員超過コード 8111 (309単位)");
+      db.data.kasan_settings.capacity_excess = {};
+
+      // Test 158: 短期利用対象外の加算（初期加算・入院時加算・看取り・退所時相談・LIFE加算）が除外されること
+      const shortRes158 = Object.assign({}, shortRes157_38, {
+        admission_date: "2026-10-01",
+        short_end_date: "2026-10-20"
+      });
+      db.data.kasan_settings.initial_kasan = true;
+      db.data.kasan_settings.taisei_items = {
+        scientific_life: { option_key: "1", notified_date: "2026-04-01" }
+      };
+      const res158 = cpComputeMonthlyKasan(shortRes158, "2026-10");
+      assert(!res158.items.some(d => d.code === "1550"), "Test 158a: 短期利用では初期加算（1550）が算定されないこと");
+      assert(!res158.items.some(d => d.code === "6400"), "Test 158b: 短期利用では入院時費用（6400）が算定されないこと");
+      assert(!res158.items.some(d => d.code === "6350"), "Test 158c: 短期利用では看取り介護加算が算定されないこと");
+      assert(!res158.items.some(d => d.code === "6370"), "Test 158d: 短期利用では退所時相談援助加算が算定されないこと");
+      assert(!res158.items.some(d => d.code === "6361"), "Test 158e: 短期利用ではLIFE加算（6361）が算定されないこと");
+      db.data.kasan_settings.initial_kasan = false;
+      db.data.kasan_settings.taisei_items = {};
+
+      // Test 159: 認知症行動・心理症状緊急対応加算（6121、200単位/日）が入所日から7日目まで算定され、8日目以降は付かないこと
+      const shortRes159 = {
+        id: "test_short_res_159",
+        name: "短期テストBPSD",
+        name_kana: "タンキテストビーピーエスディー",
+        care_level: "要介護3",
+        status: "入居中",
+        usage_type: "short",
+        admission_date: "2026-10-01",
+        short_end_date: "2026-10-15",
+        short_emergency_doctor: "山田医師",
+        short_emergency_date: "2026-10-01",
+        short_emergency_confirmed: true,
+        short_plan_type: "1",
+        short_plan_office_no: "1234567890",
+        short_plan_units: [{ ym: "2026-10", units: 20000 }]
+      };
+      const res159 = cpComputeMonthlyKasan(shortRes159, "2026-10");
+      const bpsd159 = res159.items.find(d => d.code === "6121");
+      assert(bpsd159 && bpsd159.count === 7 && bpsd159.unit_price === 200 && bpsd159.subtotal === 1400, "Test 159a: 認知症行動・心理症状緊急対応加算（6121）が入所日より最大7日分算定されること");
+
+      const shortRes159_short = Object.assign({}, shortRes159, { short_end_date: "2026-10-04" });
+      const res159_short = cpComputeMonthlyKasan(shortRes159_short, "2026-10");
+      const bpsd159_short = res159_short.items.find(d => d.code === "6121");
+      assert(bpsd159_short && bpsd159_short.count === 4 && bpsd159_short.subtotal === 800, "Test 159b: 滞在が4日間の場合は4日分算定されること");
+
+      const shortRes159_unconfirmed = Object.assign({}, shortRes159, { short_emergency_confirmed: false });
+      const res159_unconf = cpComputeMonthlyKasan(shortRes159_unconfirmed, "2026-10");
+      assert(!res159_unconf.items.some(d => d.code === "6121"), "Test 159c: 確認フラグがオフのときは緊急対応加算が算定されないこと");
+
+      // Test 160: 請求ファイル様式第六の五（7175）/ 六（7176）基本情報レコード（01）
+      const origCsvAdminPerm = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => true;
+
+      gKasanCsvValidationResult = {
+        ym: "2026-10",
+        settings: {
+          office_no: "1234567890",
+          media_code: "1",
+          region_type: "その他"
+        },
+        officeErrors: [],
+        candidates: [
+          { resident: shortRes157_38, calc: res157_38, validation: { valid: true, errors: [] } },
+          { resident: shortRes157_39, calc: res157_39, validation: { valid: true, errors: [] } }
+        ],
+        eligibleCount: 2,
+        ineligibleCount: 0
+      };
+      generateKasanCsvFile();
+      const csvLines160 = (gKasanGeneratedCsvText || "").split("\r\n");
+
+      // 7175 レコード01
+      const line160_7175 = csvLines160.find(l => l.includes(",7175,01,"));
+      assert(line160_7175 !== undefined, "Test 160a: CSVに様式7175レコード01が存在すること");
+      const f160_7175 = (line160_7175 || "").split(",").slice(2);
+      assert(f160_7175[0] === "7175" && f160_7175[18] === "1" && f160_7175[19] === "1234567890", "Test 160b: 7175レコード01の区分（項目19）= 1、事業所番号（項目20）= 1234567890");
+      assert(f160_7175[22] === "" && f160_7175[25] === "" && f160_7175[26] === "" && f160_7175[27] === "", "Test 160c: 7175レコード01の項目23（入所前状況）および26〜28（入院退所）が空欄であること");
+
+      // 7176 レコード01
+      const line160_7176 = csvLines160.find(l => l.includes(",7176,01,"));
+      assert(line160_7176 !== undefined, "Test 160d: CSVに様式7176レコード01が存在すること");
+      const f160_7176 = (line160_7176 || "").split(",").slice(2);
+      assert(f160_7176[0] === "7176" && f160_7176[18] === "3" && f160_7176[22] === "", "Test 160e: 7176レコード01の様式コード・区分（3）・項目23空欄が正常であること");
+
+      // Test 161: 請求ファイル明細情報レコード（10）の項目8〜11
+      const line161_10 = csvLines160.find(l => l.includes(",7175,10,"));
+      assert(line161_10 !== undefined, "Test 161a: CSVに様式7175レコード10が存在すること");
+      const f161_10 = (line161_10 || "").split(",").slice(2);
+      assert(f161_10[7] === "15" && f161_10[8] === "15000", "Test 161b: 7175レコード10の項目8基本日数=15、項目9計画単位数=15000");
+      assert(parseInt(f161_10[9], 10) === 12360, "Test 161c: 7175レコード10の項目10限度額管理対象単位数=12360");
+      assert(parseInt(f161_10[10], 10) === 0, "Test 161d: 加算未設定時の項目11限度額管理対象外単位数=0");
+
+      // サービス提供体制強化＋処遇改善加算がある場合の対象外単位数の計算検証
+      db.data.kasan_settings.shogu_type = "1_a";
+      db.data.kasan_settings.taisei_items = { service_supply: { option_key: "1", notified_date: "2026-04-01" } };
+      const res161_addons = cpComputeMonthlyKasan(shortRes157_38, "2026-10");
+      gKasanCsvValidationResult = {
+        ym: "2026-10",
+        settings: {
+          office_no: "1234567890",
+          media_code: "1",
+          region_type: "その他"
+        },
+        officeErrors: [],
+        candidates: [
+          { resident: shortRes157_38, calc: res161_addons, validation: { valid: true, errors: [] } }
+        ],
+        eligibleCount: 1,
+        ineligibleCount: 0
+      };
+      generateKasanCsvFile();
+      const csvLines161_addons = (gKasanGeneratedCsvText || "").split("\r\n");
+      const line161_addons_10 = csvLines161_addons.find(l => l.includes(",7175,10,"));
+      const f161_addons_10 = (line161_addons_10 || "").split(",").slice(2);
+      assert(parseInt(f161_addons_10[10], 10) === 2995, "Test 161e: サ提供強化加算＋処遇改善加算が項目11（対象外単位数: 2995単位）に正しく集計されること");
+
+      window.isCurrentStaffAdminOrClerk = origCsvAdminPerm;
+
+      // Test 162: 区分支給限度基準額の超過判定・警告
+      db.data.kasan_settings.shogu_type = "none";
+      db.data.kasan_settings.taisei_items = {};
+      const shortRes162_over = Object.assign({}, shortRes157_38, {
+        short_plan_units: [{ ym: "2026-10", units: 10000 }]
+      });
+      const res162_over = cpComputeMonthlyKasan(shortRes162_over, "2026-10");
+      assert(res162_over.isLimitExceeded === true && res162_over.excessUnits === 2360, "Test 162a: 管理対象単位数が計画単位数を超過したとき isLimitExceeded === true, excessUnits = 2360");
+
+      const shortRes162_under = Object.assign({}, shortRes157_38, {
+        short_plan_units: [{ ym: "2026-10", units: 15000 }]
+      });
+      const res162_under = cpComputeMonthlyKasan(shortRes162_under, "2026-10");
+      assert(res162_under.isLimitExceeded === false && res162_under.excessUnits === 0, "Test 162b: 限度額内のときは isLimitExceeded === false, excessUnits = 0");
+
+      const shortRes162_noplan = Object.assign({}, shortRes157_38, { short_plan_units: [] });
+      const res162_noplan = cpComputeMonthlyKasan(shortRes162_noplan, "2026-10");
+      assert(res162_noplan.isLimitExceeded === false && res162_noplan.planUnits === 0, "Test 162c: 計画単位数未設定時は超過判定なし（planUnits === 0）");
+
+      // Test 163: LIFE評価対象月判定からの除外 & 利用者モーダルチェック
+      assert(cpIsLifeAssessmentRequiredMonth(shortRes157_38, "2026-10") === false, "Test 163a: 短期利用者はLIFE評価対象月から除外されること（false）");
+      assert(typeof onResidentUsageTypeChange === "function" && typeof onResidentShortPlanTypeChange === "function", "Test 163b: 短期利用UI連動関数（onResidentUsageTypeChange, onResidentShortPlanTypeChange）が存在すること");
+      assert(typeof renderResidentPlanUnitsList === "function" && typeof addResidentPlanUnitsRow === "function" && typeof deleteResidentPlanUnit === "function", "Test 163c: 短期利用計画単位数リスト管理関数が存在すること");
+
+      // 設定およびユニット構成を元に戻す
+      db.data.kasan_settings = origSettingsBefore157;
+      db.data.units = origUnitsBefore157;
+
       // 33. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
