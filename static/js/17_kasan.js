@@ -31,6 +31,165 @@ const CP_KASAN_SHOGU_DEFS = {
   "4": { code: "6380", rate: 149, name: "介護職員等処遇改善加算（Ⅳ）" }
 };
 
+// 令和８年度特例要件（老発0313第６号、令和8年3月13日）
+// 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの要件判定テーブル（別紙1 令和8年6月以降）
+const CP_SHOGU_RO_SERVICE_TABLES = {
+  table_1_2: {
+    id: "table_1_2",
+    name: "別紙1 表1-2（訪問系・通所系サービス）",
+    allowed: ["careplan", "social_welfare"],
+    allowedLabels: ["（ア）ケアプランデータ連携システム", "（ウ）社会福祉連携推進法人"],
+    services: [
+      "訪問介護",
+      "夜間対応型訪問介護",
+      "定期巡回・随時対応型訪問介護看護",
+      "（介護予防）訪問入浴介護",
+      "通所介護",
+      "地域密着型通所介護",
+      "（介護予防）通所リハビリテーション",
+      "（介護予防）認知症対応型通所介護"
+    ]
+  },
+  table_1_3: {
+    id: "table_1_3",
+    name: "別紙1 表1-3（多機能系・短期入所系サービス）",
+    allowed: ["careplan", "productivity", "social_welfare"],
+    allowedLabels: ["（ア）ケアプランデータ連携システム", "（イ）生産性向上推進体制加算", "（ウ）社会福祉連携推進法人"],
+    services: [
+      "（介護予防）小規模多機能型居宅介護",
+      "看護小規模多機能型居宅介護",
+      "（介護予防）短期入所生活介護",
+      "（介護予防）短期入所療養介護（老健・病院等・医療院）"
+    ]
+  },
+  table_1_4: {
+    id: "table_1_4",
+    name: "別紙1 表1-4（施設系・居住系サービス）",
+    allowed: ["productivity", "social_welfare"],
+    allowedLabels: ["（イ）生産性向上推進体制加算", "（ウ）社会福祉連携推進法人"],
+    services: [
+      "（介護予防）特定施設入居者生活介護",
+      "地域密着型特定施設入居者生活介護",
+      "（介護予防）認知症対応型共同生活介護",
+      "介護老人福祉施設",
+      "地域密着型介護老人福祉施設",
+      "介護老人保健施設",
+      "介護医療院"
+    ]
+  }
+};
+
+// 現在の事業所のサービス区分（定数で管理し切り替え可能）
+// 規定値: （介護予防）認知症対応型共同生活介護（別紙1 表1-4）
+let CP_CURRENT_SERVICE_TYPE = "（介護予防）認知症対応型共同生活介護";
+
+function cpGetCurrentServiceType() {
+  return (typeof window !== "undefined" && window.CP_CURRENT_SERVICE_TYPE) || CP_CURRENT_SERVICE_TYPE;
+}
+
+function cpSetCurrentServiceType(serviceType) {
+  if (serviceType) {
+    CP_CURRENT_SERVICE_TYPE = serviceType;
+    if (typeof window !== "undefined") {
+      window.CP_CURRENT_SERVICE_TYPE = serviceType;
+    }
+  }
+}
+
+function cpGetShoguRoTableForService(serviceType) {
+  const st = serviceType || cpGetCurrentServiceType();
+  for (const key of ["table_1_2", "table_1_3", "table_1_4"]) {
+    const tbl = CP_SHOGU_RO_SERVICE_TABLES[key];
+    if (tbl.services.includes(st)) return tbl;
+  }
+  for (const key of ["table_1_2", "table_1_3", "table_1_4"]) {
+    const tbl = CP_SHOGU_RO_SERVICE_TABLES[key];
+    if (tbl.services.some(s => st && (st.includes(s) || s.includes(st)))) return tbl;
+  }
+  return CP_SHOGU_RO_SERVICE_TABLES.table_1_4;
+}
+
+function cpCheckShoguRoRequirements(settings, serviceType) {
+  const s = settings || cpGetKasanSettings();
+  const st = serviceType || cpGetCurrentServiceType();
+  const tbl = cpGetShoguRoTableForService(st);
+  const shoguType = s.shogu_type || "";
+  const isRo = (shoguType === "1_b" || shoguType === "2_b");
+
+  if (!isRo) {
+    return {
+      isRo: false,
+      isSatisfied: true,
+      isPledged: false,
+      serviceType: st,
+      table: tbl,
+      allowed: tbl.allowed,
+      allowedLabels: tbl.allowedLabels,
+      satisfiedAllowed: [],
+      satisfiedDisallowed: []
+    };
+  }
+
+  // （ア）ケアプランデータ連携システム
+  const careplanUsing = (s.careplan_link === "using");
+  const careplanPledged = (s.careplan_link === "pledged");
+  const careplanMet = (careplanUsing || careplanPledged);
+
+  // （イ）生産性向上推進体制加算（Ⅰ又はⅡ算定）
+  const prodTaiseiKey = (s.taisei_items && s.taisei_items.productivity && s.taisei_items.productivity.option_key) || "";
+  const prodNotified = (prodTaiseiKey === "1" || prodTaiseiKey === "2");
+  const prodPledged = (s.productivity_pledge === "pledged");
+  const prodMet = (prodNotified || prodPledged);
+
+  // （ウ）社会福祉連携推進法人
+  const socialJoined = (s.social_welfare === "joined");
+  const socialPledged = (s.social_welfare === "pledged");
+  const socialMet = (socialJoined || socialPledged);
+
+  const satisfiedAllowed = [];
+  const satisfiedDisallowed = [];
+
+  if (careplanMet) {
+    if (tbl.allowed.includes("careplan")) satisfiedAllowed.push("careplan");
+    else satisfiedDisallowed.push("careplan");
+  }
+  if (prodMet) {
+    if (tbl.allowed.includes("productivity")) satisfiedAllowed.push("productivity");
+    else satisfiedDisallowed.push("productivity");
+  }
+  if (socialMet) {
+    if (tbl.allowed.includes("social_welfare")) satisfiedAllowed.push("social_welfare");
+    else satisfiedDisallowed.push("social_welfare");
+  }
+
+  const isSatisfied = (satisfiedAllowed.length > 0);
+
+  // 誓約中（配慮措置）により満たしているか
+  let hasFormalAllowed = false;
+  if (tbl.allowed.includes("careplan") && careplanUsing) hasFormalAllowed = true;
+  if (tbl.allowed.includes("productivity") && prodNotified) hasFormalAllowed = true;
+  if (tbl.allowed.includes("social_welfare") && socialJoined) hasFormalAllowed = true;
+
+  const isPledged = (isSatisfied && !hasFormalAllowed);
+
+  return {
+    isRo: true,
+    isSatisfied: isSatisfied,
+    isPledged: isPledged,
+    serviceType: st,
+    table: tbl,
+    allowed: tbl.allowed,
+    allowedLabels: tbl.allowedLabels,
+    satisfiedAllowed: satisfiedAllowed,
+    satisfiedDisallowed: satisfiedDisallowed,
+    details: {
+      careplan: { using: careplanUsing, pledged: careplanPledged, met: careplanMet, allowed: tbl.allowed.includes("careplan") },
+      productivity: { notified: prodNotified, pledged: prodPledged, met: prodMet, allowed: tbl.allowed.includes("productivity") },
+      social_welfare: { joined: socialJoined, pledged: socialPledged, met: socialMet, allowed: tbl.allowed.includes("social_welfare") }
+    }
+  };
+}
+
 // 減算基本サービスコード表（WAMサービスコード表 令和8年6月・8月版準拠）
 const CP_KASAN_REDUCED_BASIC_CODES = {
   unit1: {
@@ -322,6 +481,10 @@ const CP_KASAN_REGION_RATES = [
 ];
 
 const CP_KASAN_SOURCES = [
+  {
+    label: "厚生労働省老健局長通知「介護職員等処遇改善加算に関する基本的考え方並びに事務処理手順及び様式例の提示について（令和８年度分）」（老発0313第６号、令和8年3月13日）別紙1「令和８年度特例要件」",
+    url: "https://www.mhlw.go.jp/shogu-kaizen/download/6_tsuuchi_kihontekikangaekata_jimushoritejun.pdf"
+  },
   {
     label: "市川市 運営の手引き「処遇改善加算: 基本単位に加算減算を加えた単位数の1000分の210に相当する単位数」",
     url: "https://www.city.ichikawa.lg.jp/uploaded/attachment/55858.pdf"
@@ -990,6 +1153,12 @@ function cpGetKasanSettings() {
     region_type: raw.region_type || "",
     capacity: (raw.capacity !== undefined && raw.capacity !== null && raw.capacity !== "") ? parseInt(raw.capacity, 10) : "",
     shogu_type: raw.shogu_type || "",
+    careplan_link: raw.careplan_link || "",
+    careplan_link_pledged_date: raw.careplan_link_pledged_date || "",
+    productivity_pledge: raw.productivity_pledge || "",
+    productivity_pledged_date: raw.productivity_pledged_date || "",
+    social_welfare: raw.social_welfare || "",
+    social_welfare_pledged_date: raw.social_welfare_pledged_date || "",
     night_shortage: Object.assign({}, raw.night_shortage || {}),
     capacity_excess: Object.assign({}, raw.capacity_excess || {}),
     staff_shortage: Array.isArray(raw.staff_shortage) ? raw.staff_shortage.slice() : [],
@@ -1360,6 +1529,8 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     if (shoguDef) {
       const sumOtherUnits = items.reduce((sum, it) => sum + (it.candidate ? 0 : it.subtotal), 0);
       const shoguUnits = cpComputeShoguUnits(sumOtherUnits, shoguDef.rate);
+      const residentRoCheck = cpCheckShoguRoRequirements(settings);
+      const isPledgedNote = (residentRoCheck.isRo && residentRoCheck.isPledged) ? "誓約中（令和8年度の配慮措置） " : "";
       items.push({
         category: "体制加算",
         code: shoguDef.code,
@@ -1368,7 +1539,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         count: 1,
         unit_label: "月",
         subtotal: shoguUnits,
-        note: `他算定合計 ${sumOtherUnits}単位 × ${shoguDef.rate}/1000`
+        note: `${isPledgedNote}他算定合計 ${sumOtherUnits}単位 × ${shoguDef.rate}/1000`
       });
     }
   }
@@ -1475,6 +1646,17 @@ function renderOfficeKasanTab() {
     }
     if (unassessedLifeCount > 0) {
       warningItems.push(`<div style="margin-bottom:4px;">[警告] <strong>科学的介護推進体制加算</strong>: LIFE の評価が未入力: ${unassessedLifeCount}名（算定には厚生労働省への提出が必要です。合計からは外していません）</div>`);
+    }
+  }
+
+  // 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの特例要件警告
+  const roCheck = cpCheckShoguRoRequirements(settings);
+  if (roCheck.isRo) {
+    const shoguDef = CP_KASAN_SHOGU_DEFS[settings.shogu_type];
+    if (!roCheck.isSatisfied) {
+      warningItems.push(`<div style="margin-bottom:4px;">[警告] <strong>処遇改善加算（${escapeHtml(shoguDef ? shoguDef.name : "")}）の要件未充足</strong>: 令和8年度特例要件（ロ）を満たしていません。現在のサービス区分（${escapeHtml(roCheck.serviceType)}）で対象となる要件（${roCheck.allowedLabels.join("、")}）を確認してください（合計からは外していません。外すかは市町村の判断となります）。</div>`);
+    } else if (roCheck.isPledged) {
+      warningItems.push(`<div style="margin-bottom:4px;">[注意] <strong>処遇改善加算（${escapeHtml(shoguDef ? shoguDef.name : "")}）</strong>: 誓約中（令和8年度の配慮措置）により算定しています。</div>`);
     }
   }
 
@@ -1783,6 +1965,21 @@ function openKasanSettingsModal() {
   const shoguEl = document.getElementById("kasanShoguSelect");
   if (shoguEl) shoguEl.value = settings.shogu_type || "";
 
+  const careplanEl = document.getElementById("kasanCareplanLink");
+  if (careplanEl) careplanEl.value = settings.careplan_link || "";
+  const careplanDateEl = document.getElementById("kasanCareplanLinkPledgedDate");
+  if (careplanDateEl) careplanDateEl.value = settings.careplan_link_pledged_date || "";
+
+  const prodPledgeEl = document.getElementById("kasanProductivityPledge");
+  if (prodPledgeEl) prodPledgeEl.value = settings.productivity_pledge || "";
+  const prodPledgeDateEl = document.getElementById("kasanProductivityPledgedDate");
+  if (prodPledgeDateEl) prodPledgeDateEl.value = settings.productivity_pledged_date || "";
+
+  const socialEl = document.getElementById("kasanSocialWelfare");
+  if (socialEl) socialEl.value = settings.social_welfare || "";
+  const socialDateEl = document.getElementById("kasanSocialWelfarePledgedDate");
+  if (socialDateEl) socialDateEl.value = settings.social_welfare_pledged_date || "";
+
   const regSel = document.getElementById("kasanRegionSelect");
   if (regSel) {
     regSel.innerHTML = `<option value="">選んでください</option>` + CP_KASAN_REGION_RATES.map(r => `
@@ -2018,6 +2215,13 @@ function saveKasanSettings() {
   const capVal = capValRaw ? parseInt(capValRaw, 10) : "";
   const shoguVal = (document.getElementById("kasanShoguSelect")?.value || "").trim();
 
+  const careplanVal = (document.getElementById("kasanCareplanLink")?.value || "").trim();
+  const careplanDateVal = (document.getElementById("kasanCareplanLinkPledgedDate")?.value || "").trim();
+  const prodPledgeVal = (document.getElementById("kasanProductivityPledge")?.value || "").trim();
+  const prodPledgeDateVal = (document.getElementById("kasanProductivityPledgedDate")?.value || "").trim();
+  const socialVal = (document.getElementById("kasanSocialWelfare")?.value || "").trim();
+  const socialDateVal = (document.getElementById("kasanSocialWelfarePledgedDate")?.value || "").trim();
+
   let kasanError = "";
   if (capValRaw && (isNaN(capVal) || capVal <= 0)) {
     kasanError = "利用定員は1以上の数値を入力してください。";
@@ -2032,6 +2236,12 @@ function saveKasanSettings() {
     region_type: (document.getElementById("kasanRegionSelect")?.value || "").trim(),
     capacity: capVal,
     shogu_type: shoguVal,
+    careplan_link: careplanVal,
+    careplan_link_pledged_date: careplanDateVal,
+    productivity_pledge: prodPledgeVal,
+    productivity_pledged_date: prodPledgeDateVal,
+    social_welfare: socialVal,
+    social_welfare_pledged_date: socialDateVal,
     night_shortage: curSettings.night_shortage || {},
     capacity_excess: curSettings.capacity_excess || {},
     staff_shortage: curSettings.staff_shortage || [],
@@ -2054,6 +2264,28 @@ function saveKasanSettings() {
       notified_date: notifDate
     };
   });
+
+  // 誓約中の誓約日チェック（未来日は不可）
+  if (!kasanError && careplanVal === "pledged" && !careplanDateVal) {
+    kasanError = "ケアプランデータ連携システムの誓約した日を入力してください。";
+  }
+  if (!kasanError && careplanDateVal && careplanDateVal > kasanToday) {
+    kasanError = "ケアプランデータ連携システムの誓約した日に先の日付は入れられません。";
+  }
+
+  if (!kasanError && prodPledgeVal === "pledged" && !prodPledgeDateVal) {
+    kasanError = "生産性向上推進体制加算の誓約した日を入力してください。";
+  }
+  if (!kasanError && prodPledgeDateVal && prodPledgeDateVal > kasanToday) {
+    kasanError = "生産性向上推進体制加算の誓約した日に先の日付は入れられません。";
+  }
+
+  if (!kasanError && socialVal === "pledged" && !socialDateVal) {
+    kasanError = "社会福祉連携推進法人の誓約した日を入力してください。";
+  }
+  if (!kasanError && socialDateVal && socialDateVal > kasanToday) {
+    kasanError = "社会福祉連携推進法人の誓約した日に先の日付は入れられません。";
+  }
 
   // [Claude修正] 加算どうしの決まり
   if (!kasanError) {
@@ -2085,6 +2317,14 @@ function saveKasanSettings() {
   });
 
   if (kasanError) { alert(kasanError); return; }
+
+  // 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの特例要件チェック（警告のみ。保存は止めない）
+  if (shoguVal === "1_b" || shoguVal === "2_b") {
+    const roCheck = cpCheckShoguRoRequirements(nextSettings);
+    if (!roCheck.isSatisfied) {
+      alert("処遇改善加算（" + (CP_KASAN_SHOGU_DEFS[shoguVal]?.name || "") + "）のロの要件を満たしていません。確かめてください。\n現在のサービス区分（" + cpGetCurrentServiceType() + "）で対象となる要件:\n" + roCheck.allowedLabels.join("、"));
+    }
+  }
 
   // 変更の有無をチェック（無変更時は履歴を増やさない）
     const normTaisei = (raw) => {
@@ -2119,6 +2359,12 @@ function saveKasanSettings() {
     region_type: curSettings.region_type || "",
     capacity: (curSettings.capacity !== "" && curSettings.capacity !== undefined && curSettings.capacity !== null) ? Number(curSettings.capacity) : "",
     shogu_type: curSettings.shogu_type || "",
+    careplan_link: curSettings.careplan_link || "",
+    careplan_link_pledged_date: curSettings.careplan_link_pledged_date || "",
+    productivity_pledge: curSettings.productivity_pledge || "",
+    productivity_pledged_date: curSettings.productivity_pledged_date || "",
+    social_welfare: curSettings.social_welfare || "",
+    social_welfare_pledged_date: curSettings.social_welfare_pledged_date || "",
     taisei_items: normTaisei(curSettings.taisei_items),
     gensan_items: normGensan(curSettings.gensan_items)
   });
@@ -2128,6 +2374,12 @@ function saveKasanSettings() {
     region_type: nextSettings.region_type || "",
     capacity: (nextSettings.capacity !== "" && nextSettings.capacity !== undefined && nextSettings.capacity !== null) ? Number(nextSettings.capacity) : "",
     shogu_type: nextSettings.shogu_type || "",
+    careplan_link: nextSettings.careplan_link || "",
+    careplan_link_pledged_date: nextSettings.careplan_link_pledged_date || "",
+    productivity_pledge: nextSettings.productivity_pledge || "",
+    productivity_pledged_date: nextSettings.productivity_pledged_date || "",
+    social_welfare: nextSettings.social_welfare || "",
+    social_welfare_pledged_date: nextSettings.social_welfare_pledged_date || "",
     taisei_items: normTaisei(nextSettings.taisei_items),
     gensan_items: normGensan(nextSettings.gensan_items)
   });
@@ -2914,6 +3166,12 @@ function downloadGeneratedKasanCsv() {
 
 
 // グローバル公開
+window.CP_SHOGU_RO_SERVICE_TABLES = CP_SHOGU_RO_SERVICE_TABLES;
+window.CP_CURRENT_SERVICE_TYPE = CP_CURRENT_SERVICE_TYPE;
+window.cpGetCurrentServiceType = cpGetCurrentServiceType;
+window.cpSetCurrentServiceType = cpSetCurrentServiceType;
+window.cpGetShoguRoTableForService = cpGetShoguRoTableForService;
+window.cpCheckShoguRoRequirements = cpCheckShoguRoRequirements;
 window.CP_KASAN_BASIC_CODES = CP_KASAN_BASIC_CODES;
 window.CP_KASAN_RESIDENT_DEFS = CP_KASAN_RESIDENT_DEFS;
 window.CP_KASAN_TAISEI_DEFS = CP_KASAN_TAISEI_DEFS;

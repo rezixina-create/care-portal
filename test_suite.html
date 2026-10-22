@@ -1453,6 +1453,138 @@
       assert(newLogCount === origLogCount + 1 && (db.data.settings_logs[newLogCount - 1].kind || "").includes("LIFE"), "Test 146: LIFE CSV 書き出し時に settings_logs へ出力履歴が記録されること");
       db.data.kasan_settings.office_no = origOfficeNo;
 
+      // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
+      log("33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロ特例要件の判定・警告・誓約中テスト");
+
+      // Test 147: 定数・テーブル定義の確認（別紙1 表1-2, 表1-3, 表1-4）
+      assert(CP_SHOGU_RO_SERVICE_TABLES.table_1_2.allowed.includes("careplan") && !CP_SHOGU_RO_SERVICE_TABLES.table_1_2.allowed.includes("productivity"), "Test 147a: 表1-2はケアプランデータ連携のみ（生産性向上は不可）");
+      assert(CP_SHOGU_RO_SERVICE_TABLES.table_1_3.allowed.includes("careplan") && CP_SHOGU_RO_SERVICE_TABLES.table_1_3.allowed.includes("productivity"), "Test 147b: 表1-3はケアプラン連携・生産性向上ともに可");
+      assert(!CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("careplan") && CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("productivity"), "Test 147c: 表1-4は生産性向上のみ（ケアプラン連携は不可）");
+      assert(CP_SHOGU_RO_SERVICE_TABLES.table_1_2.allowed.includes("social_welfare") && CP_SHOGU_RO_SERVICE_TABLES.table_1_4.allowed.includes("social_welfare"), "Test 147d: 社会福祉連携推進法人は全表共通で利用可");
+
+      // Test 148: グループホーム（表1-4）で生産性向上推進体制加算（ⅠまたはⅡ）届出あり → 警告なし
+      cpSetCurrentServiceType("（介護予防）認知症対応型共同生活介護");
+      const st148 = {
+        shogu_type: "1_b",
+        careplan_link: "none",
+        social_welfare: "none",
+        productivity_pledge: "none",
+        taisei_items: { productivity: { option_key: "1", notified_date: "2026-04-01" } }
+      };
+      const res148 = cpCheckShoguRoRequirements(st148);
+      assert(res148.isRo === true && res148.isSatisfied === true && res148.isPledged === false, "Test 148: GHで生産性向上体制加算届出ありは要件充足・誓約なし判定");
+
+      // Test 149: グループホーム（表1-4）で社会福祉連携推進法人所属あり → 警告なし
+      const st149 = {
+        shogu_type: "2_b",
+        careplan_link: "none",
+        social_welfare: "joined",
+        productivity_pledge: "none",
+        taisei_items: {}
+      };
+      const res149 = cpCheckShoguRoRequirements(st149);
+      assert(res149.isRo === true && res149.isSatisfied === true && res149.isPledged === false, "Test 149: GHで社会福祉連携推進法人所属ありは要件充足");
+
+      // Test 150: グループホーム（表1-4）でケアプランデータ連携のみ（GHでは対象外） → 警告あり（要件未充足）
+      const st150 = {
+        shogu_type: "1_b",
+        careplan_link: "using",
+        social_welfare: "none",
+        productivity_pledge: "none",
+        taisei_items: {}
+      };
+      const res150 = cpCheckShoguRoRequirements(st150);
+      assert(res150.isRo === true && res150.isSatisfied === false && res150.satisfiedDisallowed.includes("careplan"), "Test 150: GHでケアプラン連携のみは対象外のため要件未充足（警告対象）");
+
+      // Test 151: グループホームで何も満たしていない場合 → 要件未充足（警告対象）
+      const st151 = {
+        shogu_type: "1_b",
+        careplan_link: "none",
+        social_welfare: "none",
+        productivity_pledge: "none",
+        taisei_items: {}
+      };
+      const res151 = cpCheckShoguRoRequirements(st151);
+      assert(res151.isRo === true && res151.isSatisfied === false, "Test 151: 何も要件を満たしていない場合は要件未充足");
+
+      // Test 152: グループホームで生産性向上推進体制加算「誓約中」 → 要件充足かつ誓約中（令和8年度の配慮措置）
+      const st152 = {
+        shogu_type: "1_b",
+        careplan_link: "none",
+        social_welfare: "none",
+        productivity_pledge: "pledged",
+        productivity_pledged_date: "2026-06-01",
+        taisei_items: {}
+      };
+      const res152 = cpCheckShoguRoRequirements(st152);
+      assert(res152.isRo === true && res152.isSatisfied === true && res152.isPledged === true, "Test 152: 誓約中により要件充足（配慮措置）と判定");
+
+      // Test 153: イ・ロ以外（（Ⅰ）イ・（Ⅱ）イ・（Ⅲ）・（Ⅳ）・届出なし）ではロの要件チェック不要（isRo: false）
+      assert(cpCheckShoguRoRequirements({ shogu_type: "1_a" }).isRo === false, "Test 153a: 1_aはisRo: false");
+      assert(cpCheckShoguRoRequirements({ shogu_type: "2_a" }).isRo === false, "Test 153b: 2_aはisRo: false");
+      assert(cpCheckShoguRoRequirements({ shogu_type: "3" }).isRo === false, "Test 153c: 3はisRo: false");
+      assert(cpCheckShoguRoRequirements({ shogu_type: "4" }).isRo === false, "Test 153d: 4はisRo: false");
+      assert(cpCheckShoguRoRequirements({ shogu_type: "none" }).isRo === false, "Test 153e: noneはisRo: false");
+
+      // Test 154: サービス区分を「通所介護」（表1-2）に切り替えると、ケアプランデータ連携のみで要件充足
+      cpSetCurrentServiceType("通所介護");
+      const res154 = cpCheckShoguRoRequirements(st150, "通所介護");
+      assert(res154.isRo === true && res154.isSatisfied === true, "Test 154: 通所介護ではケアプランデータ連携のみで要件充足判定");
+      cpSetCurrentServiceType("（介護予防）認知症対応型共同生活介護"); // 元に戻す
+
+      // Test 155: 権限チェック（介護職員は設定を開けず、保存も弾かれる）
+      const origStaffAdmin = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => false;
+      let alertMsg155 = "";
+      const origAlert155 = window.alert;
+      window.alert = (msg) => { alertMsg155 = msg; };
+      openKasanSettingsModal();
+      assert(alertMsg155.includes("管理者および事務員"), "Test 155a: 介護職員は設定モーダルを開けない");
+      alertMsg155 = "";
+      saveKasanSettings();
+      assert(alertMsg155.includes("管理者および事務員"), "Test 155b: 介護職員は設定保存を実行できない");
+      window.isCurrentStaffAdminOrClerk = origStaffAdmin;
+      window.alert = origAlert155;
+
+      // Test 156: 誓約中の誓約日バリデーション（未来日ブロックおよび未入力ブロック）
+      const origAdmin156 = window.isCurrentStaffAdminOrClerk;
+      window.isCurrentStaffAdminOrClerk = () => true;
+      let alertMsg156 = "";
+      const origAlert156 = window.alert;
+      window.alert = (msg) => { alertMsg156 = msg; };
+
+      const sb = document.getElementById("sandbox");
+      const testModalDiv = document.createElement("div");
+      testModalDiv.id = "kasanSettingsModal";
+      testModalDiv.innerHTML = `
+        <input id="kasanOfficeNo" value="1234567890">
+        <input id="kasanMediaCode" value="1">
+        <input id="kasanCapacity" value="18">
+        <select id="kasanRegionSelect"><option value="その他" selected>その他</option></select>
+        <select id="kasanShoguSelect"><option value="1_b" selected>1_b</option></select>
+        <select id="kasanCareplanLink"><option value="pledged" selected>pledged</option></select>
+        <input id="kasanCareplanLinkPledgedDate" value="">
+        <select id="kasanProductivityPledge"><option value="none" selected>none</option></select>
+        <input id="kasanProductivityPledgedDate" value="">
+        <select id="kasanSocialWelfare"><option value="none" selected>none</option></select>
+        <input id="kasanSocialWelfarePledgedDate" value="">
+        <div id="kasanTaiseiContainer"></div>
+      `;
+      sb.appendChild(testModalDiv);
+
+      saveKasanSettings();
+      assert(alertMsg156.includes("誓約した日を入力してください"), "Test 156a: 誓約中で日付が空欄の場合は保存をブロック");
+
+      alertMsg156 = "";
+      const futureDate = "2099-01-01";
+      document.getElementById("kasanCareplanLinkPledgedDate").value = futureDate;
+      saveKasanSettings();
+      assert(alertMsg156.includes("先の日付は入れられません"), "Test 156b: 誓約中に未来日を入力した場合は保存をブロック");
+
+      sb.removeChild(testModalDiv);
+      window.isCurrentStaffAdminOrClerk = origAdmin156;
+      window.alert = origAlert156;
+
       // 33. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
