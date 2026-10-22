@@ -1,6 +1,21 @@
 // ============================================================
 // 施設・フロア 業務日誌 (一日の記録・日課スケジュール ＆ 特変日報)
 // ============================================================
+// [Claude修正 2026-10-22] 業務日誌に出すのは「特記」だけ（特変・申し送り・連絡・家族への連絡・フロア全体の記録）。
+// 一人ひとりの介護記録（食事・巡視・体位変換など）は、利用者ごとの記録の画面で見る
+// あなた「利用者ごとの表はいらない。それは業務ではなく個人記録を見てくださいだね。特記は残す感じでもいいかもね」
+const CP_JOURNAL_CATEGORIES = ["特変", "申し送り", "連絡", "家族"];
+function cpJournalRecordsOn(dateStr) {
+ return (db.data.care_records || [])
+  .filter(r => {
+   if (r.voided) return false;
+   const timeStr = r.recorded_at || r.record_time || "";
+   if (!timeStr.startsWith(dateStr)) return false;
+   return Number(r.resident_id) === 0 || CP_JOURNAL_CATEGORIES.includes(r.category);
+  })
+  .sort((a, b) => (a.recorded_at || a.record_time || "").localeCompare(b.recorded_at || b.record_time || ""));
+}
+
 function renderDailyJournal() {
  const titleEl = document.getElementById("dailyJournalTitle");
  if (titleEl) {
@@ -68,19 +83,7 @@ function renderDailyJournal() {
  // 3. 指定日のフロア特変・申し送り記録一覧 (個別の体位交換「左側臥位」等は除外)
  const recordsListEl = document.getElementById("dailyJournalRecordsList");
  if (recordsListEl) {
- const allRecords = (db.data.care_records || [])
- .filter(r => {
- const timeStr = r.recorded_at || r.record_time || "";
- if (!timeStr.startsWith(gState.selectedDate)) return false;
- // 個別の体位変換・巡視記録(左側臥位等)は日誌の一日の記録から除外
- if (r.category === "巡視" && (r.content || "").includes("夜間巡視")) return false;
- return true;
- })
- .sort((a, b) => {
- const ta = a.recorded_at || a.record_time || "";
- const tb = b.recorded_at || b.record_time || "";
- return ta.localeCompare(tb);
- });
+ const allRecords = cpJournalRecordsOn(gState.selectedDate);
 
  if (allRecords.length === 0) {
  recordsListEl.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:12px; text-align:center; background:#f6f8f6; border-radius:6px;">この日の特変・特記事項はありません。</p>';
@@ -112,75 +115,11 @@ function renderDailyJournal() {
  }
  }
 
- // 3. フロア全体ケアサマリー表 (バイタル・食事・排泄・入浴)
- const summaryTableEl = document.getElementById("dailyJournalCareSummaryTable");
- if (summaryTableEl) {
- let rowsHtml = cpResidentsOn(gState.selectedDate).map(r => {
- // 本日のバイタル
- const vit = cpLatestVital(r.id, gState.selectedDate);
- const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
-
- // 本日の食事 (朝・昼)
- const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
- const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
-  const cpBriefMeal = m => (!m ? "-" : ((m.main_dish_ratio === null && m.side_dish_ratio === null) ? "ー" : (m.main_dish_ratio === null ? `副:${m.side_dish_ratio}割` : `${m.main_dish_ratio}割`)));
-  const mealStr = `朝:${cpBriefMeal(morningMeal)} / 昼:${cpBriefMeal(noonMeal)}`; // [Antigravity実装 2026-10-15]
-
- // 本日の排泄
- const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
- const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
- const excStr = excs.length > 0 ? `排尿:${excs.length}回 / 排便:${stoolCount}回` : "記録なし";
-
- // 本日の入浴
- const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
- const bathStr = bath ? `${bath.bath_type} 済` : (cpStatusOn(r, gState.selectedDate) === "入院中" ? "入院中" : "なし");
-
- return `
- <tr>
- <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no)}号室</td>
- <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.name)} 様</td>
- <td style="font-size:12px; white-space:nowrap;">${escapeHtml(r.care_level)}</td>
- <td style="font-size:12px;">${escapeHtml(vitStr)}</td>
- <td style="font-size:12px;">${escapeHtml(mealStr)}</td>
- <td style="font-size:12px;">${escapeHtml(excStr)}</td>
- <td style="font-size:12px; white-space:nowrap;">${escapeHtml(bathStr)}</td>
- </tr>
- `;
- }).join("");
-
- summaryTableEl.innerHTML = `
- <table class="data-table" style="font-size:13px; width:100%;">
- <thead>
- <tr>
- <th>居室</th>
- <th>氏名</th>
- <th>介護度</th>
- <th>バイタル (体温/血圧/脈拍/SpO2)</th>
- <th>食事摂取量 (主食)</th>
- <th>排泄状況</th>
- <th>入浴実施</th>
- </tr>
- </thead>
- <tbody>
- ${rowsHtml}
- </tbody>
- </table>
- `;
- }
 }
 
 // 施設・フロア業務日誌 (一日の記録) の印刷
 function printDailyJournal() {
- const records = (db.data.care_records || [])
- .filter(r => {
- const timeStr = r.recorded_at || r.record_time || "";
- return timeStr.startsWith(gState.selectedDate);
- })
- .sort((a, b) => {
- const ta = a.recorded_at || a.record_time || "";
- const tb = b.recorded_at || b.record_time || "";
- return ta.localeCompare(tb);
- });
+ const records = cpJournalRecordsOn(gState.selectedDate);
 
  const printArea = document.getElementById("printArea");
  if (!printArea) {
@@ -219,30 +158,7 @@ function printDailyJournal() {
   `;
  }
 
- let summaryTableRows = cpResidentsOn(gState.selectedDate).map(r => {
- const vit = cpLatestVital(r.id, gState.selectedDate);
- const vitStr = vit ? `${vit.temperature}℃ / ${vit.bp_high}-${vit.bp_low} / P:${vit.pulse} / SpO2:${vit.spo2}%` : "未検温";
- const morningMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "朝食");
- const noonMeal = (db.data.meals || []).find(m => m.resident_id === r.id && m.date === gState.selectedDate && m.meal_type === "昼食");
-  const cpBriefMeal = m => (!m ? "-" : ((m.main_dish_ratio === null && m.side_dish_ratio === null) ? "ー" : (m.main_dish_ratio === null ? `副:${m.side_dish_ratio}割` : `${m.main_dish_ratio}割`)));
-  const mealStr = `朝:${cpBriefMeal(morningMeal)} / 昼:${cpBriefMeal(noonMeal)}`; // [Antigravity実装 2026-10-15]
- const excs = (db.data.excretions || []).filter(e => e.resident_id === r.id && e.date === gState.selectedDate);
- const stoolCount = excs.filter(e => e.stool_amount && e.stool_amount !== "なし").length;
- const excStr = excs.length > 0 ? `尿:${excs.length}回 便:${stoolCount}回` : "記録なし";
- const bath = (db.data.baths || []).find(b => b.resident_id === r.id && b.date === gState.selectedDate);
- const bathStr = bath ? `${bath.bath_type} 済` : (cpStatusOn(r, gState.selectedDate) === "入院中" ? "入院中" : "なし");
 
- return `
- <tr>
- <td style="border:1px solid #94a19a; padding:5px 8px; font-weight:bold;">${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</td>
- <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(r.care_level)}</td>
- <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(vitStr)}</td>
- <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(mealStr)}</td>
- <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(excStr)}</td>
- <td style="border:1px solid #94a19a; padding:5px 8px;">${escapeHtml(bathStr)}</td>
- </tr>
- `;
- }).join("");
 
  let recordsHtml = records.map((r, idx) => {
  const res = gState.residents.find(x => x.id === r.resident_id);
@@ -282,25 +198,10 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
 
  ${printRosterHtml}
 
- <h3 style="font-size:14px; margin:12px 0 6px 0; color:#173f33;">1. フロア全体 ケア実施サマリー表</h3>
- <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
- <thead>
- <tr style="background:#eef2ef;">
- <th style="border:1px solid #94a19a; padding:5px 8px;">氏名・居室</th>
- <th style="border:1px solid #94a19a; padding:5px 8px;">介護度</th>
- <th style="border:1px solid #94a19a; padding:5px 8px;">バイタル</th>
- <th style="border:1px solid #94a19a; padding:5px 8px;">食事</th>
- <th style="border:1px solid #94a19a; padding:5px 8px;">排泄</th>
- <th style="border:1px solid #94a19a; padding:5px 8px;">入浴</th>
- </tr>
- </thead>
- <tbody>
- ${summaryTableRows}
- </tbody>
- </table>
+
 
  <!-- 一日の日課・業務スケジュール実施記録 (印刷欄) [Antigravity実装 2026-10-16] -->
- <h3 style="font-size:14px; margin:16px 0 6px 0; color:#173f33;">2. フロア一日の日課・業務スケジュール実施記録</h3>
+ <h3 style="font-size:14px; margin:16px 0 6px 0; color:#173f33;">1. 一日の流れ（日課・業務の実施記録）</h3>
  <table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-bottom:16px;">
  <thead>
  <tr style="background:#eef2ef;">
@@ -322,7 +223,7 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  </tbody>
  </table>
 
- <h3 style="font-size:14px; margin:14px 0 6px 0; color:#173f33;">3. 特変・申し送り記録 (計 ${records.length} 件)</h3>
+ <h3 style="font-size:14px; margin:14px 0 6px 0; color:#173f33;">2. 特記（特変・申し送り・連絡） (計 ${records.length} 件)</h3>
  <div>
  ${recordsHtml || '<p style="padding:10px; font-size:12px; color:#5f6d66;">記録なし</p>'}
  </div>
