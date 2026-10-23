@@ -46,6 +46,13 @@ def plan(rid):
         return ["テープ止めオムツ L" if is_male(rid) else "テープ止めオムツ M", "尿取りパッド", "使い捨てプラスチック手袋 L" if is_male(rid) else "使い捨てプラスチック手袋 M"]
     return ["リハビリパンツ L" if is_male(rid) else "リハビリパンツ M", "尿取りパッド", "使い捨てプラスチック手袋 M"]
 THICK = [rid for rid, r in RES.items() if "とろみ" in (r.get("diet_type") or "")]
+# とろみをあとから始めた方は、食形態の変更の履歴の日から（2026-10-24 佐藤様 10/15〜）
+THICK_FROM = {}
+for rid in THICK:
+    for h in RES[rid].get("edit_history") or []:
+        b = (h.get("before") or {})
+        if "diet_type" in b and "とろみ" not in (b.get("diet_type") or ""):
+            THICK_FROM[rid] = DT.date.fromisoformat(h["edited_at"][:10])
 
 events = []   # (日付, 時刻, 品物名, 利用者 or None, 職員, 数)
 used = collections.defaultdict(float)
@@ -74,6 +81,10 @@ for day in G.DAYS:
                 if before == 0 or int(before // PIECES[it]) != int(used[(rid, it)] // PIECES[it]):
                     t, st, _ = lst[0]; events.append((ds, t, it, rid, st, 1))
     for rid in THICK:
+        if rid in THICK_FROM:
+            if day >= THICK_FROM[rid] and G.stay(rid, day) == "full" and (day - THICK_FROM[rid]).days % 25 == 0:
+                events.append((ds, "16:50" if day == THICK_FROM[rid] else "11:50", "とろみ調整剤 1kg", rid, G.who(int(RES[rid]["unit_id"]), day, "16:50" if day == THICK_FROM[rid] else "11:50"), 1))
+            continue
         if G.stay(rid, day) == "full" and (day - G.START).days % 25 == 3 + rid % 5:
             events.append((ds, "11:50", "とろみ調整剤 1kg", rid, G.who(int(RES[rid]["unit_id"]), day, "11:50"), 1))
     for unit in (1, 2):
