@@ -1728,6 +1728,11 @@ function renderSelectedDateRecords() {
   if (summaryArea) summaryArea.innerHTML = "";
  }
 
+ // 2b. バイタルのグラフを描画 [Antigravity実装]
+ if (typeof renderPersonalVitalChart === "function") {
+  renderPersonalVitalChart();
+ }
+
  list.innerHTML = "";
 
  // 選択中利用者の全種類の記録を日付と時間の順に統合
@@ -1948,3 +1953,574 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true, minScale: 0.75 });
 }
 
+
+
+// ======================================================================
+// 個別記録 バイタルのグラフ (体温・血圧・脈拍・SpO2) [Antigravity実装]
+// ======================================================================
+
+let gVitalChartPeriod = "1w"; // "1w" | "1m" | "3m"
+let gVitalChartAnchorDate = null;
+let gVitalChartLastResId = null;
+let gVitalChartSelectedPoint = null;
+
+function cpAddDaysToStr(dateStr, days) {
+ if (!dateStr) return "";
+ const d = new Date(dateStr + "T00:00:00");
+ if (isNaN(d.getTime())) return dateStr;
+ d.setDate(d.getDate() + days);
+ const y = d.getFullYear();
+ const m = String(d.getMonth() + 1).padStart(2, "0");
+ const day = String(d.getDate()).padStart(2, "0");
+ return `${y}-${m}-${day}`;
+}
+
+function cpGetVitalChartRange(anchorDate, period) {
+ const anchor = anchorDate || (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+ const end = new Date(anchor + "T00:00:00");
+ if (isNaN(end.getTime())) {
+  const today = new Date();
+  const fmtToday = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  return { startDate: fmtToday(today), endDate: fmtToday(today) };
+ }
+ const start = new Date(end);
+ if (period === "1m") {
+  start.setMonth(start.getMonth() - 1);
+  start.setDate(start.getDate() + 1);
+ } else if (period === "3m") {
+  start.setMonth(start.getMonth() - 3);
+  start.setDate(start.getDate() + 1);
+ } else {
+  // 1w (7日間)
+  start.setDate(start.getDate() - 6);
+ }
+ const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+ return { startDate: fmt(start), endDate: fmt(end) };
+}
+
+// 看護師が決めた目安を超えた・下回ったか判定（共通関数）
+function cpIsVitalExceedingLimit(type, val, resident) {
+ if (val === null || val === undefined || val === "" || isNaN(val)) return false;
+ if (!resident) return false;
+ const num = Number(val);
+ if (type === "temperature") {
+  const max = (resident.temp_max != null && resident.temp_max !== "") ? Number(resident.temp_max) : null;
+  if (max !== null && !isNaN(max) && num > max) return true;
+  return false;
+ }
+ if (type === "bp_high") {
+  const max = (resident.bp_high_max != null && resident.bp_high_max !== "") ? Number(resident.bp_high_max) : null;
+  const min = (resident.bp_high_min != null && resident.bp_high_min !== "") ? Number(resident.bp_high_min) : null;
+  if (max !== null && !isNaN(max) && num > max) return true;
+  if (min !== null && !isNaN(min) && num < min) return true;
+  return false;
+ }
+ if (type === "bp_low") {
+  return false;
+ }
+ if (type === "pulse") {
+  const max = (resident.pulse_max != null && resident.pulse_max !== "") ? Number(resident.pulse_max) : null;
+  const min = (resident.pulse_min != null && resident.pulse_min !== "") ? Number(resident.pulse_min) : null;
+  if (max !== null && !isNaN(max) && num > max) return true;
+  if (min !== null && !isNaN(min) && num < min) return true;
+  return false;
+ }
+ if (type === "spo2") {
+  const min = (resident.spo2_min != null && resident.spo2_min !== "") ? Number(resident.spo2_min) : null;
+  if (min !== null && !isNaN(min) && num < min) return true;
+  return false;
+ }
+ return false;
+}
+
+// 看護師が決めた目安の表示文言
+function cpGetVitalLimitText(chartType, resident) {
+ if (!resident) return "看護師が決めた目安：未設定";
+ if (chartType === "temperature") {
+  const max = (resident.temp_max != null && resident.temp_max !== "") ? Number(resident.temp_max) : null;
+  if (max !== null && !isNaN(max)) return `看護師が決めた目安：${max}℃以下`;
+  return "看護師が決めた目安：未設定";
+ }
+ if (chartType === "bp") {
+  const max = (resident.bp_high_max != null && resident.bp_high_max !== "") ? Number(resident.bp_high_max) : null;
+  const min = (resident.bp_high_min != null && resident.bp_high_min !== "") ? Number(resident.bp_high_min) : null;
+  const parts = [];
+  if (max !== null && !isNaN(max)) parts.push(`最高 ${max}以下`);
+  if (min !== null && !isNaN(min)) parts.push(`最高 ${min}以上`);
+  if (parts.length > 0) return `看護師が決めた目安：${parts.join("・")} mmHg`;
+  return "看護師が決めた目安：未設定";
+ }
+ if (chartType === "pulse") {
+  const max = (resident.pulse_max != null && resident.pulse_max !== "") ? Number(resident.pulse_max) : null;
+  const min = (resident.pulse_min != null && resident.pulse_min !== "") ? Number(resident.pulse_min) : null;
+  const parts = [];
+  if (max !== null && !isNaN(max)) parts.push(`${max}以下`);
+  if (min !== null && !isNaN(min)) parts.push(`${min}以上`);
+  if (parts.length > 0) return `看護師が決めた目安：${parts.join("・")} 回/分`;
+  return "看護師が決めた目安：未設定";
+ }
+ if (chartType === "spo2") {
+  const min = (resident.spo2_min != null && resident.spo2_min !== "") ? Number(resident.spo2_min) : null;
+  if (min !== null && !isNaN(min)) return `看護師が決めた目安：${min}%以上`;
+  return "看護師が決めた目安：未設定";
+ }
+ return "看護師が決めた目安：未設定";
+}
+
+function cpChangeVitalPeriod(period) {
+ gVitalChartPeriod = period;
+ renderPersonalVitalChart();
+}
+
+function cpShiftVitalPeriod(delta) {
+ if (!gVitalChartAnchorDate) {
+  gVitalChartAnchorDate = (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+ }
+ const d = new Date(gVitalChartAnchorDate + "T00:00:00");
+ if (isNaN(d.getTime())) return;
+ if (gVitalChartPeriod === "1w") {
+  d.setDate(d.getDate() + delta * 7);
+ } else if (gVitalChartPeriod === "1m") {
+  d.setMonth(d.getMonth() + delta);
+ } else if (gVitalChartPeriod === "3m") {
+  d.setMonth(d.getMonth() + delta * 3);
+ }
+ const fmt = x => `${x.getFullYear()}-${String(x.getMonth() + 1).padStart(2, "0")}-${String(x.getDate()).padStart(2, "0")}`;
+ gVitalChartAnchorDate = fmt(d);
+ renderPersonalVitalChart();
+}
+
+function cpResetVitalPeriod() {
+ gVitalChartAnchorDate = (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+ gVitalChartPeriod = "1w";
+ renderPersonalVitalChart();
+}
+
+function cpSelectVitalPoint(encodedJson) {
+ try {
+  gVitalChartSelectedPoint = JSON.parse(decodeURIComponent(encodedJson));
+ } catch (e) {
+  gVitalChartSelectedPoint = null;
+ }
+ cpRenderVitalPointDetail();
+}
+
+function cpRenderVitalPointDetail() {
+ const box = document.getElementById("personalVitalDetailBox");
+ if (!box) return;
+ if (!gVitalChartSelectedPoint) {
+  box.innerHTML = `<span style="font-size:13px; color:var(--ink-3);">グラフ上の点をクリックまたはタップすると、測定日時・値・記録者の詳細が表示されます。</span>`;
+  return;
+ }
+ const p = gVitalChartSelectedPoint;
+ const exceedTag = p.exceeded
+  ? `<span style="display:inline-block; font-size:13px; font-weight:bold; color:var(--alert); background:var(--alert-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--alert); margin-left:8px;">目安判定：注意（上限超過または下回り）</span>`
+  : `<span style="display:inline-block; font-size:13px; color:var(--pine); background:var(--pine-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--pine-light); margin-left:8px;">目安判定：正常範囲</span>`;
+
+ box.innerHTML = `
+  <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
+   <div>
+    <span style="font-size:13px; font-weight:bold; color:var(--pine-dark); margin-right:12px;">【測定詳細】</span>
+    <span style="font-size:13px; color:var(--ink); margin-right:12px;">日時: <strong>${escapeHtml(p.date)} ${escapeHtml(p.time || "--:--")}</strong></span>
+    <span style="font-size:13px; color:var(--ink); margin-right:12px;">項目: <strong>${escapeHtml(p.label)} ${escapeHtml(String(p.val))} ${escapeHtml(p.unit)}</strong></span>
+    <span style="font-size:13px; color:var(--ink);">記録者: <strong>${escapeHtml(p.staff_name || "未記録")}</strong></span>
+    ${exceedTag}
+   </div>
+   <button type="button" class="btn btn-secondary" onclick="gVitalChartSelectedPoint=null; cpRenderVitalPointDetail();" style="font-size:13px; padding:2px 8px; background:var(--surface); border:1px solid var(--line); color:var(--ink-2); border-radius:4px; cursor:pointer;">
+    閉じる
+   </button>
+  </div>
+ `;
+}
+
+function cpBuildVitalSvgChart(chartType, resident, vitalsList, startDate, endDate) {
+ const width = 560;
+ const height = 220;
+ const padLeft = 45;
+ const padRight = 20;
+ const padTop = 25;
+ const padBottom = 35;
+ const plotWidth = width - padLeft - padRight;
+ const plotHeight = height - padTop - padBottom;
+
+ const startMs = new Date(startDate + "T00:00:00").getTime();
+ const endMs = new Date(endDate + "T23:59:59").getTime();
+ const spanMs = Math.max(1, endMs - startMs);
+
+ const calcX = (dateStr, timeStr) => {
+  const t = timeStr ? (timeStr.length === 5 ? timeStr + ":00" : timeStr) : "12:00:00";
+  const ms = new Date(`${dateStr}T${t}`).getTime();
+  const frac = Math.max(0, Math.min(1, (ms - startMs) / spanMs));
+  return padLeft + frac * plotWidth;
+ };
+
+ const linesData = [];
+ if (chartType === "temperature") {
+  const series = [];
+  vitalsList.forEach(v => {
+   if (v.temperature != null && v.temperature !== "" && !isNaN(v.temperature)) {
+    const val = Number(v.temperature);
+    series.push({
+     date: v.date,
+     time: v.time,
+     val: val,
+     type: "temperature",
+     label: "体温",
+     unit: "℃",
+     staff_name: v.staff_name || "",
+     exceeded: cpIsVitalExceedingLimit("temperature", val, resident)
+    });
+   }
+  });
+  linesData.push({ key: "temperature", color: "var(--pine)", series: series });
+ } else if (chartType === "bp") {
+  const sHigh = [];
+  const sLow = [];
+  vitalsList.forEach(v => {
+   if (v.bp_high != null && v.bp_high !== "" && !isNaN(v.bp_high)) {
+    const val = Number(v.bp_high);
+    sHigh.push({
+     date: v.date,
+     time: v.time,
+     val: val,
+     type: "bp_high",
+     label: "最高血圧",
+     unit: "mmHg",
+     staff_name: v.staff_name || "",
+     exceeded: cpIsVitalExceedingLimit("bp_high", val, resident)
+    });
+   }
+   if (v.bp_low != null && v.bp_low !== "" && !isNaN(v.bp_low)) {
+    const val = Number(v.bp_low);
+    sLow.push({
+     date: v.date,
+     time: v.time,
+     val: val,
+     type: "bp_low",
+     label: "最低血圧",
+     unit: "mmHg",
+     staff_name: v.staff_name || "",
+     exceeded: cpIsVitalExceedingLimit("bp_low", val, resident)
+    });
+   }
+  });
+  linesData.push({ key: "bp_high", color: "var(--pine)", series: sHigh, label: "最高" });
+  linesData.push({ key: "bp_low", color: "var(--secondary-color)", series: sLow, label: "最低" });
+ } else if (chartType === "pulse") {
+  const series = [];
+  vitalsList.forEach(v => {
+   if (v.pulse != null && v.pulse !== "" && !isNaN(v.pulse)) {
+    const val = Number(v.pulse);
+    series.push({
+     date: v.date,
+     time: v.time,
+     val: val,
+     type: "pulse",
+     label: "脈拍",
+     unit: "回/分",
+     staff_name: v.staff_name || "",
+     exceeded: cpIsVitalExceedingLimit("pulse", val, resident)
+    });
+   }
+  });
+  linesData.push({ key: "pulse", color: "var(--pine)", series: series });
+ } else if (chartType === "spo2") {
+  const series = [];
+  vitalsList.forEach(v => {
+   if (v.spo2 != null && v.spo2 !== "" && !isNaN(v.spo2)) {
+    const val = Number(v.spo2);
+    series.push({
+     date: v.date,
+     time: v.time,
+     val: val,
+     type: "spo2",
+     label: "SpO2",
+     unit: "%",
+     staff_name: v.staff_name || "",
+     exceeded: cpIsVitalExceedingLimit("spo2", val, resident)
+    });
+   }
+  });
+  linesData.push({ key: "spo2", color: "var(--pine)", series: series });
+ }
+
+ let allVals = [];
+ linesData.forEach(ld => {
+  ld.series.forEach(pt => allVals.push(pt.val));
+ });
+
+ const nurseGuides = [];
+ if (resident) {
+  if (chartType === "temperature" && resident.temp_max != null && resident.temp_max !== "" && !isNaN(resident.temp_max)) {
+   nurseGuides.push({ val: Number(resident.temp_max), label: `目安上限 ${resident.temp_max}℃` });
+  }
+  if (chartType === "bp") {
+   if (resident.bp_high_max != null && resident.bp_high_max !== "" && !isNaN(resident.bp_high_max)) {
+    nurseGuides.push({ val: Number(resident.bp_high_max), label: `目安上限 ${resident.bp_high_max}` });
+   }
+   if (resident.bp_high_min != null && resident.bp_high_min !== "" && !isNaN(resident.bp_high_min)) {
+    nurseGuides.push({ val: Number(resident.bp_high_min), label: `目安下限 ${resident.bp_high_min}` });
+   }
+  }
+  if (chartType === "pulse") {
+   if (resident.pulse_max != null && resident.pulse_max !== "" && !isNaN(resident.pulse_max)) {
+    nurseGuides.push({ val: Number(resident.pulse_max), label: `目安上限 ${resident.pulse_max}` });
+   }
+   if (resident.pulse_min != null && resident.pulse_min !== "" && !isNaN(resident.pulse_min)) {
+    nurseGuides.push({ val: Number(resident.pulse_min), label: `目安下限 ${resident.pulse_min}` });
+   }
+  }
+  if (chartType === "spo2" && resident.spo2_min != null && resident.spo2_min !== "" && !isNaN(resident.spo2_min)) {
+   nurseGuides.push({ val: Number(resident.spo2_min), label: `目安下限 ${resident.spo2_min}%` });
+  }
+ }
+
+ let yMin = 0;
+ let yMax = 100;
+ let yStep = 10;
+ if (chartType === "temperature") {
+  yMin = 35.0;
+  yMax = 38.5;
+  yStep = 0.5;
+ } else if (chartType === "bp") {
+  yMin = 50;
+  yMax = 180;
+  yStep = 30;
+ } else if (chartType === "pulse") {
+  yMin = 50;
+  yMax = 120;
+  yStep = 20;
+ } else if (chartType === "spo2") {
+  yMin = 88;
+  yMax = 100;
+  yStep = 2;
+ }
+
+ const allConsiderVals = [...allVals, ...nurseGuides.map(g => g.val)];
+ if (allConsiderVals.length > 0) {
+  const minV = Math.min(...allConsiderVals);
+  const maxV = Math.max(...allConsiderVals);
+  if (minV < yMin) yMin = Math.floor(minV);
+  if (maxV > yMax) yMax = Math.ceil(maxV);
+ }
+ if (yMax <= yMin) yMax = yMin + 5;
+
+ const calcY = val => {
+  const frac = (val - yMin) / (yMax - yMin);
+  return padTop + (1 - Math.max(0, Math.min(1, frac))) * plotHeight;
+ };
+
+ const gridLinesSvg = [];
+ const yLabelsSvg = [];
+ for (let yv = yMin; yv <= yMax + 0.0001; yv += yStep) {
+  const y = calcY(yv);
+  gridLinesSvg.push(`<line x1="${padLeft}" y1="${y}" x2="${padLeft + plotWidth}" y2="${y}" stroke="var(--line-2)" stroke-width="1" />`);
+  const dispVal = (chartType === "temperature") ? yv.toFixed(1) : Math.round(yv);
+  yLabelsSvg.push(`<text x="${padLeft - 6}" y="${y + 4}" text-anchor="end" font-size="13" fill="var(--ink-3)">${dispVal}</text>`);
+ }
+
+ const xTicksSvg = [];
+ const startD = new Date(startDate + "T00:00:00");
+ const endD = new Date(endDate + "T00:00:00");
+ const diffDays = Math.round((endD.getTime() - startD.getTime()) / (1000 * 60 * 60 * 24));
+ const stepDays = diffDays <= 7 ? 1 : (diffDays <= 31 ? 5 : 15);
+
+ for (let i = 0; i <= diffDays; i += stepDays) {
+  const curD = new Date(startD);
+  curD.setDate(curD.getDate() + i);
+  const ym = `${String(curD.getMonth() + 1).padStart(2, "0")}/${String(curD.getDate()).padStart(2, "0")}`;
+  const x = padLeft + (i / Math.max(1, diffDays)) * plotWidth;
+  gridLinesSvg.push(`<line x1="${x}" y1="${padTop}" x2="${x}" y2="${padTop + plotHeight}" stroke="var(--line-2)" stroke-width="1" stroke-dasharray="2,2" />`);
+  xTicksSvg.push(`<text x="${x}" y="${padTop + plotHeight + 18}" text-anchor="middle" font-size="13" fill="var(--ink-3)">${ym}</text>`);
+ }
+
+ const guidesSvg = [];
+ nurseGuides.forEach(g => {
+  const y = calcY(g.val);
+  guidesSvg.push(`
+   <line x1="${padLeft}" y1="${y}" x2="${padLeft + plotWidth}" y2="${y}" stroke="var(--alert)" stroke-width="1.5" stroke-dasharray="4,4" />
+   <text x="${padLeft + plotWidth - 4}" y="${y - 4}" text-anchor="end" font-size="13" fill="var(--alert)" font-weight="bold">${escapeHtml(g.label)}</text>
+  `);
+ });
+
+ const seriesSvg = [];
+ linesData.forEach(ld => {
+  if (ld.series.length > 1) {
+   const pts = ld.series.map(pt => `${calcX(pt.date, pt.time)},${calcY(pt.val)}`).join(" ");
+   seriesSvg.push(`<polyline points="${pts}" fill="none" stroke="${ld.color}" stroke-width="2" />`);
+  }
+  ld.series.forEach(pt => {
+   const px = calcX(pt.date, pt.time);
+   const py = calcY(pt.val);
+   const enc = encodeURIComponent(JSON.stringify(pt));
+   const tip = `${pt.date} ${pt.time || ""} ${pt.label}: ${pt.val} ${pt.unit} (記録者: ${pt.staff_name || "未記録"})${pt.exceeded ? " [目安注意]" : ""}`;
+   if (pt.exceeded) {
+    seriesSvg.push(`
+     <g onclick="cpSelectVitalPoint('${enc}')" style="cursor:pointer;">
+      <title>${escapeHtml(tip)}</title>
+      <polygon points="${px},${py - 6} ${px + 6},${py} ${px},${py + 6} ${px - 6},${py}" fill="var(--alert)" stroke="var(--surface)" stroke-width="1.5" />
+      <circle cx="${px}" cy="${py}" r="12" fill="none" pointer-events="all" />
+     </g>
+    `);
+   } else {
+    seriesSvg.push(`
+     <g onclick="cpSelectVitalPoint('${enc}')" style="cursor:pointer;">
+      <title>${escapeHtml(tip)}</title>
+      <circle cx="${px}" cy="${py}" r="4.5" fill="${ld.color}" stroke="var(--surface)" stroke-width="1.5" />
+      <circle cx="${px}" cy="${py}" r="12" fill="none" pointer-events="all" />
+     </g>
+    `);
+   }
+  });
+ });
+
+ const emptySvg = (allVals.length === 0)
+  ? `<text x="${width / 2}" y="${height / 2}" text-anchor="middle" font-size="13" fill="var(--ink-3)">期間内の測定記録はありません</text>`
+  : "";
+
+ return `
+  <svg viewBox="0 0 ${width} ${height}" style="width:100%; height:auto; display:block; max-width:100%; overflow:visible;" aria-label="バイタルグラフ">
+   <rect x="0" y="0" width="${width}" height="${height}" fill="var(--surface)" />
+   <rect x="${padLeft}" y="${padTop}" width="${plotWidth}" height="${plotHeight}" fill="none" stroke="var(--line)" stroke-width="1" />
+   ${gridLinesSvg.join("")}
+   ${yLabelsSvg.join("")}
+   ${xTicksSvg.join("")}
+   ${guidesSvg.join("")}
+   ${seriesSvg.join("")}
+   ${emptySvg}
+  </svg>
+ `;
+}
+
+function renderPersonalVitalChart() {
+ const area = document.getElementById("personalVitalChartArea");
+ if (!area) return;
+
+ const resId = gState ? gState.selectedResidentId : null;
+ const resident = (gState && Array.isArray(gState.residents)) ? gState.residents.find(r => r.id === resId) : null;
+
+ if (!resident) {
+  area.innerHTML = "";
+  return;
+ }
+
+ if (gVitalChartLastResId !== resId || !gVitalChartAnchorDate) {
+  gVitalChartLastResId = resId;
+  gVitalChartAnchorDate = (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+ }
+
+ const range = cpGetVitalChartRange(gVitalChartAnchorDate, gVitalChartPeriod);
+ const rawVitals = (window.db && db.data && Array.isArray(db.data.vitals)) ? db.data.vitals : [];
+ const vitals = rawVitals.filter(v =>
+  v &&
+  v.resident_id === resident.id &&
+  !v.voided &&
+  v.date >= range.startDate &&
+  v.date <= range.endDate
+ );
+
+ vitals.sort((a, b) => {
+  if (a.date !== b.date) return a.date.localeCompare(b.date);
+  return (a.time || "").localeCompare(b.time || "");
+ });
+
+ const periodLabel = (gVitalChartPeriod === "1m") ? "1か月" : ((gVitalChartPeriod === "3m") ? "3か月" : "1週間");
+ const rangeText = `${range.startDate} 〜 ${range.endDate} (${periodLabel})`;
+
+ const btnStyleActive = "font-size:13px; padding:4px 10px; background:var(--pine); color:var(--surface); border:1px solid var(--pine); border-radius:4px; font-weight:bold; cursor:pointer;";
+ const btnStyleInactive = "font-size:13px; padding:4px 10px; background:var(--surface); color:var(--ink-2); border:1px solid var(--line); border-radius:4px; cursor:pointer;";
+ const navBtnStyle = "font-size:13px; padding:4px 10px; background:var(--surface); color:var(--pine-dark); border:1px solid var(--line); border-radius:4px; font-weight:bold; cursor:pointer;";
+
+ const svgTemp = cpBuildVitalSvgChart("temperature", resident, vitals, range.startDate, range.endDate);
+ const svgBp = cpBuildVitalSvgChart("bp", resident, vitals, range.startDate, range.endDate);
+ const svgPulse = cpBuildVitalSvgChart("pulse", resident, vitals, range.startDate, range.endDate);
+ const svgSpo2 = cpBuildVitalSvgChart("spo2", resident, vitals, range.startDate, range.endDate);
+
+ area.innerHTML = `
+  <div style="background:var(--ground); border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:14px;">
+   <!-- グラフヘッダー: 期間・移動ナビゲーション -->
+   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+    <div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap;">
+     <span style="font-size:15px; font-weight:bold; color:var(--pine-dark);">📈 バイタルの推移グラフ</span>
+     <span style="font-size:13px; color:var(--ink-2); background:var(--surface); border:1px solid var(--line); padding:2px 8px; border-radius:4px;">${escapeHtml(rangeText)}</span>
+    </div>
+    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+     <button type="button" onclick="cpShiftVitalPeriod(-1)" style="${navBtnStyle}" title="前の期間へ">◀ 前へ</button>
+     <button type="button" onclick="cpChangeVitalPeriod('1w')" style="${gVitalChartPeriod === '1w' ? btnStyleActive : btnStyleInactive}">1週間</button>
+     <button type="button" onclick="cpChangeVitalPeriod('1m')" style="${gVitalChartPeriod === '1m' ? btnStyleActive : btnStyleInactive}">1か月</button>
+     <button type="button" onclick="cpChangeVitalPeriod('3m')" style="${gVitalChartPeriod === '3m' ? btnStyleActive : btnStyleInactive}">3か月</button>
+     <button type="button" onclick="cpShiftVitalPeriod(1)" style="${navBtnStyle}" title="次の期間へ">次へ ▶</button>
+     <button type="button" onclick="cpResetVitalPeriod()" style="font-size:13px; padding:4px 8px; background:var(--surface); color:var(--ink-3); border:1px solid var(--line); border-radius:4px; cursor:pointer;" title="選択日を末尾にする">選択日に戻す</button>
+    </div>
+   </div>
+
+   <!-- 測定詳細表示ボックス -->
+   <div id="personalVitalDetailBox" style="background:var(--surface-2); border:1px dashed var(--line); border-radius:6px; padding:8px 12px; margin-bottom:12px;">
+    <span style="font-size:13px; color:var(--ink-3);">グラフ上の点をクリックまたはタップすると、測定日時・値・記録者の詳細が表示されます。</span>
+   </div>
+
+   <!-- 4つの折れ線グラフカード (2x2 グリッド・レスポンシブ) -->
+   <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(320px, 1fr)); gap:12px;">
+    <!-- 1. 体温 -->
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px 12px;">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:6px; gap:4px;">
+      <span style="font-weight:bold; font-size:14px; color:var(--pine-dark);">🌡️ 体温 (℃)</span>
+      <span style="font-size:13px; color:var(--ink-2);">${escapeHtml(cpGetVitalLimitText("temperature", resident))}</span>
+     </div>
+     ${svgTemp}
+    </div>
+
+    <!-- 2. 最高 / 最低血圧 -->
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px 12px;">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:6px; gap:4px;">
+      <div style="display:flex; align-items:center; gap:8px;">
+       <span style="font-weight:bold; font-size:14px; color:var(--pine-dark);">🩸 血圧 (mmHg)</span>
+       <span style="font-size:13px; color:var(--pine);">● 最高</span>
+       <span style="font-size:13px; color:var(--secondary-color);">● 最低</span>
+      </div>
+      <span style="font-size:13px; color:var(--ink-2);">${escapeHtml(cpGetVitalLimitText("bp", resident))}</span>
+     </div>
+     ${svgBp}
+    </div>
+
+    <!-- 3. 脈拍 -->
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px 12px;">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:6px; gap:4px;">
+      <span style="font-weight:bold; font-size:14px; color:var(--pine-dark);">💓 脈拍 (回/分)</span>
+      <span style="font-size:13px; color:var(--ink-2);">${escapeHtml(cpGetVitalLimitText("pulse", resident))}</span>
+     </div>
+     ${svgPulse}
+    </div>
+
+    <!-- 4. SpO2 -->
+    <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px 12px;">
+     <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; margin-bottom:6px; gap:4px;">
+      <span style="font-weight:bold; font-size:14px; color:var(--pine-dark);">🫁 SpO2 (%)</span>
+      <span style="font-size:13px; color:var(--ink-2);">${escapeHtml(cpGetVitalLimitText("spo2", resident))}</span>
+     </div>
+     ${svgSpo2}
+    </div>
+   </div>
+
+   <!-- 体重タブへの案内とボタン -->
+   <div style="background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:10px 14px; margin-top:12px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+    <span style="font-size:13px; color:var(--ink-2);">※ 体重は「体重」タブに折れ線グラフがあります。</span>
+    <button type="button" class="btn btn-secondary" onclick="if(typeof switchCareTab==='function')switchCareTab('weight');" style="font-size:13px; padding:6px 12px; background:var(--surface); border:1px solid var(--line); color:var(--pine); border-radius:4px; cursor:pointer;">
+     体重のタブへ移動
+    </button>
+   </div>
+  </div>
+ `;
+}
+
+window.cpAddDaysToStr = cpAddDaysToStr;
+window.cpGetVitalChartRange = cpGetVitalChartRange;
+window.cpIsVitalExceedingLimit = cpIsVitalExceedingLimit;
+window.cpGetVitalLimitText = cpGetVitalLimitText;
+window.cpChangeVitalPeriod = cpChangeVitalPeriod;
+window.cpShiftVitalPeriod = cpShiftVitalPeriod;
+window.cpResetVitalPeriod = cpResetVitalPeriod;
+window.cpSelectVitalPoint = cpSelectVitalPoint;
+window.cpRenderVitalPointDetail = cpRenderVitalPointDetail;
+window.cpBuildVitalSvgChart = cpBuildVitalSvgChart;
+window.renderPersonalVitalChart = renderPersonalVitalChart;

@@ -91,6 +91,8 @@
     <div id="fullscreenRecordModal" style="display:none;"></div>
     <div id="selectedDateRecordsTitle"></div>
     <div id="selectedDateRecordsList"></div>
+    <div id="personalDailySummaryArea"></div>
+    <div id="personalVitalChartArea"></div>
     <div id="printArea" style="display:none;"></div>
     <input type="text" id="searchInput">
     <div id="searchResults" style="display:none;"></div>
@@ -2001,6 +2003,140 @@
         const fields7111 = line164_7111.split(",").slice(2);
         assert(fields7111[6] === "1", "Test 164h-12: 7111レコードの件数は1件");
         assert(fields7111[7] === String(calc164_u1.totalUnits), "Test 164h-13: 7111レコードの単位数合計が一致すること");
+      }
+
+      
+      // ----------------------------------------------------
+      // Test 165: 個別記録バイタルのグラフ (折れ線SVG・目安点線・目安超過判定・詳細表示・体重案内)
+      // ----------------------------------------------------
+      log("--- Test 165: 個別記録バイタルのグラフ ---");
+
+      // 165a: 目安超過判定関数 cpIsVitalExceedingLimit
+      const mockRes165 = {
+        id: 9999,
+        name: "テスト太郎",
+        temp_max: "37.5",
+        bp_high_max: "140",
+        bp_high_min: "100",
+        pulse_max: "100",
+        pulse_min: "50",
+        spo2_min: "95"
+      };
+
+      // 体温: 37.6 (超過), 37.5 (正常), 36.8 (正常), 空/無効 (正常判定)
+      assert(cpIsVitalExceedingLimit("temperature", 37.6, mockRes165) === true, "Test 165a-1: 体温 37.6℃は目安37.5超過");
+      assert(cpIsVitalExceedingLimit("temperature", 37.5, mockRes165) === false, "Test 165a-2: 体温 37.5℃は上限以下で正常");
+      assert(cpIsVitalExceedingLimit("temperature", 36.5, mockRes165) === false, "Test 165a-3: 体温 36.5℃は正常");
+      assert(cpIsVitalExceedingLimit("temperature", "", mockRes165) === false, "Test 165a-4: 空文字は超過判定しない");
+      assert(cpIsVitalExceedingLimit("temperature", null, mockRes165) === false, "Test 165a-5: nullは超過判定しない");
+
+      // 血圧: 145 (上限超過), 95 (下限下回り), 120 (正常), bp_low (判定なし)
+      assert(cpIsVitalExceedingLimit("bp_high", 145, mockRes165) === true, "Test 165a-6: 最高血圧 145は140超過");
+      assert(cpIsVitalExceedingLimit("bp_high", 95, mockRes165) === true, "Test 165a-7: 最高血圧 95は100下回り");
+      assert(cpIsVitalExceedingLimit("bp_high", 120, mockRes165) === false, "Test 165a-8: 最高血圧 120は正常範囲");
+      assert(cpIsVitalExceedingLimit("bp_low", 80, mockRes165) === false, "Test 165a-9: 最低血圧は判定なしでfalse");
+
+      // 脈拍: 105 (超過), 45 (下回り), 72 (正常)
+      assert(cpIsVitalExceedingLimit("pulse", 105, mockRes165) === true, "Test 165a-10: 脈拍 105は100超過");
+      assert(cpIsVitalExceedingLimit("pulse", 45, mockRes165) === true, "Test 165a-11: 脈拍 45は50下回り");
+      assert(cpIsVitalExceedingLimit("pulse", 72, mockRes165) === false, "Test 165a-12: 脈拍 72は正常範囲");
+
+      // SpO2: 92 (下回り), 96 (正常)
+      assert(cpIsVitalExceedingLimit("spo2", 92, mockRes165) === true, "Test 165a-13: SpO2 92%は95下回り");
+      assert(cpIsVitalExceedingLimit("spo2", 96, mockRes165) === false, "Test 165a-14: SpO2 96%は正常範囲");
+
+      // 165b: 看護師目安文言 cpGetVitalLimitText
+      // 目安設定あり
+      assert(cpGetVitalLimitText("temperature", mockRes165).includes("37.5℃以下"), "Test 165b-1: 体温目安文言");
+      assert(cpGetVitalLimitText("bp", mockRes165).includes("140以下") && cpGetVitalLimitText("bp", mockRes165).includes("100以上"), "Test 165b-2: 血圧目安文言");
+      assert(cpGetVitalLimitText("pulse", mockRes165).includes("100以下") && cpGetVitalLimitText("pulse", mockRes165).includes("50以上"), "Test 165b-3: 脈拍目安文言");
+      assert(cpGetVitalLimitText("spo2", mockRes165).includes("95%以上"), "Test 165b-4: SpO2目安文言");
+
+      // 目安未設定時: 必ず「看護師が決めた目安：未設定」となり、共通の値を勝手に入れない
+      const mockResNoLimit = { id: 9998, name: "目安未設定花子" };
+      assert(cpGetVitalLimitText("temperature", mockResNoLimit) === "看護師が決めた目安：未設定", "Test 165b-5: 体温目安未設定時の正確な文言");
+      assert(cpGetVitalLimitText("bp", mockResNoLimit) === "看護師が決めた目安：未設定", "Test 165b-6: 血圧目安未設定時の正確な文言");
+      assert(cpGetVitalLimitText("pulse", mockResNoLimit) === "看護師が決めた目安：未設定", "Test 165b-7: 脈拍目安未設定時の正確な文言");
+      assert(cpGetVitalLimitText("spo2", mockResNoLimit) === "看護師が決めた目安：未設定", "Test 165b-8: SpO2目安未設定時の正確な文言");
+      assert(cpIsVitalExceedingLimit("temperature", 38.0, mockResNoLimit) === false, "Test 165b-9: 未設定時は38度でも勝手な基準で超過判定しない");
+      assert(cpIsVitalExceedingLimit("bp_high", 160, mockResNoLimit) === false, "Test 165b-10: 未設定時は160でも勝手な基準で超過判定しない");
+
+      // 165c: 期間計算 cpGetVitalChartRange / 移動 / リセット
+      const r1w = cpGetVitalChartRange("2026-10-23", "1w");
+      assert(r1w.startDate === "2026-10-17" && r1w.endDate === "2026-10-23", "Test 165c-1: 1週間は2026-10-17〜2026-10-23 (7日間)");
+      const r1m = cpGetVitalChartRange("2026-10-23", "1m");
+      assert(r1m.endDate === "2026-10-23", "Test 165c-2: 1か月の終了日は2026-10-23");
+      const r3m = cpGetVitalChartRange("2026-10-23", "3m");
+      assert(r3m.endDate === "2026-10-23", "Test 165c-3: 3か月の終了日は2026-10-23");
+
+      gVitalChartAnchorDate = "2026-10-23";
+      gVitalChartPeriod = "1w";
+      cpShiftVitalPeriod(-1);
+      assert(gVitalChartAnchorDate === "2026-10-16", "Test 165c-4: 1週間を前へ移動で2026-10-16");
+      cpShiftVitalPeriod(1);
+      assert(gVitalChartAnchorDate === "2026-10-23", "Test 165c-5: 次へ移動で2026-10-23に戻る");
+
+      cpResetVitalPeriod();
+      assert(gVitalChartPeriod === "1w", "Test 165c-6: リセットで1週間に戻る");
+
+      // 165d: SVG描画 (cpBuildVitalSvgChart)
+      const mockVitalsList = [
+        { id: "v1", resident_id: mockRes165.id, date: "2026-10-20", time: "08:30", temperature: "36.6", bp_high: "120", bp_low: "78", pulse: "68", spo2: "98", staff_name: "山田" },
+        { id: "v2", resident_id: mockRes165.id, date: "2026-10-20", time: "14:00", temperature: "37.8", bp_high: "148", bp_low: "90", pulse: "106", spo2: "93", staff_name: "佐藤" }, // 同日2回目・超過あり
+        { id: "v3", resident_id: mockRes165.id, date: "2026-10-21", time: "09:00", temperature: "", bp_high: null, bp_low: "", pulse: "", spo2: "", staff_name: "鈴木" } // 空値
+      ];
+
+      // 体温SVG
+      const svgTemp = cpBuildVitalSvgChart("temperature", mockRes165, mockVitalsList, "2026-10-17", "2026-10-23");
+      assert(svgTemp.includes("<svg"), "Test 165d-1: 体温SVGが生成されること");
+      assert(svgTemp.includes('stroke-dasharray="4,4"'), "Test 165d-2: 目安設定ありなら点線が描画されること");
+      assert(svgTemp.includes("<polygon"), "Test 165d-3: 目安超過点(37.8)がダイヤ型polygonで描画されること");
+      assert(svgTemp.includes("<circle"), "Test 165d-4: 正常点(36.6)が円形circleで描画されること");
+      assert(svgTemp.includes("37.5℃"), "Test 165d-5: 目安上限テキストが含まれること");
+
+      // 目安未設定者のSVG
+      const svgNoLimit = cpBuildVitalSvgChart("temperature", mockResNoLimit, mockVitalsList, "2026-10-17", "2026-10-23");
+      assert(!svgNoLimit.includes('stroke-dasharray="4,4"'), "Test 165d-6: 目安未設定なら目安点線は描画されないこと");
+      assert(!svgNoLimit.includes("<polygon"), "Test 165d-7: 目安未設定なら勝手な基準でダイヤ型にならないこと");
+
+      // 血圧SVG
+      const svgBp = cpBuildVitalSvgChart("bp", mockRes165, mockVitalsList, "2026-10-17", "2026-10-23");
+      assert(svgBp.includes("var(--pine)") && svgBp.includes("var(--secondary-color)"), "Test 165d-8: 最高・最低血圧の2本線が含まれること");
+
+      // 165e: クリック詳細表示 cpSelectVitalPoint & cpRenderVitalPointDetail
+      const pointSample = {
+        date: "2026-10-20",
+        time: "14:00",
+        type: "temperature",
+        label: "体温",
+        val: 37.8,
+        unit: "℃",
+        staff_name: "佐藤",
+        exceeded: true
+      };
+      cpSelectVitalPoint(encodeURIComponent(JSON.stringify(pointSample)));
+      const detailBox = document.getElementById("personalVitalDetailBox");
+      assert(detailBox !== null, "Test 165e-1: 詳細表示ボックスが存在すること");
+      if (detailBox) {
+        assert(detailBox.textContent.includes("2026-10-20 14:00"), "Test 165e-2: 選択した日時が表示されること");
+        assert(detailBox.textContent.includes("体温 37.8 ℃"), "Test 165e-3: 項目と値が表示されること");
+        assert(detailBox.textContent.includes("佐藤"), "Test 165e-4: 記録者名が表示されること");
+        assert(detailBox.textContent.includes("注意"), "Test 165e-5: 目安超過の注意が表示されること");
+      }
+
+      // 165f: DOM統合描画 renderPersonalVitalChart & 体重案内ボタン
+      gState.selectedResidentId = 1;
+      gState.selectedDate = "2026-10-23";
+      renderPersonalVitalChart();
+      const chartArea = document.getElementById("personalVitalChartArea");
+      assert(chartArea !== null && chartArea.innerHTML.trim() !== "", "Test 165f-1: バイタルグラフ描画エリアに内容が描画されること");
+      if (chartArea) {
+        assert(chartArea.textContent.includes("体温"), "Test 165f-2: 体温グラフが含まれること");
+        assert(chartArea.textContent.includes("血圧"), "Test 165f-3: 血圧グラフが含まれること");
+        assert(chartArea.textContent.includes("脈拍"), "Test 165f-4: 脈拍グラフが含まれること");
+        assert(chartArea.textContent.includes("SpO2"), "Test 165f-5: SpO2グラフが含まれること");
+        assert(chartArea.textContent.includes("体重は「体重」タブに折れ線グラフがあります"), "Test 165f-6: 体重タブへの案内が含まれること");
+        assert(chartArea.innerHTML.includes("switchCareTab('weight')"), "Test 165f-7: 体重タブへの移動ボタンが含まれること");
       }
 
       // 設定およびユニット構成を元に戻す

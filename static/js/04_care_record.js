@@ -546,6 +546,9 @@ function cpSwitchRecordPane(pane) {
   b.classList.toggle("active", on);
   b.setAttribute("aria-selected", on ? "true" : "false");
  });
+ if (gState.recordPane === "log" && typeof renderPersonalVitalChart === "function") {
+  renderPersonalVitalChart();
+ }
 }
 window.cpSwitchRecordPane = cpSwitchRecordPane;
 
