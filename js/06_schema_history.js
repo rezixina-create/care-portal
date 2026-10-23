@@ -1590,8 +1590,9 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
   });
  });
 
- // 日付と時間の順（新しい順）に1本に並べる
- items.sort((a, b) => (b.recorded_at || "").localeCompare(a.recorded_at || ""));
+ // [Claude修正 2026-10-23] 日付と時間の順（古い順＝早い時間から遅い時間）に1本に並べる。上から読むと経過がたどれるように
+ // （あなた「早い時間から遅い時間に流れて書かないと…辿って行って最終的にこれでしたってならないと」）。月の枠は新しい月が上のまま
+ items.sort((a, b) => (a.recorded_at || "").localeCompare(b.recorded_at || ""));
  return items;
 }
 
@@ -1962,6 +1963,7 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
 let gVitalChartPeriod = "1w"; // "1w" | "1m" | "3m"
 let gVitalChartAnchorDate = null;
 let gVitalChartLastResId = null;
+let gVitalChartLastSelDate = null; // [Claude修正] 選んでいる日が変わったら、グラフの最後の日もそろえる
 let gVitalChartSelectedPoint = null;
 
 function cpAddDaysToStr(dateStr, days) {
@@ -2031,6 +2033,17 @@ function cpIsVitalExceedingLimit(type, val, resident) {
   return false;
  }
  return false;
+}
+
+// [Claude修正] その項目に看護師が決めた目安があるか（ないときは「範囲内」と言わない）
+function cpHasVitalLimit(type, resident) {
+ if (!resident) return false;
+ const has = k => resident[k] != null && resident[k] !== "" && !isNaN(Number(resident[k]));
+ if (type === "temperature") return has("temp_max");
+ if (type === "bp_high") return has("bp_high_max") || has("bp_high_min");
+ if (type === "pulse") return has("pulse_max") || has("pulse_min");
+ if (type === "spo2") return has("spo2_min");
+ return false; // 最低血圧には目安の欄がない
 }
 
 // 看護師が決めた目安の表示文言
@@ -2113,9 +2126,12 @@ function cpRenderVitalPointDetail() {
   return;
  }
  const p = gVitalChartSelectedPoint;
+ // [Claude修正] 「正常範囲」は医療の判断になるので使わない。目安がない項目は「未設定」と出す
  const exceedTag = p.exceeded
-  ? `<span style="display:inline-block; font-size:13px; font-weight:bold; color:var(--alert); background:var(--alert-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--alert); margin-left:8px;">目安判定：注意（上限超過または下回り）</span>`
-  : `<span style="display:inline-block; font-size:13px; color:var(--pine); background:var(--pine-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--pine-light); margin-left:8px;">目安判定：正常範囲</span>`;
+  ? `<span style="display:inline-block; font-size:13px; font-weight:bold; color:var(--alert); background:var(--alert-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--alert); margin-left:8px;">看護師が決めた目安を超えています（上限より上、または下限より下）</span>`
+  : (p.has_limit
+   ? `<span style="display:inline-block; font-size:13px; color:var(--pine); background:var(--pine-tint); padding:2px 8px; border-radius:4px; border:1px solid var(--pine-light); margin-left:8px;">看護師が決めた目安の範囲内</span>`
+   : `<span style="display:inline-block; font-size:13px; color:var(--ink-2); background:var(--surface); padding:2px 8px; border-radius:4px; border:1px solid var(--line); margin-left:8px;">看護師が決めた目安：未設定</span>`);
 
  box.innerHTML = `
   <div style="display:flex; flex-wrap:wrap; align-items:center; justify-content:space-between; gap:8px;">
@@ -2352,7 +2368,9 @@ function cpBuildVitalSvgChart(chartType, resident, vitalsList, startDate, endDat
   ld.series.forEach(pt => {
    const px = calcX(pt.date, pt.time);
    const py = calcY(pt.val);
-   const enc = encodeURIComponent(JSON.stringify(pt));
+   pt.has_limit = cpHasVitalLimit(pt.type, resident);
+   // [Claude修正] encodeURIComponent は ' を変えないので、onclick='…' が途中で切れないように %27 にする
+   const enc = encodeURIComponent(JSON.stringify(pt)).replace(/'/g, "%27");
    const tip = `${pt.date} ${pt.time || ""} ${pt.label}: ${pt.val} ${pt.unit} (記録者: ${pt.staff_name || "未記録"})${pt.exceeded ? " [目安注意]" : ""}`;
    if (pt.exceeded) {
     seriesSvg.push(`
@@ -2404,16 +2422,20 @@ function renderPersonalVitalChart() {
   return;
  }
 
- if (gVitalChartLastResId !== resId || !gVitalChartAnchorDate) {
+ const selDate = (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+ if (gVitalChartLastResId !== resId || gVitalChartLastSelDate !== selDate || !gVitalChartAnchorDate) {
+  if (gVitalChartLastResId !== resId) gVitalChartSelectedPoint = null;
   gVitalChartLastResId = resId;
-  gVitalChartAnchorDate = (gState && gState.selectedDate) || new Date().toISOString().slice(0, 10);
+  gVitalChartLastSelDate = selDate;
+  gVitalChartAnchorDate = selDate;
  }
 
  const range = cpGetVitalChartRange(gVitalChartAnchorDate, gVitalChartPeriod);
- const rawVitals = (window.db && db.data && Array.isArray(db.data.vitals)) ? db.data.vitals : [];
+ // [Claude修正] db は let で作られていて window.db には載っていない。window.db を見ていたので、実際の画面では点が1つも出ていなかった
+ const rawVitals = (typeof db !== "undefined" && db && db.data && Array.isArray(db.data.vitals)) ? db.data.vitals : [];
  const vitals = rawVitals.filter(v =>
   v &&
-  v.resident_id === resident.id &&
+  Number(v.resident_id) === Number(resident.id) &&
   !v.voided &&
   v.date >= range.startDate &&
   v.date <= range.endDate
@@ -2511,11 +2533,14 @@ function renderPersonalVitalChart() {
    </div>
   </div>
  `;
+ // [Claude修正] ほかの端末の保存などで描き直しても、選んだ点の詳細を消さない
+ if (gVitalChartSelectedPoint) cpRenderVitalPointDetail();
 }
 
 window.cpAddDaysToStr = cpAddDaysToStr;
 window.cpGetVitalChartRange = cpGetVitalChartRange;
 window.cpIsVitalExceedingLimit = cpIsVitalExceedingLimit;
+window.cpHasVitalLimit = cpHasVitalLimit;
 window.cpGetVitalLimitText = cpGetVitalLimitText;
 window.cpChangeVitalPeriod = cpChangeVitalPeriod;
 window.cpShiftVitalPeriod = cpShiftVitalPeriod;

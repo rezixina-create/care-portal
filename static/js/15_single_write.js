@@ -123,7 +123,7 @@ function cpRenderSingleWriteScreenInner(container) {
   const dayTurns = (db.data.turns || []).filter(t => !t.voided && t.resident_id === res.id && t.date === dateStr)
     .slice().sort((a, b) => (a.time || "").localeCompare(b.time || ""));
   const dayCareRecords = (db.data.care_records || []).filter(c => !c.voided && c.resident_id === res.id && (c.recorded_at || "").startsWith(dateStr))
-    .slice().sort((a, b) => (b.recorded_at || "").localeCompare(a.recorded_at || ""));
+    .slice().sort((a, b) => (a.recorded_at || "").localeCompare(b.recorded_at || "")); // [Claude修正 2026-10-23] 古い順（時間の流れ）
   const dayNurseRecords = dayCareRecords.filter(c => c.category === "看護");
 
   // 1. 食事・水分の記入済み表示

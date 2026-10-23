@@ -2121,7 +2121,7 @@
         assert(detailBox.textContent.includes("2026-10-20 14:00"), "Test 165e-2: 選択した日時が表示されること");
         assert(detailBox.textContent.includes("体温 37.8 ℃"), "Test 165e-3: 項目と値が表示されること");
         assert(detailBox.textContent.includes("佐藤"), "Test 165e-4: 記録者名が表示されること");
-        assert(detailBox.textContent.includes("注意"), "Test 165e-5: 目安超過の注意が表示されること");
+        assert(detailBox.textContent.includes("目安を超えています"), "Test 165e-5: 目安超過が表示されること");
       }
 
       // 165f: DOM統合描画 renderPersonalVitalChart & 体重案内ボタン
@@ -2137,6 +2137,23 @@
         assert(chartArea.textContent.includes("SpO2"), "Test 165f-5: SpO2グラフが含まれること");
         assert(chartArea.textContent.includes("体重は「体重」タブに折れ線グラフがあります"), "Test 165f-6: 体重タブへの案内が含まれること");
         assert(chartArea.innerHTML.includes("switchCareTab('weight')"), "Test 165f-7: 体重タブへの移動ボタンが含まれること");
+      }
+
+      // [Claude追加] 165g: 本物のデータから点が描かれること（window.db ではなく db を読む）、選んでいる日にそろうこと
+      {
+        const r165 = (db.data.vitals || []).filter(v => !v.voided && v.temperature != null && v.temperature !== "")[0];
+        if (r165) {
+          gState.selectedResidentId = Number(r165.resident_id);
+          gState.selectedDate = r165.date;
+          renderPersonalVitalChart();
+          const area165 = document.getElementById("personalVitalChartArea");
+          assert(area165 && area165.querySelectorAll("svg g[onclick]").length > 0, "Test 165g-1: 記録のある日はグラフに点が描かれること");
+          assert(area165 && area165.textContent.includes("〜 " + r165.date), "Test 165g-2: グラフの最後の日が選んでいる日になること");
+        }
+        assert(cpHasVitalLimit("bp_low", mockRes165) === false, "Test 165g-3: 最低血圧には目安がない（「範囲内」と言わない）");
+        cpSelectVitalPoint(encodeURIComponent(JSON.stringify({ date: "2026-10-20", time: "09:00", type: "temperature", label: "体温", val: 36.5, unit: "℃", staff_name: "佐藤", exceeded: false, has_limit: false })));
+        const box165 = document.getElementById("personalVitalDetailBox");
+        assert(box165 && box165.textContent.includes("未設定") && !box165.textContent.includes("正常範囲"), "Test 165g-4: 目安がない項目は「未設定」と出し「正常範囲」と言わない");
       }
 
       // 設定およびユニット構成を元に戻す
