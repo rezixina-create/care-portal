@@ -3080,11 +3080,9 @@ window.deleteLinenRecord = deleteLinenRecord;
 // ======================================================================
 
 function cpCanExportCareRecords() {
+ // [Claude修正] 職種の決まりを2か所に書かない。ほかの管理者・事務員だけの機能と同じ isStaffAdminOrClerk で、ログインした本人を見る
  if (!gState || !gState.session || !gState.session.staffName) return false;
- const stamps = (db && db.data && Array.isArray(db.data.stamps)) ? db.data.stamps : (gState.stamps || []);
- const staffObj = stamps.find(s => (s.name || s) === gState.session.staffName);
- const role = staffObj && staffObj.role ? String(staffObj.role) : "";
- return role.includes("管理者") || role.includes("施設長") || role.includes("事務") || role.includes("所長") || role.includes("ホーム長") || role.includes("院長") || role.includes("理事") || role.includes("事務長");
+ return isStaffAdminOrClerk(gState.session.staffName);
 }
 
 function cpPopulateExportResidentSelect() {
@@ -3333,7 +3331,8 @@ function cpBuildCareRecordsCsv(records) {
 }
 
 function cpBuildCareRecordsPrintHtml(collected, inputs) {
- const facilityName = (db.data.facility_settings && db.data.facility_settings.facility_name) || "介護付きグループホーム";
+ // [Claude修正] facility_settings という項目はなく、いつも「介護付きグループホーム」と出ていた。施設名は getFacilityName（設定の施設名）から
+ const facilityName = (typeof getFacilityName === "function") ? getFacilityName() : "";
  let targetLabel = "全員（期間中の全入居者）";
  if (inputs.resVal !== "ALL") {
   const r = collected.targetResidents[0];
