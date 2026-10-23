@@ -93,6 +93,20 @@
     <div id="selectedDateRecordsList"></div>
     <div id="personalDailySummaryArea"></div>
     <div id="personalVitalChartArea"></div>
+    <div id="officeCareRecordsExportSection" style="display:none;">
+      <select id="exportRecordResidentSelect"><option value="">選んでください</option><option value="ALL">全員（その期間に入居していた方）</option></select>
+      <input type="date" id="exportRecordStartDate">
+      <input type="date" id="exportRecordEndDate">
+      <input type="checkbox" id="chkExport_care_records" value="care_records">
+      <input type="checkbox" id="chkExport_vitals" value="vitals">
+      <input type="checkbox" id="chkExport_meals" value="meals">
+      <input type="checkbox" id="chkExport_excretions" value="excretions">
+      <input type="checkbox" id="chkExport_baths" value="baths">
+      <input type="checkbox" id="chkExport_turns" value="turns">
+      <input type="checkbox" id="chkExport_meds" value="meds">
+      <input type="checkbox" id="exportRecordIncludeVoided">
+      <span id="exportRecordStatusNotice"></span>
+    </div>
     <div id="printArea" style="display:none;"></div>
     <input type="text" id="searchInput">
     <div id="searchResults" style="display:none;"></div>
@@ -2155,6 +2169,307 @@
         const box165 = document.getElementById("personalVitalDetailBox");
         assert(box165 && box165.textContent.includes("未設定") && !box165.textContent.includes("正常範囲"), "Test 165g-4: 目安がない項目は「未設定」と出し「正常範囲」と言わない");
       }
+
+      
+      // ----------------------------------------------------
+      // Test 166: 記録の書き出し（CSV・印刷・権限・期間制限・取消・並び順）
+      // ----------------------------------------------------
+      log("--- Test 166: 記録の書き出し（CSV・印刷・権限・期間制限・取消・並び順） ---");
+
+      // 166a: 権限判定 (cpCanExportCareRecords)
+      const origSession166 = gState.session;
+
+      // 管理者 (aaaa, 窪田 誠)
+      gState.session = { staffName: "木村 健一", staffId: "aaaa" };
+      assert(cpCanExportCareRecords() === true, "Test 166a-1: 管理者は書き出し権限あり");
+
+      // 事務員 (cccc, 松本 喜代子)
+      gState.session = { staffName: "松本 陽子", staffId: "cccc" };
+      assert(cpCanExportCareRecords() === true, "Test 166a-2: 事務員は書き出し権限あり");
+
+      // 看護師 (bbbb, 関 奈々)
+      gState.session = { staffName: "鈴木 美智子", staffId: "bbbb" };
+      assert(cpCanExportCareRecords() === false, "Test 166a-3: 看護師は書き出し権限なし（枠非表示・処理ブロック）");
+
+      // 介護職員 (dddd, 原 洋平)
+      gState.session = { staffName: "佐藤 健太", staffId: "dddd" };
+      assert(cpCanExportCareRecords() === false, "Test 166a-4: 介護職員は書き出し権限なし（枠非表示・処理ブロック）");
+
+      // 未ログイン (null)
+      gState.session = null;
+      assert(cpCanExportCareRecords() === false, "Test 166a-5: 未ログインは書き出し権限なし");
+
+      // 166b: 入力バリデーション (cpValidateExportInputs)
+      // 未権限で関数を呼んだ場合はブロック
+      let alertMsg166 = "";
+      const origAlert166 = window.alert;
+      window.alert = msg => { alertMsg166 = msg; };
+
+      assert(cpValidateExportInputs() === null, "Test 166b-1: 未権限時はバリデーションがnullを返す");
+      assert(alertMsg166.includes("権限がありません"), "Test 166b-2: 未権限時は権限エラーメッセージを表示");
+
+      // 管理者セッション設定
+      gState.session = { staffName: "木村 健一", staffId: "aaaa" };
+      cpPopulateExportResidentSelect();
+
+      // DOM要素取得
+      const selRes166 = document.getElementById("exportRecordResidentSelect");
+      const dStart166 = document.getElementById("exportRecordStartDate");
+      const dEnd166 = document.getElementById("exportRecordEndDate");
+      const chkVoid166 = document.getElementById("exportRecordIncludeVoided");
+
+      // 未選択状態 (利用者未選択)
+      selRes166.value = "";
+      dStart166.value = "2026-10-01";
+      dEnd166.value = "2026-10-23";
+      cpExportToggleAllTypes(true);
+      assert(cpValidateExportInputs() === null, "Test 166b-3: 利用者未選択時はバリデーションで弾かれること");
+      assert(alertMsg166.includes("利用者を選択"), "Test 166b-4: 利用者選択警告が出ること");
+
+      // 日付未指定
+      selRes166.value = "1";
+      dStart166.value = "";
+      dEnd166.value = "2026-10-23";
+      assert(cpValidateExportInputs() === null, "Test 166b-5: 開始日空欄時は弾かれること");
+
+      // 開始日 > 終了日
+      dStart166.value = "2026-10-25";
+      dEnd166.value = "2026-10-23";
+      assert(cpValidateExportInputs() === null, "Test 166b-6: 開始日>終了日は弾かれること");
+      assert(alertMsg166.includes("開始日は終了日以前"), "Test 166b-7: 日付逆転警告が出ること");
+
+      // 未来日
+      dStart166.value = "2026-10-01";
+      dEnd166.value = "2099-12-31";
+      assert(cpValidateExportInputs() === null, "Test 166b-8: 未来日指定は弾かれること");
+      assert(alertMsg166.includes("未来の日付は指定できません"), "Test 166b-9: 未来日警告が出ること");
+
+      // 1年超 (最長1年制限)
+      dStart166.value = "2024-01-01";
+      dEnd166.value = "2025-06-01";
+      assert(cpValidateExportInputs() === null, "Test 166b-10: 1年超は弾かれること");
+      assert(alertMsg166.includes("最長1年以内"), "Test 166b-11: 1年超警告が出ること");
+
+      // 種類未選択
+      dStart166.value = "2026-10-01";
+      dEnd166.value = "2026-10-23";
+      cpExportToggleAllTypes(false);
+      assert(cpValidateExportInputs() === null, "Test 166b-12: 記録の種類未選択時は弾かれること");
+      assert(alertMsg166.includes("1つ以上選択"), "Test 166b-13: 種類未選択警告が出ること");
+
+      // 正常条件
+      cpExportToggleAllTypes(true);
+      const validInputs166 = cpValidateExportInputs();
+      assert(validInputs166 !== null, "Test 166b-14: 全条件を満たすと有効な入力オブジェクトが返る");
+      assert(validInputs166.selectedTypes.size === 7, "Test 166b-15: 7種類すべて選択されていること");
+
+      // 166c: 記録収集と古い順ソート (cpCollectExportRecords)
+      // 1人・1か月 (2026-10-01〜2026-10-23)・全部の種類
+      const collected1Res = cpCollectExportRecords({
+        resVal: "1",
+        startDate: "2026-10-01",
+        endDate: "2026-10-23",
+        selectedTypes: new Set(["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"]),
+        includeVoided: false
+      });
+      assert(collected1Res.allRecords.length > 0, "Test 166c-1: 期間内の記録が収集されること");
+
+      // 件数の一致確認: 日ごとに cpBuildUnifiedResidentRecords を集めた総件数と一致すること
+      let expectedSum166 = 0;
+      let curD166 = "2026-10-01";
+      while (curD166 <= "2026-10-23") {
+        expectedSum166 += cpBuildUnifiedResidentRecords(1, curD166, false, false).length;
+        curD166 = cpAddDaysToStr(curD166, 1);
+      }
+      assert(collected1Res.allRecords.length === expectedSum166, "Test 166c-2: 個別記録の日ごと合算件数と完全に一致すること");
+
+      // 並び順: 古い順（日付・時刻昇順）
+      let isChronological = true;
+      for (let i = 0; i < collected1Res.allRecords.length - 1; i++) {
+        if (collected1Res.allRecords[i].recorded_at > collected1Res.allRecords[i + 1].recorded_at) {
+          isChronological = false;
+          break;
+        }
+      }
+      assert(isChronological === true, "Test 166c-3: 1人分の記録が古い順（早い時間から遅い時間）に並んでいること");
+
+      // 種類別絞り込み (バイタルのみ)
+      const collectedVitalOnly = cpCollectExportRecords({
+        resVal: "1",
+        startDate: "2026-10-01",
+        endDate: "2026-10-23",
+        selectedTypes: new Set(["vitals"]),
+        includeVoided: false
+      });
+      const allAreVitals = collectedVitalOnly.allRecords.every(r => r.category === "バイタル");
+      assert(allAreVitals && collectedVitalOnly.allRecords.length > 0, "Test 166c-4: バイタルのみ選択時にバイタルのみ抽出されること");
+
+      // 166d: 全員指定時の入退居者の正しい判定
+      // テスト用に入居日・退居日を持つ利用者を一時登録
+      const mockResDischarged = {
+        id: 99912,
+        name: "山本 孝",
+        room_no: "205",
+        status: "退居",
+        admission_date: "2025-01-01",
+        discharge_date: "2026-03-14"
+      };
+      const mockResAdmitted = {
+        id: 99919,
+        name: "堀 陽子",
+        room_no: "206",
+        status: "在所",
+        admission_date: "2026-05-18",
+        discharge_date: null
+      };
+      db.data.residents.push(mockResDischarged, mockResAdmitted);
+
+      // 山本 孝 (id: 99912) は 2026-03-14 退居
+      // 2026-04-01〜2026-04-07 では対象外
+      const collApr166 = cpCollectExportRecords({
+        resVal: "ALL",
+        startDate: "2026-04-01",
+        endDate: "2026-04-07",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+      const hasYamamotoApr = collApr166.targetResidents.some(r => r.id === 99912);
+      assert(hasYamamotoApr === false, "Test 166d-1: 4月期間に3月退居の山本様は含まれないこと");
+
+      // 2026-03-01〜2026-03-07 では対象に含まれる
+      const collMar166 = cpCollectExportRecords({
+        resVal: "ALL",
+        startDate: "2026-03-01",
+        endDate: "2026-03-07",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+      const hasYamamotoMar = collMar166.targetResidents.some(r => r.id === 99912);
+      assert(hasYamamotoMar === true, "Test 166d-2: 3月期間に3月退居の山本様が含まれること");
+
+      // 堀 陽子 (id: 99919) は 2026-05-18 入居
+      // 2026-01-01〜2026-01-07 では対象外
+      const collJan166 = cpCollectExportRecords({
+        resVal: "ALL",
+        startDate: "2026-01-01",
+        endDate: "2026-01-07",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+      const hasHoriJan = collJan166.targetResidents.some(r => r.id === 99919);
+      assert(hasHoriJan === false, "Test 166d-3: 1月期間に5月入居の堀様は含まれないこと");
+
+      // 2026-06-01〜2026-06-07 では対象に含まれる
+      const collJun166 = cpCollectExportRecords({
+        resVal: "ALL",
+        startDate: "2026-06-01",
+        endDate: "2026-06-07",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+      const hasHoriJun = collJun166.targetResidents.some(r => r.id === 99919);
+      assert(hasHoriJun === true, "Test 166d-4: 6月期間に5月入居の堀様が含まれること");
+
+      // 全員のときの並び順: 部屋番号昇順、その中は日付時刻昇順
+      let isRoomOrdered = true;
+      for (let i = 0; i < collJun166.allRecords.length - 1; i++) {
+        const curRoom = String(collJun166.allRecords[i].room_no);
+        const nextRoom = String(collJun166.allRecords[i + 1].room_no);
+        const cmp = curRoom.localeCompare(nextRoom, undefined, { numeric: true });
+        if (cmp > 0) {
+          isRoomOrdered = false;
+          break;
+        } else if (cmp === 0) {
+          if (collJun166.allRecords[i].recorded_at > collJun166.allRecords[i + 1].recorded_at) {
+            isRoomOrdered = false;
+            break;
+          }
+        }
+      }
+      assert(isRoomOrdered === true, "Test 166d-5: 全員時は部屋番号順、同部屋内は古い順に並ぶこと");
+
+      // 166e: 取消記録の除外と理由付き包含
+      // モック取消レコードを一時挿入
+      const mockVoidRecord = {
+        id: 999991,
+        resident_id: 1,
+        recorded_at: "2026-10-22 10:00",
+        date: "2026-10-22",
+        time: "10:00",
+        category: "介護",
+        content: "テスト取消記録です",
+        staff_name: "テスト記録者",
+        voided: true,
+        void_reason: "入力間違いのため",
+        voided_by: "管理者"
+      };
+      db.data.care_records.push(mockVoidRecord);
+
+      const collNoVoid = cpCollectExportRecords({
+        resVal: "1",
+        startDate: "2026-10-22",
+        endDate: "2026-10-22",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+      assert(collNoVoid.allRecords.some(r => r.content === "テスト取消記録です") === false, "Test 166e-1: チェックなし時は取消記録が含まれないこと");
+
+      const collWithVoid = cpCollectExportRecords({
+        resVal: "1",
+        startDate: "2026-10-22",
+        endDate: "2026-10-22",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: true
+      });
+      const foundVoidRec = collWithVoid.allRecords.find(r => r.content === "テスト取消記録です");
+      assert(foundVoidRec !== undefined && foundVoidRec.voided === true, "Test 166e-2: チェックあり時は取消記録が含まれること");
+      assert(foundVoidRec.void_reason === "入力間違いのため" && foundVoidRec.voided_by === "管理者", "Test 166e-3: 取消理由と取消者が保持されていること");
+
+      // 166f: CSV生成 (cpBuildCareRecordsCsv) & エスケープ
+      const csvStr166 = cpBuildCareRecordsCsv([
+        {
+          room_no: "101",
+          resident_name: "鈴木 一郎",
+          date: "2026-10-22",
+          time: "09:00",
+          category: "介護記録",
+          content: 'コンマ,と"引用符"と\n改行がある記録',
+          staff_name: "山田 花子",
+          voided: false
+        },
+        foundVoidRec
+      ]);
+
+      assert(csvStr166.includes("部屋番号,利用者名,日付,時刻,種類,内容,記録者,取消\r\n"), "Test 166f-1: CSVヘッダー行が正しいこと (CRLF)");
+      assert(csvStr166.includes('"コンマ,と""引用符""と\n改行がある記録"'), "Test 166f-2: 特殊文字が二重引用符で安全にエスケープされること");
+      assert(csvStr166.includes("取消（理由: 入力間違いのため / 取消者: 管理者）"), "Test 166f-3: 取消列に理由と取消者が出力されること");
+
+      // 166g: 印刷HTML生成 (cpBuildCareRecordsPrintHtml)
+      const printHtml166 = cpBuildCareRecordsPrintHtml(
+        { targetResidents: [{ id: 1, room_no: "101", name: "鈴木 一郎" }], allRecords: collWithVoid.allRecords },
+        { resVal: "1", startDate: "2026-10-22", endDate: "2026-10-22", selectedTypes: new Set(["care_records"]), includeVoided: true }
+      );
+      assert(printHtml166.includes("施設名:"), "Test 166g-1: 印刷ヘッダーに施設名が含まれること");
+      assert(printHtml166.includes("印刷日時:"), "Test 166g-2: 印刷日時の表示が含まれること");
+      assert(printHtml166.includes("break-inside: avoid"), "Test 166g-3: 記録の途中改ページ防止スタイルが含まれること");
+      assert(!printHtml166.includes("#fff") && !printHtml166.includes("rgba("), "Test 166g-4: カラー直書きがなくCSS変数のみであること");
+
+      // 166h: settings_logs 記録とデータ不変性
+      const initialLogsCount166 = (db.data.settings_logs || []).length;
+      const initialCareRecsCount166 = db.data.care_records.length;
+
+      cpLogCareRecordsExport("CSV出力", "鈴木 一郎", "2026-10-01", "2026-10-23", ["介護記録", "バイタル"], 10);
+      assert(db.data.settings_logs.length === initialLogsCount166 + 1, "Test 166h-1: settings_logs に1件ログが追加されること");
+      const latestLog166 = db.data.settings_logs[db.data.settings_logs.length - 1];
+      assert(latestLog166.kind === "記録の書き出し" && latestLog166.action === "CSV出力", "Test 166h-2: ログ種別とアクションが記録されること");
+      assert(latestLog166.detail.includes("鈴木 一郎") && latestLog166.detail.includes("2026-10-01〜2026-10-23"), "Test 166h-3: 利用者名・期間が記録されること");
+      assert(db.data.care_records.length === initialCareRecsCount166, "Test 166h-4: 介護記録本体データは一切変更されないこと");
+
+      // 一時モック削除 & セッション復帰
+      db.data.residents = db.data.residents.filter(r => r.id !== 99912 && r.id !== 99919);
+      db.data.care_records = db.data.care_records.filter(r => r.id !== 999991);
+      gState.session = origSession166;
+      window.alert = origAlert166;
 
       // 設定およびユニット構成を元に戻す
       db.data.kasan_settings = origSettingsBefore157;

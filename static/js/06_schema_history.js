@@ -1408,7 +1408,7 @@ function cpDefaultMealTime(mealType) {
  return "10:00";
 }
 
-function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
+function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope, includeVoided) {
  if (!resId) return [];
  const items = [];
  const matchDate = (d) => isAllScope ? Boolean(d) : (d === targetDate);
@@ -1416,6 +1416,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
  // 1. 様子・経過記録 (care_records)
  (db.data.care_records || []).forEach(r => {
   if (r.resident_id !== resId) return;
+  if (includeVoided === false && r.voided) return;
   // 体位変換から自動生成された「巡視」は turns 側と重複するため除外（ただし手動記録や特変は残す）
   if (r.auto_night_turn && r.category === "巡視") return;
   const dtStr = r.recorded_at || r.record_time || "";
@@ -1427,6 +1428,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    source_type: "care_records",
    recorded_at: dtStr.length === 10 ? `${dtStr} 00:00` : dtStr,
    date: dPart,
+   time: dtStr.length >= 16 ? dtStr.slice(11, 16) : "00:00",
    category: r.category || "介護",
    content: r.content || "",
    staff_name: r.staff_name || "未記録",
@@ -1442,7 +1444,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 2. バイタル (vitals)
  (db.data.vitals || []).forEach(v => {
-  if (v.resident_id !== resId || v.voided) return;
+  if (v.resident_id !== resId || (!includeVoided && v.voided)) return;
   if (!matchDate(v.date)) return;
   const tm = v.time || "09:00";
   items.push({
@@ -1454,6 +1456,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "バイタル",
    content: cpFormatVitalBrief(v) + (v.notes ? ` （${v.notes}）` : ""),
    staff_name: v.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(v.voided),
+   voided_at: v.voided_at,
+   voided_by: v.voided_by,
+   void_reason: v.void_reason,
    edit_history: v.edit_history,
    raw: v
   });
@@ -1461,7 +1468,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 3. 食事・水分 (meals)
  (db.data.meals || []).forEach(m => {
-  if (m.resident_id !== resId || m.voided) return;
+  if (m.resident_id !== resId || (!includeVoided && m.voided)) return;
   if (!matchDate(m.date)) return;
   const tm = m.time || cpDefaultMealTime(m.meal_type);
   items.push({
@@ -1473,6 +1480,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "食事・水分",
    content: cpFormatMealDetail(m),
    staff_name: m.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(m.voided),
+   voided_at: m.voided_at,
+   voided_by: m.voided_by,
+   void_reason: m.void_reason,
    edit_history: m.edit_history,
    raw: m
   });
@@ -1480,7 +1492,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 4. 排泄 (excretions)
  (db.data.excretions || []).forEach(e => {
-  if (e.resident_id !== resId || e.voided) return;
+  if (e.resident_id !== resId || (!includeVoided && e.voided)) return;
   if (!matchDate(e.date)) return;
   const tm = e.time || "10:00";
   items.push({
@@ -1492,6 +1504,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "排泄",
    content: cpFormatExcretionDetail(e),
    staff_name: e.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(e.voided),
+   voided_at: e.voided_at,
+   voided_by: e.voided_by,
+   void_reason: e.void_reason,
    edit_history: e.edit_history,
    raw: e
   });
@@ -1499,7 +1516,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 5. 入浴 (baths)
  (db.data.baths || []).forEach(b => {
-  if (b.resident_id !== resId || b.voided) return;
+  if (b.resident_id !== resId || (!includeVoided && b.voided)) return;
   if (!matchDate(b.date)) return;
   const tm = b.time || "14:00";
   items.push({
@@ -1511,6 +1528,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "入浴",
    content: cpFormatBathDetail(b),
    staff_name: b.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(b.voided),
+   voided_at: b.voided_at,
+   voided_by: b.voided_by,
+   void_reason: b.void_reason,
    edit_history: b.edit_history,
    raw: b
   });
@@ -1518,7 +1540,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 6. 体位変換・夜間巡視 (turns)
  (db.data.turns || []).forEach(t => {
-  if (t.resident_id !== resId || t.voided) return;
+  if (t.resident_id !== resId || (!includeVoided && t.voided)) return;
   if (!matchDate(t.date)) return;
   const tm = t.time || "00:00";
   items.push({
@@ -1530,6 +1552,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "体位変換",
    content: `【${tm} 体位変換・巡視】${t.action || ""}${t.note ? " 【様子】" + t.note : ""}`,
    staff_name: t.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(t.voided),
+   voided_at: t.voided_at,
+   voided_by: t.voided_by,
+   void_reason: t.void_reason,
    edit_history: t.edit_history,
    raw: t
   });
@@ -1538,7 +1565,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
  // 7. 服薬 (meds)
  // [Antigravity実装 2026-10-19] 飲む日の表記や目薬の薬名・左右も統合記録に出す
  (db.data.meds || []).forEach(m => {
-  if (m.resident_id !== resId || m.voided) return;
+  if (m.resident_id !== resId || (!includeVoided && m.voided)) return;
   if (!matchDate(m.date)) return;
   const label = m.timing_key || m.slot || "服薬";
   const tm = m.actual_time || m.recorded_time || (typeof cpRxSlotTime === "function" ? cpRxSlotTime(label) : "08:00");
@@ -1560,6 +1587,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "服薬",
    content: `【${label}】${m.status || "済"}${detail}${m.note ? " " + m.note : ""}`,
    staff_name: m.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(m.voided),
+   voided_at: m.voided_at,
+   voided_by: m.voided_by,
+   void_reason: m.void_reason,
    edit_history: m.edit_history,
    raw: m
   });
@@ -1567,7 +1599,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
 
  // 8. 口腔ケア (oral_cares)
  (db.data.oral_cares || []).forEach(o => {
-  if (o.resident_id !== resId || o.voided) return;
+  if (o.resident_id !== resId || (!includeVoided && o.voided)) return;
   if (!matchDate(o.date)) return;
   const tm = o.time || "08:30";
   const slots = [];
@@ -1585,6 +1617,11 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope) {
    category: "口腔ケア",
    content: `口腔ケア ${detail}${o.denture_cleaned ? "・義歯洗浄済" : ""}${o.mucosa_status ? " (" + o.mucosa_status + ")" : ""}${o.notes ? " " + o.notes : ""}`,
    staff_name: o.staff_name || "未記録",
+   time: tm,
+   voided: Boolean(o.voided),
+   voided_at: o.voided_at,
+   voided_by: o.voided_by,
+   void_reason: o.void_reason,
    edit_history: o.edit_history,
    raw: o
   });

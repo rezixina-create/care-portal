@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261023_k3">
+	<link rel="stylesheet" href="style.css?v=20261023_k4">
 </head>
 <body>
 
@@ -1362,6 +1362,107 @@
  </div>
  <div id="officeBackupNotice" style="margin-top:14px; font-size:13px; color:#059669; font-weight:bold; text-align:center;"></div>
  </div>
+
+  <!-- 記録の書き出し（CSV・印刷・管理者および事務員専用） [Antigravity実装] -->
+  <div id="officeCareRecordsExportSection" style="display:none; margin-top:20px; background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:18px;">
+    <div style="font-weight:bold; font-size:16px; color:var(--pine-dark); margin-bottom:6px; border-bottom:2px solid var(--pine); padding-bottom:8px;">
+      【記録の書き出し（CSV・印刷）】（管理者・事務員専用）
+    </div>
+    <p style="font-size:13px; color:var(--ink-2); margin:8px 0 16px 0; line-height:1.6;">
+      個別記録に登録された各種記録（介護経過、バイタル、食事、排泄、入浴、体位変換、服薬）を、指定した利用者・期間・種類でまとめてCSVファイル（Excel対応）で書き出し、またはA4縦で印刷出力します。<br>
+      <span style="color:var(--alert); font-weight:bold;">※ 個人情報を含む記録を出力するため、管理者および事務員のみが操作できます。</span>
+    </p>
+
+    <!-- 入力フォームエリア -->
+    <div style="display:grid; grid-template-columns:1fr; gap:14px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px; padding:16px;">
+      <!-- 1. 利用者選択 -->
+      <div>
+        <label for="exportRecordResidentSelect" style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:6px;">
+          利用者:
+        </label>
+        <select id="exportRecordResidentSelect" class="form-control" style="width:100%; max-width:400px; height:38px; font-size:13px; padding:6px 10px; border:1px solid var(--line); border-radius:4px; box-sizing:border-box; background:var(--surface); color:var(--ink);">
+          <option value="">選んでください</option>
+          <option value="ALL">全員（その期間に入居していた方）</option>
+        </select>
+      </div>
+
+      <!-- 2. 期間指定 -->
+      <div>
+        <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:6px;">
+          期間（最長1年・本日以前）:
+        </label>
+        <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+          <input type="date" id="exportRecordStartDate" class="form-control" style="font-size:13px; height:38px; padding:6px 10px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+          <span style="font-size:13px; color:var(--ink-2);">〜</span>
+          <input type="date" id="exportRecordEndDate" class="form-control" style="font-size:13px; height:38px; padding:6px 10px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+          <span style="font-size:13px; color:var(--ink-3);">（開始日 ≦ 終了日、未来日は不可）</span>
+        </div>
+      </div>
+
+      <!-- 3. 記録の種類（複数選択可） -->
+      <div>
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:6px;">
+          <label style="font-size:13px; font-weight:bold; color:var(--ink);">
+            記録の種類（複数選択可）:
+          </label>
+          <div style="display:flex; gap:6px;">
+            <button type="button" class="btn btn-secondary" onclick="cpExportToggleAllTypes(true)" style="font-size:13px; padding:2px 8px; background:var(--surface); border:1px solid var(--line); color:var(--ink-2); border-radius:4px; cursor:pointer;">すべて選択</button>
+            <button type="button" class="btn btn-secondary" onclick="cpExportToggleAllTypes(false)" style="font-size:13px; padding:2px 8px; background:var(--surface); border:1px solid var(--line); color:var(--ink-2); border-radius:4px; cursor:pointer;">すべて解除</button>
+          </div>
+        </div>
+        <div style="display:flex; flex-wrap:wrap; gap:12px 18px; background:var(--surface); border:1px solid var(--line); border-radius:4px; padding:12px 14px;">
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_care_records" value="care_records" style="width:16px; height:16px; cursor:pointer;">
+            介護記録（経過・特変・申し送りなど）
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_vitals" value="vitals" style="width:16px; height:16px; cursor:pointer;">
+            バイタル
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_meals" value="meals" style="width:16px; height:16px; cursor:pointer;">
+            食事・水分
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_excretions" value="excretions" style="width:16px; height:16px; cursor:pointer;">
+            排泄
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_baths" value="baths" style="width:16px; height:16px; cursor:pointer;">
+            入浴
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_turns" value="turns" style="width:16px; height:16px; cursor:pointer;">
+            体位変換
+          </label>
+          <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+            <input type="checkbox" id="chkExport_meds" value="meds" style="width:16px; height:16px; cursor:pointer;">
+            服薬
+          </label>
+        </div>
+      </div>
+
+      <!-- 4. 取り消した記録も含める -->
+      <div>
+        <label style="font-size:13px; color:var(--ink); cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+          <input type="checkbox" id="exportRecordIncludeVoided" style="width:16px; height:16px; cursor:pointer;">
+          取り消した記録も含める
+        </label>
+        <span style="font-size:13px; color:var(--ink-3); margin-left:8px;">（チェックを入れると、取り消された記録も取消理由・取消者名つきで出力します）</span>
+      </div>
+    </div>
+
+    <!-- 実行ボタン・ステータス表示 -->
+    <div style="display:flex; gap:12px; align-items:center; margin-top:16px; flex-wrap:wrap;">
+      <button type="button" class="btn btn-primary" onclick="cpExportCareRecordsCsv()" style="font-size:13px; padding:9px 20px; background:var(--pine); border:1px solid var(--pine-dark); color:var(--surface); border-radius:4px; cursor:pointer; font-weight:bold;">
+        📥 CSVで書き出す (Excel対応)
+      </button>
+      <button type="button" class="btn btn-secondary" onclick="cpPrintCareRecords()" style="font-size:13px; padding:9px 20px; background:var(--surface); border:1px solid var(--line); color:var(--pine-dark); border-radius:4px; cursor:pointer; font-weight:bold;">
+        🖨️ A4縦で印刷する
+      </button>
+      <span id="exportRecordStatusNotice" style="font-size:13px; color:var(--pine); font-weight:bold;"></span>
+    </div>
+  </div>
  </div>
 
  <!-- 15. 職員アカウント・暗証番号管理（管理者・事務専用） -->
@@ -4198,26 +4299,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261023_k3"></script>
- <script src="js/02_terms.js?v=20261023_k3"></script>
- <script src="js/03_common.js?v=20261023_k3"></script>
- <script src="js/04_care_record.js?v=20261023_k3"></script>
- <script src="js/05_summary_print_audit.js?v=20261023_k3"></script>
- <script src="js/06_schema_history.js?v=20261023_k3"></script>
- <script src="js/07_daily_tables.js?v=20261023_k3"></script>
- <script src="js/08_meds.js?v=20261023_k3"></script>
- <script src="js/09_night_misc.js?v=20261023_k3"></script>
- <script src="js/10_office.js?v=20261023_k3"></script>
- <script src="js/11_karte_staff.js?v=20261023_k3"></script>
- <script src="js/12_hospital_photos.js?v=20261023_k3"></script>
- <script src="js/13_shift_units.js?v=20261023_k3"></script>
- <script src="js/14_auth_home.js?v=20261023_k3"></script>
- <script src="js/15_single_write.js?v=20261023_k3"></script>
- <script src="js/16_careplan.js?v=20261023_k3"></script>
-	<script src="js/17_kasan.js?v=20261023_k3"></script>
-	<script src="js/18_stats.js?v=20261023_k3"></script>
-	<script src="js/19_life.js?v=20261023_k3"></script>
-	<script src="js/20_invoice.js?v=20261023_k3"></script>
+ <script src="js/01_core.js?v=20261023_k4"></script>
+ <script src="js/02_terms.js?v=20261023_k4"></script>
+ <script src="js/03_common.js?v=20261023_k4"></script>
+ <script src="js/04_care_record.js?v=20261023_k4"></script>
+ <script src="js/05_summary_print_audit.js?v=20261023_k4"></script>
+ <script src="js/06_schema_history.js?v=20261023_k4"></script>
+ <script src="js/07_daily_tables.js?v=20261023_k4"></script>
+ <script src="js/08_meds.js?v=20261023_k4"></script>
+ <script src="js/09_night_misc.js?v=20261023_k4"></script>
+ <script src="js/10_office.js?v=20261023_k4"></script>
+ <script src="js/11_karte_staff.js?v=20261023_k4"></script>
+ <script src="js/12_hospital_photos.js?v=20261023_k4"></script>
+ <script src="js/13_shift_units.js?v=20261023_k4"></script>
+ <script src="js/14_auth_home.js?v=20261023_k4"></script>
+ <script src="js/15_single_write.js?v=20261023_k4"></script>
+ <script src="js/16_careplan.js?v=20261023_k4"></script>
+	<script src="js/17_kasan.js?v=20261023_k4"></script>
+	<script src="js/18_stats.js?v=20261023_k4"></script>
+	<script src="js/19_life.js?v=20261023_k4"></script>
+	<script src="js/20_invoice.js?v=20261023_k4"></script>
   
 
   <!-- ============================================================ -->

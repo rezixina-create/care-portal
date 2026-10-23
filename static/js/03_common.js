@@ -427,6 +427,11 @@ function updateStaffRoleUI() {
  if (adminRow) {
  adminRow.style.display = isAdminOrClerk ? "flex" : "none";
  }
+  // 記録の書き出し枠の表示制御（管理者・事務員専用） [Antigravity実装]
+  const exportSection = document.getElementById("officeCareRecordsExportSection");
+  if (exportSection) {
+    exportSection.style.display = (typeof cpCanExportCareRecords === "function" && cpCanExportCareRecords()) ? "block" : "none";
+  }
  // [Antigravity実装 2026-10-16] 職種切り替え時に「経過記録」画面の表示項目も即時更新
  if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") {
   renderSingleWriteScreen();

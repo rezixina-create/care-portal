@@ -2583,6 +2583,9 @@ function renderOfficeBackup() {
  if (typeof loadExternalBackupStatus === "function") {
   loadExternalBackupStatus();
  }
+ if (typeof renderOfficeCareRecordsExport === "function") {
+  renderOfficeCareRecordsExport();
+ }
 }
 
 // [Claude修正] サーバーの返す記号（forbidden_role など）を、職員に分かる言葉にする
@@ -3070,3 +3073,475 @@ window.setTodayDate = setTodayDate;
 window.changeLinenResident = changeLinenResident;
 window.deleteLinenRecord = deleteLinenRecord;
 
+
+
+// ======================================================================
+// 事務所ポータル：記録の書き出し（CSV・印刷・管理者および事務員専用） [Antigravity実装]
+// ======================================================================
+
+function cpCanExportCareRecords() {
+ if (!gState || !gState.session || !gState.session.staffName) return false;
+ const stamps = (db && db.data && Array.isArray(db.data.stamps)) ? db.data.stamps : (gState.stamps || []);
+ const staffObj = stamps.find(s => (s.name || s) === gState.session.staffName);
+ const role = staffObj && staffObj.role ? String(staffObj.role) : "";
+ return role.includes("管理者") || role.includes("施設長") || role.includes("事務") || role.includes("所長") || role.includes("ホーム長") || role.includes("院長") || role.includes("理事") || role.includes("事務長");
+}
+
+function cpPopulateExportResidentSelect() {
+ const sel = document.getElementById("exportRecordResidentSelect");
+ if (!sel) return;
+ const curVal = sel.value;
+ sel.innerHTML = `<option value="">選んでください</option><option value="ALL">全員（その期間に入居していた方）</option>`;
+ const residents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : ((gState && Array.isArray(gState.residents)) ? gState.residents : []);
+ const sorted = [...residents].sort((a, b) => String(a.room_no || "").localeCompare(String(b.room_no || ""), undefined, { numeric: true }));
+ sorted.forEach(r => {
+  const statusNote = (r.status && r.status !== "在所") ? ` (${r.status})` : "";
+  const opt = document.createElement("option");
+  opt.value = String(r.id);
+  opt.textContent = `${r.room_no || "-"}号室 ${r.name || "名称未設定"} 様${statusNote}`;
+  sel.appendChild(opt);
+ });
+ if (curVal) sel.value = curVal;
+}
+
+function renderOfficeCareRecordsExport() {
+ const sec = document.getElementById("officeCareRecordsExportSection");
+ if (!sec) return;
+ if (!cpCanExportCareRecords()) {
+  sec.style.display = "none";
+  return;
+ }
+ sec.style.display = "block";
+ cpPopulateExportResidentSelect();
+}
+
+function cpExportToggleAllTypes(checkAll) {
+ const typeKeys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ typeKeys.forEach(k => {
+  const chk = document.getElementById(`chkExport_${k}`);
+  if (chk) chk.checked = Boolean(checkAll);
+ });
+}
+
+function cpGetSelectedTypeLabels(selectedTypes) {
+ const labelMap = {
+  care_records: "介護記録",
+  vitals: "バイタル",
+  meals: "食事・水分",
+  excretions: "排泄",
+  baths: "入浴",
+  turns: "体位変換",
+  meds: "服薬"
+ };
+ const labels = [];
+ const keys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ keys.forEach(k => {
+  if (selectedTypes.has(k)) labels.push(labelMap[k]);
+ });
+ return labels;
+}
+
+function cpIsRecordTypeSelected(item, selectedTypes) {
+ const src = item.source_type;
+ if (selectedTypes.has("care_records") && (src === "care_records" || (!src && item.category !== "バイタル" && item.category !== "食事・水分" && item.category !== "排泄" && item.category !== "入浴" && item.category !== "体位変換" && item.category !== "服薬" && item.category !== "口腔ケア"))) return true;
+ if (selectedTypes.has("vitals") && (src === "vitals" || item.category === "バイタル")) return true;
+ if (selectedTypes.has("meals") && (src === "meals" || src === "oral_cares" || item.category === "食事・水分" || item.category === "口腔ケア")) return true;
+ if (selectedTypes.has("excretions") && (src === "excretions" || item.category === "排泄")) return true;
+ if (selectedTypes.has("baths") && (src === "baths" || item.category === "入浴")) return true;
+ if (selectedTypes.has("turns") && (src === "turns" || item.category === "体位変換")) return true;
+ if (selectedTypes.has("meds") && (src === "meds" || item.category === "服薬")) return true;
+ return false;
+}
+
+function cpValidateExportInputs() {
+ if (!cpCanExportCareRecords()) {
+  alert("権限がありません。記録の書き出し・印刷は管理者および事務員のみ実行できます。");
+  return null;
+ }
+ const selRes = document.getElementById("exportRecordResidentSelect");
+ const resVal = selRes ? selRes.value : "";
+ if (!resVal) {
+  alert("利用者を選択してください（「選んでください」のままでは書き出せません）。");
+  return null;
+ }
+
+ const startDateInput = document.getElementById("exportRecordStartDate");
+ const endDateInput = document.getElementById("exportRecordEndDate");
+ const startDate = startDateInput ? startDateInput.value.trim() : "";
+ const endDate = endDateInput ? endDateInput.value.trim() : "";
+
+ if (!startDate || !endDate) {
+  alert("期間（開始日および終了日）を入力してください。");
+  return null;
+ }
+ if (startDate > endDate) {
+  alert("開始日は終了日以前の日付を指定してください。");
+  return null;
+ }
+ const today = (typeof toLocalDateStr === "function") ? toLocalDateStr(new Date()) : new Date().toISOString().slice(0, 10);
+ if (startDate > today || endDate > today) {
+  alert("未来の日付は指定できません（本日以前の日付を指定してください）。");
+  return null;
+ }
+
+ const dStart = new Date(startDate + "T00:00:00");
+ const dEnd = new Date(endDate + "T00:00:00");
+ const diffDays = Math.round((dEnd.getTime() - dStart.getTime()) / (1000 * 60 * 60 * 24));
+ if (diffDays > 366) {
+  alert("期間は最長1年以内で指定してください。");
+  return null;
+ }
+
+ const selectedTypes = new Set();
+ const typeKeys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ typeKeys.forEach(k => {
+  const chk = document.getElementById(`chkExport_${k}`);
+  if (chk && chk.checked) {
+   selectedTypes.add(k);
+  }
+ });
+
+ if (selectedTypes.size === 0) {
+  alert("記録の種類を1つ以上選択してください。");
+  return null;
+ }
+
+ const includeVoided = Boolean(document.getElementById("exportRecordIncludeVoided")?.checked);
+
+ return {
+  resVal,
+  startDate,
+  endDate,
+  selectedTypes,
+  includeVoided
+ };
+}
+
+function cpCollectExportRecords(inputs) {
+ const { resVal, startDate, endDate, selectedTypes, includeVoided } = inputs;
+ const residents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : ((gState && Array.isArray(gState.residents)) ? gState.residents : []);
+
+ let targetResidents = [];
+ if (resVal === "ALL") {
+  targetResidents = residents.filter(r => {
+   if (!r) return false;
+   if (r.admission_date && r.admission_date > endDate) return false;
+   if (typeof cpIsDischarged === "function" && cpIsDischarged(r) && r.discharge_date && r.discharge_date < startDate) return false;
+   if (r.status === "退居" && r.discharge_date && r.discharge_date < startDate) return false;
+   return true;
+  });
+  targetResidents.sort((a, b) => String(a.room_no || "").localeCompare(String(b.room_no || ""), undefined, { numeric: true }));
+ } else {
+  const single = residents.find(r => String(r.id) === String(resVal));
+  if (single) targetResidents.push(single);
+ }
+
+ const allRecords = [];
+
+ targetResidents.forEach(res => {
+  let curDate = startDate;
+  while (curDate <= endDate) {
+   if (res.admission_date && curDate < res.admission_date) {
+    curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
+    continue;
+   }
+   if (res.discharge_date && curDate > res.discharge_date) {
+    curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
+    continue;
+   }
+
+   const dayItems = (typeof cpBuildUnifiedResidentRecords === "function")
+    ? cpBuildUnifiedResidentRecords(res.id, curDate, false, includeVoided)
+    : [];
+
+   dayItems.forEach(item => {
+    if (!includeVoided && item.voided) return;
+    if (!cpIsRecordTypeSelected(item, selectedTypes)) return;
+
+    allRecords.push({
+     resident_id: res.id,
+     room_no: res.room_no || "",
+     resident_name: res.name || "",
+     date: item.date || curDate,
+     time: item.time || (item.recorded_at && item.recorded_at.length >= 16 ? item.recorded_at.slice(11, 16) : "00:00"),
+     recorded_at: item.recorded_at || `${curDate} 00:00`,
+     category: item.category || "介護記録",
+     content: item.content || "",
+     staff_name: item.staff_name || "未記録",
+     voided: Boolean(item.voided),
+     void_reason: item.void_reason || "",
+     voided_by: item.voided_by || "",
+     voided_at: item.voided_at || "",
+     raw: item
+    });
+   });
+
+   curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
+  }
+ });
+
+ if (resVal === "ALL") {
+  allRecords.sort((a, b) => {
+   const roomCmp = String(a.room_no || "").localeCompare(String(b.room_no || ""), undefined, { numeric: true });
+   if (roomCmp !== 0) return roomCmp;
+   if (a.resident_id !== b.resident_id) return a.resident_id - b.resident_id;
+   return (a.recorded_at || "").localeCompare(b.recorded_at || "");
+  });
+ } else {
+  allRecords.sort((a, b) => (a.recorded_at || "").localeCompare(b.recorded_at || ""));
+ }
+
+ return { targetResidents, allRecords };
+}
+
+function cpEscapeCsvField(val) {
+ if (val === null || val === undefined) return "";
+ let s = String(val);
+ if (s.includes('"') || s.includes(",") || s.includes("\r") || s.includes("\n")) {
+  s = '"' + s.replace(/"/g, '""') + '"';
+ }
+ return s;
+}
+
+function cpBuildCareRecordsCsv(records) {
+ const bom = "\uFEFF";
+ const lines = [];
+ lines.push(["部屋番号", "利用者名", "日付", "時刻", "種類", "内容", "記録者", "取消"].map(cpEscapeCsvField).join(","));
+
+ (records || []).forEach(r => {
+  if (!r) return;
+  let voidCol = "";
+  if (r.voided) {
+   const reasonPart = r.void_reason ? `理由: ${r.void_reason}` : "理由: なし";
+   const whoPart = r.voided_by ? `取消者: ${r.voided_by}` : "取消者: 未記録";
+   voidCol = `取消（${reasonPart} / ${whoPart}）`;
+  }
+  const row = [
+   r.room_no || "",
+   r.resident_name || "",
+   r.date || "",
+   r.time || "",
+   r.category || "",
+   r.content || "",
+   r.staff_name || "",
+   voidCol
+  ];
+  lines.push(row.map(cpEscapeCsvField).join(","));
+ });
+
+ return bom + lines.join("\r\n") + "\r\n";
+}
+
+function cpBuildCareRecordsPrintHtml(collected, inputs) {
+ const facilityName = (db.data.facility_settings && db.data.facility_settings.facility_name) || "介護付きグループホーム";
+ let targetLabel = "全員（期間中の全入居者）";
+ if (inputs.resVal !== "ALL") {
+  const r = collected.targetResidents[0];
+  targetLabel = r ? `${r.room_no || "-"}号室 ${r.name} 様` : "個別利用者";
+ }
+ const typeLabels = cpGetSelectedTypeLabels(inputs.selectedTypes);
+ const staffName = (gState.session && gState.session.staffName) ? gState.session.staffName : (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "管理者");
+ const nowStr = (typeof toLocalDateTimeStr === "function") ? toLocalDateTimeStr(new Date()) : new Date().toLocaleString("ja-JP");
+
+ const recordsByRes = new Map();
+ collected.targetResidents.forEach(res => {
+  recordsByRes.set(res.id, []);
+ });
+ collected.allRecords.forEach(r => {
+  if (!recordsByRes.has(r.resident_id)) recordsByRes.set(r.resident_id, []);
+  recordsByRes.get(r.resident_id).push(r);
+ });
+
+ const residentSectionsHtml = [];
+ let resIndex = 0;
+
+ recordsByRes.forEach((recs, rId) => {
+  const res = collected.targetResidents.find(x => x.id === rId);
+  const room = res ? (res.room_no || "-") : "-";
+  const name = res ? res.name : "利用者";
+  const isFirst = (resIndex === 0);
+  resIndex++;
+
+  const pageBreakStyle = isFirst ? "" : "page-break-before: always; break-before: page; margin-top: 24px;";
+
+  let rowsHtml = "";
+  if (recs.length === 0) {
+   rowsHtml = `<tr><td colspan="5" style="padding:10px; text-align:center; color:var(--ink-3); font-size:13px;">期間内の対象記録はありません</td></tr>`;
+  } else {
+   rowsHtml = recs.map(r => {
+    let voidText = "";
+    let contentStyle = "";
+    if (r.voided) {
+     contentStyle = "text-decoration: line-through; color: var(--ink-3);";
+     const reasonPart = r.void_reason ? `理由: ${r.void_reason}` : "理由: なし";
+     const whoPart = r.voided_by ? `取消者: ${r.voided_by}` : "取消者: 未記録";
+     voidText = `<span style="display:inline-block; font-size:13px; color:var(--alert); font-weight:bold;">［取消: ${escapeHtml(reasonPart)} / ${escapeHtml(whoPart)}］</span>`;
+    }
+    return `
+     <tr style="break-inside: avoid; page-break-inside: avoid; border-bottom: 1px solid var(--line);">
+      <td style="padding: 6px 8px; font-size: 13px; white-space: nowrap; vertical-align: top; color: var(--ink);">${escapeHtml(r.date)} ${escapeHtml(r.time)}</td>
+      <td style="padding: 6px 8px; font-size: 13px; white-space: nowrap; vertical-align: top; color: var(--pine-dark); font-weight: bold;">${escapeHtml(r.category)}</td>
+      <td style="padding: 6px 8px; font-size: 13px; vertical-align: top; line-height: 1.5; color: var(--ink); ${contentStyle}">${escapeHtml(r.content)} ${voidText}</td>
+      <td style="padding: 6px 8px; font-size: 13px; white-space: nowrap; vertical-align: top; color: var(--ink);">${escapeHtml(r.staff_name)}</td>
+      <td style="padding: 6px 8px; font-size: 13px; white-space: nowrap; vertical-align: top; color: var(--ink); text-align: center;">${r.voided ? '<span style="color:var(--alert); font-weight:bold;">取消</span>' : '-'}</td>
+     </tr>
+    `;
+   }).join("");
+  }
+
+  residentSectionsHtml.push(`
+   <div style="${pageBreakStyle}">
+    <div style="background: var(--surface-2); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; margin-bottom: 8px; display: flex; justify-content: space-between; align-items: center;">
+     <strong style="font-size: 15px; color: var(--pine-dark);">【${escapeHtml(room)}号室 ${escapeHtml(name)} 様】 記録一覧</strong>
+     <span style="font-size: 13px; color: var(--ink-2);">対象件数: ${recs.length} 件</span>
+    </div>
+    <table style="width: 100%; border-collapse: collapse; margin-bottom: 16px; border: 1px solid var(--line);">
+     <thead>
+      <tr style="background: var(--ground); border-bottom: 2px solid var(--pine);">
+       <th style="padding: 6px 8px; font-size: 13px; text-align: left; width: 15%; color: var(--ink);">日時</th>
+       <th style="padding: 6px 8px; font-size: 13px; text-align: left; width: 13%; color: var(--ink);">種類</th>
+       <th style="padding: 6px 8px; font-size: 13px; text-align: left; width: 52%; color: var(--ink);">内容</th>
+       <th style="padding: 6px 8px; font-size: 13px; text-align: left; width: 12%; color: var(--ink);">記録者</th>
+       <th style="padding: 6px 8px; font-size: 13px; text-align: center; width: 8%; color: var(--ink);">状態</th>
+      </tr>
+     </thead>
+     <tbody>
+      ${rowsHtml}
+     </tbody>
+    </table>
+   </div>
+  `);
+ });
+
+ return `
+  <div style="font-family: var(--font-family); color: var(--ink); background: var(--surface); padding: 12px; box-sizing: border-box;">
+   <!-- 1ページ目上部ヘッダー -->
+   <div style="border-bottom: 2px solid var(--pine); padding-bottom: 10px; margin-bottom: 16px;">
+    <div style="display: flex; justify-content: space-between; align-items: flex-start; flex-wrap: wrap; gap: 8px;">
+     <div>
+      <h2 style="font-size: 18px; font-weight: bold; color: var(--pine-dark); margin: 0 0 6px 0;">介護記録出力一覧</h2>
+      <div style="font-size: 13px; color: var(--ink-2);">施設名: <strong>${escapeHtml(facilityName)}</strong></div>
+     </div>
+     <div style="text-align: right; font-size: 13px; color: var(--ink-2);">
+      <div>印刷日時: ${escapeHtml(nowStr)}</div>
+      <div>印刷担当者: <strong>${escapeHtml(staffName)}</strong></div>
+      <div>総出力件数: 計 <strong>${collected.allRecords.length}</strong> 件</div>
+     </div>
+    </div>
+    <div style="margin-top: 10px; background: var(--ground); border: 1px solid var(--line); border-radius: 4px; padding: 8px 12px; display: grid; grid-template-columns: 1fr 1fr; gap: 8px; font-size: 13px;">
+     <div>対象利用者: <strong>${escapeHtml(targetLabel)}</strong></div>
+     <div>対象期間: <strong>${escapeHtml(inputs.startDate)} 〜 ${escapeHtml(inputs.endDate)}</strong></div>
+     <div style="grid-column: 1 / -1;">出力種類: <strong>${escapeHtml(typeLabels.join("、"))}</strong> ${inputs.includeVoided ? '<span style="color:var(--alert); margin-left:8px;">(取消記録含む)</span>' : ''}</div>
+    </div>
+   </div>
+
+   <!-- 利用者別レコードセクション (改ページ対応) -->
+   ${residentSectionsHtml.join("")}
+
+   <div style="margin-top: 24px; border-top: 1px solid var(--line); padding-top: 8px; display: flex; justify-content: space-between; font-size: 13px; color: var(--ink-3);">
+    <span>ケアポータル 統合管理システム (介護記録出力)</span>
+    <span>確認印: __________________</span>
+   </div>
+  </div>
+ `;
+}
+
+function cpLogCareRecordsExport(actionType, targetResidentName, startDate, endDate, typeLabels, count) {
+ if (!db || !db.data) return;
+ if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
+ const staffName = (gState.session && gState.session.staffName) ? gState.session.staffName : (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "管理者");
+ const nowStr = (typeof toLocalDateTimeStr === "function") ? toLocalDateTimeStr(new Date()) : new Date().toLocaleString("ja-JP");
+
+ db.data.settings_logs.push({
+  id: Date.now() + Math.floor(Math.random() * 1000),
+  at: nowStr,
+  by: staffName,
+  kind: "記録の書き出し",
+  action: actionType,
+  detail: `出力形式: ${actionType} / 利用者: ${targetResidentName} / 期間: ${startDate}〜${endDate} / 種類: ${typeLabels.join("、")} / 件数: ${count}件`
+ });
+ if (typeof db.save === "function") db.save();
+}
+
+function cpExportCareRecordsCsv() {
+ if (!cpCanExportCareRecords()) {
+  alert("権限がありません。記録の書き出しは管理者および事務員のみ実行できます。");
+  return;
+ }
+ const inputs = cpValidateExportInputs();
+ if (!inputs) return;
+
+ const collected = cpCollectExportRecords(inputs);
+ if (collected.allRecords.length === 0) {
+  alert("指定された期間・条件に該当する記録がありません。");
+  return;
+ }
+
+ const csvString = cpBuildCareRecordsCsv(collected.allRecords);
+ const blob = new Blob([csvString], { type: "text/csv;charset=utf-8;" });
+
+ let targetLabel = "全員";
+ if (inputs.resVal !== "ALL") {
+  const r = collected.targetResidents[0];
+  targetLabel = r ? r.name.replace(/[\s\r\n\t]/g, "") : "個別";
+ }
+ const filename = `記録_${targetLabel}_${inputs.startDate}_${inputs.endDate}.csv`;
+
+ const link = document.createElement("a");
+ link.href = URL.createObjectURL(blob);
+ link.download = filename;
+ document.body.appendChild(link);
+ link.click();
+ document.body.removeChild(link);
+ URL.revokeObjectURL(link.href);
+
+ const typeLabels = cpGetSelectedTypeLabels(inputs.selectedTypes);
+ cpLogCareRecordsExport("CSV出力", (inputs.resVal === "ALL" ? "全員" : (collected.targetResidents[0] ? collected.targetResidents[0].name : "個別")), inputs.startDate, inputs.endDate, typeLabels, collected.allRecords.length);
+
+ const statusEl = document.getElementById("exportRecordStatusNotice");
+ if (statusEl) {
+  statusEl.textContent = `CSVファイルを書き出しました（計 ${collected.allRecords.length} 件）`;
+  setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 5000);
+ }
+}
+
+function cpPrintCareRecords() {
+ if (!cpCanExportCareRecords()) {
+  alert("権限がありません。記録の印刷は管理者および事務員のみ実行できます。");
+  return;
+ }
+ const inputs = cpValidateExportInputs();
+ if (!inputs) return;
+
+ const collected = cpCollectExportRecords(inputs);
+ if (collected.allRecords.length === 0) {
+  alert("指定された期間・条件に該当する記録がありません。");
+  return;
+ }
+
+ const html = cpBuildCareRecordsPrintHtml(collected, inputs);
+ if (typeof runPrintJob === "function") {
+  runPrintJob(html, { page: "A4 portrait", fitOnePage: false });
+ } else {
+  alert("印刷機能の初期化に失敗しました。");
+  return;
+ }
+
+ const typeLabels = cpGetSelectedTypeLabels(inputs.selectedTypes);
+ cpLogCareRecordsExport("印刷", (inputs.resVal === "ALL" ? "全員" : (collected.targetResidents[0] ? collected.targetResidents[0].name : "個別")), inputs.startDate, inputs.endDate, typeLabels, collected.allRecords.length);
+}
+
+window.cpCanExportCareRecords = cpCanExportCareRecords;
+window.cpPopulateExportResidentSelect = cpPopulateExportResidentSelect;
+window.renderOfficeCareRecordsExport = renderOfficeCareRecordsExport;
+window.cpExportToggleAllTypes = cpExportToggleAllTypes;
+window.cpGetSelectedTypeLabels = cpGetSelectedTypeLabels;
+window.cpIsRecordTypeSelected = cpIsRecordTypeSelected;
+window.cpValidateExportInputs = cpValidateExportInputs;
+window.cpCollectExportRecords = cpCollectExportRecords;
+window.cpEscapeCsvField = cpEscapeCsvField;
+window.cpBuildCareRecordsCsv = cpBuildCareRecordsCsv;
+window.cpBuildCareRecordsPrintHtml = cpBuildCareRecordsPrintHtml;
+window.cpLogCareRecordsExport = cpLogCareRecordsExport;
+window.cpExportCareRecordsCsv = cpExportCareRecordsCsv;
+window.cpPrintCareRecords = cpPrintCareRecords;
