@@ -3178,6 +3178,7 @@ function printEmergencyResidentSheets() {
 
 let gKasanGeneratedCsvText = "";
 let gKasanGeneratedCsvFileName = "";
+let gKasanGeneratedCsvMeta = null; // [Claude修正] 作ったファイルの中身（月・審査の月・利用者ごとの単位数と金額）
 let gKasanCsvValidationResult = null;
 
 // 要介護状態区分コード マッピング（要介護1=21, 2=22, 3=23, 4=24, 5=25）
@@ -3220,6 +3221,7 @@ function openKasanCsvModal() {
   // 初期化
   gKasanGeneratedCsvText = "";
   gKasanGeneratedCsvFileName = "";
+  gKasanGeneratedCsvMeta = null;
   const previewSec = document.getElementById("kasanCsvPreviewSection");
   if (previewSec) previewSec.style.display = "none";
   const dlBtn = document.getElementById("kasanCsvDownloadBtn");
@@ -3492,6 +3494,22 @@ function generateKasanCsvFile() {
   }
   const nextYmRaw = `${nextY}${String(nextM).padStart(2, "0")}`; // 審査年月
 
+  // [Claude修正] 今のファイルの「処理対象年月」は、いつもサービス提供月の次の月。
+  // それより後の月に出す分（月遅れ分）を作ると、処理対象年月が違うファイルになるので、月遅れの作り方ができるまで止める
+  const nowD = new Date();
+  const curYmRaw = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`;
+  if (nextYmRaw < curYmRaw) {
+    alert(`${y}年${m}月分の審査の月（${nextY}年${nextM}月）は過ぎています。\nこの月の分は「月遅れ分」として今月以降の審査で出す必要があります。月遅れ分のファイルはまだ作れません（次の作業で作ります）。`);
+    return;
+  }
+  // [Claude修正] 同じサービス提供年月の請求書を、同じ審査の月に2つのファイルに分けて送ることはできない（インタフェース仕様書 解説書 1.1(1)）
+  const sameMonthSent = (Array.isArray(db.data.claim_submissions) ? db.data.claim_submissions : [])
+    .some(c => !c.voided && c.status !== "取消" && c.service_ym === ym && String(c.process_ym) === nextYmRaw);
+  if (sameMonthSent) {
+    alert(`${y}年${m}月分は、${nextY}年${nextM}月審査ですでに送付済みとして記録されています。\n同じ月の分を同じ審査の月に分けて送ることはできません（国保連の決まり）。\n送り直すときは、送付の記録を取消してから全員分を作り直してください。`);
+    return;
+  }
+
   const regionObj = CP_KASAN_REGION_RATES.find(r => r.key === settings.region_type);
   if (!regionObj) {
     alert("地域区分が正しく設定されていません。加算・減算設定をご確認ください。");
@@ -3514,6 +3532,7 @@ function generateKasanCsvFile() {
   let grandUserBurden = 0;
 
   const residentBlocks = [];
+  const genItems = []; // [Claude修正] 送ったの記録に使う（ファイルに入れた人と金額そのもの）
 
   for (const item of eligibleItems) {
     const r = item.resident;
@@ -3532,6 +3551,7 @@ function generateKasanCsvFile() {
     grandCost100 += cost100;
     grandHokenDemand += hokenDemand;
     grandUserBurden += userBurden;
+    genItems.push({ resident_id: Number(r.id), service_type_code: serviceTypeCode, total_units: totalUnits, insurance_demand: hokenDemand, user_burden: userBurden });
 
     // 基本情報レコード (7171 / 7175 / 7176) 01（56項目）
     const insNo10 = String(r.insured_no || "").trim().padStart(10, "0");
@@ -3719,6 +3739,7 @@ function generateKasanCsvFile() {
 
   gKasanGeneratedCsvText = fullCsvText;
   gKasanGeneratedCsvFileName = fileName;
+  gKasanGeneratedCsvMeta = { ym: ym, process_ym: nextYmRaw, items: genItems };
 
   // 操作ログの記録
   const opLogDetail = `${ym} 請求CSV作成（${eligibleItems.length}名分、ファイル名: ${fileName}、レコード数: ${recordNumber}）`;
@@ -4747,7 +4768,7 @@ function renderKasanClaimStatusTable(ym) {
       }
     }
 
-    const roomStr = r.room ? `${r.room}号室 ` : "";
+    const roomStr = r.room_no ? `${r.room_no}号室 ` : ""; // [Claude修正] 部屋番号は room_no
 
     return `
       <tr>
@@ -4809,74 +4830,48 @@ function markKasanCsvAsSubmitted() {
     alert("国保連への送付記録は管理者または事務員のみ操作可能です。");
     return;
   }
-  if (!gKasanGeneratedCsvText || !gKasanGeneratedCsvFileName || !gKasanCsvValidationResult) {
+  // [Claude修正] 記録するのは「作ったファイルに実際に入れた人と金額」。ファイルを作ったときに残した中身を使い、ここで計算し直さない
+  const gen = gKasanGeneratedCsvMeta;
+  if (!gKasanGeneratedCsvText || !gKasanGeneratedCsvFileName || !gen || !Array.isArray(gen.items)) {
     alert("送付対象の請求ファイルがありません。先にCSVファイルを作成・保存してください。");
     return;
   }
-  const val = gKasanCsvValidationResult;
-  const eligibleItems = (val.candidates || []).filter(c => c.validation.valid && !c.excluded);
-  if (eligibleItems.length === 0) {
-    alert("送付対象となる利用者が0名です。");
+  // [Claude修正] 2回押しても二重に記録しない（すでに提出済の人は外す）
+  const items = gen.items.filter(it => !cpGetResidentClaimStatus(it.resident_id, gen.ym).is_submitted);
+  if (items.length === 0) {
+    alert("このファイルの利用者は、すでに送付済みとして記録されています。");
     return;
   }
 
-  if (!confirm(`この請求ファイル（${gKasanGeneratedCsvFileName}）を国保連へ送付（伝送）済みとして記録しますか？\n\n対象利用者: ${eligibleItems.length}名\n※記録後、二重請求防止のため同一月の再作成から自動除外されます。`)) {
+  if (!confirm(`この請求ファイル（${gKasanGeneratedCsvFileName}）を国保連へ送付（伝送）済みとして記録しますか？\n\n対象利用者: ${items.length}名\n※記録後、二重請求防止のため同一月の再作成から自動除外されます。`)) {
     return;
   }
-
-  const ym = val.ym;
-  const [yStr, mStr] = ym.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  let nextY = y;
-  let nextM = m + 1;
-  if (nextM > 12) {
-    nextM = 1;
-    nextY += 1;
-  }
-  const nextYmRaw = `${nextY}${String(nextM).padStart(2, "0")}`; // 審査年月
-
-  const settings = val.settings;
-  const regionObj = CP_KASAN_REGION_RATES.find(r => r.key === settings.region_type) || { rate: 10.0 };
-  const unitPriceInt = Math.round(regionObj.rate * 100);
 
   if (!Array.isArray(db.data.claim_submissions)) {
     db.data.claim_submissions = [];
   }
 
-  const now = new Date();
-  const nowStr = toLocalDateTimeStr(now);
+  const nowStr = toLocalDateTimeStr(new Date());
   const staff = cpLoginStaffName();
   const baseTime = Date.now();
 
-  eligibleItems.forEach((item, idx) => {
-    const r = item.resident;
-    const calc = item.calc;
-    const isShort = (r.usage_type === "short");
-    const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
-    const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
-
-    const totalUnits = calc.totalUnits;
-    const cost100 = Math.floor(totalUnits * unitPriceInt / 100);
-    const hokenDemand = Math.floor(cost100 * benefitRateInt / 100);
-    const userBurden = cost100 - hokenDemand;
-
+  items.forEach((it, idx) => {
     db.data.claim_submissions.push({
       id: baseTime + idx,
-      resident_id: Number(r.id),
-      service_ym: ym,
-      process_ym: nextYmRaw,
-      service_type_code: serviceTypeCode,
-      total_units: totalUnits,
-      insurance_demand: hokenDemand,
-      user_burden: userBurden,
+      resident_id: Number(it.resident_id),
+      service_ym: gen.ym,
+      process_ym: gen.process_ym,
+      service_type_code: it.service_type_code,
+      total_units: it.total_units,
+      insurance_demand: it.insurance_demand,
+      user_burden: it.user_burden,
       file_name: gKasanGeneratedCsvFileName,
       status: "提出済",
       sent_at: nowStr,
       sent_by: staff
     });
   });
-
+  const eligibleItems = items;
   db.save();
 
   const sentBtn = document.getElementById("kasanCsvMarkSentBtn");
