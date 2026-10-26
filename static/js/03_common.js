@@ -1166,20 +1166,28 @@ function checkGlobalAlerts() {
     }
   }
 
-  // 8. 【事務ポータル用】国保連請求 返戻未再請求アラート [Antigravity追加 2026-10-26]
-  if (typeof cpGetUnresolvedRemandClaims === "function") {
-    const unresRemands = cpGetUnresolvedRemandClaims();
-    if (unresRemands.length > 0) {
-      const activeRemands = unresRemands.filter(r => !isAlertDismissed(`claim_remand_${r.id}`));
-      if (activeRemands.length > 0) {
-        const activeKeys = activeRemands.map(r => `claim_remand_${r.id}`);
+  // 8. 【事務ポータル用】国保連請求 返戻・過誤決定未再請求アラート [Antigravity追加 2026-10-26]
+  const getUnresolvedClaimsFn = (typeof cpGetUnresolvedRemandAndKagoClaims === "function")
+    ? cpGetUnresolvedRemandAndKagoClaims
+    : (typeof cpGetUnresolvedRemandClaims === "function" ? () => cpGetUnresolvedRemandClaims().map(r => ({ type: "remand", record: r })) : null);
+
+  if (getUnresolvedClaimsFn) {
+    const unresItems = getUnresolvedClaimsFn();
+    if (unresItems.length > 0) {
+      const activeItems = unresItems.filter(it => !isAlertDismissed(`claim_${it.type}_${it.record.id}`));
+      if (activeItems.length > 0) {
+        const activeKeys = activeItems.map(it => `claim_${it.type}_${it.record.id}`);
         const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
-        const itemsListHtml = activeRemands.map(rem => {
-          const res = allResidents.find(x => Number(x.id) === Number(rem.resident_id));
-          const name = res ? res.name : `利用者ID:${rem.resident_id}`;
-          const [y, m] = (rem.service_ym || "").split("-");
-          const ymFmt = (y && m) ? `${y}年${parseInt(m, 10)}月分` : rem.service_ym;
-          return `<div style="margin:2px 0;">・${escapeHtml(name)} 様（${escapeHtml(ymFmt)}）: ${escapeHtml(rem.remand_reason)}</div>`;
+        const itemsListHtml = activeItems.map(it => {
+          const rec = it.record;
+          const res = allResidents.find(x => Number(x.id) === Number(rec.resident_id));
+          const name = res ? res.name : `利用者ID:${rec.resident_id}`;
+          const [y, m] = (rec.service_ym || "").split("-");
+          const ymFmt = (y && m) ? `${y}年${parseInt(m, 10)}月分` : rec.service_ym;
+          if (it.type === "kago_decided") {
+            return `<div style="margin:2px 0;">・【過誤決定】${escapeHtml(name)} 様（${escapeHtml(ymFmt)}）: 決定通知確認済（${escapeHtml(rec.kago_decided_date || '-')}）</div>`;
+          }
+          return `<div style="margin:2px 0;">・【返戻】${escapeHtml(name)} 様（${escapeHtml(ymFmt)}）: ${escapeHtml(rec.remand_reason || '')}</div>`;
         }).join("");
 
         officeAlertHtml += `
@@ -1187,11 +1195,11 @@ function checkGlobalAlerts() {
             <div style="width:100%;">
               <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
                 <div>
-                  <strong style="color:var(--alert);">【請求】返戻のまま再請求していない明細があります！</strong>
+                  <strong style="color:var(--alert);">【請求】返戻のまま再請求していない明細があります（過誤決定含む）！</strong>
                   <div style="margin-top:6px; font-size:13px; line-height:1.5;">
                     ${itemsListHtml}
                   </div>
-                  <div style="font-size:12px; color:var(--ink-2); margin-top:4px;">※ エラー内容を確認の上、次の月以降に再請求（月遅れ分）を行ってください。</div>
+                  <div style="font-size:12px; color:var(--ink-2); margin-top:4px;">※ 内容を確認の上、国保連請求ファイル作成画面の「月遅れ分」から再請求を行ってください。</div>
                 </div>
                 <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
                   <button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:var(--surface); color:var(--pine-dark); border-color:var(--line);" onclick="enterPortal('office'); switchOfficeTab('kasan');">請求の状況を開く</button>

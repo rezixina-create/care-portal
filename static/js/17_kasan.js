@@ -3201,22 +3201,22 @@ function openKasanCsvModal() {
   const modal = document.getElementById("kasanCsvModal");
   if (!modal) return;
 
-  const ym = gKasanSelectedMonth || toLocalDateStr(new Date()).slice(0, 7);
-  const [yStr, mStr] = ym.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  let nextY = y;
-  let nextM = m + 1;
-  if (nextM > 12) {
-    nextM = 1;
-    nextY += 1;
-  }
-  const nextYmFmt = `${nextY}年${nextM}月`;
+  // [Antigravity修正 2026-10-26] 審査の月を「今月」にする（PCの今の年月、選ばせない）
+  const nowD = new Date();
+  const currentProcessYm = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`; // YYYYMM
+  const currentProcessYmFmt = `${nowD.getFullYear()}年${nowD.getMonth() + 1}月`;
 
+  // 通常分（先月のサービス分）
+  const regD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+  const regularServiceYm = `${regD.getFullYear()}-${String(regD.getMonth() + 1).padStart(2, "0")}`;
+  const regularServiceYmFmt = `${regD.getFullYear()}年${regD.getMonth() + 1}月分`;
+
+  const procDisp = document.getElementById("kasanCsvProcessYmDisp");
+  if (procDisp) procDisp.textContent = currentProcessYmFmt;
   const ymDisp = document.getElementById("kasanCsvTargetYmDisp");
-  if (ymDisp) ymDisp.textContent = `${yStr}年${mStr}月`;
+  if (ymDisp) ymDisp.textContent = regularServiceYmFmt;
   const nextDisp = document.getElementById("kasanCsvNextYmDisp");
-  if (nextDisp) nextDisp.textContent = nextYmFmt;
+  if (nextDisp) nextDisp.textContent = currentProcessYmFmt;
 
   // 初期化
   gKasanGeneratedCsvText = "";
@@ -3231,7 +3231,7 @@ function openKasanCsvModal() {
   const statusEl = document.getElementById("kasanCsvActionStatus");
   if (statusEl) statusEl.textContent = "";
 
-  renderKasanCsvValidation(ym);
+  renderKasanCsvValidation(regularServiceYm, currentProcessYm);
   modal.style.display = "flex";
 }
 
@@ -3327,10 +3327,37 @@ function cpValidateResidentForKasanCsv(r, ym) {
   };
 }
 
-function renderKasanCsvValidation(ym) {
+// [Antigravity追加 2026-10-26] 月遅れ候補チェックボックス変更ハンドラ
+function onKasanCsvDelayedCheckChange() {
+  const checkboxes = document.querySelectorAll(".kasan-delayed-check:checked");
+  const count = checkboxes.length;
+  const sumEl = document.getElementById("kasanCsvDelayedSummary");
+  if (sumEl) sumEl.textContent = `${count}件選択中`;
+
+  const genBtn = document.getElementById("kasanCsvGenerateBtn");
+  if (genBtn && gKasanCsvValidationResult) {
+    const regularOk = gKasanCsvValidationResult.eligibleCount > 0;
+    const officeOk = gKasanCsvValidationResult.officeErrors.length === 0;
+    genBtn.disabled = (!officeOk || (!regularOk && count === 0));
+  }
+}
+
+// [Antigravity更新 2026-10-26] 通常分および月遅れ分（過去12か月）の検証と描画
+function renderKasanCsvValidation(regularYm, currentProcessYm) {
+  const nowD = new Date();
+  if (!currentProcessYm) {
+    currentProcessYm = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`;
+  }
+  if (!regularYm) {
+    const regD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
+    regularYm = `${regD.getFullYear()}-${String(regD.getMonth() + 1).padStart(2, "0")}`;
+  }
+
   const settings = cpGetKasanSettings();
   const summaryEl = document.getElementById("kasanCsvValidationSummary");
   const listBody = document.getElementById("kasanCsvResidentListBody");
+  const delayedListBody = document.getElementById("kasanCsvDelayedListBody");
+  const delayedSummaryEl = document.getElementById("kasanCsvDelayedSummary");
   const genBtn = document.getElementById("kasanCsvGenerateBtn");
 
   const officeErrors = [];
@@ -3347,42 +3374,124 @@ function renderKasanCsvValidation(ym) {
   }
 
   const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  
+  // 1. 通常分（先月サービス提供分）の検証
   const candidateResults = [];
   let eligibleCount = 0;
   let ineligibleCount = 0;
 
   allResidents.forEach(r => {
-    const calc = cpComputeMonthlyKasan(r, ym);
+    const calc = cpComputeMonthlyKasan(r, regularYm);
     if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
-      const v = cpValidateResidentForKasanCsv(r, ym);
-      const claimStatus = cpGetResidentClaimStatus(r.id, ym);
+      const v = cpValidateResidentForKasanCsv(r, regularYm);
+      const claimStatus = cpGetResidentClaimStatus(r.id, regularYm);
+      const elig = cpGetClaimEligibleStatus(r.id, regularYm, currentProcessYm);
       let excluded = false;
       let excludeReason = "";
+
       if (claimStatus.is_submitted) {
         excluded = true;
         const procM = (claimStatus.record && claimStatus.record.process_ym)
           ? parseInt(String(claimStatus.record.process_ym).slice(4), 10)
           : "";
         excludeReason = `提出済のため外しました（${procM}月審査で送付）`;
+      } else if (!elig.eligible) {
+        excluded = true;
+        excludeReason = elig.reason;
       }
+
       if (v.valid && !excluded) eligibleCount++;
-      else if (!v.valid) ineligibleCount++;
+      else if (!v.valid && !excluded) ineligibleCount++;
+
       candidateResults.push({
         resident: r,
+        serviceYm: regularYm,
         calc: calc,
         validation: v,
         claimStatus: claimStatus,
+        elig: elig,
         excluded: excluded,
         excludeReason: excludeReason
       });
     }
   });
 
+  // 2. 月遅れ候補の検索（今月から過去12か月以内の未提出・返戻・過誤決定）
+  const pastMonths = cpGetPastServiceMonths(12, nowD);
+  const delayedMonths = pastMonths.slice(1); // 先月（通常分）を除いた過去2〜12か月前
+  const delayedCandidates = [];
+  const seenCandidateKeys = new Set();
+
+  delayedMonths.forEach(pastYm => {
+    allResidents.forEach(r => {
+      const elig = cpGetClaimEligibleStatus(r.id, pastYm, currentProcessYm);
+      if (elig.eligible && (elig.type === "unsubmitted" || elig.type === "remand" || elig.type === "kago_decided")) {
+        const calc = cpComputeMonthlyKasan(r, pastYm);
+        if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
+          const key = `${r.id}_${pastYm}`;
+          if (!seenCandidateKeys.has(key)) {
+            seenCandidateKeys.add(key);
+            const v = cpValidateResidentForKasanCsv(r, pastYm);
+            const statuteDate = cpGetClaimStatuteDate(pastYm);
+            delayedCandidates.push({
+              resident: r,
+              serviceYm: pastYm,
+              calc: calc,
+              validation: v,
+              elig: elig,
+              statuteDate: statuteDate
+            });
+          }
+        }
+      }
+    });
+  });
+
+  // 過去12か月より前の未解決返戻・過誤決定があれば念のため追加（時効等の確認用）
+  const unresAll = cpGetUnresolvedRemandAndKagoClaims();
+  unresAll.forEach(item => {
+    const rec = item.record;
+    if (rec.service_ym < regularYm) {
+      const key = `${rec.resident_id}_${rec.service_ym}`;
+      if (!seenCandidateKeys.has(key)) {
+        seenCandidateKeys.add(key);
+        const res = allResidents.find(x => Number(x.id) === Number(rec.resident_id));
+        if (res) {
+          const calc = cpComputeMonthlyKasan(res, rec.service_ym);
+          if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
+            const v = cpValidateResidentForKasanCsv(res, rec.service_ym);
+            const elig = cpGetClaimEligibleStatus(res.id, rec.service_ym, currentProcessYm);
+            const statuteDate = cpGetClaimStatuteDate(rec.service_ym);
+            delayedCandidates.push({
+              resident: res,
+              serviceYm: rec.service_ym,
+              calc: calc,
+              validation: v,
+              elig: elig,
+              statuteDate: statuteDate
+            });
+          }
+        }
+      }
+    }
+  });
+
+  // 月遅れ候補をサービス提供年月昇順（古い順）に整列
+  delayedCandidates.sort((a, b) => {
+    if (a.serviceYm !== b.serviceYm) return a.serviceYm.localeCompare(b.serviceYm);
+    return Number(a.resident.id) - Number(b.resident.id);
+  });
+
+  window.gKasanDelayedCandidates = delayedCandidates;
+
   gKasanCsvValidationResult = {
-    ym: ym,
+    ym: regularYm,
+    regularYm: regularYm,
+    processYm: currentProcessYm,
     settings: settings,
     officeErrors: officeErrors,
     candidates: candidateResults,
+    delayedCandidates: delayedCandidates,
     eligibleCount: eligibleCount,
     ineligibleCount: ineligibleCount
   };
@@ -3402,9 +3511,9 @@ function renderKasanCsvValidation(ym) {
       <div style="display:flex; gap:12px; align-items:center; flex-wrap:wrap; font-size:13px; margin-bottom:6px;">
         <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">事業所番号: <strong>${escapeHtml(settings.office_no)}</strong></span>
         <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">媒体区分: <strong>${escapeHtml(settings.media_code === "1" ? "1 伝送" : "7 伝送（インターネット）")}</strong></span>
-        <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">作成可能: <strong>${eligibleCount}</strong> 名</span>
-        ${submittedCount > 0 ? `<span class="badge" style="background:var(--ground); color:var(--ink-2); padding:4px 8px;">提出済（除外）: <strong>${submittedCount}</strong> 名</span>` : ""}
-        ${ineligibleCount > 0 ? `<span class="badge" style="background:var(--caution-tint); color:var(--caution); padding:4px 8px; font-weight:bold;">情報不足（作成不可）: <strong>${ineligibleCount}</strong> 名</span>` : (submittedCount === 0 && ineligibleCount === 0 ? `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); padding:4px 8px;">全員作成可能</span>` : "")}
+        <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">通常分作成可能: <strong>${eligibleCount}</strong> 名</span>
+        ${submittedCount > 0 ? `<span class="badge" style="background:var(--ground); color:var(--ink-2); padding:4px 8px;">通常分提出済（除外）: <strong>${submittedCount}</strong> 名</span>` : ""}
+        ${ineligibleCount > 0 ? `<span class="badge" style="background:var(--caution-tint); color:var(--caution); padding:4px 8px; font-weight:bold;">情報不足（作成不可）: <strong>${ineligibleCount}</strong> 名</span>` : (submittedCount === 0 && ineligibleCount === 0 ? `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); padding:4px 8px;">通常分全員作成可能</span>` : "")}
       </div>
     `;
     if (ineligibleCount > 0) {
@@ -3417,9 +3526,10 @@ function renderKasanCsvValidation(ym) {
   }
   if (summaryEl) summaryEl.innerHTML = summaryHtml;
 
+  // 通常分一覧描画
   if (listBody) {
     if (candidateResults.length === 0) {
-      listBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--ink-3);">当月の算定対象となる利用者の記録はありません。</td></tr>`;
+      listBody.innerHTML = `<tr><td colspan="5" style="text-align:center; padding:16px; color:var(--ink-3);">通常請求（${escapeHtml(regularYm)}）の算定対象となる利用者の記録はありません。</td></tr>`;
     } else {
       listBody.innerHTML = candidateResults.map(item => {
         const r = item.resident;
@@ -3428,11 +3538,11 @@ function renderKasanCsvValidation(ym) {
         let statusBadge = "";
         let missingText = "";
         if (item.excluded) {
-          statusBadge = `<span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:2px 6px;">提出済</span>`;
+          statusBadge = `<span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:2px 6px;">除外</span>`;
           missingText = `<span style="color:var(--ink-2); font-size:13px;">${escapeHtml(item.excludeReason)}</span>`;
         } else if (isOk) {
           statusBadge = `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; padding:2px 6px;">出せる</span>`;
-          missingText = `<span style="color:var(--pine); font-size:13px;">必要項目が揃っています${item.claimStatus && item.claimStatus.is_remand ? '（返戻・再請求分）' : ''}</span>`;
+          missingText = `<span style="color:var(--pine); font-size:13px;">必要項目が揃っています</span>`;
         } else {
           statusBadge = `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:2px 6px;">出せない</span>`;
           missingText = `<span style="color:var(--alert); font-size:13px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
@@ -3451,12 +3561,53 @@ function renderKasanCsvValidation(ym) {
     }
   }
 
+  // 月遅れ分候補一覧描画
+  if (delayedSummaryEl) delayedSummaryEl.textContent = "0件選択中";
+  if (delayedListBody) {
+    if (delayedCandidates.length === 0) {
+      delayedListBody.innerHTML = `<tr><td colspan="7" style="text-align:center; padding:16px; color:var(--ink-3);">過去12か月の月遅れ対象（未提出・返戻・過誤決定）はありません。</td></tr>`;
+    } else {
+      delayedListBody.innerHTML = delayedCandidates.map(c => {
+        const r = c.resident;
+        const v = c.validation;
+        const [y, m] = c.serviceYm.split("-");
+        const ymDisp = `${y}年${parseInt(m, 10)}月分`;
+
+        let reasonLabel = "";
+        if (c.elig.type === "remand") {
+          reasonLabel = `<span style="color:var(--alert); font-weight:bold;">返戻:</span> ${escapeHtml(c.elig.reason)}`;
+        } else if (c.elig.type === "kago_decided") {
+          reasonLabel = `<span style="color:var(--pine-dark); font-weight:bold;">過誤決定</span>`;
+        } else {
+          reasonLabel = `<span style="color:var(--ink-2);">未提出</span>`;
+        }
+
+        const validHtml = v.valid
+          ? `<span style="color:var(--pine); font-size:13px;">出せる</span>`
+          : `<span style="color:var(--alert); font-size:13px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
+
+        return `
+          <tr>
+            <td style="text-align:center; white-space:nowrap;">
+              <input type="checkbox" class="kasan-delayed-check" data-res-id="${r.id}" data-ym="${c.serviceYm}" onchange="onKasanCsvDelayedCheckChange()" ${!v.valid ? "disabled" : ""}>
+            </td>
+            <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)}</td>
+            <td style="text-align:center; font-weight:bold; white-space:nowrap;">${escapeHtml(ymDisp)}</td>
+            <td style="font-size:13px; line-height:1.4;">${reasonLabel}</td>
+            <td style="text-align:right; font-weight:bold; white-space:nowrap;">${c.calc.totalUnits.toLocaleString()} 単位</td>
+            <td style="text-align:center; font-size:12px; color:var(--ink-2); white-space:nowrap;">${escapeHtml(c.statuteDate)}</td>
+            <td>${validHtml}</td>
+          </tr>
+        `;
+      }).join("");
+    }
+  }
+
   if (genBtn) {
     genBtn.disabled = (officeErrors.length > 0 || eligibleCount === 0);
   }
 }
 
-// 請求CSVファイルの生成処理
 function generateKasanCsvFile() {
   if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
     alert("国保連請求ファイルの作成は、管理者および事務員のみ操作可能です。");
@@ -3464,50 +3615,65 @@ function generateKasanCsvFile() {
   }
 
   const val = gKasanCsvValidationResult;
-  if (!val || val.officeErrors.length > 0) {
+  if (!val || (val.officeErrors && val.officeErrors.length > 0)) {
     alert("事業所情報に不備があるため作成できません。加算・減算設定をご確認ください。");
     return;
   }
 
-  const reductions = cpGetActiveReductions(val.ym);
-  if (reductions.conflict) {
-    alert("定員超過と人員基準欠如が同じ月に重なっています。どちらで請求するか市町村に確かめてください。");
-    return;
-  }
-  const eligibleItems = val.candidates.filter(c => c.validation.valid && !c.excluded);
-  if (eligibleItems.length === 0) {
+  // 1. 通常分の作成可能利用者
+  const regularEligibleItems = (val.candidates || []).filter(c => c.validation.valid && !c.excluded);
+
+  // 2. 月遅れ分でチェックされた利用者
+  const checkedDelayedBoxes = Array.from(document.querySelectorAll(".kasan-delayed-check:checked"));
+  const delayedEligibleItems = [];
+  const delayedPool = window.gKasanDelayedCandidates || [];
+
+  checkedDelayedBoxes.forEach(cb => {
+    const resId = Number(cb.getAttribute("data-res-id"));
+    const ym = cb.getAttribute("data-ym");
+    const found = delayedPool.find(c => Number(c.resident.id) === resId && c.serviceYm === ym);
+    if (found && found.validation.valid) {
+      delayedEligibleItems.push(found);
+    }
+  });
+
+  const totalCandidateCount = regularEligibleItems.length + delayedEligibleItems.length;
+  if (totalCandidateCount === 0) {
     alert("作成可能な利用者が0名のため、請求ファイルを作成できません。利用者の請求情報を登録してください。");
     return;
   }
 
   const settings = val.settings;
-  const ym = val.ym;
-  const ymRaw = ym.replace("-", ""); // YYYYMM
-  const [yStr, mStr] = ym.split("-");
-  const y = parseInt(yStr, 10);
-  const m = parseInt(mStr, 10);
-  let nextY = y;
-  let nextM = m + 1;
-  if (nextM > 12) {
-    nextM = 1;
-    nextY += 1;
-  }
-  const nextYmRaw = `${nextY}${String(nextM).padStart(2, "0")}`; // 審査年月
-
-  // [Claude修正] 今のファイルの「処理対象年月」は、いつもサービス提供月の次の月。
-  // それより後の月に出す分（月遅れ分）を作ると、処理対象年月が違うファイルになるので、月遅れの作り方ができるまで止める
+  const regularYm = val.ym || val.regularYm;
+  const regularYmRaw = (regularYm || "").replace("-", ""); // YYYYMM
   const nowD = new Date();
-  const curYmRaw = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`;
-  if (nextYmRaw < curYmRaw) {
-    alert(`${y}年${m}月分の審査の月（${nextY}年${nextM}月）は過ぎています。\nこの月の分は「月遅れ分」として今月以降の審査で出す必要があります。月遅れ分のファイルはまだ作れません（次の作業で作ります）。`);
-    return;
+  const currentProcessYmRaw = val.processYm || (regularYm ? cpGetNextYm(regularYm).replace("-", "") : `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`);
+
+  // 全ての対象サービス提供年月（古い月順）
+  const distinctYms = Array.from(new Set([
+    ...regularEligibleItems.map(c => c.serviceYm || regularYm),
+    ...delayedEligibleItems.map(c => c.serviceYm)
+  ])).filter(Boolean).sort();
+
+  // 各月の減算重複チェック
+  for (const ym of distinctYms) {
+    const reductions = cpGetActiveReductions(ym);
+    if (reductions && reductions.conflict) {
+      alert(`${ym}提供分で定員超過と人員基準欠如が同じ月に重なっています。どちらで請求するか市町村に確かめてください。`);
+      return;
+    }
   }
-  // [Claude修正] 同じサービス提供年月の請求書を、同じ審査の月に2つのファイルに分けて送ることはできない（インタフェース仕様書 解説書 1.1(1)）
-  const sameMonthSent = (Array.isArray(db.data.claim_submissions) ? db.data.claim_submissions : [])
-    .some(c => !c.voided && c.status !== "取消" && c.service_ym === ym && String(c.process_ym) === nextYmRaw);
-  if (sameMonthSent) {
-    alert(`${y}年${m}月分は、${nextY}年${nextM}月審査ですでに送付済みとして記録されています。\n同じ月の分を同じ審査の月に分けて送ることはできません（国保連の決まり）。\n送り直すときは、送付の記録を取消してから全員分を作り直してください。`);
-    return;
+
+  // [国保連仕様] 同じサービス提供年月の請求書を、同じ審査の月に2つのファイルに分けて送ることはできない（インタフェース仕様書 解説書 1.1(1)）
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  for (const ym of distinctYms) {
+    const sameMonthSent = submissions.some(c =>
+      !c.voided && c.status === "提出済" && c.service_ym === ym && String(c.process_ym) === currentProcessYmRaw
+    );
+    if (sameMonthSent) {
+      alert(`${ym}提供分は、今月審査（${currentProcessYmRaw}）ですでに送付済みとして記録されています。\n同じ提供年月の分を同じ審査の月に分けて送ることはできません（国保連の仕様）。\n送り直すときは、送付の記録を取消してから全員分を作り直してください。`);
+      return;
+    }
   }
 
   const regionObj = CP_KASAN_REGION_RATES.find(r => r.key === settings.region_type);
@@ -3521,22 +3687,16 @@ function generateKasanCsvFile() {
   const previewRows = [];
   let recordNumber = 1;
 
-  // 1行目: コントロールレコード（12項目）
-  // 1 レコード種別「1」, 2 レコード番号「1」, 3 ボリューム通番「0」, 4 データレコードの件数, 5 データ種別「711」, 6 福祉事務所特定番号「0」, 7 保険者番号「0」, 8 事業所番号, 9 都道府県番号「0」, 10 媒体区分, 11 処理対象年月, 12 ファイル管理番号「1」
-  // 注意: データレコード件数はデータ行作成後に確定して代入する
-
-  // 利用者ごとの計算データ準備
-  let grandTotalUnits = 0;
-  let grandCost100 = 0;
-  let grandHokenDemand = 0;
-  let grandUserBurden = 0;
-
+  // 利用者ごとの計算データ準備（サービス提供年月ごとに整理）
+  const allTargetItems = [...regularEligibleItems, ...delayedEligibleItems];
   const residentBlocks = [];
   const genItems = []; // [Claude修正] 送ったの記録に使う（ファイルに入れた人と金額そのもの）
 
-  for (const item of eligibleItems) {
+  for (const item of allTargetItems) {
     const r = item.resident;
     const calc = item.calc;
+    const itemServiceYm = item.serviceYm || regularYm;
+    const itemYmRaw = itemServiceYm.replace("-", "");
     const isShort = (r.usage_type === "short");
     const formCode = isShort ? (r.care_level === "要支援2" ? "7176" : "7175") : (r.care_level === "要支援2" ? "7172" : "7171");
     const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
@@ -3547,13 +3707,16 @@ function generateKasanCsvFile() {
     const hokenDemand = Math.floor(cost100 * benefitRateInt / 100);
     const userBurden = cost100 - hokenDemand;
 
-    grandTotalUnits += totalUnits;
-    grandCost100 += cost100;
-    grandHokenDemand += hokenDemand;
-    grandUserBurden += userBurden;
-    genItems.push({ resident_id: Number(r.id), service_type_code: serviceTypeCode, total_units: totalUnits, insurance_demand: hokenDemand, user_burden: userBurden });
+    genItems.push({
+      resident_id: Number(r.id),
+      service_ym: itemServiceYm,
+      service_type_code: serviceTypeCode,
+      total_units: totalUnits,
+      insurance_demand: hokenDemand,
+      user_burden: userBurden
+    });
 
-    // 基本情報レコード (7171 / 7175 / 7176) 01（56項目）
+    // 基本情報レコード (7171 / 7172 / 7175 / 7176) 01（56項目）
     const insNo10 = String(r.insured_no || "").trim().padStart(10, "0");
     const insurerNo8 = String(r.insurer_no || "").trim();
     const birthRaw = (r.birth_date || "").replace(/-/g, "");
@@ -3564,9 +3727,9 @@ function generateKasanCsvFile() {
     const preStatus = isShort ? "" : String(r.pre_admission_status || "");
     const admissionRaw = (r.admission_date || "").replace(/-/g, "");
 
-    const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === ym);
+    const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === itemServiceYm);
     const shortDischargeDate = r.short_end_date || r.discharge_date || "";
-    const isShortDischargeMonth = (shortDischargeDate && shortDischargeDate.slice(0, 7) === ym);
+    const isShortDischargeMonth = (shortDischargeDate && shortDischargeDate.slice(0, 7) === itemServiceYm);
     const dischargeRaw = isShort ? (isShortDischargeMonth ? shortDischargeDate.replace(/-/g, "") : "") : (isDischargeMonth ? (r.discharge_date || "").replace(/-/g, "") : "");
     const postStatus = isShort ? "" : (isDischargeMonth ? String(r.post_discharge_status || "") : "");
 
@@ -3576,7 +3739,7 @@ function generateKasanCsvFile() {
         if (kd === "OUTING_MID") outingMidDays++;
       });
     } else {
-      const dCalc = cpKasanBasicDays(r, ym);
+      const dCalc = cpKasanBasicDays(r, itemServiceYm);
       if (dCalc && dCalc.details) {
         Object.values(dCalc.details).forEach(kd => {
           if (kd === "OUTING_MID") outingMidDays++;
@@ -3587,7 +3750,7 @@ function generateKasanCsvFile() {
     const inResidenceDaysStr = isShort ? "" : String(calc.basicDays);
 
     const r01_fields = [
-      formCode, "01", ymRaw, settings.office_no, insurerNo8, insNo10,
+      formCode, "01", itemYmRaw, settings.office_no, insurerNo8, insNo10,
       "", "", "", "", "", "", // 7..12 公費1〜3
       birthRaw, genderCode, careCode, "", // 13..16 (16: 空)
       careStartRaw, careExpiryRaw, // 17..18
@@ -3603,12 +3766,12 @@ function generateKasanCsvFile() {
       r01_fields.push("");
     }
 
-    // 明細情報レコード (7171 / 7175 / 7176) 02（各行18項目）
+    // 明細情報レコード (7171 / 7172 / 7175 / 7176) 02（各行18項目）
     const r02_list = [];
     calc.items.forEach(it => {
       if (it.candidate) return;
       const r02_fields = [
-        formCode, "02", ymRaw, settings.office_no, insurerNo8, insNo10,
+        formCode, "02", itemYmRaw, settings.office_no, insurerNo8, insNo10,
         serviceTypeCode, String(it.code), String(it.unit_price), String(it.count),
         "", "", "", // 11..13
         String(it.subtotal), // 14
@@ -3618,9 +3781,9 @@ function generateKasanCsvFile() {
       r02_list.push(r02_fields);
     });
 
-    // 集計情報レコード (7171 / 7175 / 7176) 10（38項目）
+    // 集計情報レコード (7171 / 7172 / 7175 / 7176) 10（38項目）
     const r10_fields = [
-      formCode, "10", ymRaw, settings.office_no, insurerNo8, insNo10,
+      formCode, "10", itemYmRaw, settings.office_no, insurerNo8, insNo10,
       serviceTypeCode,
       isShort ? String(calc.basicDays) : "", // 8 サービス実日数
       isShort ? String(calc.planUnits || 0) : "", // 9 計画単位数
@@ -3635,25 +3798,25 @@ function generateKasanCsvFile() {
 
     residentBlocks.push({
       resident: r,
+      serviceYm: itemServiceYm,
       formCode: formCode,
+      totalUnits: totalUnits,
+      cost100: cost100,
+      hokenDemand: hokenDemand,
+      userBurden: userBurden,
       r01: r01_fields,
       r02_list: r02_list,
       r10: r10_fields
     });
   }
 
-  // 請求書レコード 7111（18項目）
-  // 1「7111」 2 サービス提供年月 3 事業所番号 4「1」 5「0」 6「01」
-  // 7 件数（人数） 8 単位数合計 9 費用合計（100％金額） 10 保険請求額 11 公費請求額「0」 12 利用者負担
-  // 13〜18 特定入所者等はすべて「0」
-  const r7111_fields = [
-    "7111", ymRaw, settings.office_no, "1", "0", "01",
-    String(eligibleItems.length), String(grandTotalUnits), String(grandCost100), String(grandHokenDemand), "0", String(grandUserBurden),
-    "0", "0", "0", "0", "0", "0"
-  ];
+  // [国保連仕様 事業所編 p61 レコード構成図]
+  // 1. コントロールレコード（処理対象年月は今月の審査年月で全体で1つ）
+  // 2. 請求書レコード（7111）をサービス提供年月の数だけ先に並べる（古い月順）
+  // 3. そのあとに明細書レコード（古い月順、その中は今と同じ順）
+  // 4. エンドレコード
 
-  // データレコード総数 = 請求書1件 + 各利用者の (01: 1件 + 02: N件 + 10: 1件)
-  let dataRecordCount = 1; // 7111
+  let dataRecordCount = distinctYms.length; // 7111レコードの数
   residentBlocks.forEach(b => {
     dataRecordCount += 1; // 01
     dataRecordCount += b.r02_list.length; // 02
@@ -3662,7 +3825,7 @@ function generateKasanCsvFile() {
 
   // 1行目 コントロールレコード
   recordNumber = 1;
-  const controlLine = `1,1,0,${dataRecordCount},711,0,0,${settings.office_no},0,${settings.media_code},${nextYmRaw},1`;
+  const controlLine = `1,1,0,${dataRecordCount},711,0,0,${settings.office_no},0,${settings.media_code},${currentProcessYmRaw},1`;
   lines.push(controlLine);
   previewRows.push({
     lineNo: 1,
@@ -3670,49 +3833,74 @@ function generateKasanCsvFile() {
     content: controlLine
   });
 
-  // 2行目 請求書レコード 7111
-  recordNumber++;
-  const line7111 = `2,${recordNumber},` + r7111_fields.join(",");
-  lines.push(line7111);
-  previewRows.push({
-    lineNo: recordNumber,
-    type: "請求書レコード (7111)",
-    content: line7111
-  });
+  // 請求書レコード（7111）をサービス提供年月ごとに作成（古い月順）
+  for (const targetYm of distinctYms) {
+    const ymBlocks = residentBlocks.filter(b => b.serviceYm === targetYm);
+    const targetYmRaw = targetYm.replace("-", "");
+    let ymTotalUnits = 0;
+    let ymCost100 = 0;
+    let ymHokenDemand = 0;
+    let ymUserBurden = 0;
 
-  // 明細書レコード
-  for (const block of residentBlocks) {
-    // 01 基本情報
-    recordNumber++;
-    const line01 = `2,${recordNumber},` + block.r01.join(",");
-    lines.push(line01);
-    previewRows.push({
-      lineNo: recordNumber,
-      type: `明細書 基本 (7171-01: ${escapeHtml(block.resident.name)})`,
-      content: line01
+    ymBlocks.forEach(b => {
+      ymTotalUnits += b.totalUnits;
+      ymCost100 += b.cost100;
+      ymHokenDemand += b.hokenDemand;
+      ymUserBurden += b.userBurden;
     });
 
-    // 02 明細情報
-    for (const r02 of block.r02_list) {
+    const r7111_fields = [
+      "7111", targetYmRaw, settings.office_no, "1", "0", "01",
+      String(ymBlocks.length), String(ymTotalUnits), String(ymCost100), String(ymHokenDemand), "0", String(ymUserBurden),
+      "0", "0", "0", "0", "0", "0"
+    ];
+
+    recordNumber++;
+    const line7111 = `2,${recordNumber},` + r7111_fields.join(",");
+    lines.push(line7111);
+    previewRows.push({
+      lineNo: recordNumber,
+      type: `請求書レコード (7111: ${escapeHtml(targetYm)})`,
+      content: line7111
+    });
+  }
+
+  // 明細書レコード（サービス提供年月古い順、各月内は基本情報→明細→集計）
+  for (const targetYm of distinctYms) {
+    const ymBlocks = residentBlocks.filter(b => b.serviceYm === targetYm);
+    for (const block of ymBlocks) {
+      // 01 基本情報
       recordNumber++;
-      const line02 = `2,${recordNumber},` + r02.join(",");
-      lines.push(line02);
+      const line01 = `2,${recordNumber},` + block.r01.join(",");
+      lines.push(line01);
       previewRows.push({
         lineNo: recordNumber,
-        type: `明細書 明細 (7171-02: コード ${escapeHtml(r02[7])})`,
-        content: line02
+        type: `明細書 基本 (${block.formCode}-01: ${escapeHtml(block.resident.name)})`,
+        content: line01
+      });
+
+      // 02 明細情報
+      for (const r02 of block.r02_list) {
+        recordNumber++;
+        const line02 = `2,${recordNumber},` + r02.join(",");
+        lines.push(line02);
+        previewRows.push({
+          lineNo: recordNumber,
+          type: `明細書 明細 (${block.formCode}-02: コード ${escapeHtml(r02[7])})`,
+          content: line02
+        });
+      }
+
+      // 10 集計情報
+      recordNumber++;
+      const line10 = `2,${recordNumber},` + block.r10.join(",");
+      lines.push(line10);
+      previewRows.push({
+        lineNo: recordNumber,
+        type: `明細書 集計 (${block.formCode}-10: ${escapeHtml(block.resident.name)})`,
+        content: line10
       });
     }
-
-    // 10 集計情報
-    recordNumber++;
-    const line10 = `2,${recordNumber},` + block.r10.join(",");
-    lines.push(line10);
-    previewRows.push({
-      lineNo: recordNumber,
-      type: `明細書 集計 (7171-10: ${escapeHtml(block.resident.name)})`,
-      content: line10
-    });
   }
 
   // エンドレコード
@@ -3725,24 +3913,30 @@ function generateKasanCsvFile() {
     content: endLine
   });
 
-  const fullCsvText = lines.join("\r\n") + "\r\n"; // [Claude修正] 改行の文字が生のまま入って、ファイル全体が読み込めなくなっていた
+  const fullCsvText = lines.join("\r\n") + "\r\n";
 
   // 全角文字チェック（半角英数字・カンマ・CRLF以外が含まれていないか機械的検証）
-  const nonAsciiMatch = fullCsvText.match(/[^\x20-\x7E\r\n,]/); // [Claude修正] 同上
+  const nonAsciiMatch = fullCsvText.match(/[^\x20-\x7E\r\n,]/);
   if (nonAsciiMatch) {
     alert(`ファイル内に半角英数字・記号以外の文字が含まれています: ${nonAsciiMatch[0]}`);
     return;
   }
 
-  // ファイル名: 英字1文字＋年月6桁 (例: K202610.CSV) -> ベース7文字で8文字以内準拠
-  const fileName = `K${ymRaw}.CSV`;
+  // ファイル名: 月遅れ分なしの場合は元と1文字も変わらないよう K{通常年月}.CSV
+  const fileName = `K${regularYmRaw}.CSV`;
 
   gKasanGeneratedCsvText = fullCsvText;
   gKasanGeneratedCsvFileName = fileName;
-  gKasanGeneratedCsvMeta = { ym: ym, process_ym: nextYmRaw, items: genItems };
+  gKasanGeneratedCsvMeta = {
+    ym: regularYm,
+    regular_ym: regularYm,
+    process_ym: currentProcessYmRaw,
+    yms: distinctYms,
+    items: genItems
+  };
 
   // 操作ログの記録
-  const opLogDetail = `${ym} 請求CSV作成（${eligibleItems.length}名分、ファイル名: ${fileName}、レコード数: ${recordNumber}）`;
+  const opLogDetail = `${regularYm} 請求CSV作成（全${allTargetItems.length}名分、ファイル名: ${fileName}、レコード数: ${recordNumber}）`;
   if (!Array.isArray(db.data.settings_logs)) db.data.settings_logs = [];
   db.data.settings_logs.push({
     id: Date.now(),
@@ -3774,11 +3968,10 @@ function generateKasanCsvFile() {
   if (previewSec) previewSec.style.display = "block";
   if (dlBtn) dlBtn.style.display = "inline-block";
   if (statusEl) {
-    statusEl.innerHTML = `<span style="color:var(--pine); font-weight:bold;">CSVファイルを正常に作成しました（${eligibleItems.length}名分）。下のボタンから端末へ保存できます。</span>`;
+    statusEl.innerHTML = `<span style="color:var(--pine); font-weight:bold;">CSVファイルを正常に作成しました（${allTargetItems.length}名分）。下のボタンから端末へ保存できます。</span>`;
   }
 }
 
-// 作成されたCSVファイルのダウンロード
 function downloadGeneratedKasanCsv() {
   if (!gKasanGeneratedCsvText || !gKasanGeneratedCsvFileName) {
     alert("作成されたCSVファイルがありません。先に「CSVファイルを作成する」を実行してください。");
@@ -3844,7 +4037,12 @@ window.closeKasanCsvModal = closeKasanCsvModal;
 window.generateKasanCsvFile = generateKasanCsvFile;
 window.downloadGeneratedKasanCsv = downloadGeneratedKasanCsv;
 window.cpGetResidentClaimStatus = cpGetResidentClaimStatus;
+window.cpGetClaimStatuteDate = cpGetClaimStatuteDate;
+window.cpGetPastServiceMonths = cpGetPastServiceMonths;
+window.cpGetClaimEligibleStatus = cpGetClaimEligibleStatus;
 window.cpGetUnresolvedRemandClaims = cpGetUnresolvedRemandClaims;
+window.cpGetUnresolvedRemandAndKagoClaims = cpGetUnresolvedRemandAndKagoClaims;
+window.onKasanCsvDelayedCheckChange = onKasanCsvDelayedCheckChange;
 window.renderKasanClaimStatusTable = renderKasanClaimStatusTable;
 window.markKasanCsvAsSubmitted = markKasanCsvAsSubmitted;
 window.openClaimRemandModal = openClaimRemandModal;
@@ -3852,6 +4050,14 @@ window.closeClaimRemandModal = closeClaimRemandModal;
 window.submitClaimRemand = submitClaimRemand;
 window.restoreClaimRemand = restoreClaimRemand;
 window.voidClaimSubmission = voidClaimSubmission;
+window.openClaimKagoModal = openClaimKagoModal;
+window.closeClaimKagoModal = closeClaimKagoModal;
+window.submitClaimKago = submitClaimKago;
+window.restoreClaimKagoFiling = restoreClaimKagoFiling;
+window.openClaimKagoDecideModal = openClaimKagoDecideModal;
+window.closeClaimKagoDecideModal = closeClaimKagoDecideModal;
+window.submitClaimKagoDecide = submitClaimKagoDecide;
+window.restoreClaimKagoDecision = restoreClaimKagoDecision;
 window.cpValidateResidentForKasanCsv = cpValidateResidentForKasanCsv;
 window.CP_KASAN_SHOGU_DEFS = CP_KASAN_SHOGU_DEFS;
 window.CP_KASAN_REDUCED_BASIC_CODES = CP_KASAN_REDUCED_BASIC_CODES;
@@ -4651,6 +4857,33 @@ window.cpStaffShortageReductionStartYm = cpStaffShortageReductionStartYm;
 window.voidKasanStaffShortage = voidKasanStaffShortage;
 
 
+// [Antigravity追加 2026-10-26] 請求権の時効起算日を取得（サービス提供年月の翌々々月1日）
+function cpGetClaimStatuteDate(serviceYm) {
+  if (!serviceYm) return "-";
+  const ymNorm = serviceYm.replace("/", "-");
+  const [yStr, mStr] = ymNorm.includes("-") ? ymNorm.split("-") : [serviceYm.slice(0, 4), serviceYm.slice(4, 6)];
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  if (isNaN(y) || isNaN(m)) return "-";
+  // サービス提供年月の翌々々月（+3か月）の1日
+  const dt = new Date(y, m - 1 + 3, 1);
+  return `${dt.getFullYear()}年${dt.getMonth() + 1}月1日`;
+}
+
+// [Antigravity追加 2026-10-26] 過去Nか月のサービス提供年月一覧を取得
+function cpGetPastServiceMonths(count = 12, baseDate = new Date()) {
+  const months = [];
+  const y = baseDate.getFullYear();
+  const m = baseDate.getMonth(); // 0-based
+  for (let i = 1; i <= count; i++) {
+    const d = new Date(y, m - i, 1);
+    const yStr = d.getFullYear();
+    const mStr = String(d.getMonth() + 1).padStart(2, "0");
+    months.push(`${yStr}-${mStr}`);
+  }
+  return months;
+}
+
 // [Antigravity追加 2026-10-26] 利用者・サービス提供年月ごとの国保連請求状態（共通アクセサ）
 function cpGetResidentClaimStatus(residentId, ym) {
   const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
@@ -4660,7 +4893,9 @@ function cpGetResidentClaimStatus(residentId, ym) {
       status: "未提出",
       record: null,
       is_submitted: false,
-      is_remand: false
+      is_remand: false,
+      is_kago_filed: false,
+      is_kago_decided: false
     };
   }
   matches.sort((a, b) => Number(b.id) - Number(a.id));
@@ -4670,15 +4905,150 @@ function cpGetResidentClaimStatus(residentId, ym) {
       status: "返戻",
       record: latest,
       is_submitted: false,
-      is_remand: true
+      is_remand: true,
+      is_kago_filed: false,
+      is_kago_decided: false
+    };
+  }
+  if (latest.status === "過誤申立中") {
+    return {
+      status: "過誤申立中",
+      record: latest,
+      is_submitted: true,
+      is_remand: false,
+      is_kago_filed: true,
+      is_kago_decided: false
+    };
+  }
+  if (latest.status === "過誤決定") {
+    return {
+      status: "過誤決定",
+      record: latest,
+      is_submitted: false,
+      is_remand: false,
+      is_kago_filed: false,
+      is_kago_decided: true
     };
   }
   return {
     status: "提出済",
     record: latest,
     is_submitted: true,
-    is_remand: false
+    is_remand: false,
+    is_kago_filed: false,
+    is_kago_decided: false
   };
+}
+
+// [Antigravity追加 2026-10-26] その人・その月が今月の審査で請求可能かを判定する単一関数（共通判定）
+function cpGetClaimEligibleStatus(residentId, serviceYm, currentProcessYm) {
+  if (!currentProcessYm) {
+    const d = new Date();
+    currentProcessYm = `${d.getFullYear()}${String(d.getMonth() + 1).padStart(2, "0")}`;
+  }
+  const procY = parseInt(String(currentProcessYm).slice(0, 4), 10);
+  const procM = parseInt(String(currentProcessYm).slice(4, 6), 10);
+  // 通常分（前月サービス提供分）
+  const regD = new Date(procY, procM - 1 - 1, 1);
+  const regularYm = `${regD.getFullYear()}-${String(regD.getMonth() + 1).padStart(2, "0")}`;
+
+  // 1. 同一審査年月で同一サービス提供年月が既に提出済かチェック
+  // （国保連インタフェース仕様書 解説書 1.1(1) 同月に別々に分けて送ることはできない）
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const sameMonthAlreadySent = submissions.some(s =>
+    !s.voided && s.status === "提出済" && s.service_ym === serviceYm && String(s.process_ym) === String(currentProcessYm)
+  );
+  if (sameMonthAlreadySent) {
+    return {
+      eligible: false,
+      type: "same_month_sent",
+      label: "当月審査送付済",
+      reason: `${serviceYm}の請求は今月審査（${currentProcessYm}）ですでに送付済みです。同一審査年月に同一提供年月を複数ファイルに分けて送ることはできません。`,
+      claimSubmission: null
+    };
+  }
+
+  // 2. 利用者登録確認
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const res = allResidents.find(r => Number(r.id) === Number(residentId));
+  if (!res) {
+    return {
+      eligible: false,
+      type: "not_found",
+      label: "利用者未登録",
+      reason: "利用者の登録情報が見つかりません",
+      claimSubmission: null
+    };
+  }
+
+  // 3. 過去の送付状況（最新の有効レコード）
+  const claimStatus = cpGetResidentClaimStatus(residentId, serviceYm);
+  const rec = claimStatus.record;
+
+  if (claimStatus.status === "提出済") {
+    const procM = (rec && rec.process_ym) ? parseInt(String(rec.process_ym).slice(4), 10) : "";
+    return {
+      eligible: false,
+      type: "submitted",
+      label: "提出済",
+      reason: procM ? `提出済のため外しました（${procM}月審査で送付）` : "送付済み（返戻・過誤なし）",
+      claimSubmission: rec
+    };
+  }
+  if (claimStatus.status === "過誤申立中") {
+    return {
+      eligible: false,
+      type: "kago_filed",
+      label: "過誤申立中",
+      reason: "保険者に過誤申立中（過誤決定通知書の確認後に再請求可能）",
+      claimSubmission: rec
+    };
+  }
+  if (claimStatus.status === "返戻") {
+    return {
+      eligible: true,
+      type: "remand",
+      label: "返戻",
+      reason: rec ? (rec.remand_reason || "返戻") : "返戻",
+      claimSubmission: rec
+    };
+  }
+  if (claimStatus.status === "過誤決定") {
+    return {
+      eligible: true,
+      type: "kago_decided",
+      label: "過誤決定",
+      reason: "過誤決定通知確認済（再請求可能）",
+      claimSubmission: rec
+    };
+  }
+
+  // 未提出の場合
+  if (serviceYm === regularYm) {
+    return {
+      eligible: true,
+      type: "regular",
+      label: "ふだんの分",
+      reason: "通常請求対象（先月サービス分）",
+      claimSubmission: null
+    };
+  } else if (serviceYm < regularYm) {
+    return {
+      eligible: true,
+      type: "unsubmitted",
+      label: "未提出",
+      reason: "過去月の未提出分（月遅れ）",
+      claimSubmission: null
+    };
+  } else {
+    return {
+      eligible: false,
+      type: "future",
+      label: "未来月",
+      reason: "サービス提供月が未来のため作成不可",
+      claimSubmission: null
+    };
+  }
 }
 
 // [Antigravity追加 2026-10-26] 未解決の返戻一覧を取得（共通アクセサ）
@@ -4690,15 +5060,48 @@ function cpGetUnresolvedRemandClaims() {
       Number(s.resident_id) === Number(rem.resident_id) &&
       s.service_ym === rem.service_ym &&
       !s.voided &&
-      s.status === "提出済" &&
+      (s.status === "提出済" || s.status === "過誤申立中" || s.status === "過誤決定") &&
       Number(s.id) > Number(rem.id)
     );
     return !newerSubmitted;
   });
 }
 
+// [Antigravity追加 2026-10-26] 未解決の返戻および過誤決定一覧を取得（お知らせ表示用）
+function cpGetUnresolvedRemandAndKagoClaims() {
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const items = [];
 
-// [Antigravity追加 2026-10-26] 国保連 請求の状況一覧テーブル
+  // 1. 返戻（未再請求）
+  const remands = cpGetUnresolvedRemandClaims();
+  remands.forEach(rem => {
+    items.push({
+      type: "remand",
+      record: rem
+    });
+  });
+
+  // 2. 過誤決定（未再請求）
+  const kagoDecided = submissions.filter(s => s.status === "過誤決定" && !s.voided);
+  kagoDecided.forEach(kd => {
+    const newerSubmitted = submissions.some(s =>
+      Number(s.resident_id) === Number(kd.resident_id) &&
+      s.service_ym === kd.service_ym &&
+      !s.voided &&
+      s.status === "提出済" &&
+      Number(s.id) > Number(kd.id)
+    );
+    if (!newerSubmitted) {
+      items.push({
+        type: "kago_decided",
+        record: kd
+      });
+    }
+  });
+
+  return items;
+}
+
 function renderKasanClaimStatusTable(ym) {
   const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
   const isAdminOrClerk = (typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk());
@@ -4750,6 +5153,7 @@ function renderKasanClaimStatusTable(ym) {
         actionHtml = `
           <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
             <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--alert); border-color:var(--alert); background:var(--surface);" onclick="openClaimRemandModal(${rec.id})">返戻にする</button>
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--caution); border-color:var(--caution); background:var(--surface);" onclick="openClaimKagoModal(${rec.id})">過誤を申し立てる</button>
             <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--ink-2); border-color:var(--line); background:var(--surface);" onclick="voidClaimSubmission(${rec.id})">取消</button>
           </div>
         `;
@@ -4766,9 +5170,37 @@ function renderKasanClaimStatusTable(ym) {
           <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--pine-dark); border-color:var(--line); background:var(--surface);" onclick="restoreClaimRemand(${rec.id})">返戻を戻す</button>
         `;
       }
+    } else if (cs.status === "過誤申立中") {
+      badgeHtml = `<span class="badge" style="background:var(--caution-tint); color:var(--caution); border:1px solid var(--caution); font-size:12px; padding:3px 8px; font-weight:bold;">過誤申立中</span>`;
+      detailHtml = `
+        <div style="font-size:13px; color:var(--caution); font-weight:bold;">申立日: ${escapeHtml(rec.kago_filed_date || '-')}（${escapeHtml(rec.kago_filed_by || '')}）</div>
+        <div style="font-size:12px; color:var(--ink); margin-top:2px;">事由番号: <strong>${escapeHtml(rec.kago_reason_code || '')}</strong> ${rec.kago_reason_code === '02' ? '請求誤りによる実績取り下げ' : (rec.kago_reason_code === '12' ? '請求誤りによる実績取り下げ（同月）' : '')}</div>
+        <div style="font-size:12px; color:var(--ink); margin-top:2px; line-height:1.4;">理由: ${escapeHtml(rec.kago_reason || '')}</div>
+        <div style="font-size:12px; color:var(--ink-2); margin-top:4px;">※ 国保連の過誤決定通知書を確認後、「過誤決定通知を登録」を行ってください。</div>
+      `;
+      if (isAdminOrClerk) {
+        actionHtml = `
+          <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--pine-dark); border-color:var(--pine); background:var(--surface);" onclick="openClaimKagoDecideModal(${rec.id})">過誤決定通知を登録</button>
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--ink-2); border-color:var(--line); background:var(--surface);" onclick="restoreClaimKagoFiling(${rec.id})">申立を戻す</button>
+          </div>
+        `;
+      }
+    } else if (cs.status === "過誤決定") {
+      badgeHtml = `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); border:1px solid var(--pine); font-size:12px; padding:3px 8px; font-weight:bold;">過誤決定</span>`;
+      detailHtml = `
+        <div style="font-size:13px; color:var(--pine-dark); font-weight:bold;">決定通知確認日: ${escapeHtml(rec.kago_decided_date || '-')}（${escapeHtml(rec.kago_decided_by || '')}）</div>
+        <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">申立情報: ${escapeHtml(rec.kago_filed_date || '')} 申立（事由: ${escapeHtml(rec.kago_reason_code || '')}）</div>
+        <div style="font-size:12px; color:var(--alert); font-weight:bold; margin-top:4px;">※ 再請求が可能です（国保連ファイル作成画面の月遅れ分で選択してください）</div>
+      `;
+      if (isAdminOrClerk) {
+        actionHtml = `
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--ink-2); border-color:var(--line); background:var(--surface);" onclick="restoreClaimKagoDecision(${rec.id})">決定を戻す</button>
+        `;
+      }
     }
 
-    const roomStr = r.room_no ? `${r.room_no}号室 ` : ""; // [Claude修正] 部屋番号は room_no
+    const roomStr = r.room_no ? `${r.room_no}号室 ` : "";
 
     return `
       <tr>
@@ -4799,7 +5231,7 @@ function renderKasanClaimStatusTable(ym) {
       <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
         <div>
           <h4 style="margin:0; font-size:15px; color:var(--pine-dark);">国保連 請求の状況（${escapeHtml(ym)} 提供分）</h4>
-          <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ この月に算定対象となる利用者の提出・返戻の記録状況です。</div>
+          <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ この月に算定対象となる利用者の提出・返戻・過誤の記録状況です。</div>
         </div>
       </div>
       <div style="overflow-x:auto;">
@@ -4811,7 +5243,7 @@ function renderKasanClaimStatusTable(ym) {
               <th style="width:110px; text-align:right;">算定単位数</th>
               <th style="width:90px; text-align:center;">状態</th>
               <th>状況詳細</th>
-              <th style="width:130px; text-align:center;">操作</th>
+              <th style="width:170px; text-align:center;">操作</th>
             </tr>
           </thead>
           <tbody>
@@ -4823,8 +5255,6 @@ function renderKasanClaimStatusTable(ym) {
   `;
 }
 
-
-// [Antigravity追加 2026-10-26] 国保連請求ファイル送付済みの記録
 function markKasanCsvAsSubmitted() {
   if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
     alert("国保連への送付記録は管理者または事務員のみ操作可能です。");
@@ -4837,7 +5267,7 @@ function markKasanCsvAsSubmitted() {
     return;
   }
   // [Claude修正] 2回押しても二重に記録しない（すでに提出済の人は外す）
-  const items = gen.items.filter(it => !cpGetResidentClaimStatus(it.resident_id, gen.ym).is_submitted);
+  const items = gen.items.filter(it => !cpGetResidentClaimStatus(it.resident_id, it.service_ym || gen.ym).is_submitted);
   if (items.length === 0) {
     alert("このファイルの利用者は、すでに送付済みとして記録されています。");
     return;
@@ -4859,7 +5289,7 @@ function markKasanCsvAsSubmitted() {
     db.data.claim_submissions.push({
       id: baseTime + idx,
       resident_id: Number(it.resident_id),
-      service_ym: gen.ym,
+      service_ym: it.service_ym || gen.ym,
       process_ym: gen.process_ym,
       service_type_code: it.service_type_code,
       total_units: it.total_units,
@@ -4885,7 +5315,6 @@ function markKasanCsvAsSubmitted() {
   if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
 }
 
-// [Antigravity追加 2026-10-26] 返戻登録モーダルを開く
 function openClaimRemandModal(claimId) {
   if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
     alert("返戻の登録は管理者または事務員のみ可能です。");
@@ -5040,6 +5469,310 @@ function voidClaimSubmission(claimId) {
   rec.void_reason = reason.trim();
   rec.voided_at = toLocalDateTimeStr(new Date());
   rec.voided_by = cpLoginStaffName();
+
+  db.save();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+
+// [Antigravity追加 2026-10-26] 過誤申立モーダルを開く
+function openClaimKagoModal(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤申立の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const res = allResidents.find(x => Number(x.id) === Number(rec.resident_id));
+  const resName = res ? res.name : `利用者ID:${rec.resident_id}`;
+
+  const modal = document.getElementById("claimKagoModal");
+  if (!modal) return;
+
+  const idEl = document.getElementById("kagoClaimId");
+  const nameEl = document.getElementById("kagoResidentName");
+  const ymEl = document.getElementById("kagoServiceYm");
+  const sentEl = document.getElementById("kagoSentDate");
+  const dateEl = document.getElementById("claimKagoDate");
+  const reasonCodeEl = document.getElementById("claimKagoReasonCode");
+  const reasonEl = document.getElementById("claimKagoReason");
+
+  if (idEl) idEl.value = rec.id;
+  if (nameEl) nameEl.textContent = `${resName} 様`;
+  if (ymEl) ymEl.textContent = rec.service_ym;
+  const sentDate = (rec.sent_at || "").slice(0, 10);
+  if (sentEl) sentEl.textContent = sentDate;
+
+  const today = toLocalDateStr(new Date());
+  if (dateEl) {
+    dateEl.value = today;
+    dateEl.max = today;
+    if (sentDate) dateEl.min = sentDate;
+  }
+  if (reasonCodeEl) reasonCodeEl.value = "";
+  if (reasonEl) reasonEl.value = "";
+
+  modal.style.display = "flex";
+}
+
+function closeClaimKagoModal() {
+  const modal = document.getElementById("claimKagoModal");
+  if (modal) modal.style.display = "none";
+}
+
+// [Antigravity追加 2026-10-26] 過誤申立の登録
+function submitClaimKago() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤申立の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const idEl = document.getElementById("kagoClaimId");
+  const dateEl = document.getElementById("claimKagoDate");
+  const reasonCodeEl = document.getElementById("claimKagoReasonCode");
+  const reasonEl = document.getElementById("claimKagoReason");
+  if (!idEl || !dateEl || !reasonCodeEl || !reasonEl) return;
+
+  const id = Number(idEl.value);
+  const kagoDate = (dateEl.value || "").trim();
+  const reasonCode = (reasonCodeEl.value || "").trim();
+  const reason = (reasonEl.value || "").trim();
+
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === id);
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+
+  if (!kagoDate) {
+    alert("申し立てた日を入力してください。");
+    return;
+  }
+  const today = toLocalDateStr(new Date());
+  if (kagoDate > today) {
+    alert("申し立てた日に先の日付は入れられません。");
+    return;
+  }
+  const sentDate = (rec.sent_at || "").slice(0, 10);
+  if (sentDate && kagoDate < sentDate) {
+    alert(`申し立てた日は、国保連に送った日（${sentDate}）以降の日付にしてください。`);
+    return;
+  }
+  if (!reasonCode || (reasonCode !== "02" && reasonCode !== "12")) {
+    alert("申立理由番号を選択してください（02または12）。");
+    return;
+  }
+  if (!reason) {
+    alert("申立理由を入力してください。");
+    return;
+  }
+
+  rec.status = "過誤申立中";
+  rec.kago_filed_date = kagoDate;
+  rec.kago_reason_code = reasonCode;
+  rec.kago_reason = reason;
+  rec.kago_filed_at = toLocalDateTimeStr(new Date());
+  rec.kago_filed_by = cpLoginStaffName();
+
+  if (!Array.isArray(rec.kago_history)) rec.kago_history = [];
+  rec.kago_history.push({
+    action: "file",
+    date: kagoDate,
+    reason_code: reasonCode,
+    reason: reason,
+    by: cpLoginStaffName(),
+    at: toLocalDateTimeStr(new Date())
+  });
+
+  db.save();
+  closeClaimKagoModal();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 過誤申立の取消・復旧
+function restoreClaimKagoFiling(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤申立の取消・復旧は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec || rec.status !== "過誤申立中") return;
+
+  const reason = prompt("この過誤申立を取り消し、「提出済」に戻します。\n\n戻す理由を入力してください（必須）:", "");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("戻す理由を入力してください。復旧は行っていません。");
+    return;
+  }
+
+  if (!Array.isArray(rec.kago_history)) rec.kago_history = [];
+  rec.kago_history.push({
+    action: "restore_filing",
+    date: toLocalDateStr(new Date()),
+    reason: reason.trim(),
+    by: cpLoginStaffName(),
+    at: toLocalDateTimeStr(new Date())
+  });
+
+  rec.status = "提出済";
+  rec.kago_restore_filing_at = toLocalDateTimeStr(new Date());
+  rec.kago_restore_filing_by = cpLoginStaffName();
+  rec.kago_restore_filing_reason = reason.trim();
+
+  db.save();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 過誤決定通知モーダルを開く
+function openClaimKagoDecideModal(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤決定通知の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const res = allResidents.find(x => Number(x.id) === Number(rec.resident_id));
+  const resName = res ? res.name : `利用者ID:${rec.resident_id}`;
+
+  const modal = document.getElementById("claimKagoDecideModal");
+  if (!modal) return;
+
+  const idEl = document.getElementById("kagoDecideClaimId");
+  const nameEl = document.getElementById("kagoDecideResidentName");
+  const ymEl = document.getElementById("kagoDecideServiceYm");
+  const filedEl = document.getElementById("kagoDecideFiledDate");
+  const dateEl = document.getElementById("claimKagoDecideDate");
+
+  if (idEl) idEl.value = rec.id;
+  if (nameEl) nameEl.textContent = `${resName} 様`;
+  if (ymEl) ymEl.textContent = rec.service_ym;
+  if (filedEl) filedEl.textContent = rec.kago_filed_date || "-";
+
+  const today = toLocalDateStr(new Date());
+  if (dateEl) {
+    dateEl.value = today;
+    dateEl.max = today;
+    if (rec.kago_filed_date) dateEl.min = rec.kago_filed_date;
+  }
+
+  modal.style.display = "flex";
+}
+
+function closeClaimKagoDecideModal() {
+  const modal = document.getElementById("claimKagoDecideModal");
+  if (modal) modal.style.display = "none";
+}
+
+// [Antigravity追加 2026-10-26] 過誤決定通知の登録
+function submitClaimKagoDecide() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤決定通知の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const idEl = document.getElementById("kagoDecideClaimId");
+  const dateEl = document.getElementById("claimKagoDecideDate");
+  if (!idEl || !dateEl) return;
+
+  const id = Number(idEl.value);
+  const decideDate = (dateEl.value || "").trim();
+
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === id);
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+
+  if (!decideDate) {
+    alert("過誤決定通知を確認した日を入力してください。");
+    return;
+  }
+  const today = toLocalDateStr(new Date());
+  if (decideDate > today) {
+    alert("確認した日に先の日付は入れられません。");
+    return;
+  }
+  if (rec.kago_filed_date && decideDate < rec.kago_filed_date) {
+    alert(`確認した日は、申し立てた日（${rec.kago_filed_date}）以降の日付にしてください。`);
+    return;
+  }
+
+  rec.status = "過誤決定";
+  rec.kago_decided_date = decideDate;
+  rec.kago_decided_at = toLocalDateTimeStr(new Date());
+  rec.kago_decided_by = cpLoginStaffName();
+
+  if (!Array.isArray(rec.kago_history)) rec.kago_history = [];
+  rec.kago_history.push({
+    action: "decide",
+    date: decideDate,
+    by: cpLoginStaffName(),
+    at: toLocalDateTimeStr(new Date())
+  });
+
+  db.save();
+  closeClaimKagoDecideModal();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 過誤決定通知の取消・復旧
+function restoreClaimKagoDecision(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("過誤決定の取消・復旧は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec || rec.status !== "過誤決定") return;
+
+  // 再請求が既に行われていないかチェック
+  const newerSubmitted = submissions.some(s =>
+    Number(s.resident_id) === Number(rec.resident_id) &&
+    s.service_ym === rec.service_ym &&
+    !s.voided &&
+    s.status === "提出済" &&
+    Number(s.id) > Number(rec.id)
+  );
+  if (newerSubmitted) {
+    alert("この過誤決定に対する再請求がすでに送付されています。先に新しい送付記録を取り消してください。");
+    return;
+  }
+
+  const reason = prompt("この過誤決定通知の登録を取り消し、「過誤申立中」に戻します。\n\n戻す理由を入力してください（必須）:", "");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("戻す理由を入力してください。復旧は行っていません。");
+    return;
+  }
+
+  if (!Array.isArray(rec.kago_history)) rec.kago_history = [];
+  rec.kago_history.push({
+    action: "restore_decision",
+    date: toLocalDateStr(new Date()),
+    reason: reason.trim(),
+    by: cpLoginStaffName(),
+    at: toLocalDateTimeStr(new Date())
+  });
+
+  rec.status = "過誤申立中";
+  rec.kago_restore_decision_at = toLocalDateTimeStr(new Date());
+  rec.kago_restore_decision_by = cpLoginStaffName();
+  rec.kago_restore_decision_reason = reason.trim();
 
   db.save();
   renderOfficeKasanTab();

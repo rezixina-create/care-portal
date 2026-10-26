@@ -270,6 +270,33 @@
       <textarea id="claimRemandReason"></textarea>
       <button id="btnSubmitClaimRemand"></button>
     </div>
+    <div id="claimKagoModal" style="display:none;">
+      <input type="hidden" id="kagoClaimId">
+      <span id="kagoResidentName"></span>
+      <span id="kagoServiceYm"></span>
+      <span id="kagoSentDate"></span>
+      <input type="date" id="claimKagoDate">
+      <select id="claimKagoReasonCode">
+        <option value="">選んでください</option>
+        <option value="02">02 請求誤りによる実績取り下げ</option>
+        <option value="12">12 請求誤りによる実績取り下げ（同月）</option>
+      </select>
+      <textarea id="claimKagoReason"></textarea>
+      <button id="btnSubmitClaimKago"></button>
+    </div>
+    <div id="claimKagoDecideModal" style="display:none;">
+      <input type="hidden" id="kagoDecideClaimId">
+      <span id="kagoDecideResidentName"></span>
+      <span id="kagoDecideServiceYm"></span>
+      <span id="kagoDecideFiledDate"></span>
+      <input type="date" id="claimKagoDecideDate">
+      <button id="btnSubmitClaimKagoDecide"></button>
+    </div>
+    <div id="mockDelayedContainer" style="display:none;">
+      <span id="kasanCsvProcessYmDisp"></span>
+      <span id="kasanCsvDelayedSummary"></span>
+      <table><tbody id="kasanCsvDelayedListBody"></tbody></table>
+    </div>
     <div id="committeeModal" style="display:none;">
       <input id="comDate">
       <select id="comCategory">
@@ -1854,6 +1881,239 @@
       window.prompt = origPrompt170;
       gKasanGeneratedCsvMeta = null;
       closeClaimRemandModal();
+
+      // ------------------------------------------------------------------
+      // Test 171: 国保連請求「月遅れ分」の追加と「過誤」の記録
+      // ------------------------------------------------------------------
+      log("--- Test 171: 国保連請求「月遅れ分」の追加と「過誤」の記録 ---");
+      const origSession171 = gState.session;
+      const origLogin171 = window.cpLoginStaffName;
+      const origStamps171 = gState.stamps;
+      const origAlert171 = window.alert;
+      const origConfirm171 = window.confirm;
+      const origPrompt171 = window.prompt;
+      let alertMsg171 = "";
+      window.alert = msg => { alertMsg171 = msg; };
+      window.confirm = () => true;
+
+      const origSubmissions171 = JSON.parse(JSON.stringify(db.data.claim_submissions || []));
+      db.data.claim_submissions = [];
+
+      // 171a: cpGetClaimStatuteDate の時効起算日計算（サービス提供年月+3か月の1日）
+      assert(typeof cpGetClaimStatuteDate === "function", "Test 171a-1: cpGetClaimStatuteDate が定義されていること");
+      assert(cpGetClaimStatuteDate("2026-08") === "2026年11月1日", "Test 171a-2: 2026-08 の起算日は 2026年11月1日");
+      assert(cpGetClaimStatuteDate("2026-09") === "2026年12月1日", "Test 171a-3: 2026-09 の起算日は 2026年12月1日");
+      assert(cpGetClaimStatuteDate("2025-11") === "2026年2月1日", "Test 171a-4: 年をまたぐ 2025-11 の起算日は 2026年2月1日");
+
+      // 171b: cpGetPastServiceMonths(12) 過去12か月一覧
+      assert(typeof cpGetPastServiceMonths === "function", "Test 171b-1: cpGetPastServiceMonths が定義されていること");
+      const pastMonths171 = cpGetPastServiceMonths(12, new Date(2026, 9, 26)); // 2026年10月
+      assert(pastMonths171.length === 12, "Test 171b-2: 12か月分取得できること");
+      assert(pastMonths171[0] === "2026-09", "Test 171b-3: 先月は 2026-09");
+      assert(pastMonths171[1] === "2026-08", "Test 171b-4: 2か月前は 2026-08");
+      assert(pastMonths171[11] === "2025-10", "Test 171b-5: 12か月前は 2025-10");
+
+      // 171c: cpGetClaimEligibleStatus 共通判定
+      assert(typeof cpGetClaimEligibleStatus === "function", "Test 171c-1: cpGetClaimEligibleStatus が定義されていること");
+      let elig171 = cpGetClaimEligibleStatus(1, "2026-09", "202610");
+      assert(elig171.eligible === true && elig171.type === "regular", "Test 171c-2: 未提出の先月分は通常分として請求可能");
+
+      elig171 = cpGetClaimEligibleStatus(1, "2026-08", "202610");
+      assert(elig171.eligible === true && elig171.type === "unsubmitted", "Test 171c-3: 未提出の過去月分は月遅れ分として請求可能");
+
+      // 送付済レコードを追加
+      const sub171 = {
+        id: 11112222,
+        resident_id: 1,
+        service_ym: "2026-08",
+        process_ym: "202609",
+        service_type_code: "32",
+        total_units: 25000,
+        insurance_demand: 225000,
+        user_burden: 25000,
+        file_name: "K202608.CSV",
+        status: "提出済",
+        sent_at: "2026-09-10 10:00:00",
+        sent_by: "テスト管理者"
+      };
+      db.data.claim_submissions.push(sub171);
+
+      elig171 = cpGetClaimEligibleStatus(1, "2026-08", "202610");
+      assert(elig171.eligible === false && elig171.type === "submitted", "Test 171c-4: 提出済で返戻過誤なしは請求不可");
+
+      // 171d: 過誤申立（権限、未来日ブロック、送付日前ブロック、事由番号必須、理由必須）
+      gState.session = { staffName: "テスト介護" };
+      gState.stamps = [{ name: "テスト介護", role: "介護職員" }];
+      window.cpLoginStaffName = () => "テスト介護";
+
+      alertMsg171 = "";
+      openClaimKagoModal(11112222);
+      assert(alertMsg171.includes("管理者または事務員"), "Test 171d-1: openClaimKagoModal が介護職員でブロックされること");
+
+      gState.session = { staffName: "テスト管理者" };
+      gState.stamps = [{ name: "テスト管理者", role: "施設長（管理者）" }];
+      window.cpLoginStaffName = () => "テスト管理者";
+
+      document.getElementById("kagoClaimId").value = "11112222";
+
+      // 未来日
+      alertMsg171 = "";
+      document.getElementById("claimKagoDate").value = "2099-01-01";
+      document.getElementById("claimKagoReasonCode").value = "02";
+      document.getElementById("claimKagoReason").value = "実績取り下げ";
+      submitClaimKago();
+      assert(alertMsg171.includes("先の日付"), "Test 171d-2: 過誤申立日に未来日は設定不可");
+
+      // 送付日より前
+      alertMsg171 = "";
+      document.getElementById("claimKagoDate").value = "2020-01-01";
+      submitClaimKago();
+      assert(alertMsg171.includes("送った日"), "Test 171d-3: 送付日より前の過誤申立日は設定不可");
+
+      // 申立理由番号空欄
+      alertMsg171 = "";
+      document.getElementById("claimKagoDate").value = toLocalDateStr(new Date());
+      document.getElementById("claimKagoReasonCode").value = "";
+      submitClaimKago();
+      assert(alertMsg171.includes("申立理由番号"), "Test 171d-4: 申立理由番号未選択はブロック");
+
+      // 理由空欄
+      alertMsg171 = "";
+      document.getElementById("claimKagoReasonCode").value = "02";
+      document.getElementById("claimKagoReason").value = "  ";
+      submitClaimKago();
+      assert(alertMsg171.includes("申立理由"), "Test 171d-5: 申立理由空欄はブロック");
+
+      // 正常保存（02 請求誤りによる実績取り下げ）
+      document.getElementById("claimKagoReason").value = "外泊日数の算定誤りによる実績取り下げ";
+      submitClaimKago();
+      assert(sub171.status === "過誤申立中", "Test 171d-6: ステータスが過誤申立中に更新されたこと");
+      assert(sub171.kago_reason_code === "02", "Test 171d-7: 理由番号02が記録されたこと");
+      assert(sub171.kago_filed_by === "テスト管理者", "Test 171d-8: 申立者が記録されたこと");
+
+      // 過誤申立中は再請求候補に出ないこと
+      elig171 = cpGetClaimEligibleStatus(1, "2026-08", "202610");
+      assert(elig171.eligible === false && elig171.type === "kago_filed", "Test 171d-9: 過誤申立中は再請求不可（決定待ち）");
+
+      // 171e: 過誤決定通知（未来日ブロック、申立日前ブロック、正常登録）
+      document.getElementById("kagoDecideClaimId").value = "11112222";
+
+      // 未来日
+      alertMsg171 = "";
+      document.getElementById("claimKagoDecideDate").value = "2099-01-01";
+      submitClaimKagoDecide();
+      assert(alertMsg171.includes("先の日付"), "Test 171e-1: 過誤決定日に未来日は不可");
+
+      // 申立日前
+      alertMsg171 = "";
+      document.getElementById("claimKagoDecideDate").value = "2020-01-01";
+      submitClaimKagoDecide();
+      assert(alertMsg171.includes("申し立てた日"), "Test 171e-2: 申立日より前の過誤決定日は不可");
+
+      // 正常登録
+      document.getElementById("claimKagoDecideDate").value = toLocalDateStr(new Date());
+      submitClaimKagoDecide();
+      assert(sub171.status === "過誤決定", "Test 171e-3: ステータスが過誤決定に更新されたこと");
+      assert(sub171.kago_decided_by === "テスト管理者", "Test 171e-4: 決定確認者が記録されたこと");
+
+      // 過誤決定後は再請求可能（月遅れ候補）
+      elig171 = cpGetClaimEligibleStatus(1, "2026-08", "202610");
+      assert(elig171.eligible === true && elig171.type === "kago_decided", "Test 171e-5: 過誤決定後は月遅れ請求可能");
+
+      // 171f: 決定の戻すと申立の戻す
+      alertMsg171 = "";
+      window.prompt = () => ""; // 空欄
+      restoreClaimKagoDecision(11112222);
+      assert(alertMsg171.includes("戻す理由"), "Test 171f-1: 決定戻し理由空欄はブロック");
+
+      window.prompt = () => "決定通知の確認誤り";
+      restoreClaimKagoDecision(11112222);
+      assert(sub171.status === "過誤申立中", "Test 171f-2: 決定を戻すと過誤申立中に戻ること");
+
+      window.prompt = () => "申立の誤登録取り消し";
+      restoreClaimKagoFiling(11112222);
+      assert(sub171.status === "提出済", "Test 171f-3: 申立を戻すと提出済に戻ること");
+
+      // 171g: 複数月のCSV出力（7111が年月順に並び、明細書が続くこと）
+      // 再度過誤決定にして月遅れ候補にする
+      sub171.status = "過誤決定";
+      sub171.kago_decided_date = toLocalDateStr(new Date());
+
+      gKasanCsvValidationResult = {
+        ym: "2026-09",
+        regularYm: "2026-09",
+        processYm: "202610",
+        settings: { office_no: "1234567890", media_code: "1", region_type: "その他" },
+        officeErrors: [],
+        candidates: [
+          {
+            resident: { id: 2, name: "田中 ハナ", room_no: "102", care_level: "要介護2", benefit_rate: 90, usage_type: "normal" },
+            serviceYm: "2026-09",
+            calc: { basicDays: 30, hospDays: 0, totalUnits: 20000, items: [{ code: "1111", unit_price: 1000, count: 1, subtotal: 20000 }] },
+            validation: { valid: true, missing: [] },
+            excluded: false
+          }
+        ],
+        delayedCandidates: [
+          {
+            resident: { id: 1, name: "佐藤 太郎", room_no: "101", care_level: "要介護3", benefit_rate: 90, usage_type: "normal" },
+            serviceYm: "2026-08",
+            calc: { basicDays: 31, hospDays: 0, totalUnits: 25000, items: [{ code: "1111", unit_price: 1000, count: 1, subtotal: 25000 }] },
+            validation: { valid: true, missing: [] },
+            elig: { eligible: true, type: "kago_decided" },
+            statuteDate: "2026年11月1日"
+          }
+        ],
+        eligibleCount: 1,
+        ineligibleCount: 0
+      };
+      window.gKasanDelayedCandidates = gKasanCsvValidationResult.delayedCandidates;
+
+      // モックチェックボックス作成
+      const delayedBody = document.getElementById("kasanCsvDelayedListBody");
+      delayedBody.innerHTML = `<tr><td><input type="checkbox" class="kasan-delayed-check" data-res-id="1" data-ym="2026-08" checked></td></tr>`;
+
+      generateKasanCsvFile();
+      const csvLines171 = (gKasanGeneratedCsvText || "").split(/\r?\n/).filter(Boolean);
+
+      // コントロールレコード（1行目）
+      assert(csvLines171[0].startsWith("1,1,0,"), "Test 171g-1: 1行目はコントロールレコード");
+      assert(csvLines171[0].includes(",202610,1"), "Test 171g-2: コントロールレコードの処理対象年月は202610（今月）");
+
+      // 7111 レコードが古い順（202608 → 202609）で先に並ぶこと
+      assert(csvLines171[1].includes(",7111,202608,"), "Test 171g-3: 1つ目の7111は202608（古い月）");
+      assert(csvLines171[2].includes(",7111,202609,"), "Test 171g-4: 2つ目の7111は202609（新しい月）");
+
+      // その後に明細書が古い順（202608 → 202609）で続くこと
+      const firstDetail = csvLines171[3];
+      assert(firstDetail.includes(",7171,01,202608,"), "Test 171g-5: 最初の明細書レコード01は202608提供分");
+
+      // 171h: 送付記録の複数月保存と二重記録防止
+      const prevSubLen = db.data.claim_submissions.length;
+      markKasanCsvAsSubmitted();
+      const afterSubLen = db.data.claim_submissions.length;
+      assert(afterSubLen === prevSubLen + 2, "Test 171h-1: 2名分（202608と202609）が保存されたこと");
+
+      // 2回目実行で二重記録されないこと
+      alertMsg171 = "";
+      markKasanCsvAsSubmitted();
+      assert(alertMsg171.includes("すでに送付済み"), "Test 171h-2: 連打・2回呼出で二重保存がブロックされること");
+      assert(db.data.claim_submissions.length === afterSubLen, "Test 171h-3: 送付件数が増えていないこと");
+
+      // クリーンアップ
+      db.data.claim_submissions = origSubmissions171;
+      gState.session = origSession171;
+      window.cpLoginStaffName = origLogin171;
+      gState.stamps = origStamps171;
+      window.alert = origAlert171;
+      window.confirm = origConfirm171;
+      window.prompt = origPrompt171;
+      gKasanGeneratedCsvMeta = null;
+      window.gKasanDelayedCandidates = [];
+      const delEl = document.getElementById("kasanCsvDelayedListBody");
+      if (delEl) delEl.innerHTML = "";
+      closeClaimKagoModal();
+      closeClaimKagoDecideModal();
 
       // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
       log("33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロ特例要件の判定・警告・誓約中テスト");

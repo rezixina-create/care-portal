@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_d2">
+	<link rel="stylesheet" href="style.css?v=20261026_e1">
 </head>
 <body>
 
@@ -4571,26 +4571,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_d2"></script>
- <script src="js/02_terms.js?v=20261026_d2"></script>
- <script src="js/03_common.js?v=20261026_d2"></script>
- <script src="js/04_care_record.js?v=20261026_d2"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_d2"></script>
- <script src="js/06_schema_history.js?v=20261026_d2"></script>
- <script src="js/07_daily_tables.js?v=20261026_d2"></script>
- <script src="js/08_meds.js?v=20261026_d2"></script>
- <script src="js/09_night_misc.js?v=20261026_d2"></script>
- <script src="js/10_office.js?v=20261026_d2"></script>
- <script src="js/11_karte_staff.js?v=20261026_d2"></script>
- <script src="js/12_hospital_photos.js?v=20261026_d2"></script>
- <script src="js/13_shift_units.js?v=20261026_d2"></script>
- <script src="js/14_auth_home.js?v=20261026_d2"></script>
- <script src="js/15_single_write.js?v=20261026_d2"></script>
- <script src="js/16_careplan.js?v=20261026_d2"></script>
-	<script src="js/17_kasan.js?v=20261026_d2"></script>
-	<script src="js/18_stats.js?v=20261026_d2"></script>
-	<script src="js/19_life.js?v=20261026_d2"></script>
-	<script src="js/20_invoice.js?v=20261026_d2"></script>
+ <script src="js/01_core.js?v=20261026_e1"></script>
+ <script src="js/02_terms.js?v=20261026_e1"></script>
+ <script src="js/03_common.js?v=20261026_e1"></script>
+ <script src="js/04_care_record.js?v=20261026_e1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_e1"></script>
+ <script src="js/06_schema_history.js?v=20261026_e1"></script>
+ <script src="js/07_daily_tables.js?v=20261026_e1"></script>
+ <script src="js/08_meds.js?v=20261026_e1"></script>
+ <script src="js/09_night_misc.js?v=20261026_e1"></script>
+ <script src="js/10_office.js?v=20261026_e1"></script>
+ <script src="js/11_karte_staff.js?v=20261026_e1"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_e1"></script>
+ <script src="js/13_shift_units.js?v=20261026_e1"></script>
+ <script src="js/14_auth_home.js?v=20261026_e1"></script>
+ <script src="js/15_single_write.js?v=20261026_e1"></script>
+ <script src="js/16_careplan.js?v=20261026_e1"></script>
+	<script src="js/17_kasan.js?v=20261026_e1"></script>
+	<script src="js/18_stats.js?v=20261026_e1"></script>
+	<script src="js/19_life.js?v=20261026_e1"></script>
+	<script src="js/20_invoice.js?v=20261026_e1"></script>
   
 
   <!-- ============================================================ -->
@@ -6067,7 +6067,7 @@
 				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
 					<div style="font-weight:bold; font-size:13px; color:var(--pine-dark); margin-bottom:4px;">国保連インタフェース仕様書 準拠ファイル作成（確認用）</div>
 					<div style="font-size:13px; color:var(--ink-2); line-height:1.6;">
-						※対象年月: <strong id="kasanCsvTargetYmDisp">-</strong>（処理対象年月: <span id="kasanCsvNextYmDisp">-</span>）<br>
+						※処理対象年月（審査の月）: <strong id="kasanCsvProcessYmDisp">-</strong>（通常分: <span id="kasanCsvTargetYmDisp">-</span><span id="kasanCsvNextYmDisp" style="display:none;">-</span>）<br>
 						※当機能は「仕様書どおりのCSVファイルが作成できるか」を事前検証するためのものです。実際の国保連への送信は行われません。<br><strong>まだ入っていないもの: 介護予防（37）・短期利用（38・39）。夜勤・定員超過・人員基準欠如の減算は、確認表のボタンで確定・登録した内容から反映します。この画面のファイルは、そのまま請求には使えません。</strong><br>
 						※国保中央会インタフェース仕様書解説書（サービス事業所編 令和6年4月版）に準拠し、サービス種類32の集計情報（8..13）および基本情報（16、19..23、36..38、42..44、48..50、54..56）は空欄（カンマのみ）とし、入居実日数（26）・外泊日数（27）を出力します。
 					</div>
@@ -6089,6 +6089,33 @@
 								</tr>
 							</thead>
 							<tbody id="kasanCsvResidentListBody"></tbody>
+						</table>
+					</div>
+				</div>
+
+				<!-- 月遅れ分の追加請求（過去12か月以内の未提出・返戻・過誤決定） [Antigravity追加 2026-10-26] -->
+				<div style="margin-bottom:16px;">
+					<div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
+						<h4 style="margin:0; font-size:14px; color:var(--pine-dark);">月遅れ分の追加請求（過去12か月以内の未提出・返戻・過誤決定）</h4>
+						<span id="kasanCsvDelayedSummary" style="font-size:13px; color:var(--ink-2); font-weight:bold;">0件選択中</span>
+					</div>
+					<div style="font-size:12px; color:var(--ink-2); margin-bottom:6px;">
+						※過去12か月分の返戻・過誤決定・未提出の利用者を一覧表示しています。今回の請求ファイルに含める場合はチェックを入れてください。時効起算日はサービス提供年月の翌々々月1日です。
+					</div>
+					<div style="overflow-x:auto; max-height:220px; border:1px solid var(--line-2); border-radius:4px;">
+						<table class="data-table" style="width:100%; font-size:13px; margin:0;">
+							<thead>
+								<tr style="background:var(--ground);">
+									<th style="width:50px; text-align:center;">選択</th>
+									<th style="width:140px;">利用者名</th>
+									<th style="width:100px; text-align:center;">提供年月</th>
+									<th style="width:150px;">区分・理由</th>
+									<th style="width:90px; text-align:right;">算定単位数</th>
+									<th style="width:110px; text-align:center;">時効起算日</th>
+									<th>確認状況</th>
+								</tr>
+							</thead>
+							<tbody id="kasanCsvDelayedListBody"></tbody>
 						</table>
 					</div>
 				</div>
@@ -6158,6 +6185,82 @@
 			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
 				<button type="button" class="btn btn-secondary" id="btnCloseClaimRemand" onclick="closeClaimRemandModal()">閉じる</button>
 				<button type="button" class="btn btn-primary" id="btnSubmitClaimRemand" style="background:var(--alert); border-color:var(--alert);" onclick="submitClaimRemand()">返戻として登録する</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Antigravity追加 2026-10-26] 国保連請求 過誤申立モーダル -->
+	<div class="modal-overlay" id="claimKagoModal" style="display:none;">
+		<div class="modal-card" style="max-width:540px; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">過誤の申立（実績取り下げ）</h3>
+				<button type="button" class="close-btn" onclick="closeClaimKagoModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px;">
+				<input type="hidden" id="kagoClaimId">
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; line-height:1.6;">
+					<div><strong>対象利用者:</strong> <span id="kagoResidentName">-</span></div>
+					<div><strong>サービス提供年月:</strong> <span id="kagoServiceYm">-</span></div>
+					<div><strong>国保連送付日:</strong> <span id="kagoSentDate">-</span></div>
+				</div>
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						申し立てた日 <span style="color:var(--alert);">*</span>
+					</label>
+					<input type="date" id="claimKagoDate" class="form-control" style="font-size:13px; width:100%;">
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 先の日付や、送付日より前の日付は設定できません。</div>
+				</div>
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						申立理由番号 <span style="color:var(--alert);">*</span>
+					</label>
+					<select id="claimKagoReasonCode" class="form-control" style="font-size:13px; width:100%;">
+						<option value="">選んでください</option>
+						<option value="02">02 請求誤りによる実績取り下げ</option>
+						<option value="12">12 請求誤りによる実績取り下げ（同月）</option>
+					</select>
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 保険者（市町村）へ提出した過誤申立書の事由番号を選択してください。</div>
+				</div>
+				<div style="margin-bottom:8px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						申立理由（具体的な誤り内容） <span style="color:var(--alert);">*</span>
+					</label>
+					<textarea id="claimKagoReason" class="form-control" rows="4" style="font-size:13px; width:100%;"></textarea>
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 保険者に申し立てた取り下げ理由を記入してください。</div>
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" id="btnCloseClaimKago" onclick="closeClaimKagoModal()">閉じる</button>
+				<button type="button" class="btn btn-primary" id="btnSubmitClaimKago" style="background:var(--caution); border-color:var(--caution); color:white;" onclick="submitClaimKago()">過誤を申し立てる</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- [Antigravity追加 2026-10-26] 国保連請求 過誤決定通知確認モーダル -->
+	<div class="modal-overlay" id="claimKagoDecideModal" style="display:none;">
+		<div class="modal-card" style="max-width:540px; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">過誤決定通知の登録</h3>
+				<button type="button" class="close-btn" onclick="closeClaimKagoDecideModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px;">
+				<input type="hidden" id="kagoDecideClaimId">
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; line-height:1.6;">
+					<div><strong>対象利用者:</strong> <span id="kagoDecideResidentName">-</span></div>
+					<div><strong>サービス提供年月:</strong> <span id="kagoDecideServiceYm">-</span></div>
+					<div><strong>申立日:</strong> <span id="kagoDecideFiledDate">-</span></div>
+				</div>
+				<div style="margin-bottom:8px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						過誤決定通知を確認した日 <span style="color:var(--alert);">*</span>
+					</label>
+					<input type="date" id="claimKagoDecideDate" class="form-control" style="font-size:13px; width:100%;">
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 国保連の「介護給付費過誤決定通知書」を確認した日を入力してください（申立日より前や未来日は不可）。登録後、月遅れ分の請求候補に追加されます。</div>
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" id="btnCloseClaimKagoDecide" onclick="closeClaimKagoDecideModal()">閉じる</button>
+				<button type="button" class="btn btn-primary" id="btnSubmitClaimKagoDecide" style="background:var(--pine); border-color:var(--pine); color:white;" onclick="submitClaimKagoDecide()">決定通知を登録する</button>
 			</div>
 		</div>
 	</div>
