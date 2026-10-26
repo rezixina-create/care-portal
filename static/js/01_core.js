@@ -309,7 +309,8 @@ const CP_LEDGERS = {
  fire_drills: { label: "消防・避難訓練記録", render: () => renderOfficeFireDrills() },
  recreations: { label: "レクリエーション記録", render: () => renderRecreationTable() },
  incidents: { label: "事故・ヒヤリハット報告書", render: () => renderOfficeIncidents() },
- committees: { label: "委員会・研修記録", render: () => renderOfficeCommittees() }
+ // [Claude修正] 委員会・研修は管理者・事務員だけ。共通の取消・取消を戻すを直接呼んでも止める
+ committees: { label: "委員会・研修記録", render: () => renderOfficeCommittees(), can: () => (typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk()), who: "管理者または事務員" }
 };
 
 function cpLedgerStaff() {
@@ -320,6 +321,7 @@ function cpVoidLedgerRecord(key, id) {
  const conf = CP_LEDGERS[key];
  const rec = (db.data[key] || []).find(x => Number(x.id) === Number(id));
  if (!conf || !rec || rec.voided) return;
+ if (conf.can && !conf.can()) { alert(`${conf.label}の取消は${conf.who}のみ可能です。`); return; }
  const reason = prompt(`この${conf.label}を「取消」にします。\n記録は消えずに、取消済みとして残ります。\n\n取消の理由を入力してください (例: 重複登録、利用者の選択間違い)`, "");
  if (reason === null) return;
  if (!reason.trim()) { alert("取消の理由を入力してください。取消は行っていません。"); return; }
@@ -336,6 +338,7 @@ function cpRestoreLedgerRecord(key, id) {
  const conf = CP_LEDGERS[key];
  const rec = (db.data[key] || []).find(x => Number(x.id) === Number(id));
  if (!conf || !rec || !rec.voided) return;
+ if (conf.can && !conf.can()) { alert(`${conf.label}の取消を戻すのは${conf.who}のみ可能です。`); return; }
  if (!confirm(`この${conf.label}の取消を戻し、有効な記録に戻しますか？\n(取消理由: ${rec.void_reason || '-'})`)) return;
  rec.voided = false;
  rec.restored_at = toLocalDateTimeStr(new Date());

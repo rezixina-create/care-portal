@@ -1123,9 +1123,10 @@ function checkGlobalAlerts() {
   if (typeof cpGetCommitteeComplianceStatus === "function") {
     const comStatuses = cpGetCommitteeComplianceStatus();
     const unmet = comStatuses.filter(s => s.is_unmet);
-    const activeUnmet = unmet.filter(s => !isAlertDismissed(`committee_compliance_${s.fy}_${s.key}`));
+    // [Claude修正] 印は数える関数が作ったもの（alert_key）を使う
+    const activeUnmet = unmet.filter(s => !isAlertDismissed(s.alert_key));
     if (activeUnmet.length > 0) {
-      const activeKeys = activeUnmet.map(s => `committee_compliance_${s.fy}_${s.key}`);
+      const activeKeys = activeUnmet.map(s => s.alert_key);
       const hasPenaltySubject = activeUnmet.some(s => s.penalty_subject);
       const itemsListHtml = activeUnmet.map(s => {
         let detail = "";

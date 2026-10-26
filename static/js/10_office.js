@@ -1253,6 +1253,11 @@ function cpGetCommitteeComplianceStatus(refDate) {
 		}
 
 		const isUnmet = (status === "期限を過ぎている" || status === "記録なし");
+		// [Claude修正] 知らせの印。「〇か月ごと」は期限も入れる（年度と項目だけだと、確認済にしたあと同じ年度に
+		// また期限を過ぎても出なかった。3か月ごとの委員会は1年に何度も期限が来る）
+		const alertKey = item.frequency_type === "interval"
+			? `committee_compliance_${fy}_${item.key}_${nextDeadline || "none"}`
+			: `committee_compliance_${fy}_${item.key}`;
 
 		return {
 			item: item,
@@ -1270,7 +1275,8 @@ function cpGetCommitteeComplianceStatus(refDate) {
 			fy_count: fyCount,
 			required_count: item.required_count,
 			status: status,
-			is_unmet: isUnmet
+			is_unmet: isUnmet,
+			alert_key: alertKey
 		};
 	});
 }
@@ -1451,6 +1457,11 @@ function submitCommittee() {
 
 	if (!date || !name || !content) {
 		alert("開催日、委員会・研修名、および協議内容は必須項目です。");
+		return;
+	}
+	// [Claude修正] 先の日付は不可（まだ行っていない回が「行った」として数えられ、期限内に見えてしまうため）
+	if (date > toLocalDateStr(new Date())) {
+		alert("開催日に先の日付は入れられません。行ったあとに登録してください。");
 		return;
 	}
 
