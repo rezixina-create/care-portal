@@ -1817,7 +1817,7 @@
       // 返戻後の再作成許可（返戻の人は除外されない）
       st170 = cpGetResidentClaimStatus(1, "2026-09");
       assert(st170.status === "返戻" && st170.is_remand === true && st170.is_submitted === false, "Test 170e-7: cpGetResidentClaimStatus が返戻を返すこと");
-      renderKasanCsvValidation("2026-09");
+      renderKasanCsvValidation("2026-09", "202611"); // 翌月審査での再作成時
       const candRemand170 = gKasanCsvValidationResult.candidates.find(c => c.resident.id === 1);
       assert(candRemand170 && candRemand170.excluded === false, "Test 170e-8: 返戻の利用者は除外されず作成対象に入ること");
 
