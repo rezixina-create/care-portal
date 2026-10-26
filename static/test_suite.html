@@ -118,6 +118,7 @@
       <input type="checkbox" id="chkExport_care_records" value="care_records">
       <input type="checkbox" id="chkExport_vitals" value="vitals">
       <input type="checkbox" id="chkExport_meals" value="meals">
+      <input type="checkbox" id="chkExport_oral_cares" value="oral_cares">
       <input type="checkbox" id="chkExport_excretions" value="excretions">
       <input type="checkbox" id="chkExport_baths" value="baths">
       <input type="checkbox" id="chkExport_turns" value="turns">
@@ -3034,7 +3035,7 @@
       cpExportToggleAllTypes(true);
       const validInputs166 = cpValidateExportInputs();
       assert(validInputs166 !== null, "Test 166b-14: 全条件を満たすと有効な入力オブジェクトが返る");
-      assert(validInputs166.selectedTypes.size === 7, "Test 166b-15: 7種類すべて選択されていること");
+      assert(validInputs166.selectedTypes.size === 8, "Test 166b-15: 8種類すべて選択されていること");
 
       // 166c: 記録収集と古い順ソート (cpCollectExportRecords)
       // 1人・1か月 (2026-10-01〜2026-10-23)・全部の種類
@@ -3042,7 +3043,7 @@
         resVal: "1",
         startDate: "2026-10-01",
         endDate: "2026-10-23",
-        selectedTypes: new Set(["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"]),
+        selectedTypes: new Set(["care_records", "vitals", "meals", "oral_cares", "excretions", "baths", "turns", "meds"]),
         includeVoided: false
       });
       assert(collected1Res.allRecords.length > 0, "Test 166c-1: 期間内の記録が収集されること");
@@ -3493,6 +3494,147 @@
       gState.stamps = origStamps;
       window.alert = origAlert168;
       closeModal("careSummaryModal");
+
+            // ====================================================
+      // Test 173: 口腔ケア表の改善と記録書き出し分離テスト (173a〜173f)
+      // ====================================================
+      log("--- Test 173: 口腔ケア表の改善と記録書き出し分離テスト ---");
+
+      // 173a: 時間帯正規化関数 (cpNormalizeOralTiming / cpDefaultOralCareTime)
+      assert(typeof cpNormalizeOralTiming === "function", "Test 173a-1: 口腔ケア時間帯正規化関数 (cpNormalizeOralTiming) が存在すること");
+      assert(cpNormalizeOralTiming("朝") === "朝食後" && cpNormalizeOralTiming("朝食後") === "朝食後", "Test 173a-2: 「朝」と「朝食後」が共に「朝食後」に正規化されること");
+      assert(cpNormalizeOralTiming("昼") === "昼食後" && cpNormalizeOralTiming("昼食後") === "昼食後", "Test 173a-3: 「昼」と「昼食後」が共に「昼食後」に正規化されること");
+      assert(cpNormalizeOralTiming("夕") === "夕食後" && cpNormalizeOralTiming("夕食後") === "夕食後", "Test 173a-4: 「夕」と「夕食後」が共に「夕食後」に正規化されること");
+      assert(typeof cpDefaultOralCareTime === "function", "Test 173a-5: 口腔ケア時刻決定関数 (cpDefaultOralCareTime) が存在すること");
+      assert(cpDefaultOralCareTime("朝食後") === "08:30" && cpDefaultOralCareTime("朝") === "08:30", "Test 173a-6: 朝食後は 08:30 になること");
+      assert(cpDefaultOralCareTime("昼食後") === "12:30" && cpDefaultOralCareTime("昼") === "12:30", "Test 173a-7: 昼食後は 12:30 になること");
+      assert(cpDefaultOralCareTime("夕食後") === "18:30" && cpDefaultOralCareTime("夕") === "18:30", "Test 173a-8: 夕食後は 18:30 になること");
+
+      // 173b: 最新サマリーからの整容段階・介助やり方取得 (cpGetResidentGroomingInfo)
+      assert(typeof cpGetResidentGroomingInfo === "function", "Test 173b-1: 整容情報取得関数 (cpGetResidentGroomingInfo) が存在すること");
+      // サマリーがない／古い文章のみの場合は「整容: サマリー未記入」
+      assert(cpGetResidentGroomingInfo(99999) === "整容: サマリー未記入", "Test 173b-2: サマリーが存在しない利用者は「整容: サマリー未記入」");
+      const mockSummaryOld = { id: 88801, resident_id: 888, created_at: "2026-10-01 10:00", adl: "移動: 自立。整容: 洗面自立。" };
+      if (!db.data.care_summaries) db.data.care_summaries = [];
+      const origSummaries173 = JSON.parse(JSON.stringify(db.data.care_summaries));
+      db.data.care_summaries.push(mockSummaryOld);
+      assert(cpGetResidentGroomingInfo(888) === "整容: サマリー未記入", "Test 173b-3: 古い文章形式サマリーのみの場合は「整容: サマリー未記入」");
+
+      // 新しい adl_items を持つサマリー
+      const mockSummaryNew1 = {
+        id: 88802,
+        resident_id: 888,
+        created_at: "2026-10-15 10:00",
+        adl_items: [
+          { key: "move", action: "移動", level: "自立", method: "" },
+          { key: "grooming", action: "整容（歯磨き・洗面）", level: "自立", method: "" }
+        ]
+      };
+      db.data.care_summaries.push(mockSummaryNew1);
+      assert(cpGetResidentGroomingInfo(888) === "整容: 自立", "Test 173b-4: 整容が自立で介助のやり方が空なら「整容: 自立」");
+
+      const mockSummaryNew2 = {
+        id: 88803,
+        resident_id: 888,
+        created_at: "2026-10-20 10:00",
+        adl_items: [
+          { key: "grooming", action: "整容（歯磨き・洗面）", level: "見守り", method: "歯磨き準備のみ一部介助" }
+        ]
+      };
+      db.data.care_summaries.push(mockSummaryNew2);
+      assert(cpGetResidentGroomingInfo(888) === "整容: 見守り（歯磨き準備のみ一部介助）", "Test 173b-5: 介助のやり方がある場合は横に出ること");
+
+      // 173c: 口腔ケア表の描画 (renderOralTable) と不具合解消
+      const origOralCares173 = JSON.parse(JSON.stringify(db.data.oral_cares || []));
+      const origDate173 = gState.selectedDate;
+      gState.selectedDate = "2026-10-26";
+
+      // 利用者1 (佐藤 太郎 様) のテスト用口腔ケアレコード
+      // デモ形式「朝食後」と古い形式「昼」の2件を用意
+      db.data.oral_cares = [
+        { id: 77701, date: "2026-10-26", timing: "朝食後", resident_id: 1, oral_done: 1, denture_done: 1, notes: "", staff_name: "木村 健一" },
+        { id: 77702, date: "2026-10-26", timing: "昼", resident_id: 1, oral_done: 1, denture_done: 0, notes: "", staff_name: "小林 恵子" }
+      ];
+
+      renderOralTable();
+      const oralTableEl = document.getElementById("oralTable");
+      const oralHtml = oralTableEl ? oralTableEl.innerHTML : "";
+
+      assert(oralHtml.includes("佐藤 太郎 様"), "Test 173c-1: 利用者氏名が表示されていること");
+      assert(oralHtml.includes("食形態:"), "Test 173c-2: 食形態が表示されていること");
+      assert(oralHtml.includes("整容:"), "Test 173c-3: 整容段階が表示されていること");
+      assert(oralHtml.includes('id="oralDenture_1"'), "Test 173c-4: 各行に入れ歯洗浄チェックボックスが存在すること");
+      const dentureChk173 = document.getElementById("oralDenture_1");
+      assert(dentureChk173 && dentureChk173.checked === false, "Test 173c-5: 入れ歯洗浄チェックボックスは最初は未チェックであること");
+      assert(oralHtml.includes("済 (木村 健一・義歯)"), "Test 173c-6: 「朝食後」記録が「済 (職員名・義歯)」と表示されること");
+      assert(oralHtml.includes("済 (小林 恵子)"), "Test 173c-7: 古い形式「昼」の記録も昼食後欄で「済 (職員名)」と表示されること");
+
+      // 173d: 口腔ケア保存 (saveOralCare)
+      let alertMsg173 = "";
+      const origAlert173 = window.alert;
+      window.alert = (msg) => { alertMsg173 = msg; };
+
+      const origLogin173 = window.cpLoginStaffName;
+      window.cpLoginStaffName = () => "井上 蓮";
+
+      // 利用者1の夕食後（入れ歯洗浄チェックなし）
+      if (dentureChk173) dentureChk173.checked = false;
+      const notesEl173 = document.getElementById("oralNotes_1");
+      if (notesEl173) notesEl173.value = "口内良好";
+
+      saveOralCare(1, "夕食後");
+      const savedOral173_1 = (db.data.oral_cares || []).find(o => o.resident_id === 1 && o.timing === "夕食後");
+      assert(savedOral173_1 !== undefined, "Test 173d-1: 夕食後の口腔ケアが保存されること");
+      assert(savedOral173_1.denture_done === 0, "Test 173d-2: 入れ歯未チェック時は denture_done が 0 であること");
+      assert(savedOral173_1.staff_name === "井上 蓮", "Test 173d-3: 記録者がログイン者 (井上 蓮) から取得されること");
+      assert(alertMsg173.includes("口腔ケアを記録しました"), "Test 173d-4: お知らせメッセージが「口腔ケアを記録しました」になること");
+
+      // 重複チェック: 同じ時間帯（夕食後）の再登録はブロックされること
+      alertMsg173 = "";
+      saveOralCare(1, "夕食後");
+      assert(alertMsg173.includes("すでに完了記録があります"), "Test 173d-5: 完了済みの時間帯は重複保存がブロックされること");
+
+      // 利用者2の朝食後（入れ歯洗浄チェックあり）
+      const dentureChk173_2 = document.getElementById("oralDenture_2");
+      if (dentureChk173_2) dentureChk173_2.checked = true;
+      saveOralCare(2, "朝食後");
+      const savedOral173_2 = (db.data.oral_cares || []).find(o => o.resident_id === 2 && o.timing === "朝食後");
+      assert(savedOral173_2 !== undefined && savedOral173_2.denture_done === 1, "Test 173d-6: 入れ歯チェック時は denture_done が 1 になること");
+      assert(alertMsg173.includes("口腔ケア・入れ歯の洗浄を記録しました"), "Test 173d-7: お知らせメッセージが「口腔ケア・入れ歯の洗浄を記録しました」になること");
+
+      // 173e: 統合記録 (cpBuildUnifiedResidentRecords) での表示確認
+      const unifiedOrals173 = cpBuildUnifiedResidentRecords(1, "2026-10-26", false, false).filter(x => x.category === "口腔ケア");
+      assert(unifiedOrals173.length === 3, "Test 173e-1: 利用者1の口腔ケア統合記録が3件取得されること");
+      const mornOralRec = unifiedOrals173.find(x => x.content.includes("【朝食後】"));
+      const noonOralRec = unifiedOrals173.find(x => x.content.includes("【昼食後】"));
+      const eveOralRec = unifiedOrals173.find(x => x.content.includes("【夕食後】"));
+      assert(mornOralRec !== undefined && mornOralRec.time === "08:30" && mornOralRec.content.includes("義歯洗浄済"), "Test 173e-2: 朝食後(義歯洗浄あり)が正しく構築されること");
+      assert(noonOralRec !== undefined && noonOralRec.time === "12:30", "Test 173e-3: 古い形式「昼」も「【昼食後】」として時間12:30で構築されること");
+      assert(eveOralRec !== undefined && eveOralRec.time === "18:30" && !eveOralRec.content.includes("義歯洗浄済"), "Test 173e-4: 夕食後(義歯なし)に義歯洗浄済が含まれないこと");
+
+      // 173f: 記録書き出しの「口腔ケア」分離確認
+      const mockOralItem = { source_type: "oral_cares", category: "口腔ケア" };
+      const mockMealItem = { source_type: "meals", category: "食事・水分" };
+      assert(cpIsRecordTypeSelected(mockOralItem, new Set(["oral_cares"])) === true, "Test 173f-1: oral_cares 選択時に口腔ケアが対象になること");
+      assert(cpIsRecordTypeSelected(mockOralItem, new Set(["meals"])) === false, "Test 173f-2: meals 選択時に口腔ケアは対象外になること（分離）");
+      assert(cpIsRecordTypeSelected(mockMealItem, new Set(["meals"])) === true, "Test 173f-3: meals 選択時に食事・水分が対象になること");
+      assert(cpIsRecordTypeSelected(mockMealItem, new Set(["oral_cares"])) === false, "Test 173f-4: oral_cares 選択時に食事・水分は対象外になること");
+
+      // 書き出し種類のラベル確認
+      const exportLabels173 = cpGetSelectedTypeLabels(new Set(["meals", "oral_cares"]));
+      assert(exportLabels173.includes("食事・水分") && exportLabels173.includes("口腔ケア"), "Test 173f-5: ラベル一覧に「口腔ケア」が含まれること");
+
+      // 一括選択
+      cpExportToggleAllTypes(true);
+      const chkOralEl = document.getElementById("chkExport_oral_cares");
+      assert(chkOralEl && chkOralEl.checked === true, "Test 173f-6: 一括選択で口腔ケアのチェックもONになること");
+
+      // クリーンアップ
+      db.data.care_summaries = origSummaries173;
+      db.data.oral_cares = origOralCares173;
+      gState.selectedDate = origDate173;
+      window.alert = origAlert173;
+      window.cpLoginStaffName = origLogin173;
 
       // 33. 総合結果判定
       log("====================================================");

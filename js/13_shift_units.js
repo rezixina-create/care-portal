@@ -3114,7 +3114,7 @@ function renderOfficeCareRecordsExport() {
 }
 
 function cpExportToggleAllTypes(checkAll) {
- const typeKeys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ const typeKeys = ["care_records", "vitals", "meals", "oral_cares", "excretions", "baths", "turns", "meds"];
  typeKeys.forEach(k => {
   const chk = document.getElementById(`chkExport_${k}`);
   if (chk) chk.checked = Boolean(checkAll);
@@ -3126,13 +3126,14 @@ function cpGetSelectedTypeLabels(selectedTypes) {
   care_records: "介護記録",
   vitals: "バイタル",
   meals: "食事・水分",
+  oral_cares: "口腔ケア",
   excretions: "排泄",
   baths: "入浴",
   turns: "体位変換",
   meds: "服薬"
  };
  const labels = [];
- const keys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ const keys = ["care_records", "vitals", "meals", "oral_cares", "excretions", "baths", "turns", "meds"];
  keys.forEach(k => {
   if (selectedTypes.has(k)) labels.push(labelMap[k]);
  });
@@ -3141,9 +3142,10 @@ function cpGetSelectedTypeLabels(selectedTypes) {
 
 function cpIsRecordTypeSelected(item, selectedTypes) {
  const src = item.source_type;
- if (selectedTypes.has("care_records") && (src === "care_records" || (!src && item.category !== "バイタル" && item.category !== "食事・水分" && item.category !== "排泄" && item.category !== "入浴" && item.category !== "体位変換" && item.category !== "服薬" && item.category !== "口腔ケア"))) return true;
+ if (selectedTypes.has("care_records") && (src === "care_records" || (!src && item.category !== "バイタル" && item.category !== "食事・水分" && item.category !== "口腔ケア" && item.category !== "排泄" && item.category !== "入浴" && item.category !== "体位変換" && item.category !== "服薬"))) return true;
  if (selectedTypes.has("vitals") && (src === "vitals" || item.category === "バイタル")) return true;
- if (selectedTypes.has("meals") && (src === "meals" || src === "oral_cares" || item.category === "食事・水分" || item.category === "口腔ケア")) return true;
+ if (selectedTypes.has("meals") && (src === "meals" || item.category === "食事・水分")) return true;
+ if (selectedTypes.has("oral_cares") && (src === "oral_cares" || item.category === "口腔ケア")) return true;
  if (selectedTypes.has("excretions") && (src === "excretions" || item.category === "排泄")) return true;
  if (selectedTypes.has("baths") && (src === "baths" || item.category === "入浴")) return true;
  if (selectedTypes.has("turns") && (src === "turns" || item.category === "体位変換")) return true;
@@ -3191,14 +3193,13 @@ function cpValidateExportInputs() {
  }
 
  const selectedTypes = new Set();
- const typeKeys = ["care_records", "vitals", "meals", "excretions", "baths", "turns", "meds"];
+ const typeKeys = ["care_records", "vitals", "meals", "oral_cares", "excretions", "baths", "turns", "meds"];
  typeKeys.forEach(k => {
   const chk = document.getElementById(`chkExport_${k}`);
   if (chk && chk.checked) {
    selectedTypes.add(k);
   }
  });
-
  if (selectedTypes.size === 0) {
   alert("記録の種類を1つ以上選択してください。");
   return null;

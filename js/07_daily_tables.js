@@ -1469,55 +1469,125 @@ function toggleTopical(resId, pinId, slot) {
 }
 
 // 5. 口腔ケア
+// [Antigravity実装 2026-10-26] 最新サマリーから整容の段階と介助のやり方を取得する共通関数
+function cpGetResidentGroomingInfo(residentId) {
+ const summaries = (typeof cpSummariesOfResident === "function") ? cpSummariesOfResident(residentId) : [];
+ const latest = (summaries && summaries.length > 0) ? summaries[0] : null;
+ if (!latest || !Array.isArray(latest.adl_items) || latest.adl_items.length === 0) {
+  return "整容: サマリー未記入";
+ }
+ const item = latest.adl_items.find(x => x && (x.key === "grooming" || (x.action && x.action.includes("整容"))));
+ if (!item || !item.level) {
+  return "整容: サマリー未記入";
+ }
+ const level = String(item.level).trim();
+ const method = String(item.method || "").trim();
+ if (method) {
+  return `整容: ${level}（${method}）`;
+ }
+ return `整容: ${level}`;
+}
+window.cpGetResidentGroomingInfo = cpGetResidentGroomingInfo;
+
 function renderOralTable() {
- const tbody = document.querySelector("#oralTable tbody");
+ let tbody = document.querySelector("#oralTable tbody");
+ if (!tbody) {
+  const tbl = document.getElementById("oralTable");
+  if (tbl) {
+   tbody = document.createElement("tbody");
+   tbl.appendChild(tbody);
+  } else {
+   return;
+  }
+ }
  tbody.innerHTML = "";
- const oralCares = (db.data.oral_cares || []).filter(o => o.date === gState.selectedDate);
+ const oralCares = (db.data.oral_cares || []).filter(o => !o.voided && o.date === gState.selectedDate);
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
- const tr = document.createElement("tr");
+  const tr = document.createElement("tr");
 
- const getOralBtn = (timing) => {
- const done = oralCares.find(o => o.resident_id === r.id && o.timing === timing);
- if (done) {
- return `<span style="display:inline-block; padding:4px 8px; font-size:12px; font-weight:bold; color:#15803d; background:#dcfce7; border-radius:4px; border:1px solid #86efac;"> 済 (${done.staff_name || '済'})</span>`;
- }
- return `<button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="saveOralCare(${r.id}, '${timing}')">${timing} 食後 </button>`;
- };
+  const getOralBtn = (slot) => {
+   const done = oralCares.find(o => Number(o.resident_id) === Number(r.id) && ((typeof cpNormalizeOralTiming === "function") ? cpNormalizeOralTiming(o.timing) : o.timing) === slot);
+   if (done) {
+    const staff = escapeHtml(done.staff_name || '済');
+    const denturePart = (Number(done.denture_done) === 1) ? '・義歯' : '';
+    return `<span style="display:inline-block; padding:4px 8px; font-size:13px; font-weight:bold; color:var(--pine-dark); background:var(--pine-tint); border-radius:4px; border:1px solid var(--pine-light);">済 (${staff}${denturePart})</span>`;
+   }
+   return `<button type="button" class="btn btn-secondary" style="padding:4px 8px; font-size:13px;" onclick="saveOralCare(${r.id}, '${slot}')">${slot}</button>`;
+  };
 
- tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
- <td style="font-size:12px; font-weight:bold; color:#0369a1;">${escapeHtml(r.oral_state || '未登録')}</td>
- <td>${getOralBtn("朝")}</td>
- <td>${getOralBtn("昼")}</td>
- <td>${getOralBtn("夕")}</td>
- <td><input type="text" id="oralNotes_${r.id}" class="form-control" style="font-size:12px;"></td>
- `;
- tbody.appendChild(tr);
+  const groomingText = cpGetResidentGroomingInfo(r.id);
+
+  tr.innerHTML = `
+   <td>${escapeHtml(r.room_no || '')}</td>
+   <td>
+    <div><strong>${escapeHtml(r.name || '')} 様</strong></div>
+    <div style="margin-top:4px; font-size:13px; color:var(--ink-2); line-height:1.4;">
+     <div>食形態: ${escapeHtml(r.diet_type || '未登録')}</div>
+     <div>${escapeHtml(groomingText)}</div>
+    </div>
+   </td>
+   <td style="font-size:13px; color:var(--ink);">
+    <div style="font-weight:bold; color:var(--pine-dark);">${escapeHtml(r.oral_state || '未登録')}</div>
+    <label style="display:inline-flex; align-items:center; gap:4px; margin-top:4px; font-size:13px; font-weight:normal; color:var(--ink-2); cursor:pointer;">
+     <input type="checkbox" id="oralDenture_${r.id}" style="width:16px; height:16px; cursor:pointer;">
+     入れ歯の洗浄もした
+    </label>
+   </td>
+   <td>${getOralBtn("朝食後")}</td>
+   <td>${getOralBtn("昼食後")}</td>
+   <td>${getOralBtn("夕食後")}</td>
+   <td><input type="text" id="oralNotes_${r.id}" class="form-control" style="font-size:13px;"></td>
+  `;
+  tbody.appendChild(tr);
  });
 }
 
 function saveOralCare(resId, timing) {
- const r = gState.residents.find(x => x.id === resId);
- const exists = (db.data.oral_cares || []).some(o => o.date === gState.selectedDate && o.resident_id === resId && o.timing === timing);
+ const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
+ const normTiming = (typeof cpNormalizeOralTiming === "function") ? cpNormalizeOralTiming(timing) : timing;
+ const exists = (db.data.oral_cares || []).some(o =>
+  !o.voided &&
+  o.date === gState.selectedDate &&
+  Number(o.resident_id) === Number(resId) &&
+  ((typeof cpNormalizeOralTiming === "function") ? cpNormalizeOralTiming(o.timing) : o.timing) === normTiming
+ );
  if (exists) {
- alert(`この方の【${timing}】の口腔ケアはすでに完了記録があります。`);
- return;
+  alert(`この方の【${normTiming}】の口腔ケアはすでに完了記録があります。`);
+  return;
  }
 
+ const dentureChk = document.getElementById(`oralDenture_${resId}`);
+ const dentureDone = (dentureChk && dentureChk.checked) ? 1 : 0;
+
  const notesEl = document.getElementById(`oralNotes_${resId}`);
- const notes = notesEl ? notesEl.value : "";
- const staff = document.getElementById("currentStaff").value;
+ const notes = notesEl ? notesEl.value.trim() : "";
+ const staff = (typeof cpLoginStaffName === "function" && cpLoginStaffName())
+  ? cpLoginStaffName()
+  : ((document.getElementById("currentStaff") && document.getElementById("currentStaff").value) || "未記録");
+
+ if (!Array.isArray(db.data.oral_cares)) {
+  db.data.oral_cares = [];
+ }
 
  db.data.oral_cares.push({
- id: Date.now(), date: gState.selectedDate, timing: timing, resident_id: resId,
- oral_done: 1, denture_done: 1, notes: notes, staff_name: staff
+  id: Date.now(),
+  date: gState.selectedDate,
+  timing: normTiming,
+  resident_id: Number(resId),
+  oral_done: 1,
+  denture_done: dentureDone,
+  notes: notes,
+  staff_name: staff
  });
  db.save();
  renderOralTable();
- loadDateRecords(gState.selectedDate);
- alert(`${r ? r.name : '利用者'}様の【${timing}】口腔ケア・義歯洗浄を記録しました！`);
+ if (typeof loadDateRecords === "function") {
+  loadDateRecords(gState.selectedDate);
+ }
+ const residentLabel = r ? `${r.name} 様` : "利用者様";
+ const actionLabel = (dentureDone === 1) ? "口腔ケア・入れ歯の洗浄" : "口腔ケア";
+ alert(`${residentLabel}の【${normTiming}】${actionLabel}を記録しました！`);
 }
 
 // 6. 服薬・点眼

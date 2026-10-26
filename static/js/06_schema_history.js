@@ -1408,6 +1408,25 @@ function cpDefaultMealTime(mealType) {
  return "10:00";
 }
 
+// [Antigravity実装 2026-10-26] 口腔ケアの時間帯の表記ゆれ（朝/朝食後など）をそろえる共通関数
+function cpNormalizeOralTiming(timing) {
+ const t = String(timing || "").trim();
+ if (t === "朝" || t === "朝食後") return "朝食後";
+ if (t === "昼" || t === "昼食後") return "昼食後";
+ if (t === "夕" || t === "夕食後") return "夕食後";
+ return t;
+}
+
+function cpDefaultOralCareTime(timing) {
+ const norm = cpNormalizeOralTiming(timing);
+ if (norm === "朝食後") return "08:30";
+ if (norm === "昼食後") return "12:30";
+ if (norm === "夕食後") return "18:30";
+ return "08:30";
+}
+window.cpNormalizeOralTiming = cpNormalizeOralTiming;
+window.cpDefaultOralCareTime = cpDefaultOralCareTime;
+
 function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope, includeVoided) {
  if (!resId) return [];
  const items = [];
@@ -1598,16 +1617,16 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope, includeVoi
  });
 
  // 8. 口腔ケア (oral_cares)
+ // [Antigravity実装 2026-10-26] 朝/朝食後などの時間帯ゆれを共通正規化し、義歯洗浄フラグや時刻を正しく反映
  (db.data.oral_cares || []).forEach(o => {
-  if (o.resident_id !== resId || (!includeVoided && o.voided)) return;
+  if (Number(o.resident_id) !== Number(resId) || (!includeVoided && o.voided)) return;
   if (!matchDate(o.date)) return;
-  const tm = o.time || "08:30";
-  const slots = [];
-  if (o.morning) slots.push("朝");
-  if (o.noon) slots.push("昼");
-  if (o.evening) slots.push("夕");
-  if (o.bedtime) slots.push("眠前");
-  const detail = slots.length ? `実施 (${slots.join("・")})` : (o.status || "実施済");
+  const normTiming = (typeof cpNormalizeOralTiming === "function") ? cpNormalizeOralTiming(o.timing) : (o.timing || "");
+  const tm = o.time || ((typeof cpDefaultOralCareTime === "function") ? cpDefaultOralCareTime(normTiming) : "08:30");
+  const timingPart = normTiming ? `【${normTiming}】` : "";
+  const denturePart = (Number(o.denture_done) === 1 || o.denture_cleaned) ? "・義歯洗浄済" : "";
+  const notePart = o.notes ? ` ${o.notes}` : "";
+  const detail = `${timingPart}口腔ケア 実施済${denturePart}${notePart}`;
   items.push({
    uid: `oral_${o.id}`,
    raw_id: o.id,
@@ -1615,7 +1634,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope, includeVoi
    recorded_at: `${o.date} ${tm}`,
    date: o.date,
    category: "口腔ケア",
-   content: `口腔ケア ${detail}${o.denture_cleaned ? "・義歯洗浄済" : ""}${o.mucosa_status ? " (" + o.mucosa_status + ")" : ""}${o.notes ? " " + o.notes : ""}`,
+   content: detail,
    staff_name: o.staff_name || "未記録",
    time: tm,
    voided: Boolean(o.voided),
