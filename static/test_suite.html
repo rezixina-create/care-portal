@@ -245,6 +245,31 @@
         <div id="committeeTable"><tbody></tbody></div>
     <div id="committeeComplianceTable"><tbody id="committeeComplianceTableBody"></tbody></div>
     <button id="btnOpenCommitteeModal"></button>
+    <!-- Kasan CSV & Remand Mocks -->
+    <div id="tabOfficeKasan"></div>
+    <div id="kasanCsvModal" style="display:none;">
+      <span id="kasanCsvTargetYmDisp"></span>
+      <span id="kasanCsvNextYmDisp"></span>
+      <div id="kasanCsvValidationSummary"></div>
+      <table><tbody id="kasanCsvResidentListBody"></tbody></table>
+      <div id="kasanCsvPreviewSection" style="display:none;">
+        <span id="kasanCsvFileNameDisp"></span>
+        <table><tbody id="kasanCsvPreviewTableBody"></tbody></table>
+      </div>
+      <div id="kasanCsvActionStatus"></div>
+      <button id="kasanCsvGenerateBtn"></button>
+      <button id="kasanCsvDownloadBtn" style="display:none;"></button>
+      <button id="kasanCsvMarkSentBtn" style="display:none;"></button>
+    </div>
+    <div id="claimRemandModal" style="display:none;">
+      <input type="hidden" id="remandClaimId">
+      <span id="remandResidentName"></span>
+      <span id="remandServiceYm"></span>
+      <span id="remandSentDate"></span>
+      <input type="date" id="claimRemandDate">
+      <textarea id="claimRemandReason"></textarea>
+      <button id="btnSubmitClaimRemand"></button>
+    </div>
     <div id="committeeModal" style="display:none;">
       <input id="comDate">
       <select id="comCategory">
@@ -1626,6 +1651,196 @@
       gState.stamps = origStamps169;
       window.alert = origAlert169;
       closeModal("committeeModal");
+
+      // ------------------------------------------------------------------
+      // Test 170: 国保連請求「出した記録」と「返戻の登録」
+      // ------------------------------------------------------------------
+      log("--- Test 170: 国保連請求「出した記録」と「返戻の登録」 ---");
+      const origSession170 = gState.session;
+      const origLogin170 = window.cpLoginStaffName;
+      const origStamps170 = gState.stamps;
+      const origAlert170 = window.alert;
+      const origConfirm170 = window.confirm;
+      const origPrompt170 = window.prompt;
+      let alertMsg170 = "";
+      window.alert = msg => { alertMsg170 = msg; };
+      window.confirm = () => true;
+
+      const origSubmissions170 = JSON.parse(JSON.stringify(db.data.claim_submissions || []));
+      db.data.claim_submissions = [];
+
+      // 170a: cpGetResidentClaimStatus 共通関数の基本挙動
+      assert(typeof cpGetResidentClaimStatus === "function", "Test 170a-1: cpGetResidentClaimStatus が定義されていること");
+      let st170 = cpGetResidentClaimStatus(1, "2026-09");
+      assert(st170.status === "未提出" && st170.is_submitted === false && st170.is_remand === false, "Test 170a-2: 記録なし時は未提出であること");
+
+      // 170b: 権限チェック（非管理者・非事務員はブロック）
+      gState.session = { staffName: "テスト介護" };
+      gState.stamps = [{ name: "テスト介護", role: "介護職員" }];
+      window.cpLoginStaffName = () => "テスト介護";
+
+      alertMsg170 = "";
+      markKasanCsvAsSubmitted();
+      assert(alertMsg170.includes("管理者または事務員"), "Test 170b-1: markKasanCsvAsSubmitted が権限でブロックされること");
+
+      alertMsg170 = "";
+      openClaimRemandModal(999);
+      assert(alertMsg170.includes("管理者または事務員"), "Test 170b-2: openClaimRemandModal が権限でブロックされること");
+
+      alertMsg170 = "";
+      submitClaimRemand();
+      assert(alertMsg170.includes("管理者または事務員"), "Test 170b-3: submitClaimRemand が権限でブロックされること");
+
+      alertMsg170 = "";
+      restoreClaimRemand(999);
+      assert(alertMsg170.includes("管理者または事務員"), "Test 170b-4: restoreClaimRemand が権限でブロックされること");
+
+      alertMsg170 = "";
+      voidClaimSubmission(999);
+      assert(alertMsg170.includes("管理者または事務員"), "Test 170b-5: voidClaimSubmission が権限でブロックされること");
+
+      alertMsg170 = "";
+      if (typeof cpVoidLedgerRecord === "function") {
+        db.data.claim_submissions = [{ id: 999, status: "提出済" }];
+        cpVoidLedgerRecord("claim_submissions", 999);
+        assert(alertMsg170.includes("管理者または事務員"), "Test 170b-6: cpVoidLedgerRecord直接呼出も権限でブロックされること");
+        db.data.claim_submissions = [];
+      }
+
+      // 170c: 管理者による「国保連に送った」の記録保存
+      gState.session = { staffName: "テスト管理者" };
+      gState.stamps = [{ name: "テスト管理者", role: "施設長（管理者）" }];
+      window.cpLoginStaffName = () => "テスト管理者";
+
+      gKasanGeneratedCsvText = "1,1,0,1,711...\r\n";
+      gKasanGeneratedCsvFileName = "K202609.CSV";
+      gKasanCsvValidationResult = {
+        ym: "2026-09",
+        settings: { office_no: "1234567890", media_code: "1", region_type: "1級地" },
+        candidates: [
+          {
+            resident: { id: 1, name: "佐藤 太郎", care_level: "要介護3", benefit_rate: 90, usage_type: "normal" },
+            calc: { basicDays: 30, hospDays: 0, totalUnits: 25000, items: [] },
+            validation: { valid: true, missing: [] },
+            excluded: false
+          }
+        ]
+      };
+
+      markKasanCsvAsSubmitted();
+      assert(db.data.claim_submissions.length === 1, "Test 170c-1: claim_submissions に1件保存されたこと");
+      const sub170 = db.data.claim_submissions[0];
+      assert(sub170.resident_id === 1 && sub170.service_ym === "2026-09" && sub170.status === "提出済", "Test 170c-2: 提出済として保存されていること");
+      assert(sub170.process_ym === "202610", "Test 170c-3: 処理対象年月が翌月（202610）であること");
+      assert(sub170.sent_by === "テスト管理者" && sub170.file_name === "K202609.CSV", "Test 170c-4: 送付者・ファイル名が記録されていること");
+      assert(typeof sub170.id === "number" && sub170.id > 1000000000, "Test 170c-5: IDが時刻ベースで生成されていること");
+
+      // 170d: 二重請求防止（同じ月で提出済の利用者は自動除外）
+      st170 = cpGetResidentClaimStatus(1, "2026-09");
+      assert(st170.status === "提出済" && st170.is_submitted === true, "Test 170d-1: cpGetResidentClaimStatus が提出済を返すこと");
+
+      renderKasanCsvValidation("2026-09");
+      const cand170 = gKasanCsvValidationResult.candidates.find(c => c.resident.id === 1);
+      assert(cand170 && cand170.excluded === true, "Test 170d-2: 提出済利用者が candidate から excluded となること");
+      assert(cand170.excludeReason.includes("提出済のため外しました（10月審査で送付）"), "Test 170d-3: 正しい除外理由が表示されること");
+
+      // 170e: 返戻の登録（日付逆転ブロック、未来日ブロック、理由必須）
+      const subId170 = sub170.id;
+      document.getElementById("remandClaimId").value = subId170;
+
+      // 先の日付
+      alertMsg170 = "";
+      document.getElementById("claimRemandDate").value = "2099-01-01";
+      document.getElementById("claimRemandReason").value = "資格喪失エラー";
+      submitClaimRemand();
+      assert(alertMsg170.includes("先の日付"), "Test 170e-1: 返戻日に先の日付はブロックされること");
+
+      // 送付日より前の日付
+      alertMsg170 = "";
+      document.getElementById("claimRemandDate").value = "2020-01-01";
+      submitClaimRemand();
+      assert(alertMsg170.includes("送った日"), "Test 170e-2: 送付日より前の返戻日はブロックされること");
+
+      // 理由空欄
+      alertMsg170 = "";
+      document.getElementById("claimRemandDate").value = toLocalDateStr(new Date());
+      document.getElementById("claimRemandReason").value = "   ";
+      submitClaimRemand();
+      assert(alertMsg170.includes("理由"), "Test 170e-3: 返戻理由が空欄の場合はブロックされること");
+
+      // 正しい返戻登録
+      document.getElementById("claimRemandReason").value = "保険者番号不一致のためエラー";
+      submitClaimRemand();
+      assert(sub170.status === "返戻", "Test 170e-4: ステータスが返戻に更新されたこと");
+      assert(sub170.remand_reason === "保険者番号不一致のためエラー", "Test 170e-5: 返戻理由が記録されたこと");
+      assert(sub170.remanded_by === "テスト管理者", "Test 170e-6: 返戻登録者が記録されたこと");
+
+      // 返戻後の再作成許可（返戻の人は除外されない）
+      st170 = cpGetResidentClaimStatus(1, "2026-09");
+      assert(st170.status === "返戻" && st170.is_remand === true && st170.is_submitted === false, "Test 170e-7: cpGetResidentClaimStatus が返戻を返すこと");
+      renderKasanCsvValidation("2026-09");
+      const candRemand170 = gKasanCsvValidationResult.candidates.find(c => c.resident.id === 1);
+      assert(candRemand170 && candRemand170.excluded === false, "Test 170e-8: 返戻の利用者は除外されず作成対象に入ること");
+
+      // 170f: 返戻を戻す
+      alertMsg170 = "";
+      window.prompt = () => ""; // 空欄
+      restoreClaimRemand(subId170);
+      assert(alertMsg170.includes("戻す理由"), "Test 170f-1: 戻す理由が空欄の場合はブロックされること");
+
+      window.prompt = () => "誤操作による返戻登録を取消";
+      restoreClaimRemand(subId170);
+      assert(sub170.status === "提出済", "Test 170f-2: 返戻を戻すと提出済に戻ること");
+      assert(sub170.remand_restore_reason === "誤操作による返戻登録を取消", "Test 170f-3: 戻した理由が記録されていること");
+
+      // 170g: 送付記録の取消（理由必須、取消済みは二重請求判定に使わない）
+      alertMsg170 = "";
+      window.prompt = () => ""; // 空欄
+      voidClaimSubmission(subId170);
+      assert(alertMsg170.includes("取消の理由"), "Test 170g-1: 取消理由が空欄の場合はブロックされること");
+
+      window.prompt = () => "伝送テスト用の誤送付取消";
+      voidClaimSubmission(subId170);
+      assert(sub170.status === "取消" && sub170.voided === true, "Test 170g-2: statusが取消、voidedがtrueになること");
+      assert(sub170.void_reason === "伝送テスト用の誤送付取消", "Test 170g-3: 取消理由が記録されていること");
+
+      st170 = cpGetResidentClaimStatus(1, "2026-09");
+      assert(st170.status === "未提出", "Test 170g-4: 取消された記録は二重判定から外れ未提出扱いになること");
+
+      // 170h: 事務ポータルお知らせバナー連携
+      db.data.claim_submissions.push({
+        id: 99887766,
+        resident_id: 1,
+        service_ym: "2026-09",
+        process_ym: "202610",
+        service_type_code: "32",
+        total_units: 25000,
+        insurance_demand: 225000,
+        user_burden: 25000,
+        file_name: "K202609.CSV",
+        status: "返戻",
+        remand_date: "2026-10-26",
+        remand_reason: "被保険者番号資格喪失エラー",
+        sent_at: "2026-10-25 10:00:00",
+        sent_by: "テスト管理者"
+      });
+      const unresList = cpGetUnresolvedRemandClaims();
+      assert(unresList.length === 1 && unresList[0].id === 99887766, "Test 170h-1: 未再請求の返戻が検出されること");
+
+      checkGlobalAlerts();
+      const officeAlertsEl170 = document.getElementById("officeAlertsContainer");
+      assert(officeAlertsEl170 && officeAlertsEl170.innerHTML.includes("返戻のまま再請求していない明細があります"), "Test 170h-2: 事務ポータルに返戻アラートが表示されること");
+      assert(officeAlertsEl170.innerHTML.includes("claim_remand_99887766"), "Test 170h-3: 確認済ボタンにIDを含む印が設定されていること");
+
+      // クリーンアップ
+      db.data.claim_submissions = origSubmissions170;
+      gState.session = origSession170;
+      window.cpLoginStaffName = origLogin170;
+      gState.stamps = origStamps170;
+      window.alert = origAlert170;
+      window.confirm = origConfirm170;
+      window.prompt = origPrompt170;
+      closeClaimRemandModal();
 
       // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
       log("33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロ特例要件の判定・警告・誓約中テスト");

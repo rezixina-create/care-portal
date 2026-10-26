@@ -1166,6 +1166,45 @@ function checkGlobalAlerts() {
     }
   }
 
+  // 8. 【事務ポータル用】国保連請求 返戻未再請求アラート [Antigravity追加 2026-10-26]
+  if (typeof cpGetUnresolvedRemandClaims === "function") {
+    const unresRemands = cpGetUnresolvedRemandClaims();
+    if (unresRemands.length > 0) {
+      const activeRemands = unresRemands.filter(r => !isAlertDismissed(`claim_remand_${r.id}`));
+      if (activeRemands.length > 0) {
+        const activeKeys = activeRemands.map(r => `claim_remand_${r.id}`);
+        const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+        const itemsListHtml = activeRemands.map(rem => {
+          const res = allResidents.find(x => Number(x.id) === Number(rem.resident_id));
+          const name = res ? res.name : `利用者ID:${rem.resident_id}`;
+          const [y, m] = (rem.service_ym || "").split("-");
+          const ymFmt = (y && m) ? `${y}年${parseInt(m, 10)}月分` : rem.service_ym;
+          return `<div style="margin:2px 0;">・${escapeHtml(name)} 様（${escapeHtml(ymFmt)}）: ${escapeHtml(rem.remand_reason)}</div>`;
+        }).join("");
+
+        officeAlertHtml += `
+          <div class="alert-banner alert-warning notice-card-warning" style="background:var(--alert-tint); border-left:5px solid var(--alert); color:var(--ink);">
+            <div style="width:100%;">
+              <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+                <div>
+                  <strong style="color:var(--alert);">【請求】返戻のまま再請求していない明細があります！</strong>
+                  <div style="margin-top:6px; font-size:13px; line-height:1.5;">
+                    ${itemsListHtml}
+                  </div>
+                  <div style="font-size:12px; color:var(--ink-2); margin-top:4px;">※ エラー内容を確認の上、次の月以降に再請求（月遅れ分）を行ってください。</div>
+                </div>
+                <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+                  <button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:var(--surface); color:var(--pine-dark); border-color:var(--line);" onclick="enterPortal('office'); switchOfficeTab('kasan');">請求の状況を開く</button>
+                  <button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:var(--surface); color:var(--ink-2); border-color:var(--line);" onclick="requestDismissAlertFromButton(this, ${escapeHtml(JSON.stringify(activeKeys))})">確認済・閉じる</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }
+
   // 介護現場ポータル コンテナへ描画
   // [Claude修正] お知らせの見出し【…】を共通の形にそろえる (色は style.css で指定)
   careAlertHtml = cpDecorateNoticeLabels(careAlertHtml);

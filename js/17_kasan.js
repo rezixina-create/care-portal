@@ -1,3 +1,13 @@
+// [Antigravity追加 2026-10-26] 国保連請求送付記録の台帳権限登録（直接呼び出しブロック）
+if (typeof CP_LEDGERS !== "undefined") {
+  CP_LEDGERS.claim_submissions = {
+    label: "国保連請求送付記録",
+    render: () => { if (typeof renderOfficeKasanTab === "function") renderOfficeKasanTab(); },
+    can: () => (typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk()),
+    who: "管理者または事務員"
+  };
+}
+
 // ======================================================================
 // 17_kasan.js: 加算・減算の「月の確認表」（第1段階）および停電に備えた印刷
 // サービス種類 32: 認知症対応型共同生活介護
@@ -2488,6 +2498,8 @@ function renderOfficeKasanTab() {
       </table>
     </div>
 
+    ${renderKasanClaimStatusTable(ym)}
+
     <details class="care-accordion" style="margin-top:16px; border:1px solid var(--line-2); border-radius:6px; padding:8px 12px; background:var(--surface);">
       <summary style="font-weight:bold; font-size:13px; color:var(--pine-dark); cursor:pointer;">
         根拠・公的資料リンク（サービスコード表・運営手引き・地域区分）
@@ -3212,6 +3224,8 @@ function openKasanCsvModal() {
   if (previewSec) previewSec.style.display = "none";
   const dlBtn = document.getElementById("kasanCsvDownloadBtn");
   if (dlBtn) dlBtn.style.display = "none";
+  const markSentBtn = document.getElementById("kasanCsvMarkSentBtn");
+  if (markSentBtn) markSentBtn.style.display = "none";
   const statusEl = document.getElementById("kasanCsvActionStatus");
   if (statusEl) statusEl.textContent = "";
 
@@ -3339,12 +3353,25 @@ function renderKasanCsvValidation(ym) {
     const calc = cpComputeMonthlyKasan(r, ym);
     if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
       const v = cpValidateResidentForKasanCsv(r, ym);
-      if (v.valid) eligibleCount++;
-      else ineligibleCount++;
+      const claimStatus = cpGetResidentClaimStatus(r.id, ym);
+      let excluded = false;
+      let excludeReason = "";
+      if (claimStatus.is_submitted) {
+        excluded = true;
+        const procM = (claimStatus.record && claimStatus.record.process_ym)
+          ? parseInt(String(claimStatus.record.process_ym).slice(4), 10)
+          : "";
+        excludeReason = `提出済のため外しました（${procM}月審査で送付）`;
+      }
+      if (v.valid && !excluded) eligibleCount++;
+      else if (!v.valid) ineligibleCount++;
       candidateResults.push({
         resident: r,
         calc: calc,
-        validation: v
+        validation: v,
+        claimStatus: claimStatus,
+        excluded: excluded,
+        excludeReason: excludeReason
       });
     }
   });
@@ -3357,6 +3384,8 @@ function renderKasanCsvValidation(ym) {
     eligibleCount: eligibleCount,
     ineligibleCount: ineligibleCount
   };
+
+  const submittedCount = candidateResults.filter(c => c.excluded).length;
 
   let summaryHtml = "";
   if (officeErrors.length > 0) {
@@ -3372,7 +3401,8 @@ function renderKasanCsvValidation(ym) {
         <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">事業所番号: <strong>${escapeHtml(settings.office_no)}</strong></span>
         <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">媒体区分: <strong>${escapeHtml(settings.media_code === "1" ? "1 伝送" : "7 伝送（インターネット）")}</strong></span>
         <span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); padding:4px 8px;">作成可能: <strong>${eligibleCount}</strong> 名</span>
-        ${ineligibleCount > 0 ? `<span class="badge" style="background:var(--caution-tint); color:var(--caution); padding:4px 8px; font-weight:bold;">情報不足（作成不可）: <strong>${ineligibleCount}</strong> 名</span>` : `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); padding:4px 8px;">全員作成可能</span>`}
+        ${submittedCount > 0 ? `<span class="badge" style="background:var(--ground); color:var(--ink-2); padding:4px 8px;">提出済（除外）: <strong>${submittedCount}</strong> 名</span>` : ""}
+        ${ineligibleCount > 0 ? `<span class="badge" style="background:var(--caution-tint); color:var(--caution); padding:4px 8px; font-weight:bold;">情報不足（作成不可）: <strong>${ineligibleCount}</strong> 名</span>` : (submittedCount === 0 && ineligibleCount === 0 ? `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); padding:4px 8px;">全員作成可能</span>` : "")}
       </div>
     `;
     if (ineligibleCount > 0) {
@@ -3393,12 +3423,18 @@ function renderKasanCsvValidation(ym) {
         const r = item.resident;
         const v = item.validation;
         const isOk = v.valid;
-        const statusBadge = isOk
-          ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; padding:2px 6px;">出せる</span>`
-          : `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:2px 6px;">出せない</span>`;
-        const missingText = isOk
-          ? `<span style="color:var(--pine); font-size:13px;">必要項目が揃っています</span>`
-          : `<span style="color:var(--alert); font-size:13px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
+        let statusBadge = "";
+        let missingText = "";
+        if (item.excluded) {
+          statusBadge = `<span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:2px 6px;">提出済</span>`;
+          missingText = `<span style="color:var(--ink-2); font-size:13px;">${escapeHtml(item.excludeReason)}</span>`;
+        } else if (isOk) {
+          statusBadge = `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; padding:2px 6px;">出せる</span>`;
+          missingText = `<span style="color:var(--pine); font-size:13px;">必要項目が揃っています${item.claimStatus && item.claimStatus.is_remand ? '（返戻・再請求分）' : ''}</span>`;
+        } else {
+          statusBadge = `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:2px 6px;">出せない</span>`;
+          missingText = `<span style="color:var(--alert); font-size:13px; font-weight:bold;">不足: ${escapeHtml(v.missing.join("、"))}</span>`;
+        }
 
         return `
           <tr>
@@ -3436,7 +3472,7 @@ function generateKasanCsvFile() {
     alert("定員超過と人員基準欠如が同じ月に重なっています。どちらで請求するか市町村に確かめてください。");
     return;
   }
-  const eligibleItems = val.candidates.filter(c => c.validation.valid);
+  const eligibleItems = val.candidates.filter(c => c.validation.valid && !c.excluded);
   if (eligibleItems.length === 0) {
     alert("作成可能な利用者が0名のため、請求ファイルを作成できません。利用者の請求情報を登録してください。");
     return;
@@ -3743,6 +3779,8 @@ function downloadGeneratedKasanCsv() {
     if (statusEl) {
       statusEl.innerHTML = `<span style="color:var(--pine); font-weight:bold;">${escapeHtml(gKasanGeneratedCsvFileName)} を端末に保存しました。</span>`;
     }
+    const markSentBtn = document.getElementById("kasanCsvMarkSentBtn");
+    if (markSentBtn) markSentBtn.style.display = "inline-block";
   } catch (e) {
     alert("ファイルの保存中にエラーが発生しました: " + (e.message || e));
   }
@@ -3784,6 +3822,15 @@ window.openKasanCsvModal = openKasanCsvModal;
 window.closeKasanCsvModal = closeKasanCsvModal;
 window.generateKasanCsvFile = generateKasanCsvFile;
 window.downloadGeneratedKasanCsv = downloadGeneratedKasanCsv;
+window.cpGetResidentClaimStatus = cpGetResidentClaimStatus;
+window.cpGetUnresolvedRemandClaims = cpGetUnresolvedRemandClaims;
+window.renderKasanClaimStatusTable = renderKasanClaimStatusTable;
+window.markKasanCsvAsSubmitted = markKasanCsvAsSubmitted;
+window.openClaimRemandModal = openClaimRemandModal;
+window.closeClaimRemandModal = closeClaimRemandModal;
+window.submitClaimRemand = submitClaimRemand;
+window.restoreClaimRemand = restoreClaimRemand;
+window.voidClaimSubmission = voidClaimSubmission;
 window.cpValidateResidentForKasanCsv = cpValidateResidentForKasanCsv;
 window.CP_KASAN_SHOGU_DEFS = CP_KASAN_SHOGU_DEFS;
 window.CP_KASAN_REDUCED_BASIC_CODES = CP_KASAN_REDUCED_BASIC_CODES;
@@ -4581,3 +4628,425 @@ window.cpKasanNormalizeTaiseiItems = cpKasanNormalizeTaiseiItems;
 window.cpKasanHasMedicalCoop1 = cpKasanHasMedicalCoop1;
 window.cpStaffShortageReductionStartYm = cpStaffShortageReductionStartYm;
 window.voidKasanStaffShortage = voidKasanStaffShortage;
+
+
+// [Antigravity追加 2026-10-26] 利用者・サービス提供年月ごとの国保連請求状態（共通アクセサ）
+function cpGetResidentClaimStatus(residentId, ym) {
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const matches = submissions.filter(s => Number(s.resident_id) === Number(residentId) && s.service_ym === ym && !s.voided && s.status !== "取消");
+  if (matches.length === 0) {
+    return {
+      status: "未提出",
+      record: null,
+      is_submitted: false,
+      is_remand: false
+    };
+  }
+  matches.sort((a, b) => Number(b.id) - Number(a.id));
+  const latest = matches[0];
+  if (latest.status === "返戻") {
+    return {
+      status: "返戻",
+      record: latest,
+      is_submitted: false,
+      is_remand: true
+    };
+  }
+  return {
+    status: "提出済",
+    record: latest,
+    is_submitted: true,
+    is_remand: false
+  };
+}
+
+// [Antigravity追加 2026-10-26] 未解決の返戻一覧を取得（共通アクセサ）
+function cpGetUnresolvedRemandClaims() {
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const remands = submissions.filter(s => s.status === "返戻" && !s.voided);
+  return remands.filter(rem => {
+    const newerSubmitted = submissions.some(s =>
+      Number(s.resident_id) === Number(rem.resident_id) &&
+      s.service_ym === rem.service_ym &&
+      !s.voided &&
+      s.status === "提出済" &&
+      Number(s.id) > Number(rem.id)
+    );
+    return !newerSubmitted;
+  });
+}
+
+
+// [Antigravity追加 2026-10-26] 国保連 請求の状況一覧テーブル
+function renderKasanClaimStatusTable(ym) {
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const isAdminOrClerk = (typeof isCurrentStaffAdminOrClerk === "function" && isCurrentStaffAdminOrClerk());
+  const eligibleResidents = [];
+
+  allResidents.forEach(r => {
+    const calc = cpComputeMonthlyKasan(r, ym);
+    if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
+      const claimStatus = cpGetResidentClaimStatus(r.id, ym);
+      eligibleResidents.push({
+        resident: r,
+        calc: calc,
+        claimStatus: claimStatus
+      });
+    }
+  });
+
+  if (eligibleResidents.length === 0) {
+    return `
+      <div class="panel-card" style="margin-top:16px; border:1px solid var(--line-2); border-radius:6px; padding:16px; background:var(--surface);">
+        <h4 style="margin:0 0 6px 0; font-size:15px; color:var(--pine-dark);">国保連 請求の状況（${escapeHtml(ym)} 提供分）</h4>
+        <div style="font-size:13px; color:var(--ink-2); text-align:center; padding:12px;">この月の請求対象となる利用者の記録はありません。</div>
+      </div>
+    `;
+  }
+
+  const rows = eligibleResidents.map(item => {
+    const r = item.resident;
+    const calc = item.calc;
+    const cs = item.claimStatus;
+    const rec = cs.record;
+
+    let badgeHtml = "";
+    let detailHtml = "";
+    let actionHtml = "-";
+
+    if (cs.status === "未提出") {
+      badgeHtml = `<span class="badge" style="background:var(--ground); color:var(--ink-2); border:1px solid var(--line-2); font-size:12px; padding:3px 8px;">未提出</span>`;
+      detailHtml = `<span style="font-size:13px; color:var(--ink-3);">-</span>`;
+    } else if (cs.status === "提出済") {
+      const procM = (rec && rec.process_ym) ? parseInt(String(rec.process_ym).slice(4), 10) : "";
+      const sentDate = (rec && rec.sent_at) ? rec.sent_at.slice(0, 10) : "-";
+      badgeHtml = `<span class="badge" style="background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--line-2); font-size:12px; padding:3px 8px; font-weight:bold;">提出済</span>`;
+      detailHtml = `
+        <div style="font-size:13px; color:var(--ink); font-weight:bold;">${procM ? `${procM}月審査で送付` : "送付済"}</div>
+        <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">送付日: ${escapeHtml(sentDate)}（${escapeHtml(rec.sent_by || '')}）</div>
+      `;
+      if (isAdminOrClerk) {
+        actionHtml = `
+          <div style="display:flex; gap:6px; flex-wrap:wrap; justify-content:center;">
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--alert); border-color:var(--alert); background:var(--surface);" onclick="openClaimRemandModal(${rec.id})">返戻にする</button>
+            <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--ink-2); border-color:var(--line); background:var(--surface);" onclick="voidClaimSubmission(${rec.id})">取消</button>
+          </div>
+        `;
+      }
+    } else if (cs.status === "返戻") {
+      badgeHtml = `<span class="badge" style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); font-size:12px; padding:3px 8px; font-weight:bold;">返戻</span>`;
+      detailHtml = `
+        <div style="font-size:13px; color:var(--alert); font-weight:bold;">返戻を知った日: ${escapeHtml(rec.remand_date || '-')}</div>
+        <div style="font-size:12px; color:var(--ink); margin-top:2px; line-height:1.4;">理由: ${escapeHtml(rec.remand_reason || '')}</div>
+        <div style="font-size:12px; color:var(--alert); font-weight:bold; margin-top:4px;">※ 次の月以降にもう一度請求が必要です（月遅れ分）</div>
+      `;
+      if (isAdminOrClerk) {
+        actionHtml = `
+          <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:12px; color:var(--pine-dark); border-color:var(--line); background:var(--surface);" onclick="restoreClaimRemand(${rec.id})">返戻を戻す</button>
+        `;
+      }
+    }
+
+    const roomStr = r.room ? `${r.room}号室 ` : "";
+
+    return `
+      <tr>
+        <td style="font-weight:bold; font-size:13px; color:var(--pine-dark); white-space:nowrap;">
+          ${escapeHtml(roomStr)}${escapeHtml(r.name)} 様
+        </td>
+        <td style="text-align:center; font-size:13px; white-space:nowrap;">
+          ${escapeHtml(r.care_level || "-")}
+        </td>
+        <td style="text-align:right; font-size:13px; white-space:nowrap;">
+          ${calc.totalUnits.toLocaleString()} 単位
+        </td>
+        <td style="text-align:center; white-space:nowrap;">
+          ${badgeHtml}
+        </td>
+        <td style="line-height:1.5;">
+          ${detailHtml}
+        </td>
+        <td style="text-align:center; white-space:nowrap;">
+          ${actionHtml}
+        </td>
+      </tr>
+    `;
+  }).join("");
+
+  return `
+    <div class="panel-card" style="margin-top:16px; border:1px solid var(--line-2); border-radius:6px; padding:16px; background:var(--surface);">
+      <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:10px;">
+        <div>
+          <h4 style="margin:0; font-size:15px; color:var(--pine-dark);">国保連 請求の状況（${escapeHtml(ym)} 提供分）</h4>
+          <div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ この月に算定対象となる利用者の提出・返戻の記録状況です。</div>
+        </div>
+      </div>
+      <div style="overflow-x:auto;">
+        <table class="data-table" id="kasanClaimStatusTable" style="width:100%; font-size:13px; min-width:760px; margin:0;">
+          <thead>
+            <tr style="background:var(--pine-tint-2);">
+              <th style="width:160px;">利用者名</th>
+              <th style="width:90px; text-align:center;">要介護度</th>
+              <th style="width:110px; text-align:right;">算定単位数</th>
+              <th style="width:90px; text-align:center;">状態</th>
+              <th>状況詳細</th>
+              <th style="width:130px; text-align:center;">操作</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rows}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  `;
+}
+
+
+// [Antigravity追加 2026-10-26] 国保連請求ファイル送付済みの記録
+function markKasanCsvAsSubmitted() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("国保連への送付記録は管理者または事務員のみ操作可能です。");
+    return;
+  }
+  if (!gKasanGeneratedCsvText || !gKasanGeneratedCsvFileName || !gKasanCsvValidationResult) {
+    alert("送付対象の請求ファイルがありません。先にCSVファイルを作成・保存してください。");
+    return;
+  }
+  const val = gKasanCsvValidationResult;
+  const eligibleItems = (val.candidates || []).filter(c => c.validation.valid && !c.excluded);
+  if (eligibleItems.length === 0) {
+    alert("送付対象となる利用者が0名です。");
+    return;
+  }
+
+  if (!confirm(`この請求ファイル（${gKasanGeneratedCsvFileName}）を国保連へ送付（伝送）済みとして記録しますか？\n\n対象利用者: ${eligibleItems.length}名\n※記録後、二重請求防止のため同一月の再作成から自動除外されます。`)) {
+    return;
+  }
+
+  const ym = val.ym;
+  const [yStr, mStr] = ym.split("-");
+  const y = parseInt(yStr, 10);
+  const m = parseInt(mStr, 10);
+  let nextY = y;
+  let nextM = m + 1;
+  if (nextM > 12) {
+    nextM = 1;
+    nextY += 1;
+  }
+  const nextYmRaw = `${nextY}${String(nextM).padStart(2, "0")}`; // 審査年月
+
+  const settings = val.settings;
+  const regionObj = CP_KASAN_REGION_RATES.find(r => r.key === settings.region_type) || { rate: 10.0 };
+  const unitPriceInt = Math.round(regionObj.rate * 100);
+
+  if (!Array.isArray(db.data.claim_submissions)) {
+    db.data.claim_submissions = [];
+  }
+
+  const now = new Date();
+  const nowStr = toLocalDateTimeStr(now);
+  const staff = cpLoginStaffName();
+  const baseTime = Date.now();
+
+  eligibleItems.forEach((item, idx) => {
+    const r = item.resident;
+    const calc = item.calc;
+    const isShort = (r.usage_type === "short");
+    const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
+    const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
+
+    const totalUnits = calc.totalUnits;
+    const cost100 = Math.floor(totalUnits * unitPriceInt / 100);
+    const hokenDemand = Math.floor(cost100 * benefitRateInt / 100);
+    const userBurden = cost100 - hokenDemand;
+
+    db.data.claim_submissions.push({
+      id: baseTime + idx,
+      resident_id: Number(r.id),
+      service_ym: ym,
+      process_ym: nextYmRaw,
+      service_type_code: serviceTypeCode,
+      total_units: totalUnits,
+      insurance_demand: hokenDemand,
+      user_burden: userBurden,
+      file_name: gKasanGeneratedCsvFileName,
+      status: "提出済",
+      sent_at: nowStr,
+      sent_by: staff
+    });
+  });
+
+  db.save();
+
+  const sentBtn = document.getElementById("kasanCsvMarkSentBtn");
+  if (sentBtn) sentBtn.style.display = "none";
+  const statusEl = document.getElementById("kasanCsvActionStatus");
+  if (statusEl) {
+    statusEl.innerHTML = `<span style="color:var(--pine-dark); font-weight:bold;">国保連へ送付済として記録しました（${eligibleItems.length}名）。</span>`;
+  }
+
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 返戻登録モーダルを開く
+function openClaimRemandModal(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("返戻の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const res = allResidents.find(x => Number(x.id) === Number(rec.resident_id));
+  const resName = res ? res.name : `利用者ID:${rec.resident_id}`;
+
+  const modal = document.getElementById("claimRemandModal");
+  if (!modal) return;
+
+  const idEl = document.getElementById("remandClaimId");
+  const nameEl = document.getElementById("remandResidentName");
+  const ymEl = document.getElementById("remandServiceYm");
+  const sentEl = document.getElementById("remandSentDate");
+  const dateEl = document.getElementById("claimRemandDate");
+  const reasonEl = document.getElementById("claimRemandReason");
+
+  if (idEl) idEl.value = rec.id;
+  if (nameEl) nameEl.textContent = `${resName} 様`;
+  if (ymEl) ymEl.textContent = rec.service_ym;
+  const sentDate = (rec.sent_at || "").slice(0, 10);
+  if (sentEl) sentEl.textContent = sentDate;
+
+  const today = toLocalDateStr(new Date());
+  if (dateEl) {
+    dateEl.value = today;
+    dateEl.max = today;
+    if (sentDate) dateEl.min = sentDate;
+  }
+  if (reasonEl) reasonEl.value = "";
+
+  modal.style.display = "flex";
+}
+
+function closeClaimRemandModal() {
+  const modal = document.getElementById("claimRemandModal");
+  if (modal) modal.style.display = "none";
+}
+
+// [Antigravity追加 2026-10-26] 返戻の保存
+function submitClaimRemand() {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("返戻の登録は管理者または事務員のみ可能です。");
+    return;
+  }
+  const idEl = document.getElementById("remandClaimId");
+  const dateEl = document.getElementById("claimRemandDate");
+  const reasonEl = document.getElementById("claimRemandReason");
+  if (!idEl || !dateEl || !reasonEl) return;
+  const id = Number(idEl.value);
+  const remandDate = (dateEl.value || "").trim();
+  const reason = (reasonEl.value || "").trim();
+
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === id);
+  if (!rec) {
+    alert("対象の請求送付記録が見つかりません。");
+    return;
+  }
+
+  if (!remandDate) {
+    alert("返戻を知った日を入力してください。");
+    return;
+  }
+  const today = toLocalDateStr(new Date());
+  if (remandDate > today) {
+    alert("返戻を知った日に先の日付は入れられません。");
+    return;
+  }
+  const sentDate = (rec.sent_at || "").slice(0, 10);
+  if (sentDate && remandDate < sentDate) {
+    alert(`返戻を知った日は、国保連に送った日（${sentDate}）以降の日付にしてください。`);
+    return;
+  }
+  if (!reason) {
+    alert("返戻の理由（エラー内容）を入力してください。");
+    return;
+  }
+
+  rec.status = "返戻";
+  rec.remand_date = remandDate;
+  rec.remand_reason = reason;
+  rec.remanded_at = toLocalDateTimeStr(new Date());
+  rec.remanded_by = cpLoginStaffName();
+
+  db.save();
+  closeClaimRemandModal();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 返戻の取消・復旧
+function restoreClaimRemand(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("返戻の取消・復旧は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec || rec.status !== "返戻") return;
+  const reason = prompt("この返戻を取り消し、「提出済」に戻します。\n\n戻す理由を入力してください（必須）:", "");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("戻す理由を入力してください。復旧は行っていません。");
+    return;
+  }
+  if (!Array.isArray(rec.remand_history)) rec.remand_history = [];
+  rec.remand_history.push({
+    remand_date: rec.remand_date,
+    remand_reason: rec.remand_reason,
+    remanded_at: rec.remanded_at,
+    remanded_by: rec.remanded_by,
+    restored_at: toLocalDateTimeStr(new Date()),
+    restored_by: cpLoginStaffName(),
+    restore_reason: reason.trim()
+  });
+  rec.status = "提出済";
+  rec.remand_restored_at = toLocalDateTimeStr(new Date());
+  rec.remand_restored_by = cpLoginStaffName();
+  rec.remand_restore_reason = reason.trim();
+
+  db.save();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}
+
+// [Antigravity追加 2026-10-26] 国保連請求送付記録の取消
+function voidClaimSubmission(claimId) {
+  if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
+    alert("国保連請求送付記録の取消は管理者または事務員のみ可能です。");
+    return;
+  }
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  const rec = submissions.find(x => Number(x.id) === Number(claimId));
+  if (!rec || rec.voided) return;
+  const reason = prompt("この送付記録を取り消します。\n記録は消去されず、取消済みとして残ります。\n二重請求の除外対象から外れ、再度の請求ファイル作成が可能になります。\n\n取消の理由を入力してください（必須）:", "");
+  if (reason === null) return;
+  if (!reason.trim()) {
+    alert("取消の理由を入力してください。取消は行っていません。");
+    return;
+  }
+  rec.voided = true;
+  rec.status = "取消";
+  rec.void_reason = reason.trim();
+  rec.voided_at = toLocalDateTimeStr(new Date());
+  rec.voided_by = cpLoginStaffName();
+
+  db.save();
+  renderOfficeKasanTab();
+  if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+}

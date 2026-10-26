@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_c2">
+	<link rel="stylesheet" href="style.css?v=20261026_d1">
 </head>
 <body>
 
@@ -4571,26 +4571,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_c2"></script>
- <script src="js/02_terms.js?v=20261026_c2"></script>
- <script src="js/03_common.js?v=20261026_c2"></script>
- <script src="js/04_care_record.js?v=20261026_c2"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_c2"></script>
- <script src="js/06_schema_history.js?v=20261026_c2"></script>
- <script src="js/07_daily_tables.js?v=20261026_c2"></script>
- <script src="js/08_meds.js?v=20261026_c2"></script>
- <script src="js/09_night_misc.js?v=20261026_c2"></script>
- <script src="js/10_office.js?v=20261026_c2"></script>
- <script src="js/11_karte_staff.js?v=20261026_c2"></script>
- <script src="js/12_hospital_photos.js?v=20261026_c2"></script>
- <script src="js/13_shift_units.js?v=20261026_c2"></script>
- <script src="js/14_auth_home.js?v=20261026_c2"></script>
- <script src="js/15_single_write.js?v=20261026_c2"></script>
- <script src="js/16_careplan.js?v=20261026_c2"></script>
-	<script src="js/17_kasan.js?v=20261026_c2"></script>
-	<script src="js/18_stats.js?v=20261026_c2"></script>
-	<script src="js/19_life.js?v=20261026_c2"></script>
-	<script src="js/20_invoice.js?v=20261026_c2"></script>
+ <script src="js/01_core.js?v=20261026_d1"></script>
+ <script src="js/02_terms.js?v=20261026_d1"></script>
+ <script src="js/03_common.js?v=20261026_d1"></script>
+ <script src="js/04_care_record.js?v=20261026_d1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_d1"></script>
+ <script src="js/06_schema_history.js?v=20261026_d1"></script>
+ <script src="js/07_daily_tables.js?v=20261026_d1"></script>
+ <script src="js/08_meds.js?v=20261026_d1"></script>
+ <script src="js/09_night_misc.js?v=20261026_d1"></script>
+ <script src="js/10_office.js?v=20261026_d1"></script>
+ <script src="js/11_karte_staff.js?v=20261026_d1"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_d1"></script>
+ <script src="js/13_shift_units.js?v=20261026_d1"></script>
+ <script src="js/14_auth_home.js?v=20261026_d1"></script>
+ <script src="js/15_single_write.js?v=20261026_d1"></script>
+ <script src="js/16_careplan.js?v=20261026_d1"></script>
+	<script src="js/17_kasan.js?v=20261026_d1"></script>
+	<script src="js/18_stats.js?v=20261026_d1"></script>
+	<script src="js/19_life.js?v=20261026_d1"></script>
+	<script src="js/20_invoice.js?v=20261026_d1"></script>
   
 
   <!-- ============================================================ -->
@@ -6119,12 +6119,49 @@
 					<button type="button" class="btn btn-secondary" onclick="closeKasanCsvModal()">閉じる</button>
 					<button type="button" class="btn btn-primary" id="kasanCsvGenerateBtn" onclick="generateKasanCsvFile()">CSVファイルを作成する</button>
 					<button type="button" class="btn btn-secondary" id="kasanCsvDownloadBtn" style="display:none;" onclick="downloadGeneratedKasanCsv()">ファイルを端末に保存</button>
+					<button type="button" class="btn btn-primary" id="kasanCsvMarkSentBtn" style="display:none; background:var(--pine-dark); border-color:var(--pine-dark);" onclick="markKasanCsvAsSubmitted()">このファイルを国保連に送った</button>
 				</div>
 			</div>
 		</div>
 	</div>
 
 	<!-- [Antigravity追加 2026-10-21] 夜勤職員配置加算・減算の確定モーダル -->
+	<!-- [Antigravity追加 2026-10-26] 国保連請求 返戻登録モーダル -->
+	<div class="modal-overlay" id="claimRemandModal" style="display:none;">
+		<div class="modal-card" style="max-width:540px; display:flex; flex-direction:column;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px;">返戻の登録</h3>
+				<button type="button" class="close-btn" onclick="closeClaimRemandModal()">&times;</button>
+			</div>
+			<div class="modal-body" style="padding:16px;">
+				<input type="hidden" id="remandClaimId">
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:14px; font-size:13px; line-height:1.6;">
+					<div><strong>対象利用者:</strong> <span id="remandResidentName">-</span></div>
+					<div><strong>サービス提供年月:</strong> <span id="remandServiceYm">-</span></div>
+					<div><strong>国保連送付日:</strong> <span id="remandSentDate">-</span></div>
+				</div>
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						返戻を知った日 <span style="color:var(--alert);">*</span>
+					</label>
+					<input type="date" id="claimRemandDate" class="form-control" style="font-size:13px; width:100%;">
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 先の日付や、送付日より前の日付は設定できません。</div>
+				</div>
+				<div style="margin-bottom:8px;">
+					<label style="display:block; font-weight:bold; font-size:13px; margin-bottom:4px; color:var(--ink);">
+						返戻の理由（返戻一覧表のエラー内容） <span style="color:var(--alert);">*</span>
+					</label>
+					<textarea id="claimRemandReason" class="form-control" rows="4" style="font-size:13px; width:100%;"></textarea>
+					<div style="font-size:12px; color:var(--ink-2); margin-top:2px;">※ 国保連の「請求明細書・給付管理票返戻（保留）一覧表」に記載された内容をそのまま記入してください。</div>
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; border-top:1px solid var(--line); display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" id="btnCloseClaimRemand" onclick="closeClaimRemandModal()">閉じる</button>
+				<button type="button" class="btn btn-primary" id="btnSubmitClaimRemand" style="background:var(--alert); border-color:var(--alert);" onclick="submitClaimRemand()">返戻として登録する</button>
+			</div>
+		</div>
+	</div>
+
 	<div class="modal-overlay" id="kasanNightConfirmModal" style="display:none;">
 		<div class="modal-card" style="max-width:760px; max-height:90vh; display:flex; flex-direction:column;">
 			<div class="modal-header">
