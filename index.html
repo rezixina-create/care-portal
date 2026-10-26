@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_a2">
+	<link rel="stylesheet" href="style.css?v=20261026_b1">
 </head>
 <body>
 
@@ -3740,7 +3740,7 @@
  <span id="csResidentBadge" class="badge" style="background:#1e5b47; color:white; font-size:13px; padding:3px 8px;"></span>
  </div>
  <p style="font-size:13px; color:#5f6d66; margin:4px 0 0 0;">
- 入所時・入院後再入所・状態変化時の生活動作・認知・介助方法を体系的に記録・確認します。
+					書き直すきっかけ：ケアプランの見直し、退院時、状態の変化など
  </p>
  </div>
  <button class="modal-close-btn" onclick="closeModal('careSummaryModal')">&times;</button>
@@ -3752,12 +3752,12 @@
  <label style="font-size:13px; font-weight:bold; color:#22302b; white-space:nowrap;">サマリー履歴:</label>
  <select id="careSummaryHistorySelect" class="form-control" style="font-size:13px; max-width:340px;" onchange="switchCareSummaryRecord(this.value)"></select>
  </div>
- <div style="display:flex; gap:6px; flex-wrap:wrap;">
- <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f1f6f3; color:#1a4f3d; border-color:#a9cfbf;" onclick="startNewCareSummary('新規入所時サマリー')">＋ 新規入所時</button>
- <button type="button" class="btn btn-secondary" style="font-size:13px; background:#f0fdf4; color:#166534; border-color:#86efac;" onclick="startNewCareSummary('入院後再入所サマリー')">＋ 入院後再入所</button>
- <button type="button" class="btn btn-secondary" style="font-size:13px; background:#fff7ed; color:#c2410c; border-color:#fed7aa;" onclick="startNewCareSummary('状態変化・見直しサマリー')">＋ 状態変化見直し</button>
-          <button type="button" class="btn btn-secondary" style="font-size:13px; background:#e0e7ff; color:#3730a3; border-color:#a5b4fc; font-weight:bold;" onclick="openCareSummaryCompareModal()">新旧比較プレビュー</button>
- </div>
+					<div id="careSummaryNewButtons" style="display:flex; gap:6px; flex-wrap:wrap;">
+						<button id="btnCsNewEntry" type="button" class="btn btn-secondary" style="font-size:13px; background:var(--pine-tint); color:var(--pine-dark); border-color:var(--line); cursor:pointer;" onclick="startNewCareSummary('新規入所時サマリー')">＋ 新規入所時</button>
+						<button id="btnCsNewReentry" type="button" class="btn btn-secondary" style="font-size:13px; background:var(--pine-tint); color:var(--pine-dark); border-color:var(--line); cursor:pointer;" onclick="startNewCareSummary('入院後再入所サマリー')">＋ 入院後再入所</button>
+						<button id="btnCsNewChange" type="button" class="btn btn-secondary" style="font-size:13px; background:var(--caution-tint); color:var(--caution); border-color:var(--line); cursor:pointer;" onclick="startNewCareSummary('状態変化・見直しサマリー')">＋ 状態変化見直し</button>
+						<button type="button" class="btn btn-secondary" style="font-size:13px; background:var(--surface); color:var(--ink); border-color:var(--line); font-weight:bold; cursor:pointer;" onclick="openCareSummaryCompareModal()">新旧比較プレビュー</button>
+					</div>
  </div>
 
  <!-- サマリー基本属性フォーム -->
@@ -3805,10 +3805,130 @@
  </div>
 
  <!-- 4. ADL（日常生活動作） -->
- <div class="summary-section-box">
- <div class="summary-section-title">4. ADL（日常生活動作: 移動・移乗・更衣・整容・入浴）</div>
- <textarea id="csAdl" class="form-control summary-textarea" rows="3" placeholder="寝返り、起き上がり、立ち上がり、車椅子移乗、歩行・移動形態、更衣・整容、入浴自立度など"></textarea>
- </div>
+				<!-- 4. ADL（日常生活動作） -->
+				<div class="summary-section-box" style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
+					<div class="summary-section-title" style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">4. ADL（日常生活動作: 動作ごとの段階と介助のやり方）</div>
+					<div id="csAdlPrevRefBox" style="display:none; background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px; margin-bottom:10px; font-size:13px; color:var(--ink-2); line-height:1.6;"></div>
+					<input type="hidden" id="csAdl" value="">
+					<div style="overflow-x:auto;">
+						<table class="table" style="width:100%; border-collapse:collapse; font-size:13px; background:var(--surface);">
+							<thead>
+								<tr style="background:var(--ground); border-bottom:1px solid var(--line);">
+									<th style="width:24%; min-width:90px; padding:8px 10px; text-align:left; color:var(--ink);">動作</th>
+									<th style="width:28%; min-width:120px; padding:8px 10px; text-align:left; color:var(--ink);">段階</th>
+									<th style="padding:8px 10px; text-align:left; color:var(--ink);">介助のやり方 <span style="font-weight:normal; font-size:12px; color:var(--ink-3);">※自立以外は必須</span></th>
+								</tr>
+							</thead>
+							<tbody id="csAdlActionTableBody">
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">移動</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_move" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_move" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">移乗</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_transfer" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_transfer" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">食事</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_eating" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_eating" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">排泄</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_excretion" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_excretion" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">入浴</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_bathing" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_bathing" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">更衣</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_dressing" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_dressing" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+								<tr style="border-bottom:1px solid var(--line-2);">
+									<td style="padding:8px 10px; font-weight:bold; color:var(--ink); vertical-align:top;">整容（歯みがき・洗面）</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<select id="csAdlLevel_grooming" class="form-control" style="width:100%; font-size:13px; height:36px; padding:4px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink);">
+											<option value="">選んでください</option>
+											<option value="自立">自立</option>
+											<option value="見守り">見守り</option>
+											<option value="一部介助">一部介助</option>
+											<option value="全介助">全介助</option>
+										</select>
+									</td>
+									<td style="padding:8px 10px; vertical-align:top;">
+										<textarea id="csAdlMethod_grooming" class="form-control" rows="2" style="width:100%; font-size:13px; padding:6px 8px; border:1px solid var(--line); border-radius:4px; background:var(--surface); color:var(--ink); box-sizing:border-box; resize:vertical;"></textarea>
+									</td>
+								</tr>
+							</tbody>
+						</table>
+					</div>
+				</div>
 
  <!-- 5. 食事・水分摂取 -->
  <div class="summary-section-box">
@@ -3872,7 +3992,7 @@
  </div>
  <div style="display:flex; gap:8px;">
  <button type="button" class="btn btn-secondary" onclick="closeModal('careSummaryModal')">閉じる</button>
- <button type="button" class="btn btn-primary" onclick="submitCareSummary()">サマリーを保存する</button>
+ <button id="btnSubmitCareSummary" type="button" class="btn btn-primary" onclick="submitCareSummary()">サマリーを保存する</button>
  </div>
  </div>
  </div>
@@ -4391,26 +4511,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_a2"></script>
- <script src="js/02_terms.js?v=20261026_a2"></script>
- <script src="js/03_common.js?v=20261026_a2"></script>
- <script src="js/04_care_record.js?v=20261026_a2"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_a2"></script>
- <script src="js/06_schema_history.js?v=20261026_a2"></script>
- <script src="js/07_daily_tables.js?v=20261026_a2"></script>
- <script src="js/08_meds.js?v=20261026_a2"></script>
- <script src="js/09_night_misc.js?v=20261026_a2"></script>
- <script src="js/10_office.js?v=20261026_a2"></script>
- <script src="js/11_karte_staff.js?v=20261026_a2"></script>
- <script src="js/12_hospital_photos.js?v=20261026_a2"></script>
- <script src="js/13_shift_units.js?v=20261026_a2"></script>
- <script src="js/14_auth_home.js?v=20261026_a2"></script>
- <script src="js/15_single_write.js?v=20261026_a2"></script>
- <script src="js/16_careplan.js?v=20261026_a2"></script>
-	<script src="js/17_kasan.js?v=20261026_a2"></script>
-	<script src="js/18_stats.js?v=20261026_a2"></script>
-	<script src="js/19_life.js?v=20261026_a2"></script>
-	<script src="js/20_invoice.js?v=20261026_a2"></script>
+ <script src="js/01_core.js?v=20261026_b1"></script>
+ <script src="js/02_terms.js?v=20261026_b1"></script>
+ <script src="js/03_common.js?v=20261026_b1"></script>
+ <script src="js/04_care_record.js?v=20261026_b1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_b1"></script>
+ <script src="js/06_schema_history.js?v=20261026_b1"></script>
+ <script src="js/07_daily_tables.js?v=20261026_b1"></script>
+ <script src="js/08_meds.js?v=20261026_b1"></script>
+ <script src="js/09_night_misc.js?v=20261026_b1"></script>
+ <script src="js/10_office.js?v=20261026_b1"></script>
+ <script src="js/11_karte_staff.js?v=20261026_b1"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_b1"></script>
+ <script src="js/13_shift_units.js?v=20261026_b1"></script>
+ <script src="js/14_auth_home.js?v=20261026_b1"></script>
+ <script src="js/15_single_write.js?v=20261026_b1"></script>
+ <script src="js/16_careplan.js?v=20261026_b1"></script>
+	<script src="js/17_kasan.js?v=20261026_b1"></script>
+	<script src="js/18_stats.js?v=20261026_b1"></script>
+	<script src="js/19_life.js?v=20261026_b1"></script>
+	<script src="js/20_invoice.js?v=20261026_b1"></script>
   
 
   <!-- ============================================================ -->

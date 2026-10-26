@@ -1044,6 +1044,46 @@ function checkGlobalAlerts() {
     });
   }
 
+  // [Antigravity実装 2026-10-26] 6-3. 【介護・事務共通：介護サマリー ADL段階変更のお知らせ】
+  if (Array.isArray(db.data.care_summaries)) {
+    (typeof cpCurrentResidents === "function" ? cpCurrentResidents() : (gState.residents || [])).forEach(r => {
+      if (!r || (typeof cpIsDischarged === "function" && cpIsDischarged(r))) return;
+      const rSummaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+      if (rSummaries.length < 2) return;
+      const latest = rSummaries[0];
+      const prev = rSummaries.find(s => s.id === latest.previous_id) || rSummaries[1];
+      if (!latest || !prev) return;
+      if (!Array.isArray(latest.adl_items) || latest.adl_items.length === 0) return;
+      if (!Array.isArray(prev.adl_items) || prev.adl_items.length === 0) return;
+
+      const changes = [];
+      latest.adl_items.forEach(currItem => {
+        if (!currItem || !currItem.level) return;
+        const prevItem = prev.adl_items.find(p => (p.key && p.key === currItem.key) || (p.action && p.action === currItem.action));
+        if (prevItem && prevItem.level && prevItem.level !== currItem.level) {
+          changes.push(`${currItem.action || currItem.key} ${prevItem.level} → ${currItem.level}`);
+        }
+      });
+
+      if (changes.length > 0) {
+        const adlAlertKey = `summary_adl_change_${latest.id}`;
+        if (!isAlertDismissed(adlAlertKey)) {
+          const adlNoticeHtml = `
+            <div class="alert-banner alert-warning notice-card-warning">
+              <span><strong>【ADL段階変更】</strong> ${escapeHtml(r.name || "")} 様：ADL の段階が変わりました（${changes.map(c => escapeHtml(c)).join("、")}）。ケアプランの見直しを検討してください。</span>
+              <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap;">
+                <button type="button" class="btn btn-secondary" onclick="enterPortal('care'); selectResident(${Number(r.id)}); switchCareTab('careplan');">ケアプランを開く</button>
+                <button type="button" class="btn btn-secondary" onclick="requestDismissAlertFromButton(this, '${adlAlertKey}')">確認済・閉じる</button>
+              </div>
+            </div>
+          `;
+          careAlertHtml += adlNoticeHtml;
+          officeAlertHtml += adlNoticeHtml;
+        }
+      }
+    });
+  }
+
   // 7. 【事務専用：要介護認定有効期限 (満了60日以内)】
   {
     const expiringResidents = [];

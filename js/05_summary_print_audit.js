@@ -1,6 +1,23 @@
 // ======================================================================
 // 介護サマリー (生活・ADLアセスメント詳細 13項目)
 // ======================================================================
+const CP_SUMMARY_ADL_ACTIONS = [
+	{ key: "move", name: "移動" },
+	{ key: "transfer", name: "移乗" },
+	{ key: "eating", name: "食事" },
+	{ key: "excretion", name: "排泄" },
+	{ key: "bathing", name: "入浴" },
+	{ key: "dressing", name: "更衣" },
+	{ key: "grooming", name: "整容（歯みがき・洗面）" }
+];
+
+function cpSummaryAdlBadgeClass(level) {
+	if (level === "自立") return "badge-ok";
+	if (level === "見守り") return "badge-info";
+	if (level === "一部介助") return "badge-warn";
+	if (level === "全介助") return "badge-alert";
+	return "badge-secondary";
+}
 function getResidentSummaryStatusText(residentId) {
  const rId = Number(residentId);
  const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
@@ -30,7 +47,7 @@ function renderResidentSummaryAccordionContent(residentId) {
  <strong style="color:#1e5b47;">［${escapeHtml(s.summary_type || "介護サマリー")}］</strong>
  <span style="color:#4a5852; margin-left:6px;">作成日: ${escapeHtml(s.created_at || "")} (作成者: ${escapeHtml(s.staff_name || "職員")})</span>
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="openCareSummaryModal(${rId}, ${s.id})">詳細確認・変更</button>
+ ${(typeof cpRoleFlags === "function" && cpRoleFlags().caremanager) ? `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:var(--surface); color:var(--pine-dark); border:1px solid var(--line);" onclick="openCareSummaryModal(${rId}, ${s.id})">詳細確認・変更</button>` : `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:var(--surface); color:var(--ink); border:1px solid var(--line);" onclick="openCareSummaryModal(${rId}, ${s.id})">詳細確認</button>`}
  </div>
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
@@ -45,10 +62,40 @@ function renderResidentSummaryAccordionContent(residentId) {
  <strong style="color:#173f33; font-size:12px;">3. 現在の身体・認知状態:</strong>
  <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.physical_cognitive || "特記事項なし")}</div>
  </div>
- <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
- <strong style="color:#173f33; font-size:12px;">4. ADL (日常生活動作):</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.adl || "特記事項なし")}</div>
- </div>
+ <div style="background:var(--ground); border:1px solid var(--line); border-radius:6px; padding:8px 10px;">
+				<strong style="color:var(--pine-dark); font-size:12px;">4. ADL (日常生活動作):</strong>
+				${(() => {
+					if (Array.isArray(s.adl_items) && s.adl_items.length > 0) {
+						const trs = s.adl_items.map(it => `
+							<tr style="border-bottom:1px solid var(--line-2);">
+								<td style="padding:4px 6px; font-weight:bold; color:var(--ink); font-size:12px;">${escapeHtml(it.action || it.key)}</td>
+								<td style="padding:4px 6px;"><span class="badge ${cpSummaryAdlBadgeClass(it.level)}" style="font-size:11px;">${escapeHtml(it.level || "-")}</span></td>
+								<td style="padding:4px 6px; color:var(--ink-2); font-size:12px;">${escapeHtml(it.method || "-")}</td>
+							</tr>
+						`).join("");
+						return `
+							<div style="overflow-x:auto; margin-top:4px;">
+								<table class="table" style="width:100%; border-collapse:collapse; font-size:12px; background:var(--surface);">
+									<thead>
+										<tr style="background:var(--ground); border-bottom:1px solid var(--line);">
+											<th style="width:26%; padding:4px 6px; text-align:left; color:var(--ink);">動作</th>
+											<th style="width:26%; padding:4px 6px; text-align:left; color:var(--ink);">段階</th>
+											<th style="padding:4px 6px; text-align:left; color:var(--ink);">介助のやり方</th>
+										</tr>
+									</thead>
+									<tbody>${trs}</tbody>
+								</table>
+							</div>
+						`;
+					}
+					return `
+						<div style="margin-top:2px; color:var(--ink-2); font-size:12px;">
+							<span class="badge" style="background:var(--pine-tint); color:var(--pine); font-size:11px; margin-right:6px; font-weight:bold;">前の書き方（文章）</span>
+							${escapeHtml(s.adl || "特記事項なし")}
+						</div>
+					`;
+				})()}
+			</div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">5. 食事・水分摂取:</strong>
  <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meals_hydration || "特記事項なし")}</div>
@@ -90,12 +137,36 @@ function renderResidentSummaryAccordionContent(residentId) {
 }
 
 function openCareSummaryModal(resId, summaryId) {
- const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
- const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
- if (!r) {
- alert("利用者を選択してください。");
- return;
- }
+	const targetId = (resId !== undefined && resId !== null && resId !== '') ? Number(resId) : Number(gState.selectedResidentId);
+	const r = gState.residents ? gState.residents.find(x => Number(x.id) === targetId) : null;
+	if (!r) {
+		alert("利用者を選択してください。");
+		return;
+	}
+
+	const canEdit = typeof cpRoleFlags === "function" ? !!cpRoleFlags().caremanager : false;
+	const newBox = document.getElementById("careSummaryNewButtons"); if (newBox) newBox.style.display = canEdit ? "flex" : "none";
+	const b1 = document.getElementById("btnCsNewEntry"); if (b1) b1.style.display = canEdit ? "inline-block" : "none";
+	const b2 = document.getElementById("btnCsNewReentry"); if (b2) b2.style.display = canEdit ? "inline-block" : "none";
+	const b3 = document.getElementById("btnCsNewChange"); if (b3) b3.style.display = canEdit ? "inline-block" : "none";
+	const submitBtn = document.getElementById("btnSubmitCareSummary"); if (submitBtn) submitBtn.style.display = canEdit ? "inline-block" : "none";
+
+	const fieldsToToggle = [
+		"csSummaryType", "csDate",
+		"csBasicInfo", "csBackground", "csPhysicalCognitive",
+		"csMealsHydration", "csExcretion", "csSleep", "csMeds",
+		"csMedicalCare", "csDementiaBehavior", "csCareNotes", "csFamilyInfo", "csFutureGoals"
+	];
+	fieldsToToggle.forEach(fId => {
+		const el = document.getElementById(fId);
+		if (el) el.disabled = !canEdit;
+	});
+	CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+		const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
+		const mtdEl = document.getElementById(`csAdlMethod_${act.key}`);
+		if (lvlEl) lvlEl.disabled = !canEdit;
+		if (mtdEl) mtdEl.disabled = !canEdit;
+	});
 
  const badgeEl = document.getElementById("csResidentBadge");
  if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${r.care_level})`;
@@ -120,31 +191,40 @@ function openCareSummaryModal(resId, summaryId) {
  if (historySelect) {
  historySelect.innerHTML = "";
  if (list.length > 0) {
- list.forEach((s, idx) => {
- const opt = document.createElement("option");
- opt.value = String(s.id);
- opt.textContent = `${idx === 0 ? "［最新］" : ""} ${s.created_at} - ${s.summary_type} (${s.staff_name})`;
- historySelect.appendChild(opt);
- });
- const newOpt = document.createElement("option");
- newOpt.value = "new";
- newOpt.textContent = "＋ 新規サマリー作成 (新規入所・入院後再入所等)";
- historySelect.appendChild(newOpt);
- } else {
- const opt = document.createElement("option");
- opt.value = "new";
- opt.textContent = "新規サマリー作成 (未登録)";
- historySelect.appendChild(opt);
- }
+			list.forEach((s, idx) => {
+				const opt = document.createElement("option");
+				opt.value = String(s.id);
+				opt.textContent = `${idx === 0 ? "［最新］" : ""} ${s.created_at} - ${s.summary_type} (${s.staff_name})`;
+				historySelect.appendChild(opt);
+			});
+			if (canEdit) {
+				const newOpt = document.createElement("option");
+				newOpt.value = "new";
+				newOpt.textContent = "＋ 新規サマリー作成 (新規入所・入院後再入所等)";
+				historySelect.appendChild(newOpt);
+			}
+		} else {
+			if (canEdit) {
+				const opt = document.createElement("option");
+				opt.value = "new";
+				opt.textContent = "新規サマリー作成 (未登録)";
+				historySelect.appendChild(opt);
+			} else {
+				const opt = document.createElement("option");
+				opt.value = "";
+				opt.textContent = "サマリー未登録 (閲覧のみ)";
+				historySelect.appendChild(opt);
+			}
+		}
  }
 
  if (summaryId) {
- switchCareSummaryRecord(String(summaryId));
- } else if (list.length > 0) {
- switchCareSummaryRecord(String(list[0].id));
- } else {
- startNewCareSummary("新規入所時サマリー");
- }
+		switchCareSummaryRecord(String(summaryId));
+	} else if (list.length > 0) {
+		switchCareSummaryRecord(String(list[0].id));
+	} else if (canEdit) {
+		startNewCareSummary("新規入所時サマリー");
+	}
 
  const modal = document.getElementById("careSummaryModal");
  if (modal) modal.style.display = "flex";
@@ -185,13 +265,43 @@ function switchCareSummaryRecord(summaryVal) {
  ];
 
  fields.forEach((fId, i) => {
- const el = document.getElementById(fId);
- if (el) el.value = s[keys[i]] || "";
- });
+		const el = document.getElementById(fId);
+		if (el) el.value = s[keys[i]] || "";
+	});
+
+	// ADL動作別項目の反映
+	const refBox = document.getElementById("csAdlPrevRefBox");
+	if (Array.isArray(s.adl_items) && s.adl_items.length > 0) {
+		if (refBox) { refBox.style.display = "none"; refBox.innerHTML = ""; }
+		CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+			const it = s.adl_items.find(x => x.key === act.key || x.action === act.name);
+			const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
+			const mtdEl = document.getElementById(`csAdlMethod_${act.key}`);
+		if (lvlEl) lvlEl.value = it ? (it.level || "") : "";
+		if (mtdEl) mtdEl.value = it ? (it.method || "") : "";
+		});
+	} else {
+		if (refBox) {
+			refBox.style.display = "block";
+			refBox.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; color:var(--pine-dark);">前の書き方（文章）</div><div style="white-space:pre-wrap;">${escapeHtml(s.adl || "特記事項なし")}</div>`;
+		}
+		CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+			const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
+			const mtdEl = document.getElementById(`csAdlMethod_${act.key}`);
+		if (lvlEl) lvlEl.value = "";
+		if (mtdEl) mtdEl.value = "";
+		});
+	}
+	const csAdlEl = document.getElementById("csAdl");
+	if (csAdlEl) csAdlEl.value = s.adl || "";
 }
 
 function startNewCareSummary(summaryType = "新規入所時サマリー") {
- const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
+	if (typeof cpRoleFlags === "function" && !cpRoleFlags().caremanager) {
+		alert("介護サマリーの作成は計画作成担当者のみ行えます。");
+		return;
+	}
+	const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
  const r = gState.residents ? gState.residents.find(x => Number(x.id) === rId) : null;
  const historySelect = document.getElementById("careSummaryHistorySelect");
  if (historySelect) historySelect.value = "new";
@@ -242,84 +352,159 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
  ];
 
  fields.forEach(f => {
- const el = document.getElementById(f.id);
- if (el) el.value = f.val;
- });
+		const el = document.getElementById(f.id);
+		if (el) el.value = f.val;
+	});
+
+	// ADL動作別欄の初期化（前回のサマリーに adl_items があれば引継ぎ、なければ参考文章として表示し動作欄は空から開始）
+	const refBox = document.getElementById("csAdlPrevRefBox");
+	const csAdlEl = document.getElementById("csAdl");
+	if (csAdlEl) csAdlEl.value = "";
+
+	if (prev && Array.isArray(prev.adl_items) && prev.adl_items.length > 0) {
+		if (refBox) { refBox.style.display = "none"; refBox.innerHTML = ""; }
+		CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+			const it = prev.adl_items.find(x => x.key === act.key || x.action === act.name);
+			const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
+			const mtdEl = document.getElementById(`csAdlMethod_${act.key}`);
+			if (lvlEl) lvlEl.value = it ? (it.level || "") : "";
+			if (mtdEl) mtdEl.value = it ? (it.method || "") : "";
+		});
+	} else {
+		if (prev && prev.adl) {
+			if (refBox) {
+				refBox.style.display = "block";
+				refBox.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; color:var(--pine-dark);">参考：前回のサマリーの文章</div><div style="white-space:pre-wrap;">${escapeHtml(prev.adl)}</div>`;
+			}
+		} else {
+			if (refBox) { refBox.style.display = "none"; refBox.innerHTML = ""; }
+		}
+		CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+			const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
+			const mtdEl = document.getElementById(`csAdlMethod_${act.key}`);
+			if (lvlEl) lvlEl.value = "";
+			if (mtdEl) mtdEl.value = "";
+		});
+	}
 }
 
 function submitCareSummary() {
- const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
+	if (typeof cpRoleFlags === "function" && !cpRoleFlags().caremanager) {
+		alert("介護サマリーの保存は計画作成担当者のみ行えます。");
+		return;
+	}
+	const rId = Number(document.getElementById("csResidentId")?.value) || gState.selectedResidentId;
  const sid = document.getElementById("csSummaryId")?.value;
  const summaryType = document.getElementById("csSummaryType")?.value || "新規入所時サマリー";
  const dateVal = document.getElementById("csDate")?.value || toLocalDateStr(new Date());
  const staffVal = document.getElementById("csStaff")?.value || "職員";
 
- const basicInfo = document.getElementById("csBasicInfo")?.value || "";
- const background = document.getElementById("csBackground")?.value || "";
- const physicalCognitive = document.getElementById("csPhysicalCognitive")?.value || "";
- const adl = document.getElementById("csAdl")?.value || "";
- const mealsHydration = document.getElementById("csMealsHydration")?.value || "";
- const excretion = document.getElementById("csExcretion")?.value || "";
- const sleep = document.getElementById("csSleep")?.value || "";
- const meds = document.getElementById("csMeds")?.value || "";
- const medicalCare = document.getElementById("csMedicalCare")?.value || "";
- const dementiaBehavior = document.getElementById("csDementiaBehavior")?.value || "";
- const careNotes = document.getElementById("csCareNotes")?.value || "";
- const familyInfo = document.getElementById("csFamilyInfo")?.value || "";
- const futureGoals = document.getElementById("csFutureGoals")?.value || "";
+ // ADL動作別の検査
+	const adl_items = [];
+	for (const act of CP_SUMMARY_ADL_ACTIONS) {
+		const lvl = (document.getElementById(`csAdlLevel_${act.key}`)?.value || "").trim();
+		const mtd = (document.getElementById(`csAdlMethod_${act.key}`)?.value || "").trim();
+		if (!lvl) {
+			alert(`「${act.name}」の段階を選んでください。`);
+			document.getElementById(`csAdlLevel_${act.key}`)?.focus();
+			return;
+		}
+		if (lvl !== "自立" && !mtd) {
+			alert(`「${act.name}」は${lvl}のため、介助のやり方を具体的に記入してください。`);
+			document.getElementById(`csAdlMethod_${act.key}`)?.focus();
+			return;
+		}
+		adl_items.push({
+			key: act.key,
+			action: act.name,
+			level: lvl,
+			method: mtd
+		});
+	}
 
- if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
+	// 動作ごとの内容から文章 adl を構築
+	const adl = adl_items.map(it => {
+		return `${it.action}: ${it.level}${it.method ? `（${it.method}）` : ""}`;
+	}).join("。") + "。";
+	const csAdlEl = document.getElementById("csAdl");
+	if (csAdlEl) csAdlEl.value = adl;
 
- // [Claude修正] 既存サマリーの「変更」は上書きせず、新しい版として保存する。
- // 旧実装は上書きのため更新前の内容が消え、「新規時と更新時の比較」ができなかった。
- const existingForVersion = (sid && sid.trim() !== "") ? db.data.care_summaries.find(x => Number(x.id) === Number(sid)) : null;
- if (existingForVersion) {
- const fieldsNow = { summary_type: summaryType, basic_info: basicInfo, background: background, physical_cognitive: physicalCognitive, adl: adl, meals_hydration: mealsHydration, excretion: excretion, sleep: sleep, meds: meds, medical_care: medicalCare, dementia_behavior: dementiaBehavior, care_notes: careNotes, family_info: familyInfo, future_goals: futureGoals };
- const changed = Object.keys(fieldsNow).some(k => (existingForVersion[k] || "") !== (fieldsNow[k] || ""));
- if (!changed) {
- alert("変更された項目がないため、保存は行いませんでした。");
- return;
- }
- // 日付欄が元の版のままなら、更新した日 (今日) を新しい版の日付にする (同じ日付の版が並ぶと見分けられないため)
- const versionDate = (dateVal === (existingForVersion.created_at || existingForVersion.date || "")) ? toLocalDateStr(new Date()) : dateVal;
- db.data.care_summaries.unshift(Object.assign({
- id: Date.now(),
- resident_id: rId,
- created_at: versionDate,
- updated_at: versionDate,
- staff_name: staffVal,
- previous_id: existingForVersion.id
- }, fieldsNow));
- } else {
- const newSummary = {
- id: Date.now(),
- resident_id: rId,
- created_at: dateVal,
- updated_at: dateVal,
- staff_name: staffVal,
- summary_type: summaryType,
- basic_info: basicInfo,
- background: background,
- physical_cognitive: physicalCognitive,
- adl: adl,
- meals_hydration: mealsHydration,
- excretion: excretion,
- sleep: sleep,
- meds: meds,
- medical_care: medicalCare,
- dementia_behavior: dementiaBehavior,
- care_notes: careNotes,
- family_info: familyInfo,
- future_goals: futureGoals
- };
- db.data.care_summaries.unshift(newSummary);
- }
+	const basicInfo = document.getElementById("csBasicInfo")?.value || "";
+	const background = document.getElementById("csBackground")?.value || "";
+	const physicalCognitive = document.getElementById("csPhysicalCognitive")?.value || "";
+	const mealsHydration = document.getElementById("csMealsHydration")?.value || "";
+	const excretion = document.getElementById("csExcretion")?.value || "";
+	const sleep = document.getElementById("csSleep")?.value || "";
+	const meds = document.getElementById("csMeds")?.value || "";
+	const medicalCare = document.getElementById("csMedicalCare")?.value || "";
+	const dementiaBehavior = document.getElementById("csDementiaBehavior")?.value || "";
+	const careNotes = document.getElementById("csCareNotes")?.value || "";
+	const familyInfo = document.getElementById("csFamilyInfo")?.value || "";
+	const futureGoals = document.getElementById("csFutureGoals")?.value || "";
 
- gState.care_summaries = db.data.care_summaries;
- db.save();
- renderResidentDetail();
- alert("介護サマリーを保存しました。");
- closeModal("careSummaryModal");
+	if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
+
+	const existingForVersion = (sid && sid.trim() !== "") ? db.data.care_summaries.find(x => Number(x.id) === Number(sid)) : null;
+	const prevLatest = (db.data.care_summaries || []).find(x => Number(x.resident_id) === rId);
+
+	const fieldsNow = {
+		summary_type: summaryType,
+		basic_info: basicInfo,
+		background: background,
+		physical_cognitive: physicalCognitive,
+		adl: adl,
+		adl_items: adl_items,
+		meals_hydration: mealsHydration,
+		excretion: excretion,
+		sleep: sleep,
+		meds: meds,
+		medical_care: medicalCare,
+		dementia_behavior: dementiaBehavior,
+		care_notes: careNotes,
+		family_info: familyInfo,
+		future_goals: futureGoals
+	};
+
+	if (existingForVersion) {
+		const changed = Object.keys(fieldsNow).some(k => {
+			if (k === "adl_items") {
+				return JSON.stringify(existingForVersion.adl_items || []) !== JSON.stringify(adl_items);
+			}
+			return (existingForVersion[k] || "") !== (fieldsNow[k] || "");
+		});
+		if (!changed) {
+			alert("変更された項目がないため、保存は行いませんでした。");
+			return;
+		}
+		const versionDate = (dateVal === (existingForVersion.created_at || existingForVersion.date || "")) ? toLocalDateStr(new Date()) : dateVal;
+		db.data.care_summaries.unshift(Object.assign({
+			id: Date.now(),
+			resident_id: rId,
+			created_at: versionDate,
+			updated_at: versionDate,
+			staff_name: staffVal,
+			previous_id: existingForVersion.id
+		}, fieldsNow));
+	} else {
+		const newSummary = Object.assign({
+			id: Date.now(),
+			resident_id: rId,
+			created_at: dateVal,
+			updated_at: dateVal,
+			staff_name: staffVal,
+			previous_id: prevLatest ? prevLatest.id : null
+		}, fieldsNow);
+		db.data.care_summaries.unshift(newSummary);
+	}
+
+	gState.care_summaries = db.data.care_summaries;
+	db.save();
+	renderResidentDetail();
+	if (typeof checkGlobalAlerts === "function") {
+		checkGlobalAlerts();
+	}
+	alert("介護サマリーを保存しました。");
+	closeModal("careSummaryModal");
 }
 
 // ======================================================================
@@ -782,9 +967,48 @@ function printCareSummary() {
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(physicalCognitive)}</td>
  </tr>
  <tr>
- <th style="background:#eef2ef; padding:6px; text-align:left;">4. ADL (日常生活動作)</th>
- <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(adl)}</td>
- </tr>
+				<th style="background:#eef2ef; padding:6px; text-align:left;">4. ADL (日常生活動作)</th>
+				<td style="padding:6px; white-space:pre-wrap;">${(() => {
+					const sid = document.getElementById("csSummaryId")?.value;
+					const curSummary = sid ? (db.data.care_summaries || []).find(x => x.id === Number(sid)) : null;
+					let activeItems = [];
+					if (curSummary && Array.isArray(curSummary.adl_items) && curSummary.adl_items.length > 0) {
+						activeItems = curSummary.adl_items;
+					} else {
+						const domItems = CP_SUMMARY_ADL_ACTIONS.map(act => ({
+							key: act.key,
+							action: act.name,
+							level: document.getElementById(`csAdlLevel_${act.key}`)?.value || "",
+							method: document.getElementById(`csAdlMethod_${act.key}`)?.value || ""
+						}));
+						if (domItems.some(it => it.level)) {
+							activeItems = domItems;
+						}
+					}
+					if (activeItems.length > 0 && activeItems.some(it => it.level)) {
+						const trs = activeItems.map(it => `
+							<tr>
+								<td style="padding:4px 6px; font-weight:bold; border:1px solid #333;">${escapeHtml(it.action || it.key)}</td>
+								<td style="padding:4px 6px; text-align:center; border:1px solid #333;">${escapeHtml(it.level || "-")}</td>
+								<td style="padding:4px 6px; border:1px solid #333;">${escapeHtml(it.method || "-")}</td>
+							</tr>
+						`).join("");
+						return `
+							<table style="width:100%; border-collapse:collapse; font-size:11.5px; margin-top:2px;" border="1">
+								<thead>
+									<tr style="background:#eef2ef;">
+										<th style="width:22%; padding:4px 6px; text-align:left; border:1px solid #333;">動作</th>
+										<th style="width:20%; padding:4px 6px; text-align:center; border:1px solid #333;">段階</th>
+										<th style="padding:4px 6px; text-align:left; border:1px solid #333;">介助のやり方</th>
+									</tr>
+								</thead>
+								<tbody>${trs}</tbody>
+							</table>
+						`;
+					}
+					return `<div><span style="font-weight:bold; margin-right:4px;">［前の書き方（文章）］</span>${escapeHtml(adl)}</div>`;
+				})()}</td>
+			</tr>
  <tr>
  <th style="background:#eef2ef; padding:6px; text-align:left;">5. 食事・水分摂取</th>
  <td style="padding:6px; white-space:pre-wrap;">${escapeHtml(mealsHydration)}</td>

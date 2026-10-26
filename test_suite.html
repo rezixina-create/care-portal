@@ -240,9 +240,16 @@
         <tbody id="templateManageTableBody"></tbody>
       </table>
     </div>
+    <div id="careAlertsContainer"></div>
+    <div id="officeAlertsContainer"></div>
     <div id="careSummaryModal" style="display:none;">
       <div id="csResidentBadge"></div>
       <select id="careSummaryHistorySelect"></select>
+      <div id="careSummaryNewButtons">
+        <button id="btnCsNewEntry"></button>
+        <button id="btnCsNewReentry"></button>
+        <button id="btnCsNewChange"></button>
+      </div>
       <input id="csSummaryId">
       <input id="csResidentId">
       <select id="csSummaryType"></select>
@@ -251,7 +258,22 @@
       <textarea id="csBasicInfo"></textarea>
       <textarea id="csBackground"></textarea>
       <textarea id="csPhysicalCognitive"></textarea>
-      <textarea id="csAdl"></textarea>
+      <div id="csAdlPrevRefBox"></div>
+      <input id="csAdl">
+      <select id="csAdlLevel_move"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_move"></textarea>
+      <select id="csAdlLevel_transfer"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_transfer"></textarea>
+      <select id="csAdlLevel_eating"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_eating"></textarea>
+      <select id="csAdlLevel_excretion"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_excretion"></textarea>
+      <select id="csAdlLevel_bathing"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_bathing"></textarea>
+      <select id="csAdlLevel_dressing"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_dressing"></textarea>
+      <select id="csAdlLevel_grooming"><option value="">選んでください</option><option value="自立">自立</option><option value="見守り">見守り</option><option value="一部介助">一部介助</option><option value="全介助">全介助</option></select>
+      <textarea id="csAdlMethod_grooming"></textarea>
       <textarea id="csMealsHydration"></textarea>
       <textarea id="csExcretion"></textarea>
       <textarea id="csSleep"></textarea>
@@ -261,6 +283,7 @@
       <textarea id="csCareNotes"></textarea>
       <textarea id="csFamilyInfo"></textarea>
       <textarea id="csFutureGoals"></textarea>
+      <button id="btnSubmitCareSummary"></button>
     </div>
     <div id="emergencySummaryModal" style="display:none;">
       <div id="emgResidentBadge"></div>
@@ -2643,6 +2666,101 @@
       db.data.incidents = origIncidents167;
       gState.residents = (gState.residents || []).filter(r => r.id !== 88801);
       closeModal("incidentDetailModal");
+
+      // ------------------------------------------------------------------
+      // Test 168: 介護サマリー ADL 動作ごとの段階＋介助のやり方
+      // ------------------------------------------------------------------
+      log("--- Test 168: 介護サマリー ADL 動作ごとの段階＋介助のやり方 ---");
+      // 168a: 動作ごとの要素が存在し、7動作（移動／移乗／食事／排泄／入浴／更衣／整容）が揃っていること
+      assert(Array.isArray(CP_SUMMARY_ADL_ACTIONS) && CP_SUMMARY_ADL_ACTIONS.length === 7, "Test 168a-1: CP_SUMMARY_ADL_ACTIONS に 7 動作が定義されていること");
+      const expectedActions = ["移動", "移乗", "食事", "排泄", "入浴", "更衣", "整容（歯みがき・洗面）"];
+      const actualActions = CP_SUMMARY_ADL_ACTIONS.map(a => a.name);
+      assert(JSON.stringify(actualActions) === JSON.stringify(expectedActions), "Test 168a-2: 動作の順序が仕様通り（移動〜整容）であること");
+
+      // 168b: 計画作成担当者（caremanager）以外の権限ブロック
+      const origLogin = window.cpLoginStaffName;
+      const origStamps = gState.stamps;
+      gState.stamps = [{ name: "テスト介護職", role: "介護職" }];
+      window.cpLoginStaffName = () => "テスト介護職";
+
+      let alertMsg168 = "";
+      const origAlert168 = window.alert;
+      window.alert = msg => { alertMsg168 = msg; };
+
+      startNewCareSummary("新規入所時サマリー");
+      assert(alertMsg168.includes("計画作成担当者のみ"), "Test 168b-1: 計画作成担当者以外の startNewCareSummary 呼び出しがブロックされること");
+      alertMsg168 = "";
+      submitCareSummary();
+      assert(alertMsg168.includes("計画作成担当者のみ"), "Test 168b-2: 計画作成担当者以外の submitCareSummary 呼び出しがブロックされること");
+
+      // 168c: 計画作成担当者（caremanager true）での入力バリデーション（未選択・自立以外での介助方法空欄ブロック）
+      gState.stamps = [{ name: "テスト計画作成者", role: "計画作成担当者（ケアマネ）" }];
+      window.cpLoginStaffName = () => "テスト計画作成者";
+
+      document.getElementById("csResidentId").value = 1;
+      document.getElementById("csSummaryId").value = "";
+      document.getElementById("csSummaryType").value = "新規入所時サマリー";
+      document.getElementById("csDate").value = "2026-10-26";
+      document.getElementById("csStaff").value = "テスト計画作成者";
+
+      CP_SUMMARY_ADL_ACTIONS.forEach(act => {
+        document.getElementById(`csAdlLevel_${act.key}`).value = "";
+        document.getElementById(`csAdlMethod_${act.key}`).value = "";
+      });
+
+      alertMsg168 = "";
+      submitCareSummary();
+      assert(alertMsg168.includes("段階を選んでください"), "Test 168c-1: 段階が未選択の動作がある場合に保存がブロックされること");
+
+      document.getElementById("csAdlLevel_move").value = "見守り";
+      document.getElementById("csAdlMethod_move").value = "";
+      alertMsg168 = "";
+      submitCareSummary();
+      assert(alertMsg168.includes("介助のやり方を具体的に記入してください"), "Test 168c-2: 自立以外の段階で介助のやり方が空の場合に保存がブロックされること");
+
+      // 168d: 正常保存、adl_items 配列と統合文章 adl の両方生成
+      document.getElementById("csAdlLevel_move").value = "見守り";
+      document.getElementById("csAdlMethod_move").value = "歩行器で歩く。後ろから見守る。";
+      document.getElementById("csAdlLevel_transfer").value = "自立";
+      document.getElementById("csAdlMethod_transfer").value = "";
+      document.getElementById("csAdlLevel_eating").value = "自立";
+      document.getElementById("csAdlMethod_eating").value = "";
+      document.getElementById("csAdlLevel_excretion").value = "見守り";
+      document.getElementById("csAdlMethod_excretion").value = "手すり把持でズボンの上げ下ろしを確認。";
+      document.getElementById("csAdlLevel_bathing").value = "一部介助";
+      document.getElementById("csAdlMethod_bathing").value = "洗身・洗髪の一部を介助。浴槽出入りを見守る。";
+      document.getElementById("csAdlLevel_dressing").value = "自立";
+      document.getElementById("csAdlMethod_dressing").value = "";
+      document.getElementById("csAdlLevel_grooming").value = "自立";
+      document.getElementById("csAdlMethod_grooming").value = "";
+
+      const origSummaries168 = JSON.parse(JSON.stringify(db.data.care_summaries || []));
+      submitCareSummary();
+      const savedSummary168 = (db.data.care_summaries || [])[0];
+      assert(savedSummary168 && Array.isArray(savedSummary168.adl_items) && savedSummary168.adl_items.length === 7, "Test 168d-1: 保存されたサマリーに adl_items が 7 動作分保持されていること");
+      assert(savedSummary168.adl && savedSummary168.adl.includes("移動: 見守り（歩行器で歩く。後ろから見守る。）。") && savedSummary168.adl.includes("移乗: 自立。"), "Test 168d-2: adl プロパティに「移動: 見守り（…）。移乗: 自立。」の文章が自動構築されていること");
+
+      // 168e: 画面表示（renderResidentSummaryAccordionContent）でのテーブル出力
+      const accHtml168 = renderResidentSummaryAccordionContent(1);
+      assert(accHtml168.includes("<table") && accHtml168.includes("歩行器で歩く。後ろから見守る。"), "Test 168e-1: サマリーアコーディオン内にADL動作別の表が描画されること");
+
+      // 168f: ADL段階変更アラート（checkGlobalAlerts）の検証
+      document.getElementById("csSummaryId").value = savedSummary168.id;
+      document.getElementById("csAdlLevel_move").value = "一部介助";
+      document.getElementById("csAdlMethod_move").value = "歩行車歩行時に横から付き添い介助。";
+      submitCareSummary();
+
+      checkGlobalAlerts();
+      const careAlertsEl168 = document.getElementById("careAlertsContainer");
+      assert(careAlertsEl168 && careAlertsEl168.innerHTML.includes("ADL の段階が変わりました") && careAlertsEl168.innerHTML.includes("移動 見守り → 一部介助"), "Test 168f-1: ADL段階が変化した版を保存すると要確認お知らせが表示されること");
+
+      // クリーンアップ
+      db.data.care_summaries = origSummaries168;
+      gState.care_summaries = origSummaries168;
+      window.cpLoginStaffName = origLogin;
+      gState.stamps = origStamps;
+      window.alert = origAlert168;
+      closeModal("careSummaryModal");
 
       // 33. 総合結果判定
       log("====================================================");

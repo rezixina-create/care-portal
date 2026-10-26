@@ -312,9 +312,9 @@ function renderResidentDetail() {
  </div>
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap;">
- <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:#ffffff; color:#1a4f3d; border:1px solid #a9cfbf; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
- 介護サマリー (詳細・新規・変更)
- </button>
+ <button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:var(--surface); color:var(--pine-dark); border:1px solid var(--line); font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">
+					${(typeof cpRoleFlags === "function" && cpRoleFlags().caremanager) ? "介護サマリー (詳細・新規・変更)" : "介護サマリー (詳細確認)"}
+				</button>
 				<button type="button" class="btn btn-secondary" style="font-size:12px; padding:5px 12px; background:var(--pine-tint); color:var(--pine); border:1px solid var(--pine-light); font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryCompareModal(${r.id}); return false;">介護サマリー 新旧比較</button>
  <button type="button" class="btn btn-danger" style="font-size:12px; padding:5px 12px; background:#dc2626; border-color:#dc2626; font-weight:bold;" onclick="event.preventDefault(); event.stopPropagation(); openEmergencySummaryModal(${r.id}); return false;">
  緊急搬送・受診サマリー
@@ -514,7 +514,7 @@ function renderResidentDetail() {
  <summary style="padding:10px 14px; background:#f0fdf4; font-weight:bold; cursor:pointer; font-size:13px; color:#166534; border-bottom:1px solid #bbf7d0; display:flex; justify-content:space-between; align-items:center;">
  <span> 介護サマリー要約 (生活・ADL・介助注意点 13項目)</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#dcfce7; color:#166534; border-color:#86efac;" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">サマリー編集・新規</button>
+ ${(typeof cpRoleFlags === "function" && cpRoleFlags().caremanager) ? `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:var(--pine-tint); color:var(--pine-dark); border:1px solid var(--line);" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">サマリー編集・新規</button>` : `<button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:var(--surface); color:var(--ink); border:1px solid var(--line);" onclick="event.preventDefault(); event.stopPropagation(); openCareSummaryModal(${r.id}); return false;">サマリー詳細確認</button>`}
  <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
  </div>
  </summary>
