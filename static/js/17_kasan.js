@@ -3192,19 +3192,101 @@ const CP_KASAN_CARE_LEVEL_CODES = {
 };
 
 // モーダルを開く（権限チェック & 初期検証）
-function openKasanCsvModal() {
+// [Antigravity追加 2026-10-26] 先月分の進み具合（ふだんの分の月／請求対象人数／今月審査送付済人数／未送付者一覧）を判定する共通関数
+function cpGetRegularClaimProgress(processYm, baseDate, overrideRegularYm) {
+  const now = baseDate ? new Date(baseDate) : new Date();
+  if (!processYm) {
+    processYm = `${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}`;
+  }
+  let regularYm = overrideRegularYm;
+  let regularMonthNum = 0;
+  if (!regularYm) {
+    const pYear = parseInt(String(processYm).slice(0, 4), 10);
+    const pMonth = parseInt(String(processYm).slice(4, 6), 10);
+    const regD = new Date(pYear, pMonth - 2, 1);
+    regularYm = `${regD.getFullYear()}-${String(regD.getMonth() + 1).padStart(2, "0")}`;
+    regularMonthNum = regD.getMonth() + 1;
+  } else {
+    const parts = regularYm.split("-");
+    regularMonthNum = parseInt(parts[1], 10);
+  }
+
+  const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+
+  const targets = [];
+  const submittedResidents = [];
+  const unsubmittedResidents = [];
+
+  allResidents.forEach(r => {
+    const calc = cpComputeMonthlyKasan(r, regularYm);
+    if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
+      const v = cpValidateResidentForKasanCsv(r, regularYm);
+      const claimStatus = cpGetResidentClaimStatus(r.id, regularYm);
+      const elig = cpGetClaimEligibleStatus(r.id, regularYm, processYm);
+
+      // 今月の審査（処理対象年月＝今月）で送った記録（取消以外）があること
+      const sentSub = submissions.find(s =>
+        !s.voided && s.status !== "取消" &&
+        Number(s.resident_id) === Number(r.id) &&
+        s.service_ym === regularYm &&
+        String(s.process_ym) === String(processYm)
+      );
+
+      const isSent = !!sentSub;
+      const targetItem = {
+        resident: r,
+        serviceYm: regularYm,
+        calc: calc,
+        validation: v,
+        claimStatus: claimStatus,
+        elig: elig,
+        isSent: isSent,
+        sentRecord: sentSub || null
+      };
+      targets.push(targetItem);
+      if (isSent) {
+        submittedResidents.push(targetItem);
+      } else {
+        unsubmittedResidents.push(targetItem);
+      }
+    }
+  });
+
+  const targetCount = targets.length;
+  const submittedCount = submittedResidents.length;
+  const unsubmittedCount = unsubmittedResidents.length;
+  const isComplete = (targetCount > 0 && submittedCount >= targetCount);
+
+  return {
+    processYm: String(processYm),
+    regularYm: regularYm,
+    regularMonthNum: regularMonthNum,
+    targetCount: targetCount,
+    submittedCount: submittedCount,
+    unsubmittedCount: unsubmittedCount,
+    unsubmittedResidents: unsubmittedResidents.map(item => item.resident),
+    unsubmittedTargets: unsubmittedResidents,
+    targets: targets,
+    submittedResidents: submittedResidents,
+    isComplete: isComplete
+  };
+}
+
+// モーダル開く（事前チェック & 候補検証）
+function openKasanCsvModal(baseDate) {
   if (typeof isCurrentStaffAdminOrClerk === "function" && !isCurrentStaffAdminOrClerk()) {
-    alert("国保連請求ファイルの作成は、管理者および事務員のみ操作可能です。");
+    alert("国保連ファイルの作成は、管理者または事務員のみ操作可能です。");
     return;
   }
 
   const modal = document.getElementById("kasanCsvModal");
   if (!modal) return;
 
-  // [Antigravity修正 2026-10-26] 審査の月を「今月」にする（PCの今の年月、選ばせない）
-  const nowD = new Date();
+  // [Antigravity修正 2026-10-26] 審査の月を「今月」にする（PCの今の年月、選べない）
+  const nowD = baseDate ? new Date(baseDate) : new Date();
   const currentProcessYm = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`; // YYYYMM
-  const currentProcessYmFmt = `${nowD.getFullYear()}年${nowD.getMonth() + 1}月`;
+  const currentProcessYmFmt = `${nowD.getFullYear()}年${nowD.getMonth() + 1}月審査`;
 
   // 通常分（先月のサービス分）
   const regD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
@@ -3231,7 +3313,7 @@ function openKasanCsvModal() {
   const statusEl = document.getElementById("kasanCsvActionStatus");
   if (statusEl) statusEl.textContent = "";
 
-  renderKasanCsvValidation(regularServiceYm, currentProcessYm);
+  renderKasanCsvValidation(regularServiceYm, currentProcessYm, nowD);
   modal.style.display = "flex";
 }
 
@@ -3343,14 +3425,25 @@ function onKasanCsvDelayedCheckChange() {
 }
 
 // [Antigravity更新 2026-10-26] 通常分および月遅れ分（過去12か月）の検証と描画
-function renderKasanCsvValidation(regularYm, currentProcessYm) {
-  const nowD = new Date();
+function renderKasanCsvValidation(regularYm, currentProcessYm, baseDate) {
+  const nowD = baseDate ? new Date(baseDate) : new Date();
   if (!currentProcessYm) {
     currentProcessYm = `${nowD.getFullYear()}${String(nowD.getMonth() + 1).padStart(2, "0")}`;
   }
   if (!regularYm) {
     const regD = new Date(nowD.getFullYear(), nowD.getMonth() - 1, 1);
     regularYm = `${regD.getFullYear()}-${String(regD.getMonth() + 1).padStart(2, "0")}`;
+  }
+
+  // [Antigravity追加 2026-10-26] 11日以降の受付期間外注意喚起
+  const lateWarnEl = document.getElementById("kasanCsvLateWarningNotice");
+  if (lateWarnEl) {
+    const day = nowD.getDate();
+    if (day >= 11) {
+      lateWarnEl.style.display = "block";
+    } else {
+      lateWarnEl.style.display = "none";
+    }
   }
 
   const settings = cpGetKasanSettings();
@@ -3362,61 +3455,56 @@ function renderKasanCsvValidation(regularYm, currentProcessYm) {
 
   const officeErrors = [];
   if (!settings.office_no) {
-    officeErrors.push("事業所番号が未設定です（加算・減算設定で登録してください）");
+    officeErrors.push("事業所番号が未設定です（加算・請求設定で登録してください）");
   } else if (!/^[A-Za-z0-9]{10}$/.test(settings.office_no)) {
-    officeErrors.push("事業所番号が英数字10桁ではありません");
+    officeErrors.push("事業所番号が半角英数10桁ではありません");
   }
   if (!settings.media_code) {
-    officeErrors.push("媒体区分が未選択です（加算・減算設定で登録してください）");
+    officeErrors.push("請求媒体の区分が未選択です（加算・請求設定で登録してください）");
   }
   if (!settings.region_type) {
-    officeErrors.push("地域区分が未選択です（加算・減算設定で登録してください）");
+    officeErrors.push("地域区分が未選択です（加算・請求設定で登録してください）");
   }
 
   const allResidents = (db && db.data && Array.isArray(db.data.residents)) ? db.data.residents : [];
   
-  // 1. 通常分（先月サービス提供分）の検証
+  // 1. 通常分（先月サービス提供分）の候補: cpGetRegularClaimProgress を使用して一元判定
+  const progress = cpGetRegularClaimProgress(currentProcessYm, nowD, regularYm);
   const candidateResults = [];
   let eligibleCount = 0;
   let ineligibleCount = 0;
 
-  allResidents.forEach(r => {
-    const calc = cpComputeMonthlyKasan(r, regularYm);
-    if (calc.basicDays > 0 || calc.hospDays > 0 || calc.items.length > 0) {
-      const v = cpValidateResidentForKasanCsv(r, regularYm);
-      const claimStatus = cpGetResidentClaimStatus(r.id, regularYm);
-      const elig = cpGetClaimEligibleStatus(r.id, regularYm, currentProcessYm);
-      let excluded = false;
-      let excludeReason = "";
+  progress.targets.forEach(item => {
+    let excluded = false;
+    let excludeReason = "";
 
-      if (claimStatus.is_submitted) {
-        excluded = true;
-        const procM = (claimStatus.record && claimStatus.record.process_ym)
-          ? parseInt(String(claimStatus.record.process_ym).slice(4), 10)
-          : "";
-        excludeReason = `提出済のため外しました（${procM}月審査で送付）`;
-      } else if (!elig.eligible) {
-        excluded = true;
-        excludeReason = elig.reason;
-      }
-
-      if (v.valid && !excluded) eligibleCount++;
-      else if (!v.valid && !excluded) ineligibleCount++;
-
-      candidateResults.push({
-        resident: r,
-        serviceYm: regularYm,
-        calc: calc,
-        validation: v,
-        claimStatus: claimStatus,
-        elig: elig,
-        excluded: excluded,
-        excludeReason: excludeReason
-      });
+    if (item.isSent) {
+      excluded = true;
+      const procM = (item.sentRecord && item.sentRecord.process_ym)
+        ? parseInt(String(item.sentRecord.process_ym).slice(4), 10)
+        : parseInt(String(currentProcessYm).slice(4), 10);
+      excludeReason = `提出済のため外しました（${procM}月審査で送付）`;
+    } else if (!item.elig.eligible) {
+      excluded = true;
+      excludeReason = item.elig.reason;
     }
+
+    if (item.validation.valid && !excluded) eligibleCount++;
+    else if (!item.validation.valid && !excluded) ineligibleCount++;
+
+    candidateResults.push({
+      resident: item.resident,
+      serviceYm: item.serviceYm,
+      calc: item.calc,
+      validation: item.validation,
+      claimStatus: item.claimStatus,
+      elig: item.elig,
+      excluded: excluded,
+      excludeReason: excludeReason
+    });
   });
 
-  // 2. 月遅れ候補の検索（今月から過去12か月以内の未提出・返戻・過誤決定）
+  // 2. 月遅れ分の候補（過去12か月以内の未提出・返戻・過誤決定）
   const pastMonths = cpGetPastServiceMonths(12, nowD);
   const delayedMonths = pastMonths.slice(1); // 先月（通常分）を除いた過去2〜12か月前
   const delayedCandidates = [];
@@ -4040,6 +4128,7 @@ window.cpGetResidentClaimStatus = cpGetResidentClaimStatus;
 window.cpGetClaimStatuteDate = cpGetClaimStatuteDate;
 window.cpGetPastServiceMonths = cpGetPastServiceMonths;
 window.cpGetClaimEligibleStatus = cpGetClaimEligibleStatus;
+window.cpGetRegularClaimProgress = cpGetRegularClaimProgress;
 window.cpGetUnresolvedRemandClaims = cpGetUnresolvedRemandClaims;
 window.cpGetUnresolvedRemandAndKagoClaims = cpGetUnresolvedRemandAndKagoClaims;
 window.onKasanCsvDelayedCheckChange = onKasanCsvDelayedCheckChange;

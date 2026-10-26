@@ -250,6 +250,7 @@
     <div id="kasanCsvModal" style="display:none;">
       <span id="kasanCsvTargetYmDisp"></span>
       <span id="kasanCsvNextYmDisp"></span>
+      <div id="kasanCsvLateWarningNotice" style="display:none;"><strong>国保連の受付は毎月1日〜10日です。今日作ったファイルは今月の受付に間に合いません。来月1日〜10日に作り直して送ってください（この月の分は、来月の画面で月遅れ分の候補に出ます）。</strong></div>
       <div id="kasanCsvValidationSummary"></div>
       <table><tbody id="kasanCsvResidentListBody"></tbody></table>
       <div id="kasanCsvPreviewSection" style="display:none;">
@@ -2114,6 +2115,137 @@
       if (delEl) delEl.innerHTML = "";
       closeClaimKagoModal();
       closeClaimKagoDecideModal();
+
+      // ------------------------------------------------------------------
+      // Test 172: 国保連請求 出し忘れアラート & 受付期間外注意喚起
+      // ------------------------------------------------------------------
+      log("--- Test 172: 国保連請求 出し忘れアラート & 受付期間外注意喚起 ---");
+      const origSubmissions172 = JSON.parse(JSON.stringify(db.data.claim_submissions || []));
+      const origDismissed172 = JSON.parse(JSON.stringify(db.data.dismissed_alerts || {}));
+      const origSession172 = gState.session;
+      const origCurrentStaff172 = gState.currentStaff;
+      const origLogin172 = window.cpLoginStaffName;
+      const origStamps172 = gState.stamps;
+
+      // 172a: cpGetRegularClaimProgress 基礎確認（先月分・未送付状態）
+      const dOct5 = new Date("2026-10-05T10:00:00");
+      db.data.claim_submissions = []; // 未提出状態
+      const prog172a = cpGetRegularClaimProgress("202610", dOct5);
+      assert(prog172a.processYm === "202610", "Test 172a-1: processYm が 202610 であること");
+      assert(prog172a.regularYm === "2026-09", "Test 172a-2: regularYm が 2026-09（先月分）であること");
+      assert(prog172a.regularMonthNum === 9, "Test 172a-3: regularMonthNum が 9 であること");
+      assert(prog172a.targetCount > 0, "Test 172a-4: targetCount が正の数であること");
+      assert(prog172a.submittedCount === 0, "Test 172a-5: 未提出状態では submittedCount === 0");
+      assert(prog172a.unsubmittedCount === prog172a.targetCount, "Test 172a-6: unsubmittedCount === targetCount");
+      assert(prog172a.isComplete === false, "Test 172a-7: isComplete === false");
+
+      // 172b: 1人だけ提出済のとき
+      const firstTarget = prog172a.targets[0];
+      db.data.claim_submissions = [{
+        id: 999901,
+        resident_id: firstTarget.resident.id,
+        service_ym: "2026-09",
+        process_ym: "202610",
+        status: "提出済",
+        voided: false
+      }];
+      const prog172b = cpGetRegularClaimProgress("202610", dOct5);
+      assert(prog172b.submittedCount === 1, "Test 172b-1: submittedCount === 1");
+      assert(prog172b.unsubmittedCount === prog172a.targetCount - 1, "Test 172b-2: 1人除外され未送付が減る");
+      assert(prog172b.isComplete === false, "Test 172b-3: 未完了判定");
+
+      // 172c: 全員提出済のとき
+      db.data.claim_submissions = prog172a.targets.map((t, idx) => ({
+        id: 999900 + idx,
+        resident_id: t.resident.id,
+        service_ym: "2026-09",
+        process_ym: "202610",
+        status: "提出済",
+        voided: false
+      }));
+      const prog172c = cpGetRegularClaimProgress("202610", dOct5);
+      assert(prog172c.submittedCount === prog172a.targetCount, "Test 172c-1: submittedCount が対象人数と一致");
+      assert(prog172c.unsubmittedCount === 0, "Test 172c-2: unsubmittedCount === 0");
+      assert(prog172c.isComplete === true, "Test 172c-3: 全員提出済で isComplete === true");
+
+      // 172d: 1人取消にしたとき（取消は「送っていない」に数える）
+      db.data.claim_submissions[0].status = "取消";
+      db.data.claim_submissions[0].voided = true;
+      const prog172d = cpGetRegularClaimProgress("202610", dOct5);
+      assert(prog172d.submittedCount === prog172a.targetCount - 1, "Test 172d-1: 取消分は送付済から除外");
+      assert(prog172d.unsubmittedCount === 1, "Test 172d-2: unsubmittedCount === 1");
+      assert(prog172d.isComplete === false, "Test 172d-3: isComplete === false に戻ること");
+
+      // 172e: checkGlobalAlerts の日付による出し分け（1日〜10日: 残り日数 / 11日〜: 間に合いませんでした）
+      gState.stamps = [{ name: "木村 健一", role: "施設長（管理者）", pin: "1111" }];
+      gState.session = { staffName: "木村 健一", role: "施設長（管理者）" };
+      gState.currentStaff = "木村 健一";
+      const selStaff172 = document.getElementById("currentStaff");
+      if (selStaff172) selStaff172.value = "木村 健一";
+      window.cpLoginStaffName = () => "木村 健一";
+      db.data.dismissed_alerts = {};
+      db.data.claim_submissions = []; // 未提出
+
+      // 5日
+      const offBox = document.getElementById("officeAlertsContainer");
+      checkGlobalAlerts(new Date("2026-10-05T10:00:00"));
+      assert(offBox && offBox.innerHTML.includes("受付は10日まで、あと5日"), "Test 172e-1: 5日は「受付は10日まで、あと5日」と表示");
+      assert(offBox.innerHTML.includes("claim_regular_deadline_202610_early"), "Test 172e-2: 1〜10日は early 印を使用");
+
+      // 10日（当日）
+      checkGlobalAlerts(new Date("2026-10-10T10:00:00"));
+      assert(offBox && offBox.innerHTML.includes("受付は10日まで、今日まで"), "Test 172e-3: 10日は「受付は10日まで、今日まで」と表示");
+
+      // 11日（受付終了後）
+      checkGlobalAlerts(new Date("2026-10-11T10:00:00"));
+      assert(offBox && offBox.innerHTML.includes("今月の受付（1日〜10日）に間に合いませんでした"), "Test 172e-4: 11日は「間に合いませんでした」と表示");
+      assert(offBox.innerHTML.includes("claim_regular_deadline_202610_late"), "Test 172e-5: 11日以降は late 印を使用");
+
+      // 月末（10月31日）
+      checkGlobalAlerts(new Date("2026-10-31T10:00:00"));
+      assert(offBox && offBox.innerHTML.includes("今月の受付（1日〜10日）に間に合いませんでした"), "Test 172e-6: 月末も「間に合いませんでした」と表示");
+
+      // 172f: 確認済・閉じる（印の独立性: early を閉じても late は出る、次月 early も出る）
+      db.data.dismissed_alerts = { "claim_regular_deadline_202610_early": { at: "2026-10-05" } };
+      checkGlobalAlerts(new Date("2026-10-05T10:00:00"));
+      assert(!offBox.innerHTML.includes("9月分の国保連請求"), "Test 172f-1: 1〜10日の印を閉じたら非表示");
+
+      checkGlobalAlerts(new Date("2026-10-11T10:00:00"));
+      assert(offBox.innerHTML.includes("今月の受付（1日〜10日）に間に合いませんでした"), "Test 172f-2: 1〜10日を閉じても11日以降の知らせは出ること");
+
+      checkGlobalAlerts(new Date("2026-11-05T10:00:00"));
+      assert(offBox.innerHTML.includes("10月分の国保連請求がまだ送られていません"), "Test 172f-3: 翌月は別の印となり再度表示されること");
+
+      // 172g: 権限確認（介護職員には表示しない）
+      gState.stamps = [{ name: "井上 蓮", role: "介護職員", pin: "2222" }];
+      gState.session = { staffName: "井上 蓮", role: "介護職員" };
+      gState.currentStaff = "井上 蓮";
+      if (selStaff172) selStaff172.value = "井上 蓮";
+      window.cpLoginStaffName = () => "井上 蓮";
+      db.data.dismissed_alerts = {};
+      checkGlobalAlerts(new Date("2026-10-05T10:00:00"));
+      assert(!offBox.innerHTML.includes("国保連請求がまだ送られていません"), "Test 172g-1: 介護職員では請求アラートが出ないこと");
+
+      // 172h: 請求ファイル作成画面の注意（11日以降のみ表示、生成ボタンは止めない）
+      const warnEl = document.getElementById("kasanCsvLateWarningNotice");
+      renderKasanCsvValidation("2026-09", "202610", new Date("2026-10-05T10:00:00"));
+      assert(warnEl && warnEl.style.display === "none", "Test 172h-1: 5日時点では受付期間外注意は非表示");
+
+      renderKasanCsvValidation("2026-09", "202610", new Date("2026-10-11T10:00:00"));
+      assert(warnEl && warnEl.style.display === "block", "Test 172h-2: 11日以降は受付期間外注意が表示されること");
+      assert(warnEl.textContent.includes("国保連の受付は毎月1日〜10日です"), "Test 172h-3: 正しい注意喚起文言が出力されていること");
+      assert(!gKasanCsvValidationResult.officeErrors.some(e => e.includes("受付")), "Test 172h-4: 受付期間外でも officeErrors に追加されず作成を止めないこと");
+
+      // テストクリーンアップ
+      db.data.claim_submissions = origSubmissions172;
+      db.data.dismissed_alerts = origDismissed172;
+      gState.session = origSession172;
+      gState.currentStaff = origCurrentStaff172;
+      window.cpLoginStaffName = origLogin172;
+      gState.stamps = origStamps172;
+      if (warnEl) warnEl.style.display = "none";
+      if (offBox) offBox.innerHTML = "";
+
 
       // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
       log("33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロ特例要件の判定・警告・誓約中テスト");

@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_e2">
+	<link rel="stylesheet" href="style.css?v=20261026_f1">
 </head>
 <body>
 
@@ -4571,26 +4571,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_e2"></script>
- <script src="js/02_terms.js?v=20261026_e2"></script>
- <script src="js/03_common.js?v=20261026_e2"></script>
- <script src="js/04_care_record.js?v=20261026_e2"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_e2"></script>
- <script src="js/06_schema_history.js?v=20261026_e2"></script>
- <script src="js/07_daily_tables.js?v=20261026_e2"></script>
- <script src="js/08_meds.js?v=20261026_e2"></script>
- <script src="js/09_night_misc.js?v=20261026_e2"></script>
- <script src="js/10_office.js?v=20261026_e2"></script>
- <script src="js/11_karte_staff.js?v=20261026_e2"></script>
- <script src="js/12_hospital_photos.js?v=20261026_e2"></script>
- <script src="js/13_shift_units.js?v=20261026_e2"></script>
- <script src="js/14_auth_home.js?v=20261026_e2"></script>
- <script src="js/15_single_write.js?v=20261026_e2"></script>
- <script src="js/16_careplan.js?v=20261026_e2"></script>
-	<script src="js/17_kasan.js?v=20261026_e2"></script>
-	<script src="js/18_stats.js?v=20261026_e2"></script>
-	<script src="js/19_life.js?v=20261026_e2"></script>
-	<script src="js/20_invoice.js?v=20261026_e2"></script>
+ <script src="js/01_core.js?v=20261026_f1"></script>
+ <script src="js/02_terms.js?v=20261026_f1"></script>
+ <script src="js/03_common.js?v=20261026_f1"></script>
+ <script src="js/04_care_record.js?v=20261026_f1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_f1"></script>
+ <script src="js/06_schema_history.js?v=20261026_f1"></script>
+ <script src="js/07_daily_tables.js?v=20261026_f1"></script>
+ <script src="js/08_meds.js?v=20261026_f1"></script>
+ <script src="js/09_night_misc.js?v=20261026_f1"></script>
+ <script src="js/10_office.js?v=20261026_f1"></script>
+ <script src="js/11_karte_staff.js?v=20261026_f1"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_f1"></script>
+ <script src="js/13_shift_units.js?v=20261026_f1"></script>
+ <script src="js/14_auth_home.js?v=20261026_f1"></script>
+ <script src="js/15_single_write.js?v=20261026_f1"></script>
+ <script src="js/16_careplan.js?v=20261026_f1"></script>
+	<script src="js/17_kasan.js?v=20261026_f1"></script>
+	<script src="js/18_stats.js?v=20261026_f1"></script>
+	<script src="js/19_life.js?v=20261026_f1"></script>
+	<script src="js/20_invoice.js?v=20261026_f1"></script>
   
 
   <!-- ============================================================ -->
@@ -6063,6 +6063,11 @@
 				<button type="button" class="close-btn" onclick="closeKasanCsvModal()">&times;</button>
 			</div>
 			<div class="modal-body" style="padding:16px; overflow-y:auto; flex:1;">
+				<!-- [Antigravity追加 2026-10-26] 11日以降の受付期間外注意喚起 -->
+				<div id="kasanCsvLateWarningNotice" style="display:none; background:var(--alert-tint); border-left:5px solid var(--alert); border-radius:4px; padding:10px 12px; margin-bottom:14px; color:var(--ink); font-size:13px; line-height:1.5;">
+					<strong>国保連の受付は毎月1日〜10日です。今日作ったファイルは今月の受付に間に合いません。来月1日〜10日に作り直して送ってください（この月の分は、来月の画面で月遅れ分の候補に出ます）。</strong>
+				</div>
+
 				<!-- 注意書き -->
 				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:14px;">
 					<div style="font-weight:bold; font-size:13px; color:var(--pine-dark); margin-bottom:4px;">国保連インタフェース仕様書 準拠ファイル作成（確認用）</div>

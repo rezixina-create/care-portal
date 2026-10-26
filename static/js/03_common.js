@@ -691,7 +691,7 @@ function cpUpdateAlertFold(kind) {
   }
 }
 
-function checkGlobalAlerts() {
+function checkGlobalAlerts(baseDate) {
   const careContainer = document.getElementById("careAlertsContainer");
   const officeContainer = document.getElementById("officeAlertsContainer");
   const legacyContainer = document.getElementById("alertsContainer");
@@ -699,7 +699,7 @@ function checkGlobalAlerts() {
 
   let careAlertHtml = "";
   let officeAlertHtml = "";
-  const today = new Date();
+  const today = baseDate ? new Date(baseDate) : new Date();
   const todayStr = gState.selectedDate || toLocalDateStr(today);
 
   // [Claude修正] 文字化け (日本語が「???」になったデータ) の検出
@@ -1215,6 +1215,55 @@ function checkGlobalAlerts() {
 
   // 介護現場ポータル コンテナへ描画
   // [Claude修正] お知らせの見出し【…】を共通の形にそろえる (色は style.css で指定)
+  // 9. 国保連請求 出し忘れ・受付期間アラート [Antigravity追加 2026-10-26]
+  // 管理者・事務員のみ表示（介護職員・看護師には出さない）
+  if (isCurrentStaffAdminOrClerk() && typeof cpGetRegularClaimProgress === "function") {
+    const claimDate = baseDate ? new Date(baseDate) : today;
+    const procYm = `${claimDate.getFullYear()}${String(claimDate.getMonth() + 1).padStart(2, "0")}`;
+    const progress = cpGetRegularClaimProgress(procYm, claimDate);
+
+    if (progress && progress.targetCount > 0 && !progress.isComplete) {
+      const day = claimDate.getDate();
+      let alertMsg = "";
+      let dismissKey = "";
+      let bannerBorder = "";
+      let bannerTint = "";
+
+      if (day >= 1 && day <= 10) {
+        const remainingDays = 10 - day;
+        const remainingText = (remainingDays === 0) ? "今日まで" : `あと${remainingDays}日`;
+        alertMsg = `【請求】${progress.regularMonthNum}月分の国保連請求がまだ送られていません（受付は10日まで、${remainingText}）。`;
+        dismissKey = `claim_regular_deadline_${procYm}_early`;
+        bannerBorder = "var(--caution)";
+        bannerTint = "var(--caution-tint)";
+      } else {
+        alertMsg = `【請求】${progress.regularMonthNum}月分の国保連請求は今月の受付（1日〜10日）に間に合いませんでした。来月1日〜10日に月遅れ分として出してください。`;
+        dismissKey = `claim_regular_deadline_${procYm}_late`;
+        bannerBorder = "var(--alert)";
+        bannerTint = "var(--alert-tint)";
+      }
+
+      if (!isAlertDismissed(dismissKey)) {
+        officeAlertHtml += `
+          <div class="alert-banner alert-warning notice-card-warning" style="background:${bannerTint}; border-left:5px solid ${bannerBorder}; color:var(--ink); margin-bottom:8px;">
+            <div style="width:100%;">
+              <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px;">
+                <div style="font-size:13px; line-height:1.5;">
+                  <strong>${escapeHtml(alertMsg)}</strong>
+                  <span style="font-size:13px; color:var(--ink-2); margin-left:6px;">（対象 ${progress.targetCount}名中、送付済 ${progress.submittedCount}名 / 未送付 ${progress.unsubmittedCount}名）</span>
+                </div>
+                <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
+                  <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:13px; background:var(--surface); color:var(--pine-dark); border:1px solid var(--line); border-radius:4px; cursor:pointer;" onclick="enterPortal('office'); switchOfficeTab('kasan');">加算・請求タブを開く</button>
+                  <button type="button" class="btn btn-secondary" style="padding:4px 10px; font-size:13px; background:var(--surface); color:var(--ink-2); border:1px solid var(--line); border-radius:4px; cursor:pointer;" onclick="requestDismissAlertFromButton(this, '${escapeHtml(dismissKey)}')">確認済・閉じる</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        `;
+      }
+    }
+  }
+
   careAlertHtml = cpDecorateNoticeLabels(careAlertHtml);
   officeAlertHtml = cpDecorateNoticeLabels(officeAlertHtml);
   if (careContainer && careContainer.innerHTML !== careAlertHtml) {
