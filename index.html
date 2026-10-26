@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_f2">
+	<link rel="stylesheet" href="style.css?v=20261026_f3">
 </head>
 <body>
 
@@ -720,8 +720,8 @@
  <div class="panel-title">
  <span> 本日の引継ぎ・申し送り事項 (日付連動・日々のケア・特変)</span>
  </div>
- <div style="display:flex; gap:8px; margin-bottom:12px;">
- <input type="text" id="notebookContent" class="form-control" placeholder="本日の申し送り・引き継ぎ事項を入力...">
+ <div style="display:flex; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+ <input type="text" id="notebookContent" class="form-control" style="flex:1; min-width:200px;">
  <button class="btn btn-primary" onclick="submitNotebook()">申し送りを追加</button>
  </div>
  <div id="notebookList"></div>
@@ -732,13 +732,10 @@
  <div class="panel-title">
  <span> 本日の申し送り確認 (確認者一覧)</span>
  </div>
- <p style="font-size:13px; color:var(--text-muted); margin-bottom:12px;">
- 申し送りを確認したら「確認済みにする」を押してください。（名前のみ並びます。押し間違えた名前はクリックで取り消せます）
+ <p style="font-size:13px; color:var(--ink-2); margin-bottom:12px;">
+ 申し送りを1件ずつ読んで『確認』を押してください。その日の申し送りを全部確認した人の名前がここに並びます
  </p>
- <div style="display:flex; gap:12px; align-items:center; margin-bottom:16px;">
- <button class="btn btn-primary" id="notebookStampBtn" onclick="toggleNotebookStamp()"> 確認済みにする</button>
- </div>
- <div style="border:1px solid #dfe5e1; border-radius:8px; padding:14px; min-height:56px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:#ffffff;" id="hankoStampArea"></div>
+ <div style="border:1px solid var(--line); border-radius:8px; padding:14px; min-height:56px; display:flex; flex-wrap:wrap; gap:10px; align-items:center; background:var(--surface);" id="hankoStampArea"></div>
  </div>
  </div>
  </div>
@@ -4575,26 +4572,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_f2"></script>
- <script src="js/02_terms.js?v=20261026_f2"></script>
- <script src="js/03_common.js?v=20261026_f2"></script>
- <script src="js/04_care_record.js?v=20261026_f2"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_f2"></script>
- <script src="js/06_schema_history.js?v=20261026_f2"></script>
- <script src="js/07_daily_tables.js?v=20261026_f2"></script>
- <script src="js/08_meds.js?v=20261026_f2"></script>
- <script src="js/09_night_misc.js?v=20261026_f2"></script>
- <script src="js/10_office.js?v=20261026_f2"></script>
- <script src="js/11_karte_staff.js?v=20261026_f2"></script>
- <script src="js/12_hospital_photos.js?v=20261026_f2"></script>
- <script src="js/13_shift_units.js?v=20261026_f2"></script>
- <script src="js/14_auth_home.js?v=20261026_f2"></script>
- <script src="js/15_single_write.js?v=20261026_f2"></script>
- <script src="js/16_careplan.js?v=20261026_f2"></script>
-	<script src="js/17_kasan.js?v=20261026_f2"></script>
-	<script src="js/18_stats.js?v=20261026_f2"></script>
-	<script src="js/19_life.js?v=20261026_f2"></script>
-	<script src="js/20_invoice.js?v=20261026_f2"></script>
+ <script src="js/01_core.js?v=20261026_f3"></script>
+ <script src="js/02_terms.js?v=20261026_f3"></script>
+ <script src="js/03_common.js?v=20261026_f3"></script>
+ <script src="js/04_care_record.js?v=20261026_f3"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_f3"></script>
+ <script src="js/06_schema_history.js?v=20261026_f3"></script>
+ <script src="js/07_daily_tables.js?v=20261026_f3"></script>
+ <script src="js/08_meds.js?v=20261026_f3"></script>
+ <script src="js/09_night_misc.js?v=20261026_f3"></script>
+ <script src="js/10_office.js?v=20261026_f3"></script>
+ <script src="js/11_karte_staff.js?v=20261026_f3"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_f3"></script>
+ <script src="js/13_shift_units.js?v=20261026_f3"></script>
+ <script src="js/14_auth_home.js?v=20261026_f3"></script>
+ <script src="js/15_single_write.js?v=20261026_f3"></script>
+ <script src="js/16_careplan.js?v=20261026_f3"></script>
+	<script src="js/17_kasan.js?v=20261026_f3"></script>
+	<script src="js/18_stats.js?v=20261026_f3"></script>
+	<script src="js/19_life.js?v=20261026_f3"></script>
+	<script src="js/20_invoice.js?v=20261026_f3"></script>
   
 
   <!-- ============================================================ -->

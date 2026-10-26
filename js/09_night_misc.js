@@ -971,13 +971,13 @@ function renderNotebook() {
 	if (!list) return;
 	list.innerHTML = "";
 	const notebooks = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate); // [Claude修正] 取消済みは表示しない（データには残る）
-	const currentStaff = (document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "") || "";
+	const activeStaff = cpLoginStaffName();
 
 	if (notebooks.length === 0) {
-		list.innerHTML = '<p style="font-size:13px; color:var(--text-muted); padding:10px 0;">本日の引継ぎ・申し送り事項はありません。</p>';
+		list.innerHTML = '<p style="font-size:13px; color:var(--ink-3); padding:10px 0;">本日の引継ぎ・申し送り事項はありません。</p>';
 	} else {
 		notebooks.forEach(nb => {
-			const stStatus = getDailyNotebookConfirmationStatus(nb, currentStaff);
+			const stStatus = getDailyNotebookConfirmationStatus(nb, activeStaff);
 
 			const card = document.createElement("div");
 			card.style.background = stStatus.confirmed ? "#f6f8f6" : (nb.status === "未対応" ? "#ffffff" : "#f0fdf4");
@@ -1001,8 +1001,8 @@ function renderNotebook() {
 				: `<span class="badge" style="background:#dcfce7; color:#166534; font-size:11px; padding:2px 6px; font-weight:bold;">完了</span>`;
 
 			const confirmedPills = (nb.confirmed_staff && nb.confirmed_staff.length > 0)
-				? nb.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:11.5px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
-				: `<span style="color:#94a19a; font-size:11.5px;">未確認</span>`;
+				? nb.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
+				: `<span style="color:var(--ink-3); font-size:13px;">未確認</span>`;
 
 			let updatesHtml = "";
 			if (Array.isArray(nb.updates) && nb.updates.length > 0) {
@@ -1024,32 +1024,32 @@ function renderNotebook() {
 					<div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
 						${taskBadgeHtml}
 						${statusBadgeHtml}
-						<strong style="font-size:14.5px; color:#22302b; margin-left:4px;">${escapeHtml(nb.content)}</strong>
+						<strong style="font-size:14.5px; color:var(--ink); margin-left:4px;">${escapeHtml(nb.content)}</strong>
 					</div>
 					<div style="display:flex; gap:6px; align-items:center;">
-						<span style="font-size:11px; color:#5f6d66;">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
+						<span style="font-size:13px; color:var(--ink-2);">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
 						<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
 						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:11px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
 						<button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
 					</div>
 				</div>
 				${updatesHtml}
-				<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed #dfe5e1; margin-top:8px; padding-top:8px; font-size:12px; line-height:1.6;">
+				<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; border-top:1px dashed var(--line); margin-top:8px; padding-top:8px; font-size:13px; line-height:1.6;">
 					<div style="display:flex; align-items:center; flex-wrap:wrap; gap:6px; flex:1;">
-						<strong style="color:#4a5852; white-space:nowrap;">確認済職員:</strong>
+						<strong style="color:var(--ink-2); white-space:nowrap;">確認済職員:</strong>
 						<div style="display:flex; flex-wrap:wrap; gap:4px; align-items:center;">${confirmedPills}</div>
 					</div>
 					<div>
 						${stStatus.hasNewUpdate ? `
-							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmDailyNotebookItem(${nb.id})">
+							<button class="btn btn-primary" style="padding:4px 14px; font-size:13px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmDailyNotebookItem(${nb.id})">
 								☑ 追記も含めて確認済みにする
 							</button>
 						` : (stStatus.confirmed ? `
-							<button class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmDailyNotebookItem(${nb.id})">
+							<button class="btn btn-secondary" style="padding:4px 12px; font-size:13px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmDailyNotebookItem(${nb.id})">
 								✓ 確認済み (解除)
 							</button>
 						` : `
-							<button class="btn btn-primary" style="padding:4px 14px; font-size:12.5px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmDailyNotebookItem(${nb.id})">
+							<button class="btn btn-primary" style="padding:4px 14px; font-size:13px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmDailyNotebookItem(${nb.id})">
 								☑ 確認済みにする
 							</button>
 						`)}
@@ -1060,19 +1060,7 @@ function renderNotebook() {
 		});
 	}
 
-	// 一括確認ボタン
-	const stampBtn = document.getElementById("notebookStampBtn");
-	if (stampBtn && currentStaff) {
-		// [Claude修正 2026-10-16] 全部確認済みで名前もあるときは「確認済み」と出す（新しい申し送り・追記があれば押し直せる）
-		const allDone = notebooks.every(nb => getDailyNotebookConfirmationStatus(nb, currentStaff).confirmed);
-		const stamped = (db.data.notebook_stamps || []).some(x => !x.voided && x.date === gState.selectedDate && x.staff_name === currentStaff);
-		stampBtn.textContent = (allDone && stamped) ? `✓ ［${currentStaff}］本日の申し送りは確認済みです` : `☑ 本日の全項目を［${currentStaff}］で一括確認済みにする`;
-		stampBtn.className = (allDone && stamped) ? "btn btn-secondary" : "btn btn-primary";
-		stampBtn.style.padding = "8px 18px";
-		stampBtn.style.fontSize = "13px";
-		stampBtn.style.fontWeight = "bold";
-	}
-	renderNotebookStamps(); // [Claude修正 2026-10-16]
+	renderNotebookStamps();
 }
 
 // 月間業務連絡表
@@ -1082,32 +1070,102 @@ function renderNotebook() {
 // [Claude修正] 同じ名前の関数がもう1つ後ろにあり、こちらは使われていなかった（後ろの定義が有効）ため削除: toggleNotebookStamp
 
 
+// 日々の申し送りをすべて確認したか判定（単一の判定関数）
+function cpHasStaffConfirmedAllNotebookItems(date, staffName) {
+	if (!staffName) return false;
+	const targetDate = date || gState.selectedDate;
+	const items = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === targetDate);
+	if (!items.length) return false;
+	return items.every(nb => getDailyNotebookConfirmationStatus(nb, staffName).confirmed);
+}
+
+// その日の申し送りをすべて確認した職員の一覧と最終確認時刻を取得
+function cpGetConfirmedStaffForDate(date) {
+	const targetDate = date || gState.selectedDate;
+	const items = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === targetDate);
+	if (!items.length) return [];
+
+	const staffSet = new Set();
+	items.forEach(nb => {
+		if (Array.isArray(nb.confirmed_staff)) {
+			nb.confirmed_staff.forEach(s => { if (s) staffSet.add(s); });
+		}
+		if (nb.confirmed_versions && typeof nb.confirmed_versions === "object") {
+			Object.keys(nb.confirmed_versions).forEach(s => { if (s) staffSet.add(s); });
+		}
+	});
+
+	const result = [];
+	staffSet.forEach(staff => {
+		if (cpHasStaffConfirmedAllNotebookItems(targetDate, staff)) {
+			let latestStamp = "";
+			items.forEach(nb => {
+				let t = "";
+				if (Array.isArray(nb.confirm_log)) {
+					for (let i = nb.confirm_log.length - 1; i >= 0; i--) {
+						const log = nb.confirm_log[i];
+						if (log && log.by === staff && typeof log.action === "string" && log.action.includes("確認") && !log.action.includes("取消")) {
+							t = log.at || "";
+							break;
+						}
+					}
+				}
+				if (!t && nb.confirmed_versions && nb.confirmed_versions[staff]) {
+					t = nb.confirmed_versions[staff];
+				}
+				if (!t && nb.created_at) {
+					t = nb.created_at;
+				}
+				if (t && (!latestStamp || t > latestStamp)) {
+					latestStamp = t;
+				}
+			});
+
+			let timeFormatted = "";
+			if (latestStamp) {
+				const m = latestStamp.match(/(\d{2}:\d{2})/);
+				if (m) timeFormatted = m[1];
+			}
+
+			result.push({
+				staff: staff,
+				time: timeFormatted,
+				timestamp: latestStamp
+			});
+		}
+	});
+
+	result.sort((a, b) => (a.timestamp > b.timestamp ? 1 : (a.timestamp < b.timestamp ? -1 : a.staff.localeCompare(b.staff))));
+	return result;
+}
+
 function confirmDailyNotebookItem(id) {
-	const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "";
-	if (!currentStaff) {
-		alert("担当職員を選択してください。");
+	const loginStaff = cpLoginStaffName();
+	if (!loginStaff) {
+		alert("ログイン中の職員が取得できません。ログインし直してください。");
 		return;
 	}
 
 	const nb = (db.data.notebooks || []).find(x => x.id === id);
 	if (!nb) return;
 	if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
-	if (!nb.confirmed_versions) nb.confirmed_versions = {};
+	if (!nb.confirmed_versions || typeof nb.confirmed_versions !== "object") nb.confirmed_versions = {};
 
-	const stStatus = getDailyNotebookConfirmationStatus(nb, currentStaff);
+	const stStatus = getDailyNotebookConfirmationStatus(nb, loginStaff);
 
 	if (stStatus.confirmed) {
-		const idx = nb.confirmed_staff.indexOf(currentStaff);
+		const idx = nb.confirmed_staff.indexOf(loginStaff);
 		if (idx !== -1) nb.confirmed_staff.splice(idx, 1);
-		delete nb.confirmed_versions[currentStaff];
-		cpLogConfirm(nb, currentStaff, "確認を取消");
+		delete nb.confirmed_versions[loginStaff];
+		cpLogConfirm(nb, loginStaff, "確認を取消");
 	} else {
-		if (!nb.confirmed_staff.includes(currentStaff)) {
-			nb.confirmed_staff.push(currentStaff);
+		if (!nb.confirmed_staff.includes(loginStaff)) {
+			nb.confirmed_staff.push(loginStaff);
 		}
-		cpLogConfirm(nb, currentStaff, "確認");
-		const nowStr = nb.last_updated_at || nb.created_at || new Date().toISOString();
-		nb.confirmed_versions[currentStaff] = nowStr;
+		cpLogConfirm(nb, loginStaff, "確認");
+		const now = new Date();
+		const stamp = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}:${String(now.getSeconds()).padStart(2, "0")}`;
+		nb.confirmed_versions[loginStaff] = stamp;
 	}
 
 	db.save();
@@ -1215,53 +1273,38 @@ function resolveNotebook(id) {
  }
 }
 
-// [Claude修正 2026-10-16] 「本日の全項目を一括確認済みにする」を押しても、確認者一覧に名前が出ず（一覧を描く処理がなかった）、
-// 各申し送りも「未確認」のままだった。押すと、その日の申し送りを全部（追記も含めて）確認済みにし、確認者一覧に名前を出す。
-// 名前の取り消しは確認者一覧の名前を押して行う（ボタンで外れないように、押し直しても取り消しにはしない）
+// 一括確認は廃止。直接呼ばれた場合もデータ変更せず注意喚起
 function toggleNotebookStamp() {
- const staff = (document.getElementById("currentStaff") || {}).value || "";
- if (!staff) {
-  alert("担当職員を選択してください。");
-  return;
- }
- const items = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate);
- items.forEach(nb => {
-  const st = getDailyNotebookConfirmationStatus(nb, staff);
-  if (st.confirmed) return;
-  if (!Array.isArray(nb.confirmed_staff)) nb.confirmed_staff = [];
-  if (!nb.confirmed_versions || typeof nb.confirmed_versions !== "object") nb.confirmed_versions = {};
-  if (!nb.confirmed_staff.includes(staff)) nb.confirmed_staff.push(staff);
-  nb.confirmed_versions[staff] = nb.last_updated_at || nb.created_at || toLocalDateTimeStr(new Date());
-  cpLogConfirm(nb, staff, "確認（一括）");
- });
- if (!Array.isArray(db.data.notebook_stamps)) db.data.notebook_stamps = [];
- const nowStr = toLocalDateTimeStr(new Date());
- const stamp = db.data.notebook_stamps.find(x => !x.voided && x.date === gState.selectedDate && x.staff_name === staff);
- if (stamp) stamp.stamped_at = nowStr;
- else db.data.notebook_stamps.push({ id: Date.now(), date: gState.selectedDate, staff_name: staff, stamped_at: nowStr });
- db.save();
- renderNotebook();
+	alert("申し送りは1件ずつ確認してください");
 }
 
-// [Claude修正 2026-10-16] 本日の申し送り確認（確認者一覧）を描く。名前を押すとその確認を取り消せる
+// 本日の申し送り確認（確認者一覧）を描く。全項目を確認した職員を自動集計して表示
 function renderNotebookStamps() {
- const area = document.getElementById("hankoStampArea");
- if (!area) return;
- const stamps = (db.data.notebook_stamps || []).filter(x => !x.voided && x.date === gState.selectedDate);
- area.innerHTML = "";
- if (!stamps.length) {
-  area.innerHTML = '<span style="font-size:13px; color:#94a19a;">まだ確認した職員はいません。</span>';
-  return;
- }
- stamps.forEach(x => {
-  const b = document.createElement("button");
-  b.type = "button";
-  b.className = "cp-hanko-name";
-  b.title = "押すとこの確認を取り消せます";
-  b.innerHTML = `${escapeHtml(x.staff_name || "")} <span class="cp-hanko-time">${escapeHtml((x.stamped_at || "").slice(11, 16))}</span>`;
-  b.onclick = () => removeNotebookStamp(gState.selectedDate, x.staff_name);
-  area.appendChild(b);
- });
+	const area = document.getElementById("hankoStampArea");
+	if (!area) return;
+	area.innerHTML = "";
+
+	const items = (db.data.notebooks || []).filter(nb => !nb.voided && nb.date === gState.selectedDate);
+	if (!items.length) {
+		area.innerHTML = '<span style="font-size:13px; color:var(--ink-2);">本日の申し送りはありません</span>';
+		return;
+	}
+
+	const confirmedList = cpGetConfirmedStaffForDate(gState.selectedDate);
+	if (!confirmedList.length) {
+		area.innerHTML = '<span style="font-size:13px; color:var(--ink-3);">まだ確認した職員はいません。</span>';
+		return;
+	}
+
+	confirmedList.forEach(x => {
+		const badge = document.createElement("span");
+		badge.className = "cp-hanko-name";
+		badge.style.cursor = "default";
+		badge.style.fontSize = "13px";
+		const timeHtml = x.time ? ` <span class="cp-hanko-time" style="font-size:13px; color:var(--ink-2); font-weight:normal;">${escapeHtml(x.time)}</span>` : "";
+		badge.innerHTML = `${escapeHtml(x.staff)}${timeHtml}`;
+		area.appendChild(badge);
+	});
 }
 
 function stampNotebook() {
