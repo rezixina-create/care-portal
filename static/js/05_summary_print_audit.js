@@ -18,9 +18,20 @@ function cpSummaryAdlBadgeClass(level) {
 	if (level === "全介助") return "badge-alert";
 	return "badge-secondary";
 }
+// [Claude修正] その方のサマリーを新しい順に並べる。保存の順番ではなく作成日で決める
+// （デモのデータは古い順に入っているので、[0] を「最新」とすると前の版が最新に見えていた）
+function cpSummariesOfResident(residentId) {
+ const rId = Number(residentId);
+ return (db.data.care_summaries || [])
+  .filter(s => Number(s.resident_id) === rId)
+  .slice()
+  .sort((a, b) => String(b.created_at || "").slice(0, 10).localeCompare(String(a.created_at || "").slice(0, 10)) || (Number(b.id) - Number(a.id)));
+}
+window.cpSummariesOfResident = cpSummariesOfResident;
+
 function getResidentSummaryStatusText(residentId) {
  const rId = Number(residentId);
- const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ const list = cpSummariesOfResident(rId);
  if (list.length === 0) {
  return "サマリー未登録 (入所時・入院後サマリーを新規作成できます)";
  }
@@ -30,7 +41,7 @@ function getResidentSummaryStatusText(residentId) {
 
 function renderResidentSummaryAccordionContent(residentId) {
  const rId = Number(residentId);
- const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ const list = cpSummariesOfResident(rId);
  if (list.length === 0) {
  return `
  <div style="background:#f6f8f6; border:1px dashed #cdd6d0; border-radius:6px; padding:14px; text-align:center; color:#5f6d66;">
@@ -52,15 +63,15 @@ function renderResidentSummaryAccordionContent(residentId) {
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-top:8px;">
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">1. 基本情報:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.basic_info || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.basic_info || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">2. これまでの経過:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.background || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.background || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">3. 現在の身体・認知状態:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.physical_cognitive || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.physical_cognitive || "未記入")}</div>
  </div>
  <div style="background:var(--ground); border:1px solid var(--line); border-radius:6px; padding:8px 10px;">
 				<strong style="color:var(--pine-dark); font-size:12px;">4. ADL (日常生活動作):</strong>
@@ -91,47 +102,47 @@ function renderResidentSummaryAccordionContent(residentId) {
 					return `
 						<div style="margin-top:2px; color:var(--ink-2); font-size:12px;">
 							<span class="badge" style="background:var(--pine-tint); color:var(--pine); font-size:11px; margin-right:6px; font-weight:bold;">前の書き方（文章）</span>
-							${escapeHtml(s.adl || "特記事項なし")}
+							${escapeHtml(s.adl || "未記入")}
 						</div>
 					`;
 				})()}
 			</div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">5. 食事・水分摂取:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meals_hydration || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meals_hydration || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">6. 排泄:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.excretion || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.excretion || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">7. 睡眠:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.sleep || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.sleep || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">8. 服薬:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meds || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.meds || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">9. 医療的な処置:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.medical_care || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.medical_care || "未記入")}</div>
  </div>
  <div style="background:#fef2f2; border:1px solid #fecaca; border-radius:6px; padding:8px 10px;">
  <strong style="color:#991b1b; font-size:12px;">10. 認知症の症状や行動 (BPSD):</strong>
- <div style="margin-top:2px; color:#7f1d1d;">${escapeHtml(s.dementia_behavior || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#7f1d1d;">${escapeHtml(s.dementia_behavior || "未記入")}</div>
  </div>
  <div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px;">
  <strong style="color:#92400e; font-size:12px;">11. 介助方法・注意点:</strong>
- <div style="margin-top:2px; color:#78350f;">${escapeHtml(s.care_notes || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#78350f;">${escapeHtml(s.care_notes || "未記入")}</div>
  </div>
  <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:8px 10px;">
  <strong style="color:#173f33; font-size:12px;">12. 家族の状況:</strong>
- <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.family_info || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#36443e;">${escapeHtml(s.family_info || "未記入")}</div>
  </div>
  </div>
  <div style="background:#f0fdf4; border:1px solid #bbf7d0; border-radius:6px; padding:8px 10px; margin-top:10px;">
  <strong style="color:#166534; font-size:12px;">13. 今後の支援で気をつけること:</strong>
- <div style="margin-top:2px; color:#14532d;">${escapeHtml(s.future_goals || "特記事項なし")}</div>
+ <div style="margin-top:2px; color:#14532d;">${escapeHtml(s.future_goals || "未記入")}</div>
  </div>
  `;
 }
@@ -186,7 +197,7 @@ function openCareSummaryModal(resId, summaryId) {
  }
 
  // 過去サマリー履歴セレクト
- const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === r.id);
+ const list = cpSummariesOfResident(r.id);
  const historySelect = document.getElementById("careSummaryHistorySelect");
  if (historySelect) {
  historySelect.innerHTML = "";
@@ -283,7 +294,7 @@ function switchCareSummaryRecord(summaryVal) {
 	} else {
 		if (refBox) {
 			refBox.style.display = "block";
-			refBox.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; color:var(--pine-dark);">前の書き方（文章）</div><div style="white-space:pre-wrap;">${escapeHtml(s.adl || "特記事項なし")}</div>`;
+			refBox.innerHTML = `<div style="font-weight:bold; margin-bottom:4px; color:var(--pine-dark);">前の書き方（文章）</div><div style="white-space:pre-wrap;">${escapeHtml(s.adl || "未記入")}</div>`;
 		}
 		CP_SUMMARY_ADL_ACTIONS.forEach(act => {
 			const lvlEl = document.getElementById(`csAdlLevel_${act.key}`);
@@ -314,7 +325,7 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
  if (typeEl) typeEl.value = summaryType;
  if (dateEl) dateEl.value = toLocalDateStr(new Date());
 
- const list = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === rId);
+ const list = cpSummariesOfResident(rId);
  const prev = list.length > 0 ? list[0] : null;
 
  const basicText = prev ? prev.basic_info : `${r ? r.name : ""} 様。${r ? r.care_level : ""}。生年月日: ${r ? (r.birth_date || "未登録") : ""}。緊急連絡先: ${r ? (r.emergency_contact || "未登録") : ""}。看取り方針: ［${r ? (r.policy_stamp || "未設定") : ""}］。`;
@@ -445,7 +456,7 @@ function submitCareSummary() {
 	if (!Array.isArray(db.data.care_summaries)) db.data.care_summaries = [];
 
 	const existingForVersion = (sid && sid.trim() !== "") ? db.data.care_summaries.find(x => Number(x.id) === Number(sid)) : null;
-	const prevLatest = (db.data.care_summaries || []).find(x => Number(x.resident_id) === rId);
+	const prevLatest = cpSummariesOfResident(rId)[0] || null;
 
 	const fieldsNow = {
 		summary_type: summaryType,
@@ -1102,7 +1113,7 @@ function renderEmergencySummaryPreview(r) {
  const records = (db.data.care_records || []).filter(c => !c.voided && Number(c.resident_id) === Number(r.id) && (c.category === "特変" || c.category === "バイタル" || c.category === "巡視")).slice(0, 3);
  const recordsHtml = records.length > 0 ? records.map(rc => `<div>・[${escapeHtml(rc.recorded_at || "")}] [${escapeHtml(rc.category || "")}] ${escapeHtml(rc.content || "")} (${escapeHtml(rc.staff_name || "")})</div>`).join("") : "<div>特変記録なし</div>";
 
- const summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+ const summaries = cpSummariesOfResident(r.id);
  const latestSummary = summaries.length > 0 ? summaries[0] : null;
 
  container.innerHTML = `
@@ -1209,7 +1220,7 @@ function copyEmergencySummaryText() {
  const nowStr = new Date().toLocaleString("ja-JP");
  const staffName = document.getElementById("currentStaff")?.value || "職員";
 
- const summaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+ const summaries = cpSummariesOfResident(r.id);
  const s = summaries.length > 0 ? summaries[0] : null;
 
  const text = `【緊急搬送・受診 申し送り書】

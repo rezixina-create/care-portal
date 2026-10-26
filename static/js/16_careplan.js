@@ -278,7 +278,7 @@ function cpQuoteCareSummaryToAssessment(planId) {
   if (!plan) return;
   if (!cpCarePlanContentEditable(plan)) { alert(cpCarePlanLockedMsg(plan)); return; } // [Claude修正 2026-10-19]
   const selEl = document.getElementById("cpQuoteSummarySelect");
-  const summaries = (db.data.care_summaries || []).filter(s => !s.voided && Number(s.resident_id) === Number(plan.resident_id));
+  const summaries = cpSummariesOfResident(plan.resident_id).filter(s => !s.voided); // [Claude修正] 新しい順
   if (!summaries.length) {
     alert("この方の介護サマリーがまだ登録されていません。");
     return;
@@ -1054,7 +1054,7 @@ function renderCarePlanTab() {
     const needs = Array.isArray(curPlan.needs) ? curPlan.needs : [];
     const meetings = Array.isArray(curPlan.meetings) ? curPlan.meetings : [];
     const monitorings = Array.isArray(curPlan.monitorings) ? curPlan.monitorings : [];
-    const summaries = (db.data.care_summaries || []).filter(s => !s.voided && Number(s.resident_id) === Number(r.id));
+    const summaries = cpSummariesOfResident(r.id).filter(s => !s.voided); // [Claude修正] 引用の選択肢も新しい順（一番上が最新）
     const quotedSummary = assess.summary_id ? summaries.find(s => Number(s.id) === Number(assess.summary_id)) : null;
     const isPlanEnded = curPlan.status === "終了";
     // [Claude修正 2026-10-19] 中身（①②③）は作成中・同意待ちの版だけ書ける。⑤は終了以外、⑥モニタリングは実施中の版だけ

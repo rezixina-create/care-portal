@@ -1048,7 +1048,8 @@ function checkGlobalAlerts() {
   if (Array.isArray(db.data.care_summaries)) {
     (typeof cpCurrentResidents === "function" ? cpCurrentResidents() : (gState.residents || [])).forEach(r => {
       if (!r || (typeof cpIsDischarged === "function" && cpIsDischarged(r))) return;
-      const rSummaries = (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
+      // [Claude修正] 保存の順番ではなく作成日の新しい順で比べる
+      const rSummaries = typeof cpSummariesOfResident === "function" ? cpSummariesOfResident(r.id) : (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
       if (rSummaries.length < 2) return;
       const latest = rSummaries[0];
       const prev = rSummaries.find(s => s.id === latest.previous_id) || rSummaries[1];
