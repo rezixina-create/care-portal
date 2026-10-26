@@ -1051,20 +1051,27 @@ function checkGlobalAlerts() {
       // [Claude修正] 保存の順番ではなく作成日の新しい順で比べる
       const rSummaries = typeof cpSummariesOfResident === "function" ? cpSummariesOfResident(r.id) : (db.data.care_summaries || []).filter(s => Number(s.resident_id) === Number(r.id));
       if (rSummaries.length < 2) return;
-      const latest = rSummaries[0];
-      const prev = rSummaries.find(s => s.id === latest.previous_id) || rSummaries[1];
-      if (!latest || !prev) return;
-      if (!Array.isArray(latest.adl_items) || latest.adl_items.length === 0) return;
-      if (!Array.isArray(prev.adl_items) || prev.adl_items.length === 0) return;
-
-      const changes = [];
-      latest.adl_items.forEach(currItem => {
-        if (!currItem || !currItem.level) return;
-        const prevItem = prev.adl_items.find(p => (p.key && p.key === currItem.key) || (p.action && p.action === currItem.action));
-        if (prevItem && prevItem.level && prevItem.level !== currItem.level) {
-          changes.push(`${currItem.action || currItem.key} ${prevItem.level} → ${currItem.level}`);
-        }
-      });
+      // [Claude修正] 最新と1つ前だけを比べると、段階を変えたあとに文章だけ直した版を保存したとき、
+      // ケアプランを見直す前でも知らせが消えていた。新しい版からさかのぼり「最後に段階が変わった版」で知らせる
+      // （知らせの印はその版の id。確認済・閉じるを押すまで残る）
+      const hasAdl = s => s && Array.isArray(s.adl_items) && s.adl_items.length > 0;
+      let latest = null;
+      let changes = [];
+      for (let i = 0; i < rSummaries.length - 1; i++) {
+        const cur = rSummaries[i];
+        const prev = rSummaries.find(s => s.id === cur.previous_id) || rSummaries[i + 1];
+        if (!hasAdl(cur) || !hasAdl(prev)) break; // 前の書き方（文章）の版まで来たら比べない
+        const found = [];
+        cur.adl_items.forEach(currItem => {
+          if (!currItem || !currItem.level) return;
+          const prevItem = prev.adl_items.find(p => (p.key && p.key === currItem.key) || (p.action && p.action === currItem.action));
+          if (prevItem && prevItem.level && prevItem.level !== currItem.level) {
+            found.push(`${currItem.action || currItem.key} ${prevItem.level} → ${currItem.level}`);
+          }
+        });
+        if (found.length > 0) { latest = cur; changes = found; break; }
+      }
+      if (!latest) return;
 
       if (changes.length > 0) {
         const adlAlertKey = `summary_adl_change_${latest.id}`;
