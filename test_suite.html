@@ -1714,6 +1714,13 @@
 
       gKasanGeneratedCsvText = "1,1,0,1,711...\r\n";
       gKasanGeneratedCsvFileName = "K202609.CSV";
+      gKasanGeneratedCsvMeta = {
+        ym: "2026-09",
+        process_ym: "202610",
+        items: [
+          { resident_id: 1, service_type_code: "32", total_units: 25000, insurance_demand: 257625, user_burden: 28625 }
+        ]
+      };
       gKasanCsvValidationResult = {
         ym: "2026-09",
         settings: { office_no: "1234567890", media_code: "1", region_type: "1級地" },
@@ -1729,6 +1736,11 @@
 
       markKasanCsvAsSubmitted();
       assert(db.data.claim_submissions.length === 1, "Test 170c-1: claim_submissions に1件保存されたこと");
+      // 2回目呼出で増えないこと（Claude ab34563 修正）
+      alertMsg170 = "";
+      markKasanCsvAsSubmitted();
+      assert(db.data.claim_submissions.length === 1, "Test 170c-1b: 2回呼んでも重複登録されないこと");
+      assert(alertMsg170.includes("すでに送付済み"), "Test 170c-1c: 2回目は送付済みアラートが出ること");
       const sub170 = db.data.claim_submissions[0];
       assert(sub170.resident_id === 1 && sub170.service_ym === "2026-09" && sub170.status === "提出済", "Test 170c-2: 提出済として保存されていること");
       assert(sub170.process_ym === "202610", "Test 170c-3: 処理対象年月が翌月（202610）であること");
@@ -1840,6 +1852,7 @@
       window.alert = origAlert170;
       window.confirm = origConfirm170;
       window.prompt = origPrompt170;
+      gKasanGeneratedCsvMeta = null;
       closeClaimRemandModal();
 
       // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
