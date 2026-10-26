@@ -4955,8 +4955,10 @@ function cpGetClaimEligibleStatus(residentId, serviceYm, currentProcessYm) {
   // 1. 同一審査年月で同一サービス提供年月が既に提出済かチェック
   // （国保連インタフェース仕様書 解説書 1.1(1) 同月に別々に分けて送ることはできない）
   const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  // [Claude修正] 状態が「返戻」「過誤申立中」「過誤決定」に変わっていても、今月の審査で送った事実は変わらない。
+  // 「提出済」だけを見ると、その月に1人だけ送った分が過誤決定になったとき、同じ審査の月にもう一度出せてしまっていた
   const sameMonthAlreadySent = submissions.some(s =>
-    !s.voided && s.status === "提出済" && s.service_ym === serviceYm && String(s.process_ym) === String(currentProcessYm)
+    !s.voided && s.status !== "取消" && s.service_ym === serviceYm && String(s.process_ym) === String(currentProcessYm)
   );
   if (sameMonthAlreadySent) {
     return {
