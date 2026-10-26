@@ -1043,108 +1043,444 @@ function deleteFireDrillRecord(id) {
 	cpVoidLedgerRecord('fire_drills', id);
 }
 // 法定委員会・研修記録
+const CP_COMMITTEE_STANDARD_ITEMS = [
+	{
+		key: "restraint_committee",
+		name: "身体的拘束等の適正化のための委員会",
+		category: "委員会",
+		frequency_type: "interval",
+		interval_months: 3,
+		rule_desc: "3か月ごと",
+		display_rule: "3月に1回以上",
+		approx: false,
+		penalty_subject: "身体拘束"
+	},
+	{
+		key: "restraint_training",
+		name: "身体拘束の研修",
+		category: "研修",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上（新規採用時も）",
+		approx: false,
+		penalty_subject: "身体拘束"
+	},
+	{
+		key: "abuse_committee",
+		name: "虐待防止検討委員会",
+		category: "委員会",
+		frequency_type: "annual",
+		required_count: 1,
+		rule_desc: "年度に1回",
+		display_rule: "年1回以上（定期的に）",
+		approx: false,
+		penalty_subject: "虐待防止"
+	},
+	{
+		key: "abuse_training",
+		name: "虐待防止の研修",
+		category: "研修",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上",
+		approx: false,
+		penalty_subject: "虐待防止"
+	},
+	{
+		key: "infection_committee",
+		name: "感染対策委員会",
+		category: "委員会",
+		frequency_type: "interval",
+		interval_months: 6,
+		rule_desc: "6か月ごと",
+		display_rule: "おおむね6月に1回以上",
+		approx: true,
+		penalty_subject: ""
+	},
+	{
+		key: "infection_training",
+		name: "感染対策の研修",
+		category: "研修",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上",
+		approx: false,
+		penalty_subject: ""
+	},
+	{
+		key: "infection_drill",
+		name: "感染対策の訓練",
+		category: "訓練",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上",
+		approx: false,
+		penalty_subject: ""
+	},
+	{
+		key: "bcp_training",
+		name: "業務継続計画（BCP）の研修",
+		category: "研修",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上",
+		approx: false,
+		penalty_subject: ""
+	},
+	{
+		key: "bcp_drill",
+		name: "業務継続計画（BCP）の訓練",
+		category: "訓練",
+		frequency_type: "annual",
+		required_count: 2,
+		rule_desc: "年度に2回",
+		display_rule: "年2回以上",
+		approx: false,
+		penalty_subject: ""
+	},
+	{
+		key: "promotion_meeting",
+		name: "運営推進会議",
+		category: "会議",
+		frequency_type: "interval",
+		interval_months: 2,
+		rule_desc: "2か月ごと",
+		display_rule: "おおむね2月に1回以上",
+		approx: true,
+		penalty_subject: ""
+	}
+];
+window.CP_COMMITTEE_STANDARD_ITEMS = CP_COMMITTEE_STANDARD_ITEMS;
+
+// 古い記録の項目判定（データを書き換えず表示・計算時のみ判定）
+function cpResolveCommitteeItemKey(c) {
+	if (!c) return "";
+	if (c.item_key) return c.item_key;
+	const name = String(c.committee_name || c.name || "").trim();
+	if (name === "身体拘束適正化委員会") return "restraint_committee";
+	if (name === "感染症対策委員会") return "infection_committee";
+	if (name === "虐待防止委員会") return "abuse_committee";
+	if (name === "虐待防止研修") return "abuse_training";
+	return ""; // それ以外は未設定として数えない
+}
+window.cpResolveCommitteeItemKey = cpResolveCommitteeItemKey;
+
+// 日付に月を加算（月末日あふれを安全に調整）
+function cpAddMonthsToDateStr(dateStr, months) {
+	if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return null;
+	const parts = dateStr.split("-").map(Number);
+	const y = parts[0];
+	const m = parts[1] - 1;
+	const d = parts[2];
+	const targetMonthIndex = m + months;
+	const targetYear = y + Math.floor(targetMonthIndex / 12);
+	const targetMonth = ((targetMonthIndex % 12) + 12) % 12;
+	const lastDay = new Date(targetYear, targetMonth + 1, 0).getDate();
+	const targetDay = Math.min(d, lastDay);
+	const pad = n => String(n).padStart(2, "0");
+	return `${targetYear}-${pad(targetMonth + 1)}-${pad(targetDay)}`;
+}
+window.cpAddMonthsToDateStr = cpAddMonthsToDateStr;
+
+// 決まりの回数・実施状況の計算共通関数（表・お知らせで一元利用）
+function cpGetCommitteeComplianceStatus(refDate) {
+	const today = refDate ? new Date(refDate) : new Date();
+	const todayStr = toLocalDateStr(today);
+
+	// 今年度（4月1日〜翌年3月31日）
+	const tYear = today.getFullYear();
+	const tMonth = today.getMonth() + 1; // 1-12
+	const fy = tMonth >= 4 ? tYear : tYear - 1;
+	const fyStart = `${fy}-04-01`;
+	const fyEnd = `${fy + 1}-03-31`;
+
+	// 年度の残り月数（3月末まで）: 1月=3, 2月=2, 3月=1, 4月以降=15-tMonth
+	const remainingMonths = tMonth >= 4 ? (15 - tMonth) : (4 - tMonth);
+
+	const committees = (db && db.data && Array.isArray(db.data.committees)) ? db.data.committees : [];
+	const validCommittees = committees.filter(c => !c.voided);
+
+	return CP_COMMITTEE_STANDARD_ITEMS.map(item => {
+		const matchingRecords = validCommittees.filter(c => cpResolveCommitteeItemKey(c) === item.key);
+		matchingRecords.sort((a, b) => String(b.date || "").localeCompare(String(a.date || "")) || (Number(b.id) - Number(a.id)));
+
+		const lastRecord = matchingRecords[0] || null;
+		const lastDate = lastRecord ? String(lastRecord.date || "").slice(0, 10) : "";
+
+		let status = "";
+		let nextDeadline = "";
+		let fyCount = 0;
+
+		if (item.frequency_type === "interval") {
+			if (!lastDate) {
+				status = "記録なし";
+			} else {
+				nextDeadline = cpAddMonthsToDateStr(lastDate, item.interval_months);
+				if (nextDeadline < todayStr) {
+					status = "期限を過ぎている";
+				} else {
+					const diffDays = Math.round((new Date(nextDeadline) - new Date(todayStr)) / (24 * 3600 * 1000));
+					if (diffDays <= 30) {
+						status = "30日以内に期限";
+					} else {
+						status = "期限内";
+					}
+				}
+			}
+		} else if (item.frequency_type === "annual") {
+			const fyRecords = matchingRecords.filter(c => {
+				const d = String(c.date || "").slice(0, 10);
+				return d >= fyStart && d <= fyEnd;
+			});
+			fyCount = fyRecords.length;
+
+			if (fyCount >= item.required_count) {
+				status = "足りている";
+			} else if (fyCount === 0) {
+				status = "記録なし";
+			} else {
+				if (remainingMonths <= 3) {
+					status = `まだ足りない（残り${remainingMonths}か月）`;
+				} else {
+					status = "まだ足りない";
+				}
+			}
+		}
+
+		const isUnmet = (status === "期限を過ぎている" || status === "記録なし");
+
+		return {
+			item: item,
+			key: item.key,
+			name: item.name,
+			category: item.category,
+			display_rule: item.display_rule,
+			rule_desc: item.rule_desc,
+			frequency_type: item.frequency_type,
+			approx: item.approx,
+			penalty_subject: item.penalty_subject,
+			last_date: lastDate,
+			next_deadline: nextDeadline,
+			fy: fy,
+			fy_count: fyCount,
+			required_count: item.required_count,
+			status: status,
+			is_unmet: isUnmet
+		};
+	});
+}
+window.cpGetCommitteeComplianceStatus = cpGetCommitteeComplianceStatus;
+
+// 決まりの回数の状況テーブル描画
+function renderCommitteeComplianceTable() {
+	const tbody = document.getElementById("committeeComplianceTableBody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+
+	const statuses = cpGetCommitteeComplianceStatus();
+	statuses.forEach(s => {
+		const tr = document.createElement("tr");
+
+		let catBadgeColor = "var(--pine-dark)";
+		let catBgColor = "var(--pine-tint-2)";
+		if (s.category === "研修") {
+			catBadgeColor = "var(--pine)";
+			catBgColor = "var(--pine-tint)";
+		} else if (s.category === "訓練") {
+			catBadgeColor = "var(--caution)";
+			catBgColor = "var(--caution-tint)";
+		} else if (s.category === "会議") {
+			catBadgeColor = "var(--ink-2)";
+			catBgColor = "var(--ground)";
+		}
+
+		let statusStyle = "";
+		if (s.status === "期限内" || s.status === "足りている") {
+			statusStyle = "background:var(--pine-tint); color:var(--pine-dark); border:1px solid var(--pine);";
+		} else if (s.status === "30日以内に期限" || s.status.startsWith("まだ足りない")) {
+			statusStyle = "background:var(--caution-tint); color:var(--caution); border:1px solid var(--caution);";
+		} else {
+			statusStyle = "background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert);";
+		}
+
+		let nextOrFyHtml = "";
+		if (s.frequency_type === "interval") {
+			if (s.next_deadline) {
+				nextOrFyHtml = `<strong>${escapeHtml(s.next_deadline)}</strong>${s.approx ? '<span style="font-size:11.5px; color:var(--ink-3); margin-left:4px;">（目安）</span>' : ''}`;
+			} else {
+				nextOrFyHtml = `<span style="color:var(--ink-3);">-</span>`;
+			}
+		} else {
+			nextOrFyHtml = `今年度 <strong>${s.fy_count}／${s.required_count}回</strong>`;
+		}
+
+		let remarkHtml = "-";
+		if (s.penalty_subject === "身体拘束") {
+			remarkHtml = `<span style="font-size:11.5px; color:var(--alert);">※ 足りないと減算の対象になることがあります（身体拘束廃止未実施減算）</span>`;
+		} else if (s.penalty_subject === "虐待防止") {
+			remarkHtml = `<span style="font-size:11.5px; color:var(--alert);">※ 足りないと減算の対象になることがあります（高齢者虐待防止措置未実施減算）</span>`;
+		}
+
+		tr.innerHTML = `
+			<td style="text-align:center;"><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold; font-size:11.5px;">${escapeHtml(s.category)}</span></td>
+			<td><strong>${escapeHtml(s.name)}</strong></td>
+			<td style="font-size:12.5px;">${escapeHtml(s.display_rule)}</td>
+			<td>${s.last_date ? escapeHtml(s.last_date) : '<span style="color:var(--ink-3);">-</span>'}</td>
+			<td>${nextOrFyHtml}</td>
+			<td style="text-align:center;"><span class="badge" style="${statusStyle} font-weight:bold; font-size:12px; padding:3px 8px;">${escapeHtml(s.status)}</span></td>
+			<td style="font-size:12px;">${remarkHtml}</td>
+		`;
+		tbody.appendChild(tr);
+	});
+}
+window.renderCommitteeComplianceTable = renderCommitteeComplianceTable;
+
 function renderOfficeCommittees() {
- const tbody = document.querySelector("#committeeTable tbody");
- if (!tbody) return;
- tbody.innerHTML = "";
- const list = cpLedgerOrder(db.data.committees || []); // [Claude修正] 取消済みは後ろに並べる
- if (list.length === 0) {
- const tr = document.createElement("tr");
- tr.innerHTML = `<td colspan="7" style="text-align:center; color:#5f6d66; padding:20px;">登録された委員会・研修記録はありません。「+ 委員会・研修登録」から追加できます。</td>`;
- tbody.appendChild(tr);
- return;
- }
+	renderCommitteeComplianceTable();
 
- list.forEach(c => {
- const tr = document.createElement("tr");
- const cat = c.category || "法定委員会";
- let catBadgeColor = "#1e5b47";
- let catBgColor = "#dcebe3";
- if (cat === "施設内研修") {
- catBadgeColor = "#166534";
- catBgColor = "#dcfce7";
- } else if (cat === "外部研修") {
- catBadgeColor = "#7c2d12";
- catBgColor = "#ffedd5";
- } else if (cat === "その他業務項目") {
- catBadgeColor = "#4b5563";
- catBgColor = "#f3f4f6";
- }
+	const canEdit = typeof isCurrentStaffAdminOrClerk === "function" ? isCurrentStaffAdminOrClerk() : false;
+	const btnOpen = document.getElementById("btnOpenCommitteeModal");
+	if (btnOpen) btnOpen.style.display = canEdit ? "inline-block" : "none";
 
- // [Claude修正] 削除をやめて「取消」に（理由必須・記録は残る）
- const actionHtml = c.voided
- ? `<div style="font-size:11px; color:#991b1b; font-weight:bold;">取消済</div><div style="font-size:10.5px; color:#5f6d66; white-space:normal; max-width:180px;">${escapeHtml(c.voided_at || '')} ${escapeHtml(c.voided_by || '')}<br>理由: ${escapeHtml(c.void_reason || '-')}</div><button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('committees', ${Number(c.id)})">取消を戻す</button>`
- : `<button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:#991b1b; border-color:#fca5a5;" onclick="deleteCommittee(${Number(c.id)})">取消</button>`;
- tr.innerHTML = `
- <td>${escapeHtml(c.date || '-')}</td>
- <td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${escapeHtml(cat)}</span></td>
- <td><strong>${escapeHtml(c.committee_name || c.name || '-')}</strong></td>
- <td>${escapeHtml(c.attendees || '-')}</td>
- <td>${escapeHtml(c.agenda || '-')}</td>
- <td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${escapeHtml(c.content || '-')}</td>
- <td>${actionHtml}</td>
- `;
- if (c.voided) cpMarkVoidedRow(tr);
- tbody.appendChild(tr);
- });
+	const tbody = document.querySelector("#committeeTable tbody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+	const list = cpLedgerOrder(db.data.committees || []);
+	if (list.length === 0) {
+		const tr = document.createElement("tr");
+		tr.innerHTML = `<td colspan="7" style="text-align:center; color:var(--ink-3); padding:20px;">登録された委員会・研修記録はありません。${canEdit ? '「+ 委員会・研修登録」から追加できます。' : ''}</td>`;
+		tbody.appendChild(tr);
+		return;
+	}
+
+	list.forEach(c => {
+		const tr = document.createElement("tr");
+		const cat = c.category || "法定委員会";
+		let catBadgeColor = "var(--pine-dark)";
+		let catBgColor = "var(--pine-tint-2)";
+		if (cat === "施設内研修") {
+			catBadgeColor = "var(--pine)";
+			catBgColor = "var(--pine-tint)";
+		} else if (cat === "外部研修") {
+			catBadgeColor = "var(--caution)";
+			catBgColor = "var(--caution-tint)";
+		} else if (cat === "その他業務項目") {
+			catBadgeColor = "var(--ink-2)";
+			catBgColor = "var(--ground)";
+		}
+
+		const itemKey = cpResolveCommitteeItemKey(c);
+		const stdItem = CP_COMMITTEE_STANDARD_ITEMS.find(it => it.key === itemKey);
+		let itemBadgeHtml = "";
+		if (stdItem) {
+			itemBadgeHtml = `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:11px; margin-left:6px; font-weight:bold;">${escapeHtml(stdItem.name)}</span>`;
+		} else if (c.item_key === "other") {
+			itemBadgeHtml = `<span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:11px; margin-left:6px;">その他</span>`;
+		} else {
+			itemBadgeHtml = `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:11px; margin-left:6px;">項目：未設定</span>`;
+		}
+
+		const actionHtml = c.voided
+			? `<div style="font-size:11px; color:var(--alert); font-weight:bold;">取消済</div><div style="font-size:10.5px; color:var(--ink-3); white-space:normal; max-width:180px;">${escapeHtml(c.voided_at || '')} ${escapeHtml(c.voided_by || '')}<br>理由: ${escapeHtml(c.void_reason || '-')}</div>` +
+				(canEdit ? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px; margin-top:3px;" onclick="cpRestoreLedgerRecord('committees', ${Number(c.id)})">取消を戻す</button>` : '')
+			: (canEdit
+					? `<button class="btn btn-secondary" style="padding:3px 8px; font-size:12px; color:var(--alert); border-color:var(--alert-tint);" onclick="deleteCommittee(${Number(c.id)})">取消</button>`
+					: `<span style="font-size:12px; color:var(--ink-3);">-</span>`);
+
+		tr.innerHTML = `
+			<td>${escapeHtml(c.date || '-')}</td>
+			<td><span class="badge" style="background:${catBgColor}; color:${catBadgeColor}; font-weight:bold;">${escapeHtml(cat)}</span></td>
+			<td><strong>${escapeHtml(c.committee_name || c.name || '-')}</strong>${itemBadgeHtml}</td>
+			<td>${escapeHtml(c.attendees || '-')}</td>
+			<td>${escapeHtml(c.agenda || '-')}</td>
+			<td style="max-width:280px; white-space:pre-wrap; font-size:13px;">${escapeHtml(c.content || '-')}</td>
+			<td>${actionHtml}</td>
+		`;
+		if (c.voided) cpMarkVoidedRow(tr);
+		tbody.appendChild(tr);
+	});
 }
 
 function openCommitteeModal() {
- const today = toLocalDateStr(new Date());
- const dateInput = document.getElementById("comDate");
- if (dateInput) dateInput.value = today;
- const nameInput = document.getElementById("comName");
- if (nameInput) nameInput.value = "";
- const attendeesInput = document.getElementById("comAttendees");
- if (attendeesInput) {
- const curStaff = document.getElementById("currentStaff")?.value || "";
- attendeesInput.value = curStaff;
- }
- const agendaInput = document.getElementById("comAgenda");
- if (agendaInput) agendaInput.value = "";
- const contentInput = document.getElementById("comContent");
- if (contentInput) contentInput.value = "";
- const catInput = document.getElementById("comCategory");
- if (catInput) catInput.value = "";
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("委員会・研修記録の登録は管理者または事務員のみ可能です。");
+		return;
+	}
+	const today = toLocalDateStr(new Date());
+	const dateInput = document.getElementById("comDate");
+	if (dateInput) dateInput.value = today;
+	const nameInput = document.getElementById("comName");
+	if (nameInput) nameInput.value = "";
+	const stdInput = document.getElementById("comStandardItem");
+	if (stdInput) stdInput.value = "";
+	const attendeesInput = document.getElementById("comAttendees");
+	if (attendeesInput) {
+		const curStaff = document.getElementById("currentStaff")?.value || "";
+		attendeesInput.value = curStaff;
+	}
+	const agendaInput = document.getElementById("comAgenda");
+	if (agendaInput) agendaInput.value = "";
+	const contentInput = document.getElementById("comContent");
+	if (contentInput) contentInput.value = "";
+	const catInput = document.getElementById("comCategory");
+	if (catInput) catInput.value = "";
 
- const modal = document.getElementById("committeeModal");
- if (modal) modal.style.display = "flex";
+	const modal = document.getElementById("committeeModal");
+	if (modal) modal.style.display = "flex";
 }
 
 function submitCommittee() {
- const date = document.getElementById("comDate")?.value;
- if (!cpRequireSelect("comCategory", "種類")) return;
- const category = document.getElementById("comCategory")?.value;
- const name = document.getElementById("comName")?.value?.trim();
- const attendees = document.getElementById("comAttendees")?.value?.trim() || "-";
- const agenda = document.getElementById("comAgenda")?.value?.trim() || "-";
- const content = document.getElementById("comContent")?.value?.trim();
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("委員会・研修記録の登録・保存は管理者または事務員のみ可能です。");
+		return;
+	}
+	const date = document.getElementById("comDate")?.value;
+	if (!cpRequireSelect("comCategory", "種別")) return;
+	const category = document.getElementById("comCategory")?.value;
+	if (!cpRequireSelect("comStandardItem", "決まりの項目")) return;
+	const itemKey = document.getElementById("comStandardItem")?.value;
+	const name = document.getElementById("comName")?.value?.trim();
+	const attendees = document.getElementById("comAttendees")?.value?.trim() || "-";
+	const agenda = document.getElementById("comAgenda")?.value?.trim() || "-";
+	const content = document.getElementById("comContent")?.value?.trim();
 
- if (!date || !name || !content) {
- alert("開催日、委員会・研修名、および協議内容は必須項目です。");
- return;
- }
+	if (!date || !name || !content) {
+		alert("開催日、委員会・研修名、および協議内容は必須項目です。");
+		return;
+	}
 
- if (!db.data.committees) db.data.committees = [];
- const newRecord = {
- id: Date.now(),
- date: date,
- category: category,
- committee_name: name,
- attendees: attendees,
- agenda: agenda,
- content: content,
- created_at: toLocalDateTimeStr(new Date())
- };
- db.data.committees.unshift(newRecord);
- db.save();
- closeModal("committeeModal");
- renderOfficeCommittees();
- alert("法定委員会・研修記録を登録・保存しました！");
+	if (!db.data.committees) db.data.committees = [];
+	const newRecord = {
+		id: Date.now(),
+		date: date,
+		category: category,
+		item_key: itemKey,
+		committee_name: name,
+		attendees: attendees,
+		agenda: agenda,
+		content: content,
+		created_at: toLocalDateTimeStr(new Date())
+	};
+	db.data.committees.unshift(newRecord);
+	db.save();
+	closeModal("committeeModal");
+	renderOfficeCommittees();
+	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
+	alert("法定委員会・研修記録を登録・保存しました！");
 }
 
 function deleteCommittee(id) {
- cpVoidLedgerRecord("committees", id);
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("委員会・研修記録の取消は管理者または事務員のみ可能です。");
+		return;
+	}
+	cpVoidLedgerRecord("committees", id);
+	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
 }
 
 // 発注 ＆ 上司承認 (管理者のみ認証・閲覧制限)

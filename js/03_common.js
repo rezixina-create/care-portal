@@ -1119,6 +1119,52 @@ function checkGlobalAlerts() {
     }
   }
 
+  // 7. 【事務ポータル専用】法定委員会・研修 実施状況アラート [Antigravity実装]
+  if (typeof cpGetCommitteeComplianceStatus === "function") {
+    const comStatuses = cpGetCommitteeComplianceStatus();
+    const unmet = comStatuses.filter(s => s.is_unmet);
+    const activeUnmet = unmet.filter(s => !isAlertDismissed(`committee_compliance_${s.fy}_${s.key}`));
+    if (activeUnmet.length > 0) {
+      const activeKeys = activeUnmet.map(s => `committee_compliance_${s.fy}_${s.key}`);
+      const hasPenaltySubject = activeUnmet.some(s => s.penalty_subject);
+      const itemsListHtml = activeUnmet.map(s => {
+        let detail = "";
+        if (s.frequency_type === "annual") {
+          detail = `（今年度 ${s.fy_count}／${s.required_count}回）`;
+        } else if (s.status === "期限を過ぎている") {
+          detail = `（期限 ${escapeHtml(s.next_deadline)}${s.approx ? '（目安）' : ''} を超過 - 最終: ${escapeHtml(s.last_date)}）`;
+        } else {
+          detail = `（記録なし - 決まり: ${escapeHtml(s.display_rule)}）`;
+        }
+        return `<div style="margin:2px 0;">・${escapeHtml(s.name)} ${detail}</div>`;
+      }).join("");
+
+      const penaltyNotice = hasPenaltySubject
+        ? `<div style="font-size:12px; color:var(--alert); font-weight:bold; margin-top:4px;">※ 身体拘束・虐待防止の項目は、足りないと減算の対象になることがあります（身体拘束廃止未実施減算・高齢者虐待防止措置未実施減算）。</div>`
+        : "";
+
+      officeAlertHtml += `
+        <div class="alert-banner alert-warning notice-card-warning" style="background:var(--alert-tint); border-left:5px solid var(--alert); color:var(--ink);">
+          <div style="width:100%;">
+            <div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+              <div>
+                <strong style="color:var(--alert);">【委員会・研修】決まりの回数に足りていない項目があります：</strong>
+                <div style="margin-top:6px; font-size:13px; line-height:1.5;">
+                  ${itemsListHtml}
+                </div>
+                ${penaltyNotice}
+              </div>
+              <div style="display:flex; gap:6px; align-items:center; flex-wrap:wrap; margin-top:4px;">
+                <button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:var(--surface); color:var(--pine-dark); border-color:var(--line);" onclick="enterPortal('office'); switchOfficeTab('committee');">委員会・研修を開く</button>
+                <button type="button" class="btn btn-secondary" style="padding:3px 10px; font-size:12px; background:var(--surface); color:var(--ink-2); border-color:var(--line);" onclick="requestDismissAlertFromButton(this, ${escapeHtml(JSON.stringify(activeKeys))})">確認済・閉じる</button>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+  }
+
   // 介護現場ポータル コンテナへ描画
   // [Claude修正] お知らせの見出し【…】を共通の形にそろえる (色は style.css で指定)
   careAlertHtml = cpDecorateNoticeLabels(careAlertHtml);

@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261026_b3">
+	<link rel="stylesheet" href="style.css?v=20261026_c1">
 </head>
 <body>
 
@@ -1196,17 +1196,60 @@
 
  <!-- 11. 法定委員会・研修記録 -->
  <div id="tabOfficeCommittee" style="display:none;" class="panel-card">
- <div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
- <span> 法定委員会・研修記録 (虐待防止・感染対策・身体拘束・事故防止)</span>
- <button class="btn btn-primary" onclick="openCommitteeModal()">＋ 委員会・研修を登録</button>
- </div>
- <table class="data-table" id="committeeTable">
- <thead>
- <tr><th>開催日</th><th>種別</th><th>委員会・研修名</th><th>出席者</th><th>議題・テーマ</th><th>協議内容・決定事項</th><th>操作</th></tr>
- </thead>
- <tbody></tbody>
- </table>
- </div>
+		<div class="panel-title" style="display:flex; justify-content:space-between; align-items:center;">
+			<span>📋 法定委員会・研修記録 (事故防止・感染・身体拘束・虐待防止)</span>
+			<button class="btn btn-primary" id="btnOpenCommitteeModal" onclick="openCommitteeModal()">+ 委員会・研修登録</button>
+		</div>
+
+		<!-- 決まりの回数の状況（運営基準） [Antigravity実装] -->
+		<div style="background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:20px;">
+			<div style="margin-bottom:12px;">
+				<h3 style="margin:0; font-size:15px; color:var(--pine-dark); font-weight:bold;">
+					📋 決まりの回数の状況（運営基準）
+				</h3>
+				<p style="margin:4px 0 0 0; font-size:12px; color:var(--ink-2);">
+					グループホーム（認知症対応型共同生活介護）の運営基準で定められた委員会・研修・訓練等の実施状況です。
+				</p>
+			</div>
+			<div style="overflow-x:auto;">
+				<table class="data-table" id="committeeComplianceTable" style="width:100%; font-size:13px;">
+					<thead>
+						<tr style="background:var(--pine-tint-2);">
+							<th style="width:52px; text-align:center;">区分</th>
+							<th style="min-width:180px;">決まりの項目名</th>
+							<th style="width:140px;">回数の決まり</th>
+							<th style="width:110px;">最後に行った日</th>
+							<th style="width:160px;">次の期限 / 今年度の実施</th>
+							<th style="width:150px; text-align:center;">状態</th>
+							<th style="min-width:180px;">備考</th>
+						</tr>
+					</thead>
+					<tbody id="committeeComplianceTableBody"></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- 過去の実施記録一覧 -->
+		<div style="margin-bottom:8px; font-weight:bold; font-size:14px; color:var(--pine-dark);">
+			📑 委員会・研修の実施記録一覧
+		</div>
+		<div style="overflow-x:auto;">
+			<table class="data-table" id="committeeTable">
+				<thead>
+					<tr><th>開催日</th><th>種別</th><th>委員会・研修名</th><th>出席者</th><th>議題・テーマ</th><th>協議内容・所見</th><th>操作</th></tr>
+				</thead>
+				<tbody></tbody>
+			</table>
+		</div>
+
+		<!-- 出典（運営基準） -->
+		<div style="margin-top:16px; font-size:12px; color:var(--ink-3); line-height:1.6; border-top:1px solid var(--line); padding-top:10px;">
+			<div><strong>出典（認知症対応型共同生活介護 運営基準等）:</strong></div>
+			<div>・松山市 指導監査基準: <a href="https://www.city.matsuyama.ehime.jp/kurashi/kaigohoken/zigyousya/shiteishidou/R6jigyousya.files/1-6sidoukansa.pdf" target="_blank" rel="noopener noreferrer" style="color:var(--pine-dark); word-break:break-all;">https://www.city.matsuyama.ehime.jp/kurashi/kaigohoken/zigyousya/shiteishidou/R6jigyousya.files/1-6sidoukansa.pdf</a></div>
+			<div>・藤岡市 集団指導留意事項: <a href="https://www.city.fujioka.gunma.jp/material/files/group/49/r6_syuudan_ryuuijiko_gh.pdf" target="_blank" rel="noopener noreferrer" style="color:var(--pine-dark); word-break:break-all;">https://www.city.fujioka.gunma.jp/material/files/group/49/r6_syuudan_ryuuijiko_gh.pdf</a></div>
+			<div>・中央区 運営推進会議について: <a href="https://www.city.chuo.lg.jp/a0029/kenkouiryou/koureikaigo/kaigohoken/jigyousha/tiikimicchaku/tiiki_kaigi.html" target="_blank" rel="noopener noreferrer" style="color:var(--pine-dark); word-break:break-all;">https://www.city.chuo.lg.jp/a0029/kenkouiryou/koureikaigo/kaigohoken/jigyousha/tiikimicchaku/tiiki_kaigi.html</a></div>
+		</div>
+	</div>
 
  <!-- 12. 苦情・ご要望受付簿 -->
  <div id="tabOfficeComplaint" style="display:none;" class="panel-card">
@@ -3009,49 +3052,66 @@
 
  <!-- 10. 法定委員会・研修登録 モーダル -->
  <div class="modal-overlay" id="committeeModal" style="display:none;">
- <div class="modal-card" style="max-width:560px;">
- <div class="modal-header">
- <h3 id="committeeModalTitle"> 法定委員会・研修記録の登録</h3>
- <button class="modal-close-btn" onclick="closeModal('committeeModal')">&times;</button>
- </div>
- <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
- <div class="form-group">
- <label>開催日 <span style="color:#dc2626;">*</span>:</label>
- <input type="date" id="comDate" class="form-control">
- </div>
- <div class="form-group">
- <label>種別 <span style="color:#dc2626;">*</span>:</label>
- <select id="comCategory" class="form-control">
- <option value="">選んでください</option>
- <option value="法定委員会">法定委員会</option>
- <option value="施設内研修">施設内研修</option>
- <option value="外部研修">外部研修</option>
- <option value="その他業務項目">その他業務項目</option>
- </select>
- </div>
- </div>
- <div class="form-group">
- <label>委員会・研修名 <span style="color:#dc2626;">*</span>:</label>
- <input type="text" id="comName" class="form-control">
- </div>
- <div class="form-group">
- <label>出席者・参加職員:</label>
- <input type="text" id="comAttendees" class="form-control">
- </div>
- <div class="form-group">
- <label>議題・テーマ:</label>
- <input type="text" id="comAgenda" class="form-control">
- </div>
- <div class="form-group">
- <label>協議内容・決定事項・所見 <span style="color:#dc2626;">*</span>:</label>
- <textarea id="comContent" class="form-control" rows="4" placeholder="協議した具体的な内容、決定事項、研修の要点を記入"></textarea>
- </div>
- <div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
- <button class="btn btn-secondary" onclick="closeModal('committeeModal')">キャンセル</button>
- <button class="btn btn-primary" onclick="submitCommittee()">登録を保存</button>
- </div>
- </div>
- </div>
+		<div class="modal-card" style="max-width:560px;">
+			<div class="modal-header">
+				<h3 id="committeeModalTitle">📋 法定委員会・研修記録の登録</h3>
+				<button class="modal-close-btn" onclick="closeModal('committeeModal')">&times;</button>
+			</div>
+			<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px;">
+				<div class="form-group">
+					<label>開催日 <span style="color:var(--alert);">*</span>:</label>
+					<input type="date" id="comDate" class="form-control">
+				</div>
+				<div class="form-group">
+					<label>種別 <span style="color:var(--alert);">*</span>:</label>
+					<select id="comCategory" class="form-control">
+						<option value="">選んでください</option>
+						<option value="法定委員会">法定委員会</option>
+						<option value="施設内研修">施設内研修</option>
+						<option value="外部研修">外部研修</option>
+						<option value="その他業務項目">その他業務項目</option>
+					</select>
+				</div>
+			</div>
+			<div class="form-group">
+				<label>決まりの項目 <span style="color:var(--alert);">*</span>:</label>
+				<select id="comStandardItem" class="form-control">
+					<option value="">選んでください</option>
+					<option value="restraint_committee">身体的拘束等の適正化のための委員会 (3月に1回以上)</option>
+					<option value="restraint_training">身体拘束の研修 (年2回以上（新規採用時も）)</option>
+					<option value="abuse_committee">虐待防止検討委員会 (年1回以上（定期的に）)</option>
+					<option value="abuse_training">虐待防止の研修 (年2回以上)</option>
+					<option value="infection_committee">感染対策委員会 (おおむね6月に1回以上)</option>
+					<option value="infection_training">感染対策の研修 (年2回以上)</option>
+					<option value="infection_drill">感染対策の訓練 (年2回以上)</option>
+					<option value="bcp_training">業務継続計画（BCP）の研修 (年2回以上)</option>
+					<option value="bcp_drill">業務継続計画（BCP）の訓練 (年2回以上)</option>
+					<option value="promotion_meeting">運営推進会議 (おおむね2月に1回以上)</option>
+					<option value="other">その他（決まりの項目ではない）</option>
+				</select>
+			</div>
+			<div class="form-group">
+				<label>委員会・研修名 <span style="color:var(--alert);">*</span>:</label>
+				<input type="text" id="comName" class="form-control">
+			</div>
+			<div class="form-group">
+				<label>出席者・参加職員:</label>
+				<input type="text" id="comAttendees" class="form-control">
+			</div>
+			<div class="form-group">
+				<label>議題・テーマ:</label>
+				<input type="text" id="comAgenda" class="form-control">
+			</div>
+			<div class="form-group">
+				<label>協議内容・決定事項・所見 <span style="color:var(--alert);">*</span>:</label>
+				<textarea id="comContent" class="form-control" rows="4"></textarea>
+			</div>
+			<div style="margin-top:20px; display:flex; justify-content:flex-end; gap:10px;">
+				<button class="btn btn-secondary" onclick="closeModal('committeeModal')">キャンセル</button>
+				<button class="btn btn-primary" id="btnSubmitCommittee" onclick="submitCommittee()">登録を保存</button>
+			</div>
+		</div>
+	</div>
 
  <!-- 11. 業務日誌 日課・業務スケジュール追加 モーダル [Antigravity実装 2026-10-16] -->
  <div class="modal-overlay" id="dailyScheduleModal" style="display:none;">
@@ -4511,26 +4571,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261026_b3"></script>
- <script src="js/02_terms.js?v=20261026_b3"></script>
- <script src="js/03_common.js?v=20261026_b3"></script>
- <script src="js/04_care_record.js?v=20261026_b3"></script>
- <script src="js/05_summary_print_audit.js?v=20261026_b3"></script>
- <script src="js/06_schema_history.js?v=20261026_b3"></script>
- <script src="js/07_daily_tables.js?v=20261026_b3"></script>
- <script src="js/08_meds.js?v=20261026_b3"></script>
- <script src="js/09_night_misc.js?v=20261026_b3"></script>
- <script src="js/10_office.js?v=20261026_b3"></script>
- <script src="js/11_karte_staff.js?v=20261026_b3"></script>
- <script src="js/12_hospital_photos.js?v=20261026_b3"></script>
- <script src="js/13_shift_units.js?v=20261026_b3"></script>
- <script src="js/14_auth_home.js?v=20261026_b3"></script>
- <script src="js/15_single_write.js?v=20261026_b3"></script>
- <script src="js/16_careplan.js?v=20261026_b3"></script>
-	<script src="js/17_kasan.js?v=20261026_b3"></script>
-	<script src="js/18_stats.js?v=20261026_b3"></script>
-	<script src="js/19_life.js?v=20261026_b3"></script>
-	<script src="js/20_invoice.js?v=20261026_b3"></script>
+ <script src="js/01_core.js?v=20261026_c1"></script>
+ <script src="js/02_terms.js?v=20261026_c1"></script>
+ <script src="js/03_common.js?v=20261026_c1"></script>
+ <script src="js/04_care_record.js?v=20261026_c1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261026_c1"></script>
+ <script src="js/06_schema_history.js?v=20261026_c1"></script>
+ <script src="js/07_daily_tables.js?v=20261026_c1"></script>
+ <script src="js/08_meds.js?v=20261026_c1"></script>
+ <script src="js/09_night_misc.js?v=20261026_c1"></script>
+ <script src="js/10_office.js?v=20261026_c1"></script>
+ <script src="js/11_karte_staff.js?v=20261026_c1"></script>
+ <script src="js/12_hospital_photos.js?v=20261026_c1"></script>
+ <script src="js/13_shift_units.js?v=20261026_c1"></script>
+ <script src="js/14_auth_home.js?v=20261026_c1"></script>
+ <script src="js/15_single_write.js?v=20261026_c1"></script>
+ <script src="js/16_careplan.js?v=20261026_c1"></script>
+	<script src="js/17_kasan.js?v=20261026_c1"></script>
+	<script src="js/18_stats.js?v=20261026_c1"></script>
+	<script src="js/19_life.js?v=20261026_c1"></script>
+	<script src="js/20_invoice.js?v=20261026_c1"></script>
   
 
   <!-- ============================================================ -->

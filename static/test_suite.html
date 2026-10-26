@@ -242,6 +242,27 @@
     </div>
     <div id="careAlertsContainer"></div>
     <div id="officeAlertsContainer"></div>
+        <div id="committeeTable"><tbody></tbody></div>
+    <div id="committeeComplianceTable"><tbody id="committeeComplianceTableBody"></tbody></div>
+    <button id="btnOpenCommitteeModal"></button>
+    <div id="committeeModal" style="display:none;">
+      <input id="comDate">
+      <select id="comCategory">
+        <option value="">選んでください</option>
+        <option value="法定委員会">法定委員会</option>
+        <option value="施設内研修">施設内研修</option>
+      </select>
+      <select id="comStandardItem">
+        <option value="">選んでください</option>
+        <option value="infection_drill">感染対策の訓練</option>
+        <option value="other">その他</option>
+      </select>
+      <input id="comName">
+      <input id="comAttendees">
+      <input id="comAgenda">
+      <textarea id="comContent"></textarea>
+      <button id="btnSubmitCommittee"></button>
+    </div>
     <div id="careSummaryModal" style="display:none;">
       <div id="csResidentBadge"></div>
       <select id="careSummaryHistorySelect"></select>
@@ -1514,6 +1535,97 @@
       const newLogCount = (db.data.settings_logs || []).length;
       assert(newLogCount === origLogCount + 1 && (db.data.settings_logs[newLogCount - 1].kind || "").includes("LIFE"), "Test 146: LIFE CSV 書き出し時に settings_logs へ出力履歴が記録されること");
       db.data.kasan_settings.office_no = origOfficeNo;
+
+            // ------------------------------------------------------------------
+      // Test 169: 委員会・研修「決まりの回数」と期限の確認
+      // ------------------------------------------------------------------
+      log("--- Test 169: 委員会・研修「決まりの回数」と期限の確認 ---");
+      // 169a: 10個の決まりの項目が定義され、余計な項目が含まれないこと
+      assert(Array.isArray(CP_COMMITTEE_STANDARD_ITEMS) && CP_COMMITTEE_STANDARD_ITEMS.length === 10, "Test 169a-1: CP_COMMITTEE_STANDARD_ITEMS が10項目定義されていること");
+      const expectedKeys169 = [
+        "restraint_committee", "restraint_training", "abuse_committee", "abuse_training",
+        "infection_committee", "infection_training", "infection_drill", "bcp_training", "bcp_drill", "promotion_meeting"
+      ];
+      const actualKeys169 = CP_COMMITTEE_STANDARD_ITEMS.map(it => it.key);
+      assert(JSON.stringify(actualKeys169) === JSON.stringify(expectedKeys169), "Test 169a-2: 10項目のキーが仕様通りであること");
+
+      // 169b: 権限チェック（管理者・事務員以外は登録・取消がブロックされること）
+      const origSession169 = gState.session;
+      const origLogin169 = window.cpLoginStaffName;
+      const origStamps169 = gState.stamps;
+      const origAlert169 = window.alert;
+      let alertMsg169 = "";
+      window.alert = msg => { alertMsg169 = msg; };
+
+      // 介護職員 (管理者・事務員以外)
+      gState.session = { staffName: "テスト介護職員" };
+      gState.stamps = [{ name: "テスト介護職員", role: "介護職員" }];
+      window.cpLoginStaffName = () => "テスト介護職員";
+
+      alertMsg169 = "";
+      openCommitteeModal();
+      assert(alertMsg169.includes("管理者または事務員のみ"), "Test 169b-1: 介護職員によるopenCommitteeModalがブロックされること");
+
+      alertMsg169 = "";
+      submitCommittee();
+      assert(alertMsg169.includes("管理者または事務員のみ"), "Test 169b-2: 介護職員によるsubmitCommitteeがブロックされること");
+
+      alertMsg169 = "";
+      deleteCommittee(999);
+      assert(alertMsg169.includes("管理者または事務員のみ"), "Test 169b-3: 介護職員によるdeleteCommitteeがブロックされること");
+
+      // 169c: 管理者・事務員での登録バリデーション（決まりの項目が未選択で保存ブロック）
+      gState.session = { staffName: "テスト管理者" };
+      gState.stamps = [{ name: "テスト管理者", role: "施設長（管理者）" }];
+      window.cpLoginStaffName = () => "テスト管理者";
+
+      document.getElementById("comDate").value = "2026-10-26";
+      document.getElementById("comCategory").value = "法定委員会";
+      document.getElementById("comStandardItem").value = "";
+      document.getElementById("comName").value = "テスト委員会";
+      document.getElementById("comContent").value = "テスト協議内容";
+
+      alertMsg169 = "";
+      submitCommittee();
+      assert(alertMsg169.includes("決まりの項目"), "Test 169c-1: 決まりの項目が未選択の場合に保存がブロックされること");
+
+      // 169d: 登録保存で item_key が保存されること、及び古い記録の4種マッピング（未設定は数えない、データ不変）
+      document.getElementById("comStandardItem").value = "infection_drill";
+      const origCommittees169 = JSON.parse(JSON.stringify(db.data.committees || []));
+      
+      alertMsg169 = "";
+      submitCommittee();
+      const savedCom169 = (db.data.committees || [])[0];
+      assert(savedCom169 && savedCom169.item_key === "infection_drill", "Test 169d-1: 保存データに item_key が保持されていること");
+
+      // 古い記録マッピングテスト
+      assert(cpResolveCommitteeItemKey({ committee_name: "身体拘束適正化委員会" }) === "restraint_committee", "Test 169d-2: 身体拘束適正化委員会が restraint_committee にマッピングされること");
+      assert(cpResolveCommitteeItemKey({ committee_name: "感染症対策委員会" }) === "infection_committee", "Test 169d-3: 感染症対策委員会が infection_committee にマッピングされること");
+      assert(cpResolveCommitteeItemKey({ committee_name: "虐待防止委員会" }) === "abuse_committee", "Test 169d-4: 虐待防止委員会が abuse_committee にマッピングされること");
+      assert(cpResolveCommitteeItemKey({ committee_name: "虐待防止研修" }) === "abuse_training", "Test 169d-5: 虐待防止研修が abuse_training にマッピングされること");
+      assert(cpResolveCommitteeItemKey({ committee_name: "事故防止委員会" }) === "", "Test 169d-6: 対象外の古い記録は空（未設定）となり推測されないこと");
+
+      // 169e: 実施状況・期限計算ロジック（cpGetCommitteeComplianceStatus）
+      assert(cpAddMonthsToDateStr("2026-09-15", 3) === "2026-12-15", "Test 169e-1: 3か月加算の計算が正しいこと");
+      assert(cpAddMonthsToDateStr("2026-08-31", 1) === "2026-09-30", "Test 169e-2: 月末日の加算調整が正しいこと");
+
+      const statusList169 = cpGetCommitteeComplianceStatus("2026-10-26");
+      assert(Array.isArray(statusList169) && statusList169.length === 10, "Test 169e-3: 10項目の状況が算出されること");
+
+      // 169f: checkGlobalAlerts でのお知らせ表示（事務ポータル専用、減算注意書き、閉じるキー）
+      checkGlobalAlerts();
+      const officeAlertsEl169 = document.getElementById("officeAlertsContainer");
+      assert(officeAlertsEl169 && officeAlertsEl169.innerHTML.includes("決まりの回数に足りていない項目があります"), "Test 169f-1: 不足項目がある場合に事務ポータルでお知らせが表示されること");
+      assert(officeAlertsEl169.innerHTML.includes("減算の対象になることがあります"), "Test 169f-2: 身体拘束・虐待防止の減算注意書きが含まれること");
+      assert(officeAlertsEl169.innerHTML.includes("switchOfficeTab('committee')"), "Test 169f-3: 委員会タブを開くボタンが配置されていること");
+
+      // クリーンアップ
+      db.data.committees = origCommittees169;
+      gState.session = origSession169;
+      window.cpLoginStaffName = origLogin169;
+      gState.stamps = origStamps169;
+      window.alert = origAlert169;
+      closeModal("committeeModal");
 
       // 33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロの令和8年度特例要件のテスト（老発0313第６号準拠）
       log("33. 処遇改善加算（Ⅰ）ロ・（Ⅱ）ロ特例要件の判定・警告・誓約中テスト");
