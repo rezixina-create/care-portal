@@ -989,16 +989,16 @@ function renderNotebook() {
 
 			let statusBadgeHtml = "";
 			if (stStatus.hasNewUpdate) {
-				statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再確認)</span>`;
+				statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:13px; padding:2px 8px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再確認)</span>`;
 			} else if (stStatus.confirmed) {
-				statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #86efac;">✓ 確認済み</span>`;
+				statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:13px; padding:2px 8px; font-weight:bold; border:1px solid #86efac;">✓ 確認済み</span>`;
 			} else {
-				statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:11.5px; padding:2px 8px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認</span>`;
+				statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:13px; padding:2px 8px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認</span>`;
 			}
 
 			const taskBadgeHtml = nb.status === '未対応'
-				? `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:11px; padding:2px 6px; font-weight:bold;">要対応</span>`
-				: `<span class="badge" style="background:#dcfce7; color:#166534; font-size:11px; padding:2px 6px; font-weight:bold;">完了</span>`;
+				? `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:13px; padding:2px 6px; font-weight:bold;">要対応</span>`
+				: `<span class="badge" style="background:#dcfce7; color:#166534; font-size:13px; padding:2px 6px; font-weight:bold;">完了</span>`;
 
 			const confirmedPills = (nb.confirmed_staff && nb.confirmed_staff.length > 0)
 				? nb.confirmed_staff.map(s => `<span style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd; padding:1px 7px; border-radius:4px; font-size:13px; font-weight:bold; white-space:nowrap;">${escapeHtml(s)}</span>`).join(" ")
@@ -1007,10 +1007,10 @@ function renderNotebook() {
 			let updatesHtml = "";
 			if (Array.isArray(nb.updates) && nb.updates.length > 0) {
 				updatesHtml += `<div style="background:#fffbeb; border:1px solid #fef3c7; border-radius:6px; padding:8px 10px; margin:8px 0 6px 0;">`;
-				updatesHtml += `<div style="font-weight:bold; font-size:11.5px; color:#b45309; margin-bottom:4px;"> 【追記・変更事項】 (計 ${nb.updates.length}件)</div>`;
+				updatesHtml += `<div style="font-weight:bold; font-size:13px; color:#b45309; margin-bottom:4px;"> 【追記・変更事項】 (計 ${nb.updates.length}件)</div>`;
 				nb.updates.forEach(u => {
 					updatesHtml += `
-						<div style="font-size:12px; color:#78350f; margin-top:4px; padding-top:4px; border-top:1px dashed #fde68a;">
+						<div style="font-size:13px; color:#78350f; margin-top:4px; padding-top:4px; border-top:1px dashed #fde68a;">
 							<span style="font-weight:bold; color:#92400e;">[${escapeHtml(u.created_at || '')} 追記 by ${escapeHtml(u.staff_name || '職員')}]:</span>
 							<div style="white-space:pre-wrap; margin-top:2px;">${escapeHtml(u.content)}</div>
 						</div>
@@ -1028,9 +1028,9 @@ function renderNotebook() {
 					</div>
 					<div style="display:flex; gap:6px; align-items:center;">
 						<span style="font-size:13px; color:var(--ink-2);">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
-						<button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
-						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:11px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
-						<button class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
+						<button class="btn btn-secondary" style="padding:2px 8px; font-size:13px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
+						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:13px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
+						<button class="btn btn-secondary" style="padding:2px 6px; font-size:13px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
 					</div>
 				</div>
 				${updatesHtml}
@@ -1104,7 +1104,7 @@ function cpGetConfirmedStaffForDate(date) {
 				if (Array.isArray(nb.confirm_log)) {
 					for (let i = nb.confirm_log.length - 1; i >= 0; i--) {
 						const log = nb.confirm_log[i];
-						if (log && log.by === staff && typeof log.action === "string" && log.action.includes("確認") && !log.action.includes("取消")) {
+						if (log && (log.staff === staff || log.by === staff) && typeof log.action === "string" && log.action.includes("確認") && !log.action.includes("取消")) { // [Claude修正] cpLogConfirm は staff に名前を入れている（by では見つからなかった）
 							t = log.at || "";
 							break;
 						}
@@ -1113,9 +1113,7 @@ function cpGetConfirmedStaffForDate(date) {
 				if (!t && nb.confirmed_versions && nb.confirmed_versions[staff]) {
 					t = nb.confirmed_versions[staff];
 				}
-				if (!t && nb.created_at) {
-					t = nb.created_at;
-				}
+				// [Claude修正] 申し送りを書いた時刻は、確認した時刻ではないので使わない（分からないときは時刻を出さない）
 				if (t && (!latestStamp || t > latestStamp)) {
 					latestStamp = t;
 				}
@@ -1184,7 +1182,8 @@ function openAddDailyNotebookUpdateModal(id) {
 function submitDailyNotebookUpdate() {
 	const id = parseInt(document.getElementById("dailyNotebookUpdateParentId").value, 10);
 	const content = document.getElementById("dailyNotebookUpdateContent").value.trim();
-	const currentStaff = document.getElementById("currentStaff") ? document.getElementById("currentStaff").value : "職員";
+	const currentStaff = cpLoginStaffName(); // [Claude修正 2026-10-26] 追記した人はログインした本人（記録者の欄・「職員」では埋めない）
+	if (!currentStaff) { alert("ログイン中の職員が取得できません。ログインし直してください。"); return; }
 
 	if (!content) {
 		alert("追記・変更内容を入力してください。");
@@ -1239,7 +1238,8 @@ function deleteDailyNotebookItem(id) {
 function submitNotebook() {
 	const content = document.getElementById("notebookContent").value.trim();
 	if (!content) return;
-	const staff = document.getElementById("currentStaff").value || "担当職員";
+	const staff = cpLoginStaffName(); // [Claude修正 2026-10-26] 書いた人はログインした本人（「担当職員」では埋めない）
+	if (!staff) { alert("ログイン中の職員が取得できません。ログインし直してください。"); return; }
 	const now = new Date();
 	const nowStr = `${toLocalDateStr(now)} ${now.toTimeString().slice(0, 5)}`;
 
@@ -1263,7 +1263,7 @@ function submitNotebook() {
 
 
 function resolveNotebook(id) {
- const staff = document.getElementById("currentStaff").value;
+ const staff = cpLoginStaffName(); // [Claude修正 2026-10-26] 対応した人はログインした本人
  const nb = db.data.notebooks.find(x => x.id === id);
  if (nb) {
  nb.status = "完了";
