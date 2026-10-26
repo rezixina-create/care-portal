@@ -93,7 +93,25 @@
     <div id="selectedDateRecordsList"></div>
     <div id="personalDailySummaryArea"></div>
     <div id="personalVitalChartArea"></div>
-    <div id="officeCareRecordsExportSection" style="display:none;">
+        <table class="data-table" id="incidentsTable"><tbody></tbody></table>
+    <table class="data-table" id="careIncidentsTable"><tbody></tbody></table>
+    <div class="modal-overlay" id="incidentDetailModal" style="display:none;">
+      <div id="incDetailVoidedBanner" style="display:none;"></div>
+      <span id="incDetailOccurredAt"></span>
+      <span id="incDetailReportType"></span>
+      <span id="incDetailResident"></span>
+      <span id="incDetailPlace"></span>
+      <span id="incDetailStatus"></span>
+      <span id="incDetailStaff"></span>
+      <div id="incDetailSituation"></div>
+      <div id="incidentDetailPinsOverlay"></div>
+      <div id="incidentDetailPinsTable"></div>
+      <div id="incDetailCause"></div>
+      <div id="incDetailPrevention"></div>
+      <div id="incDetailSupervisor"></div>
+      <button id="btnIncidentDetailPrint" onclick="printCurrentIncidentDetail()">この報告書を印刷</button>
+    </div>
+<div id="officeCareRecordsExportSection" style="display:none;">
       <select id="exportRecordResidentSelect"><option value="">選んでください</option><option value="ALL">全員（その期間に入居していた方）</option></select>
       <input type="date" id="exportRecordStartDate">
       <input type="date" id="exportRecordEndDate">
@@ -2294,6 +2312,20 @@
       assert(isChronological === true, "Test 166c-3: 1人分の記録が古い順（早い時間から遅い時間）に並んでいること");
 
       // 種類別絞り込み (バイタルのみ)
+      if (!db.data.vitals.some(v => v.resident_id === 1 && v.date >= "2026-10-01" && v.date <= "2026-10-23")) {
+        db.data.vitals.push({
+          id: 999992,
+          resident_id: 1,
+          date: "2026-10-15",
+          time: "09:00",
+          temperature: 36.5,
+          bp_high: 120,
+          bp_low: 75,
+          pulse: 70,
+          spo2: 98,
+          staff_name: "小林"
+        });
+      }
       const collectedVitalOnly = cpCollectExportRecords({
         resVal: "1",
         startDate: "2026-10-01",
@@ -2468,12 +2500,149 @@
       // 一時モック削除 & セッション復帰
       db.data.residents = db.data.residents.filter(r => r.id !== 99912 && r.id !== 99919);
       db.data.care_records = db.data.care_records.filter(r => r.id !== 999991);
+      db.data.vitals = db.data.vitals.filter(v => v.id !== 999992);
       gState.session = origSession166;
       window.alert = origAlert166;
 
       // 設定およびユニット構成を元に戻す
       db.data.kasan_settings = origSettingsBefore157;
       db.data.units = origUnitsBefore157;
+
+      // ----------------------------------------------------
+      // Test 167: 事故・ヒヤリハット一覧の「一覧 → 詳細 → 印刷」の流れ
+      // ----------------------------------------------------
+      log("--- Test 167: 事故・ヒヤリハット一覧の「一覧 → 詳細 → 印刷」の流れ ---");
+
+      // 167a: 一覧表の描画、行クリック属性、印刷ボタン撤廃、外傷ピンバッジ
+      const origIncidents167 = JSON.parse(JSON.stringify(db.data.incidents || []));
+      const testResident167 = { id: 88801, name: "坂本 テスト様", room_no: "201", care_level: "要介護3" };
+      gState.residents = (gState.residents || []).concat([testResident167]);
+
+      const testIncidents167 = [
+        {
+          id: 77701,
+          report_type: "事故報告書",
+          occurred_at: "2026-10-25 14:30",
+          resident_id: 88801,
+          place: "食堂 (車椅子)",
+          situation: "車椅子から立ち上がろうとして右膝を強打した。",
+          cause: "ブレーキが甘く、車椅子が後退した。",
+          prevention: "移乗時は必ずフットレストとブレーキを確認する。",
+          supervisor_comment: "再発防止を徹底すること。",
+          status: "報告済",
+          staff_name: "小林 亮",
+          injury_pins: [
+            { id: 1, site_name: "右膝部", injury_type: "打撲・擦過傷", severity: "中等度", treatment: "アイシング・消毒処置", notes: "腫脹あり", x_pct: 35, y_pct: 70 }
+          ]
+        },
+        {
+          id: 77702,
+          report_type: "ヒヤリハット",
+          occurred_at: "2026-10-25 18:00",
+          resident_id: 88801,
+          place: "居室",
+          situation: "ベッドからずり落ちそうになったが職員が支えた。",
+          cause: "姿勢が崩れていた。",
+          prevention: "クッション位置を調整する。",
+          supervisor_comment: "見守りを強化。",
+          status: "完了",
+          staff_name: "佐藤 看護師",
+          injury_pins: []
+        },
+        {
+          id: 77703,
+          report_type: "事故報告書",
+          occurred_at: "2026-10-24 09:00",
+          resident_id: 88801,
+          place: "廊下",
+          situation: "誤って作成された報告書",
+          status: "報告済",
+          staff_name: "木村",
+          injury_pins: [],
+          voided: true,
+          void_reason: "対象者誤りのため取消",
+          voided_by: "管理者 木村",
+          voided_at: "2026-10-24 10:00"
+        }
+      ];
+
+      db.data.incidents = testIncidents167;
+      renderOfficeIncidents();
+
+      const careTable167 = document.getElementById("careIncidentsTable");
+      const officeTable167 = document.getElementById("incidentsTable");
+      assert(careTable167 && officeTable167, "Test 167a-1: careIncidentsTableとincidentsTableの両方が存在すること");
+
+      const careRows167 = careTable167.querySelectorAll("tbody tr");
+      assert(careRows167.length === 3, "Test 167a-2: 報告書3件が一覧に正しく描画されること");
+
+      // 行のクリック属性・スタイル
+      const firstRow167 = careRows167[0];
+      assert(firstRow167.style.cursor === "pointer", "Test 167a-3: 行のカーソルがpointerであること");
+      assert(firstRow167.getAttribute("onclick") && firstRow167.getAttribute("onclick").includes("openIncidentDetailModal(77701)"), "Test 167a-4: 行にopenIncidentDetailModalのonclickが設定されていること");
+
+      // 外傷ピンバッジ
+      assert(firstRow167.innerHTML.includes("外傷ピン 1件"), "Test 167a-5: 外傷ピンがある報告書に「外傷ピン 1件」バッジが表示されること");
+      assert(firstRow167.innerHTML.includes("var(--alert)"), "Test 167a-6: バッジにCSS変数var(--alert)が使われていること");
+
+      // 一覧の各行に「印刷」ボタンがないこと
+      const allActionBtns167 = careTable167.querySelectorAll("tbody td:last-child button");
+      let hasPrintBtn167 = false;
+      allActionBtns167.forEach(b => {
+        if (b.textContent.includes("印刷") || (b.getAttribute("onclick") || "").includes("printIncidentReport")) {
+          hasPrintBtn167 = true;
+        }
+      });
+      assert(!hasPrintBtn167, "Test 167a-7: 一覧の行から「印刷」ボタンが撤廃されていること");
+
+      // 操作セルtdにstopPropagationがあること
+      const actionTd167 = firstRow167.querySelector("td:last-child");
+      assert(actionTd167 && actionTd167.getAttribute("onclick") && actionTd167.getAttribute("onclick").includes("stopPropagation"), "Test 167a-8: 操作セルtdにevent.stopPropagation()が設定されていること");
+
+      // 167b: openIncidentDetailModalによる詳細小窓の表示と全項目の完全な出力
+      openIncidentDetailModal(77701);
+      const detailModal167 = document.getElementById("incidentDetailModal");
+      assert(detailModal167 && detailModal167.style.display === "flex", "Test 167b-1: 詳細小窓が開くこと (style.display === flex)");
+      assert(document.getElementById("incDetailOccurredAt").textContent === "2026-10-25 14:30", "Test 167b-2: 発生日時が正しく表示されること");
+      assert(document.getElementById("incDetailReportType").textContent === "事故報告書", "Test 167b-3: 種別が正しく表示されること");
+      assert(document.getElementById("incDetailResident").textContent.includes("坂本 テスト様"), "Test 167b-4: 対象者名が表示されること");
+      assert(document.getElementById("incDetailPlace").textContent === "食堂 (車椅子)", "Test 167b-5: 発生場所が表示されること");
+      assert(document.getElementById("incDetailSituation").textContent === "車椅子から立ち上がろうとして右膝を強打した。", "Test 167b-6: 状況が省かれず表示されること");
+      assert(document.getElementById("incDetailCause").textContent === "ブレーキが甘く、車椅子が後退した。", "Test 167b-7: 原因の分析が表示されること");
+      assert(document.getElementById("incDetailPrevention").textContent === "移乗時は必ずフットレストとブレーキを確認する。", "Test 167b-8: 再発防止策が表示されること");
+      assert(document.getElementById("incDetailSupervisor").textContent === "再発防止を徹底すること。", "Test 167b-9: 上長コメントが表示されること");
+
+      // 人体図外傷ピンと一覧
+      const pinsOverlay167 = document.getElementById("incidentDetailPinsOverlay");
+      const pinsTable167 = document.getElementById("incidentDetailPinsTable");
+      assert(pinsOverlay167 && pinsOverlay167.children.length === 1, "Test 167b-10: シェーマ図上にピンが1件描画されること");
+      assert(pinsTable167 && pinsTable167.innerHTML.includes("右膝部") && pinsTable167.innerHTML.includes("打撲・擦過傷"), "Test 167b-11: 外傷ピンテーブルに部位と種類が表示されること");
+      assert(!pinsTable167.innerHTML.includes("editIncidentInjuryPin") && !pinsTable167.innerHTML.includes("deleteIncidentInjuryPin"), "Test 167b-12: 詳細画面の外傷ピン一覧は読み取り専用で編集・削除ボタンがないこと");
+
+      // 167c: 取消済報告書の表示（取消印・理由・取消者）
+      openIncidentDetailModal(77703);
+      const voidBanner167 = document.getElementById("incDetailVoidedBanner");
+      assert(voidBanner167 && voidBanner167.style.display === "block", "Test 167c-1: 取消済報告書では取消バナーが表示されること");
+      assert(voidBanner167.textContent.includes("【取消済】") && voidBanner167.textContent.includes("対象者誤りのため取消") && voidBanner167.textContent.includes("管理者 木村"), "Test 167c-2: 取消理由および取消者が表示されること");
+
+      // 167d: 詳細画面の「この報告書を印刷」ボタンで printIncidentReport(id) が正しく呼ばれること
+      let printReportIdCalled = null;
+      const origPrintFunc167 = window.printIncidentReport;
+      window.printIncidentReport = function(id) { printReportIdCalled = id; };
+
+      openIncidentDetailModal(77701);
+      printCurrentIncidentDetail();
+      assert(printReportIdCalled === 77701, "Test 167d-1: 詳細画面の印刷ボタンでprintIncidentReport(77701)が呼び出されること");
+
+      window.printIncidentReport = origPrintFunc167;
+
+      // 167e: 詳細小窓の開閉でデータが変更されないこと（読み取り専用）
+      assert(JSON.stringify(db.data.incidents) === JSON.stringify(testIncidents167), "Test 167e-1: 詳細画面の開閉でincidentsデータが一切書き換えられていないこと");
+
+      // クリーンアップ
+      db.data.incidents = origIncidents167;
+      gState.residents = (gState.residents || []).filter(r => r.id !== 88801);
+      closeModal("incidentDetailModal");
 
       // 33. 総合結果判定
       log("====================================================");

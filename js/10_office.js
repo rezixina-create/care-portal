@@ -45,7 +45,8 @@ function switchOfficeTab(tab) {
  fire: "tabOfficeFire", committee: "tabOfficeCommittee", complaint: "tabOfficeComplaint",
  care_renewal: "tabOfficeCareRenewal",
  backup: "tabOfficeBackup", staff_auth: "tabOfficeStaffAuth", units: "tabOfficeUnits",
- contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats", life: "tabOfficeLife", invoice: "tabOfficeInvoice"
+ contracts: "tabOfficeContracts", kasan: "tabOfficeKasan", stats: "tabOfficeStats", life: "tabOfficeLife", invoice: "tabOfficeInvoice",
+ incidents: "tabOfficeIncidents"
  };
 
  Object.values(tabMap).forEach(id => {
@@ -76,15 +77,13 @@ function switchOfficeTab(tab) {
  } else if (tab === "life") {
  if (typeof renderOfficeLifeTab === "function") renderOfficeLifeTab();
  } else if (tab === "invoice") {
- if (typeof renderOfficeInvoiceTab === "function") renderOfficeInvoiceTab(); // [Claude追加 2026-10-23] 利用者への請求書
- }
- }
+		if (typeof renderOfficeInvoiceTab === "function") renderOfficeInvoiceTab();
+	} else if (tab === "incidents") {
+		renderOfficeIncidents();
+	}
+	}
 }
 
-// 在庫一覧 ＆ 棚卸し実数合わせ
-// ==========================================
-// [Antigravity追加] 物品の請求設定（施設形態・区分・品物・利用者別）
-// ==========================================
 function cpGetBillingSettings() {
   const def = {
     facility_type: "gh",
@@ -2146,21 +2145,22 @@ function renderOfficeIncidents() {
 			const supervisor = inc.supervisor_comment || inc.factor || '-';
 			const st = inc.status || '報告済';
 			const pinsCount = (inc.injury_pins && Array.isArray(inc.injury_pins)) ? inc.injury_pins.length : 0;
-			const pinBadge = pinsCount > 0 ? `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:10.5px; padding:2px 6px; margin-left:4px; font-weight:bold;">外傷ピン ${pinsCount}件</span>` : '';
+			const pinBadge = pinsCount > 0 ? `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px; padding:2px 6px; margin-left:4px; font-weight:bold;">外傷ピン ${pinsCount}件</span>` : '';
 
 			const tr = document.createElement("tr");
+			tr.style.cursor = "pointer";
+			tr.setAttribute("onclick", `openIncidentDetailModal(${inc.id})`);
 			tr.innerHTML = `
 				<td>${escapeHtml(timeDisplay)}</td>
-				<td><span class="badge" style="background:#fee2e2; color:#991b1b;">${escapeHtml(repType)}</span>${pinBadge}</td>
+				<td><span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:13px;">${escapeHtml(repType)}</span>${pinBadge}</td>
 				<td><strong>${res ? escapeHtml(res.name) + ' 様' : escapeHtml(inc.resident_name || '')}</strong></td>
-				<td>${escapeHtml(inc.place || '居室')}</td>
+				<td>${escapeHtml(inc.place || '—')}</td>
 				<td>${escapeHtml(situ)}</td>
 				<td>${escapeHtml(prev)}</td>
 				<td>${escapeHtml(supervisor)}</td>
-				<td><span class="badge" style="background:#dcebe3; color:#1e5b47;">${escapeHtml(st)}</span></td>
-				<td style="white-space:nowrap; text-align:center;">
+				<td><span class="badge" style="background:var(--pine-tint); color:var(--pine); font-size:13px;">${escapeHtml(st)}</span></td>
+				<td style="white-space:nowrap; text-align:center;" onclick="event.stopPropagation();">
 					${cpLedgerActions('incidents', inc, 'editIncident').replace('訂正', '修正・追記')}
-					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; margin-left:3px; background:#f6f8f6; border:1px solid #cdd6d0;" onclick="printIncidentReport(${inc.id})">印刷</button>
 				</td>
 			`;
 			if (inc.voided) cpMarkVoidedRow(tr);
@@ -2168,7 +2168,6 @@ function renderOfficeIncidents() {
 		});
 	});
 }
-
 
 function updateIncidentPinsSummaryUI() {
 	const summaryEl = document.getElementById("incInjuryPinsSummary");
@@ -2352,30 +2351,34 @@ function handleIncidentInjuryImageClick(e) {
 	}
 }
 
-function renderIncidentInjuryPins() {
-	const overlay = document.getElementById("incInjuryPinsOverlay");
-	const tableContainer = document.getElementById("incInjuryPinsTableContainer");
-	const countTitle = document.getElementById("incInjuryPinsCountTitle");
+function renderIncidentInjuryPins(options) {
+	const opts = options || {};
+	const overlay = opts.overlay || document.getElementById("incInjuryPinsOverlay");
+	const tableContainer = opts.tableContainer || document.getElementById("incInjuryPinsTableContainer");
+	const countTitle = opts.countTitle || document.getElementById("incInjuryPinsCountTitle");
 	if (!overlay || !tableContainer) return;
 
-	const pins = gState.currentIncidentInjuryPins || [];
+	const pins = opts.pins || gState.currentIncidentInjuryPins || [];
 	pins.forEach((p, idx) => { p.pin_no = idx + 1; });
 
-	if (countTitle) countTitle.textContent = `登録中の受傷ピン (${pins.length}件)`;
+	if (countTitle) countTitle.textContent = `登録済の受傷ピン (${pins.length}件)`;
 
-	const activeEditId = Number(document.getElementById("incInjuryEditPinId")?.value || 0);
+	const isReadOnly = !!opts.readOnly;
+	const activeEditId = isReadOnly ? 0 : Number(document.getElementById("incInjuryEditPinId")?.value || 0);
 
 	let pinsHtml = "";
 	pins.forEach(p => {
-		const isSelected = activeEditId === Number(p.id);
+		const isSelected = !isReadOnly && activeEditId === Number(p.id);
 		const style = isSelected
-			? "background:#ffffff; color:#dc2626; border:2px solid #dc2626; transform:scale(1.25); z-index:25; box-shadow:0 0 8px rgba(220,38,38,0.9);"
-			: "background:#dc2626; color:#ffffff; border:2px solid #ffffff; z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.6);";
+			? "background:var(--surface); color:var(--alert); border:2px solid var(--alert); transform:scale(1.25); z-index:25; box-shadow:0 0 8px rgba(179,38,30,0.9);"
+			: "background:var(--alert); color:var(--surface); border:2px solid var(--surface); z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.6);";
+		const clickAttr = isReadOnly ? "" : `onclick="event.stopPropagation(); editIncidentInjuryPin(${p.id});"`;
+		const cursorStyle = isReadOnly ? "cursor:default;" : "cursor:pointer;";
 
 		pinsHtml += `
-			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; cursor:pointer; pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${style}"
-				title="[${p.pin_no}] ${escapeHtml(p.site_name)}: ${escapeHtml(p.injury_type)} (${escapeHtml(p.treatment || '-')})"
-				onclick="event.stopPropagation(); editIncidentInjuryPin(${p.id});">
+			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; ${cursorStyle} pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${style}"
+				title="[${p.pin_no}] ${escapeHtml(p.site_name || '')}: ${escapeHtml(p.injury_type || '')} (${escapeHtml(p.treatment || '-')})"
+				${clickAttr}>
 				${p.pin_no}
 			</div>
 		`;
@@ -2384,47 +2387,48 @@ function renderIncidentInjuryPins() {
 
 	if (pins.length === 0) {
 		tableContainer.innerHTML = `
-			<div style="text-align:center; padding:20px 10px; color:#5f6d66; font-size:12px;">
-				登録されている受傷ピンはありません。<br>
-				左の人体図（正面・背面）をクリックして位置を指定してください。
+			<div style="text-align:center; padding:20px 10px; color:var(--ink-3); font-size:13px;">
+				${isReadOnly ? '外傷ピンの登録はありません。' : '登録されている受傷ピンはありません。<br>左の人体図（前面・背面）をクリックして位置を指定してください。'}
 			</div>
 		`;
 		return;
 	}
 
 	let tableHtml = `
-		<table class="table" style="width:100%; font-size:12px; margin-bottom:0; border-collapse:collapse;">
+		<table class="table" style="width:100%; font-size:13px; margin-bottom:0; border-collapse:collapse;">
 			<thead>
-				<tr style="background:#fee2e2; color:#991b1b; border-bottom:2px solid #fca5a5;">
+				<tr style="background:var(--alert-tint); color:var(--alert); border-bottom:2px solid var(--line);">
 					<th style="padding:6px 8px; width:40px; text-align:center;">番号</th>
 					<th style="padding:6px 8px; width:85px;">部位</th>
-					<th style="padding:6px 8px;">外傷種別・処置</th>
+					<th style="padding:6px 8px;">外傷種類・処置</th>
 					<th style="padding:6px 8px; width:80px;">程度</th>
-					<th style="padding:6px 8px; width:85px; text-align:center;">操作</th>
+					${isReadOnly ? '' : '<th style="padding:6px 8px; width:85px; text-align:center;">操作</th>'}
 				</tr>
 			</thead>
 			<tbody>
 	`;
 
 	pins.forEach(p => {
-		const isSelected = activeEditId === Number(p.id);
+		const isSelected = !isReadOnly && activeEditId === Number(p.id);
 		tableHtml += `
-			<tr style="border-bottom:1px solid #dfe5e1; ${isSelected ? 'background:#fef2f2;' : ''}">
+			<tr style="border-bottom:1px solid var(--line-2); ${isSelected ? 'background:var(--alert-tint);' : ''}">
 				<td style="padding:6px 8px; text-align:center;">
-					<span style="display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%; background:#dc2626; color:#ffffff; font-weight:bold; font-size:11.5px; text-align:center;">
+					<span style="display:inline-block; width:20px; height:20px; line-height:20px; border-radius:50%; background:var(--alert); color:var(--surface); font-weight:bold; font-size:13px; text-align:center;">
 						${p.pin_no}
 					</span>
 				</td>
 				<td style="padding:6px 8px;"><strong>${escapeHtml(p.site_name || '-')}</strong></td>
 				<td style="padding:6px 8px;">
-					<div style="font-weight:bold; color:#1c2622;">${escapeHtml(p.injury_type || '-')}</div>
-					<div style="font-size:11px; color:#4a5852;">処置: ${escapeHtml(p.treatment || '-')}</div>
+					<div style="font-weight:bold; color:var(--ink);">${escapeHtml(p.injury_type || '-')}</div>
+					<div style="font-size:13px; color:var(--ink-2);">処置: ${escapeHtml(p.treatment || '-')}</div>
 				</td>
-				<td style="padding:6px 8px; font-size:11px; color:#5f6d66;">${escapeHtml(p.severity || '-')}</td>
+				<td style="padding:6px 8px; font-size:13px; color:var(--ink-3);">${escapeHtml(p.severity || '-')}</td>
+				${isReadOnly ? '' : `
 				<td style="padding:6px 8px; text-align:center; white-space:nowrap;">
-					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="editIncidentInjuryPin(${p.id})">訂正</button>
-					<button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 6px; margin-left:3px;" onclick="deleteIncidentInjuryPin(${p.id})">削除</button>
+					<button type="button" class="btn btn-secondary" style="font-size:13px; padding:2px 6px;" onclick="editIncidentInjuryPin(${p.id})">編集</button>
+					<button type="button" class="btn btn-danger" style="font-size:13px; padding:2px 6px; margin-left:3px;" onclick="deleteIncidentInjuryPin(${p.id})">削除</button>
 				</td>
+				`}
 			</tr>
 		`;
 	});
@@ -3581,3 +3585,88 @@ function submitResidentForm() {
  alert(editId ? `「${name} 様」の登録情報を更新しました！` : `新規利用者「${name} 様」を登録しました！`);
 }
 
+
+
+// ==============================================================
+// 事故・ヒヤリハット報告書 詳細モーダル表示 ＆ 印刷
+// ==============================================================
+function openIncidentDetailModal(incId) {
+	const list = db.data.incidents || [];
+	const inc = list.find(x => Number(x.id) === Number(incId));
+	if (!inc) {
+		alert("指定された報告書が見つかりません。");
+		return;
+	}
+
+	gState.selectedIncidentDetailId = inc.id;
+
+	// 取消状態の表示
+	const voidBanner = document.getElementById("incDetailVoidedBanner");
+	if (voidBanner) {
+		if (inc.voided) {
+			voidBanner.style.display = "block";
+			const reason = inc.void_reason || "理由未記入";
+			const staff = inc.voided_by || "記録者";
+			const at = inc.voided_at || "";
+			voidBanner.innerHTML = `【取消済】 取消理由: ${escapeHtml(reason)}（取消者: ${escapeHtml(staff)}${at ? ' / ' + escapeHtml(at) : ''}）`;
+		} else {
+			voidBanner.style.display = "none";
+			voidBanner.innerHTML = "";
+		}
+	}
+
+	// 利用者情報
+	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
+	const resDisplay = res
+		? `${escapeHtml(res.room_no || '')}号室 ${escapeHtml(res.name || '')} 様 (${escapeHtml(res.care_level || '-')})`
+		: (escapeHtml(inc.resident_name || '未設定'));
+
+	// 基本情報
+	const timeDisplay = inc.occurred_at || inc.date || '-';
+	const repType = inc.report_type || inc.level || 'ヒヤリハット';
+	const statusDisplay = inc.status || '報告済';
+	const staffDisplay = inc.staff_name || '担当者';
+
+	const elTime = document.getElementById("incDetailOccurredAt");
+	if (elTime) elTime.textContent = timeDisplay;
+	const elType = document.getElementById("incDetailReportType");
+	if (elType) elType.textContent = repType;
+	const elRes = document.getElementById("incDetailResident");
+	if (elRes) elRes.innerHTML = resDisplay;
+	const elPlace = document.getElementById("incDetailPlace");
+	if (elPlace) elPlace.textContent = inc.place || '—';
+	const elStatus = document.getElementById("incDetailStatus");
+	if (elStatus) elStatus.textContent = statusDisplay;
+	const elStaff = document.getElementById("incDetailStaff");
+	if (elStaff) elStaff.textContent = staffDisplay;
+
+	// 各記述欄
+	const elSitu = document.getElementById("incDetailSituation");
+	if (elSitu) elSitu.textContent = inc.situation || '—';
+	const elCause = document.getElementById("incDetailCause");
+	if (elCause) elCause.textContent = inc.cause || inc.factor || '—';
+	const elPrev = document.getElementById("incDetailPrevention");
+	if (elPrev) elPrev.textContent = inc.prevention || inc.countermeasure || '—';
+	const elSup = document.getElementById("incDetailSupervisor");
+	if (elSup) elSup.textContent = inc.supervisor_comment || '—';
+
+	// 受傷部位シェーマ図 ＆ 外傷ピン一覧の描画（読み取り専用）
+	renderIncidentInjuryPins({
+		overlay: document.getElementById("incidentDetailPinsOverlay"),
+		tableContainer: document.getElementById("incidentDetailPinsTable"),
+		pins: inc.injury_pins || [],
+		readOnly: true
+	});
+
+	// モーダルを開く
+	const modal = document.getElementById("incidentDetailModal");
+	if (modal) modal.style.display = "flex";
+}
+
+function printCurrentIncidentDetail() {
+	if (!gState.selectedIncidentDetailId) return;
+	printIncidentReport(gState.selectedIncidentDetailId);
+}
+
+window.openIncidentDetailModal = openIncidentDetailModal;
+window.printCurrentIncidentDetail = printCurrentIncidentDetail;
