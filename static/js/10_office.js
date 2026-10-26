@@ -2265,7 +2265,8 @@ function saveIncidentReport() {
 	const cause = document.getElementById("incCause").value;
 	const prevention = document.getElementById("incPrevention").value;
 	const supervisor = document.getElementById("incSupervisor").value;
-	const staff = document.getElementById("currentStaff")?.value || "担当職員";
+	// [Claude修正] 記録者はログインした本人（記録者の選ぶ欄や「担当職員」の代わりの言葉にしない）
+	const staff = (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "") || document.getElementById("currentStaff")?.value || "";
 	const injuryPins = gState.currentIncidentInjuryPins || [];
 
 	if (!situation) {
@@ -2358,7 +2359,8 @@ function renderIncidentInjuryPins(options) {
 	const countTitle = opts.countTitle || document.getElementById("incInjuryPinsCountTitle");
 	if (!overlay || !tableContainer) return;
 
-	const pins = opts.pins || gState.currentIncidentInjuryPins || [];
+	// [Claude修正] 詳細（見るだけ）のときは、保存されている報告書のピンに番号を書き足さないよう写しを使う
+	const pins = opts.pins ? opts.pins.map(p => Object.assign({}, p)) : (gState.currentIncidentInjuryPins || []);
 	pins.forEach((p, idx) => { p.pin_no = idx + 1; });
 
 	if (countTitle) countTitle.textContent = `登録済の受傷ピン (${pins.length}件)`;
@@ -3625,7 +3627,7 @@ function openIncidentDetailModal(incId) {
 	const timeDisplay = inc.occurred_at || inc.date || '-';
 	const repType = inc.report_type || inc.level || 'ヒヤリハット';
 	const statusDisplay = inc.status || '報告済';
-	const staffDisplay = inc.staff_name || '担当者';
+	const staffDisplay = inc.staff_name || '未記録'; // [Claude修正] 記録者がないときに代わりの言葉を出さない
 
 	const elTime = document.getElementById("incDetailOccurredAt");
 	if (elTime) elTime.textContent = timeDisplay;
