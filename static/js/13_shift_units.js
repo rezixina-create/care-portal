@@ -3238,45 +3238,37 @@ function cpCollectExportRecords(inputs) {
  const allRecords = [];
 
  targetResidents.forEach(res => {
-  let curDate = startDate;
-  while (curDate <= endDate) {
-   if (res.admission_date && curDate < res.admission_date) {
-    curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
-    continue;
-   }
-   if (res.discharge_date && curDate > res.discharge_date) {
-    curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
-    continue;
-   }
+  // [Antigravity改善] 日数×人数の探し直しを解消するため、利用者ごとに全期間（isAllScope=true）で1回だけ取得し、
+  // メモリ上で期間（startDate〜endDate）および入居日・退居日の範囲内に絞り込む
+  const unifiedItems = (typeof cpBuildUnifiedResidentRecords === "function")
+   ? cpBuildUnifiedResidentRecords(res.id, null, true, includeVoided)
+   : [];
 
-   const dayItems = (typeof cpBuildUnifiedResidentRecords === "function")
-    ? cpBuildUnifiedResidentRecords(res.id, curDate, false, includeVoided)
-    : [];
+  unifiedItems.forEach(item => {
+   const itemDate = item.date || (item.recorded_at ? item.recorded_at.slice(0, 10) : "");
+   if (!itemDate || itemDate < startDate || itemDate > endDate) return;
+   if (res.admission_date && itemDate < res.admission_date) return;
+   if (res.discharge_date && itemDate > res.discharge_date) return;
+   if (!includeVoided && item.voided) return;
+   if (!cpIsRecordTypeSelected(item, selectedTypes)) return;
 
-   dayItems.forEach(item => {
-    if (!includeVoided && item.voided) return;
-    if (!cpIsRecordTypeSelected(item, selectedTypes)) return;
-
-    allRecords.push({
-     resident_id: res.id,
-     room_no: res.room_no || "",
-     resident_name: res.name || "",
-     date: item.date || curDate,
-     time: item.time || (item.recorded_at && item.recorded_at.length >= 16 ? item.recorded_at.slice(11, 16) : "00:00"),
-     recorded_at: item.recorded_at || `${curDate} 00:00`,
-     category: item.category || "介護記録",
-     content: item.content || "",
-     staff_name: item.staff_name || "未記録",
-     voided: Boolean(item.voided),
-     void_reason: item.void_reason || "",
-     voided_by: item.voided_by || "",
-     voided_at: item.voided_at || "",
-     raw: item
-    });
+   allRecords.push({
+    resident_id: res.id,
+    room_no: res.room_no || "",
+    resident_name: res.name || "",
+    date: item.date || itemDate,
+    time: item.time || (item.recorded_at && item.recorded_at.length >= 16 ? item.recorded_at.slice(11, 16) : "00:00"),
+    recorded_at: item.recorded_at || (itemDate ? `${itemDate} 00:00` : "00:00"),
+    category: item.category || "介護記録",
+    content: item.content || "",
+    staff_name: item.staff_name || "未記録",
+    voided: Boolean(item.voided),
+    void_reason: item.void_reason || "",
+    voided_by: item.voided_by || "",
+    voided_at: item.voided_at || "",
+    raw: item
    });
-
-   curDate = (typeof cpAddDaysToStr === "function") ? cpAddDaysToStr(curDate, 1) : curDate;
-  }
+  });
  });
 
  if (resVal === "ALL") {
@@ -3519,6 +3511,13 @@ function cpPrintCareRecords() {
   return;
  }
 
+ // [Antigravity追加] 1万件を超える場合の確認（印刷ページ数目安の案内とCSV推奨）
+ if (collected.allRecords.length > 10000) {
+  const estPages = Math.ceil(collected.allRecords.length / 25);
+  const ok = confirm(`${collected.allRecords.length}件あります。時間がかかったり、印刷すると${estPages}ページ以上になります。CSV での書き出しをおすすめします。続けますか？`);
+  if (!ok) return;
+ }
+
  const html = cpBuildCareRecordsPrintHtml(collected, inputs);
  if (typeof runPrintJob === "function") {
   runPrintJob(html, { page: "A4 portrait", fitOnePage: false });
@@ -3529,6 +3528,12 @@ function cpPrintCareRecords() {
 
  const typeLabels = cpGetSelectedTypeLabels(inputs.selectedTypes);
  cpLogCareRecordsExport("印刷", (inputs.resVal === "ALL" ? "全員" : (collected.targetResidents[0] ? collected.targetResidents[0].name : "個別")), inputs.startDate, inputs.endDate, typeLabels, collected.allRecords.length);
+
+ const statusEl = document.getElementById("exportRecordStatusNotice");
+ if (statusEl) {
+  statusEl.textContent = `印刷データを準備しました（計 ${collected.allRecords.length} 件）`;
+  setTimeout(() => { if (statusEl) statusEl.textContent = ""; }, 5000);
+ }
 }
 
 window.cpCanExportCareRecords = cpCanExportCareRecords;

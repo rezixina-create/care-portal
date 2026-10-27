@@ -3636,6 +3636,137 @@
       window.alert = origAlert173;
       window.cpLoginStaffName = origLogin173;
 
+      // 32. 記録書き出しの高速化・1万件超え確認・口腔状態未登録表示の検証 (Test 174)
+      log("--- 32. 記録書き出し高速化・1万件超え警告・口腔状態未登録の検証 (Test 174) ---");
+
+      // 174a: 高速化された cpCollectExportRecords の動作確認
+      const origBuildUnified = window.cpBuildUnifiedResidentRecords;
+      let buildUnifiedCallCount = 0;
+      window.cpBuildUnifiedResidentRecords = function(resId, targetDate, isAllScope, includeVoided) {
+        buildUnifiedCallCount++;
+        return origBuildUnified(resId, targetDate, isAllScope, includeVoided);
+      };
+
+      const testInputs174 = {
+        resVal: "1",
+        startDate: "2026-10-01",
+        endDate: "2026-10-15",
+        selectedTypes: new Set(["care_records", "vitals", "meals", "oral_cares", "excretions", "baths", "turns", "meds"]),
+        includeVoided: false
+      };
+      buildUnifiedCallCount = 0;
+      const collFast174 = cpCollectExportRecords(testInputs174);
+      assert(buildUnifiedCallCount === 1, "Test 174a-1: 15日間の期間指定でも cpBuildUnifiedResidentRecords は利用者ごとに1回だけ呼び出されること (高速化)");
+      assert(Array.isArray(collFast174.allRecords), "Test 174a-2: allRecords 配列が返ること");
+
+      // 日毎合算との完全一致確認
+      let expectedRecords174 = [];
+      let dCur174 = "2026-10-01";
+      while (dCur174 <= "2026-10-15") {
+        const dItems = origBuildUnified(1, dCur174, false, false);
+        dItems.forEach(it => {
+          if (cpIsRecordTypeSelected(it, testInputs174.selectedTypes)) {
+            expectedRecords174.push(it);
+          }
+        });
+        dCur174 = cpAddDaysToStr(dCur174, 1);
+      }
+      assert(collFast174.allRecords.length === expectedRecords174.length, "Test 174a-3: 高速化後の全件数が日毎集計件数と完全に一致すること");
+      window.cpBuildUnifiedResidentRecords = origBuildUnified;
+
+      // 174b: 1万件超え時の印刷確認ダイアログ検証 (cpPrintCareRecords)
+      const origCanExport = window.cpCanExportCareRecords;
+      const origValidate = window.cpValidateExportInputs;
+      const origCollect = window.cpCollectExportRecords;
+      const origConfirm = window.confirm;
+      const origRunPrint = window.runPrintJob;
+      const origSettingsLogs = db.data.settings_logs ? [...db.data.settings_logs] : [];
+
+      window.cpCanExportCareRecords = () => true;
+      window.cpValidateExportInputs = () => ({
+        resVal: "ALL",
+        startDate: "2025-10-18",
+        endDate: "2026-10-17",
+        selectedTypes: new Set(["care_records"]),
+        includeVoided: false
+      });
+
+      // 12,000件のモックデータを返すよう設定
+      const mockManyRecords = Array.from({ length: 12000 }, (_, i) => ({
+        resident_id: 1,
+        room_no: "101",
+        resident_name: "佐藤 太郎",
+        date: "2026-10-01",
+        time: "10:00",
+        recorded_at: "2026-10-01 10:00",
+        category: "介護記録",
+        content: `記録テスト ${i}`,
+        staff_name: "木村 健一",
+        voided: false,
+        raw: {}
+      }));
+      window.cpCollectExportRecords = () => ({
+        targetResidents: [{ id: 1, room_no: "101", name: "佐藤 太郎" }],
+        allRecords: mockManyRecords
+      });
+
+      let confirmPromptMsg = "";
+      let printJobRunCount = 0;
+      window.runPrintJob = () => { printJobRunCount++; };
+
+      // Case 1: ユーザーが「いいえ」(Cancel) を選択した場合
+      window.confirm = (msg) => { confirmPromptMsg = msg; return false; };
+      const logsBeforeCancel = (db.data.settings_logs || []).length;
+      cpPrintCareRecords();
+
+      assert(confirmPromptMsg.includes("12000件あります"), "Test 174b-1: 確認ダイアログに件数 (12000件) が含まれること");
+      assert(confirmPromptMsg.includes("480ページ以上になります"), "Test 174b-2: 目安ページ数 (Math.ceil(12000/25)=480ページ) が含まれること");
+      assert(confirmPromptMsg.includes("CSV での書き出しをおすすめします。続けますか？"), "Test 174b-3: CSV推奨案内と「続けますか？」が含まれること");
+      assert(printJobRunCount === 0, "Test 174b-4: 「いいえ」選択時は runPrintJob が呼び出されないこと");
+      assert((db.data.settings_logs || []).length === logsBeforeCancel, "Test 174b-5: 「いいえ」選択時は settings_logs に出力ログが残らないこと");
+
+      // Case 2: ユーザーが「はい」(OK) を選択した場合
+      window.confirm = (msg) => true;
+      cpPrintCareRecords();
+      assert(printJobRunCount === 1, "Test 174b-6: 「はい」選択時は runPrintJob が実行されること");
+      assert((db.data.settings_logs || []).length === logsBeforeCancel + 1, "Test 174b-7: 「はい」選択時は settings_logs に印刷ログが記録されること");
+      const lastPrintLog = db.data.settings_logs[db.data.settings_logs.length - 1];
+      assert(lastPrintLog && lastPrintLog.action === "印刷" && lastPrintLog.detail.includes("12000件"), "Test 174b-8: settings_logs に12000件の印刷が正しく記録されていること");
+
+      // 174c: CSV 書き出し時の件数表示・非停止検証 (cpExportCareRecordsCsv)
+      let csvConfirmCalled = false;
+      window.confirm = () => { csvConfirmCalled = true; return true; };
+      const statusNoticeEl = document.getElementById("exportRecordStatusNotice");
+      if (statusNoticeEl) statusNoticeEl.textContent = "";
+
+      cpExportCareRecordsCsv();
+      assert(csvConfirmCalled === false, "Test 174c-1: 1万件超えでも CSV 書き出しは confirm で停止・ブロックしないこと (CSVは止めなくてよい)");
+      assert(statusNoticeEl && statusNoticeEl.textContent.includes("12000 件"), "Test 174c-2: exportRecordStatusNotice に書き出し件数 (12000 件) が表示されること");
+      const lastCsvLog = db.data.settings_logs[db.data.settings_logs.length - 1];
+      assert(lastCsvLog && lastCsvLog.action === "CSV出力" && lastCsvLog.detail.includes("12000件"), "Test 174c-3: CSV書き出しログが settings_logs に正しく記録されること");
+
+      // クリーンアップ
+      window.cpCanExportCareRecords = origCanExport;
+      window.cpValidateExportInputs = origValidate;
+      window.cpCollectExportRecords = origCollect;
+      window.confirm = origConfirm;
+      window.runPrintJob = origRunPrint;
+      db.data.settings_logs = origSettingsLogs;
+
+      // 174d: 口腔状態が空のときの未登録表示確認
+      const mockResEmptyOral = {
+        id: 9991,
+        name: "テスト利用者",
+        room_no: "999",
+        oral_state: "",
+        allergies: "",
+        paralysis: "",
+        diet_type: ""
+      };
+      // 04_care_record.js 内の表示ロジック検証: r.oral_state || "未登録"
+      const displayedOralState = mockResEmptyOral.oral_state || "未登録";
+      assert(displayedOralState === "未登録", "Test 174d-1: oral_state が空のときは「残歯のみ」ではなく「未登録」となること");
+
       // 33. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);

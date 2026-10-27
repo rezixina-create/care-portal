@@ -348,46 +348,46 @@ function renderResidentDetail() {
  <summary style="padding:10px 14px; background:#f6f8f6; font-weight:bold; cursor:pointer; font-size:13px; color:#173f33; border-bottom:1px solid #dfe5e1; display:flex; justify-content:space-between; align-items:center;">
  <span>身体状況・病歴 ＆ 食形態・口腔状態</span>
  <div style="display:flex; align-items:center; gap:8px;">
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;"> 変更</button>
- <span style="font-size:11px; color:#5f6d66;">(開閉)</span>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:13px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;"> 変更</button>
+ <span style="font-size:13px; color:var(--ink-3);">(開閉)</span>
  </div>
  </summary>
  <div style="padding:12px;">
  <div style="margin-bottom:10px;">
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:4px;">
- <div style="font-size:12px; font-weight:bold; color:var(--text-muted);">病歴・既往歴 (タップで現場対応ガイド表示):</div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">病歴を変更</button>
+ <div style="font-size:13px; font-weight:bold; color:var(--text-muted);">病歴・既往歴 (タップで現場対応ガイド表示):</div>
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:13px; color:var(--pine); border-color:var(--pine-light); background:var(--pine-tint-2);" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'diseases'); return false;">病歴を変更</button>
  </div>
  <div>${diseaseTags || '<span style="font-size:13px; color:var(--text-muted);">特記事項なし</span>'}</div>
  </div>
  
  <!-- 身体状況・食形態情報カード -->
- <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:8px; padding:12px;">
+ <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:8px; padding:12px;">
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; font-size:13px; margin-bottom:10px;">
  <div><strong>身体・麻痺:</strong> ${escapeHtml(r.paralysis || "未登録")}</div>
- <div><strong>アレルギー:</strong> <span style="color:#dc2626; font-weight:bold;">${escapeHtml(r.allergies || "未登録")}</span></div>
+ <div><strong>アレルギー:</strong> <span style="color:var(--alert); font-weight:bold;">${escapeHtml(r.allergies || "未登録")}</span></div>
  <div><strong>食形態:</strong> ${escapeHtml(r.diet_type || "未登録")}</div>
- <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "残歯のみ")}</div>
+ <div><strong>口腔状態:</strong> ${escapeHtml(r.oral_state || "未登録")}</div>
  </div>
- <div style="background:#ffffff; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <div style="font-size:12px; color:#22302b; flex:1; min-width:200px;">
+ <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:13px; color:var(--ink); flex:1; min-width:200px;">
  <strong>皮膚処置・軟膏ピン:</strong> ${renderSchemaSummaryBadges(r.id)}
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#eef2ef; color:#1c2622; border-color:#cdd6d0; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:13px; background:var(--ground); color:var(--ink); border-color:var(--line); font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openBodySchemaModal(${r.id}); return false;">
  シェーマ図を開く
  </button>
  </div>
- <div style="background:#ffffff; border:1px solid #cdd6d0; border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
- <div style="font-size:12px; color:#22302b; flex:1; min-width:200px;">
+ <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:8px 10px; margin-bottom:8px; display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px;">
+ <div style="font-size:13px; color:var(--ink); flex:1; min-width:200px;">
  <strong>点眼処方指示:</strong> ${eyedropSummaryHtml}
  </div>
- <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#f1f6f3; color:#1e5b47; border-color:#a9cfbf; font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
+ <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:13px; background:var(--pine-tint-2); color:var(--pine); border-color:var(--pine-light); font-weight:bold; white-space:nowrap;" onclick="event.preventDefault(); event.stopPropagation(); openEyedropOrderModal(${r.id}); return false;">
  点眼指示を管理（追加・変更・終了）
  </button>
  </div>
- <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed #cdd6d0; padding-top:8px;">
- <span style="font-size:11.5px; color:#5f6d66;">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
- <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:12px; background:#f1f6f3; color:#1a4f3d; border:1px solid #a9cfbf; font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
+ <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px dashed var(--line); padding-top:8px;">
+ <span style="font-size:13px; color:var(--ink-3);">※身体状況（麻痺）・食形態・口腔状態・アレルギーを変更できます</span>
+ <button type="button" class="btn btn-secondary" style="padding:4px 12px; font-size:13px; background:var(--pine-tint-2); color:var(--pine-dark); border:1px solid var(--pine-light); font-weight:bold; display:inline-flex; align-items:center; gap:4px;" onclick="event.preventDefault(); event.stopPropagation(); openBodyConditionModal(${r.id}, 'all'); return false;">
   身体状況・食形態を変更
  </button>
  </div>
