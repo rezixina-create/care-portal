@@ -1200,7 +1200,7 @@ function cpGetResidentRecordsForPeriod(residentId, fromDate, toDate, category) {
   });
 }
 
-// 基本日数の数え方（目安・数え方は確認中）
+// 基本日数の数え方（入院した日・退院した日・外泊の日の扱いは 2026-10-21 に資料で確認済み。claude/kasan_records_periods.md）
 // [Claude追加 2026-10-22] 初期加算の入居のときの決まり。{ allowed, days, shortDays, note } を返す
 // 同じ方の前の利用（この事業所の記録）: 被保険者番号が同じ、なければ氏名と生年月日が同じ利用者
 function cpKasanSamePersonStays(r) {
@@ -2467,8 +2467,8 @@ function renderOfficeKasanTab() {
 
     <p class="panel-note" style="margin:4px 0 12px; line-height:1.6;">
       ※月ごと・利用者ごとに算定対象となる加算・減算の目安です。基本の日数および金額は「目安」と表示しています。
-      入院した日・退院した日・外泊の日の基本日数への算入基準は確認中のため、確定値ではありません。
-      短期利用（38）・介護予防（37・39）はまだ入っていません。夜勤・定員超過・人員基準欠如の減算は、上のボタンで確定・登録した内容から反映します。
+      入院した日・退院した日は基本の単位で数え、その間の日は入院時費用（1か月に6日まで）、外泊は出かけた日・戻った日だけ基本の単位で数えています。
+      夜勤・定員超過・人員基準欠如の減算は、上のボタンで確定・登録した内容から反映します。
     </p>
 
     <div style="overflow-x:auto;">
@@ -2477,7 +2477,7 @@ function renderOfficeKasanTab() {
           <tr style="background:var(--pine-tint-2);">
             <th style="width:140px;">利用者名（居室）</th>
             <th style="width:70px; text-align:center;">要介護度</th>
-            <th style="width:110px; text-align:right;">在所日数 (目安)<br><span style="font-size:13px; font-weight:normal; color:var(--ink-3);">※数え方は確認中</span></th>
+            <th style="width:110px; text-align:right;">在所日数 (目安)</th>
             <th style="width:80px; text-align:right;">入院日数</th>
             <th>算定コード・日数/回数 内訳</th>
             <th style="width:120px; text-align:right;">単位数合計 (目安)</th>
@@ -3004,7 +3004,7 @@ function printKasanMonthlyTable() {
         <div style="font-size:13px;">区分: ${escapeHtml(unitLabel)} ／ 地域区分: ${escapeHtml(regionText)} ／ 印刷: ${toLocalDateTimeStr(new Date())}</div>
       </div>
       <p style="font-size:13px; margin:0 0 8px; color:#555;">
-        ※基本の日数および金額は目安です。国保連請求CSVデータではありません。在所日数の数え方は確認中、処遇改善加算等は第2段階除外。
+        ※基本の日数および金額は目安です。国保連請求CSVデータではありません。
       </p>
       <table style="width:100%; border-collapse:collapse; font-size:13px;" border="1">
         ${tableEl.innerHTML}
