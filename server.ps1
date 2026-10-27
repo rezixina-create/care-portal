@@ -2416,7 +2416,7 @@ namespace CarePortal
         private static readonly string[] PermResPolicyFields = new string[] { "policy_stamp" };
         private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
             "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
-            "dementia_assessments", "life_assessments", "residents", "care_plans", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
+            "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
 
         private static bool PermEmpty(object v)
         {
@@ -2475,6 +2475,11 @@ namespace CarePortal
                 if (p.Cm) return null;
                 if (cur == null || nv == null) return "計画作成担当者";
                 return PermSameExcept(cur, nv, new string[] { "meetings", "edit_history" }) ? null : "計画作成担当者";
+            }
+            if (k == "care_summaries")
+            {
+                if (p.Cm) return null;
+                return "計画作成担当者";
             }
             if (k == "staff_accounts")
             {
@@ -2580,7 +2585,7 @@ namespace CarePortal
             if (ro != null) return ro;
             if (Array.IndexOf(PermAdminKeys, k) >= 0 || Array.IndexOf(PermNurseKeys, k) >= 0 || Array.IndexOf(PermPolicyKeys, k) >= 0) return null;
             // residents・care_plans などで id がそろっていないとき: 役職のある人だけ
-            if (k == "care_plans") return p.Cm ? null : "計画作成担当者";
+            if (k == "care_plans" || k == "care_summaries") return p.Cm ? null : "計画作成担当者";
             if (k == "staff_accounts" || k == "shift_hope_offs") return p.Admin ? null : "管理者・事務員";
             return null;
         }

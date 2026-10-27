@@ -3865,7 +3865,59 @@
       assert(vitalsTabEl && vitalsTabEl.innerText.includes(expectedNoticePhrase), "Test 175c-3: まとめて入れるバイタル表内に目安の説明文が表示されていること");
       assert(vitalsTabEl && vitalsTabEl.innerText.includes(expectedSpo2Phrase), "Test 175c-4: まとめて入れるバイタル表内にSpO2の測り方の目安が表示されていること");
 
-      // 34. 総合結果判定
+      // 34. 介護サマリーのサーバー権限・拒否時巻き戻し・画面通知の検証 (Test 176)
+      log("--- 34. 介護サマリー サーバー職種チェック・拒否時ロールバック・通知名称の検証 (Test 176) ---");
+
+      // 176a: _revertForbiddenKey で care_summaries が「介護サマリー」として扱われること
+      let alertMsg176 = "";
+      const origAlert176 = window.alert;
+      window.alert = (msg) => { alertMsg176 = msg; };
+
+      const origBaseObj = db.baseObj;
+      const origCareSummaries = db.data.care_summaries;
+      const origForbidCount = db._forbidCount;
+      const origForbidShown = db._forbidShown;
+
+      db._forbidCount = 0;
+      db._forbidShown = {};
+      db.baseObj = {
+        care_summaries: [
+          { id: 99901, resident_id: 1, basic_info: "ベース情報", staff_name: "小林 恵子" }
+        ]
+      };
+      // ローカルで不正に追加または変更された状態をシミュレート
+      db.data.care_summaries = [
+        { id: 99901, resident_id: 1, basic_info: "不正変更情報", staff_name: "井上 蓮" },
+        { id: 99902, resident_id: 1, basic_info: "不正追加情報", staff_name: "井上 蓮" }
+      ];
+
+      // 1件変更の拒否（id: 99901）
+      const reverted1 = db._revertForbiddenKey({ key: "care_summaries", who: "計画作成担当者", id: 99901 });
+      assert(reverted1 === true, "Test 176a-1: _revertForbiddenKey が true を返すこと");
+      assert(db.data.care_summaries.find(x => x.id === 99901).basic_info === "ベース情報", "Test 176a-2: 拒否された介護サマリー(99901)が baseObj の内容に戻ること");
+      assert(db.data.care_summaries.some(x => x.id === 99902), "Test 176a-3: 指定id以外の介護サマリー(99902)は個別差し戻し時にそのまま残ること");
+
+      // 未登録idの拒否（新規追加分 99902 の差し戻し）
+      db._forbidShown = {};
+      const reverted2 = db._revertForbiddenKey({ key: "care_summaries", who: "計画作成担当者", id: 99902 });
+      assert(reverted2 === true, "Test 176a-4: _revertForbiddenKey が true を返すこと");
+      assert(!db.data.care_summaries.some(x => x.id === 99902), "Test 176a-5: baseObj に存在しない新規追加分(99902)は配列から削除されて戻ること");
+
+      // 全体ロールバック（id なし）
+      db.data.care_summaries = [{ id: 99999, basic_info: "完全破壊データ" }];
+      db._forbidShown = {};
+      const revertedWhole = db._revertForbiddenKey({ key: "care_summaries", who: "計画作成担当者" });
+      assert(revertedWhole === true, "Test 176a-6: 全体差し戻しが true を返すこと");
+      assert(db.data.care_summaries.length === 1 && db.data.care_summaries[0].id === 99901, "Test 176a-7: 全体差し戻しで baseObj の care_summaries 全体が復元されること");
+
+      // クリーンアップ
+      window.alert = origAlert176;
+      db.baseObj = origBaseObj;
+      db.data.care_summaries = origCareSummaries;
+      db._forbidCount = origForbidCount;
+      db._forbidShown = origForbidShown;
+
+      // 35. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
