@@ -180,7 +180,30 @@
     <button id="btnOpenNightTurnTemplates"></button>
     <table id="weightTable"></table>
     <div id="tabCareRecords"></div>
-    <div id="tabCareVitals"></div>
+    <div id="tabCareVitals">
+      <!-- [Antigravity追加] バイタル「いつもと違う」印の判定基準とSpO2測定目安の案内 -->
+      <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:13px; line-height:1.5; color:var(--ink);">
+        <div style="font-weight:bold; color:var(--pine); margin-bottom:4px;">【「いつもと違う」印の判定の目安】</div>
+        <div style="margin-bottom:6px;">
+          看護師がこの方の目安を決めているときは、その目安で『いつもと違う』の印が付きます。決めていないときは次の数字で付きます：血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。
+        </div>
+        <div style="font-size:13px; color:var(--ink-2); border-top:1px dashed var(--line); padding-top:4px;">
+          <strong>SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）:</strong> 健康な方は 96〜99%。ふだんの値より 3〜4%低下したときは看護師へ報告します。指が冷たい・動かしているときは正しく測れません。
+        </div>
+      </div>
+    </div>
+    <div class="modal-overlay" id="personalVitalModal" style="display:none;">
+      <!-- [Antigravity追加] バイタル「いつもと違う」印の判定基準とSpO2測定目安の案内 -->
+      <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:13px; line-height:1.5; color:var(--ink);">
+        <div style="font-weight:bold; color:var(--pine); margin-bottom:4px;">【「いつもと違う」印の判定の目安】</div>
+        <div style="margin-bottom:6px;">
+          看護師がこの方の目安を決めているときは、その目安で『いつもと違う』の印が付きます。決めていないときは次の数字で付きます：血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。
+        </div>
+        <div style="font-size:13px; color:var(--ink-2); border-top:1px dashed var(--line); padding-top:4px;">
+          <strong>SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）:</strong> 健康な方は 96〜99%。ふだんの値より 3〜4%低下したときは看護師へ報告します。指が冷たい・動かしているときは正しく測れません。
+        </div>
+      </div>
+    </div>
     <div id="portalCare"></div>
     <div id="portalOffice"></div>
     <div id="diseaseModal" style="display:none;">
@@ -3767,7 +3790,82 @@
       const displayedOralState = mockResEmptyOral.oral_state || "未登録";
       assert(displayedOralState === "未登録", "Test 174d-1: oral_state が空のときは「残歯のみ」ではなく「未登録」となること");
 
-      // 33. 総合結果判定
+      // 33. バイタルの「いつもと違う」印の新基準・目安説明表示の検証 (Test 175)
+      log("--- 33. バイタル「いつもと違う」新基準・家庭血圧・SpO2 90%未満・説明表示の検証 (Test 175) ---");
+
+      // 175a: 看護師の目安がない場合の基準検証
+      const resNoGuidelines = { id: 8881, name: "目安なし利用者" };
+
+      // 1. 熱: 目安がないときは印を出さない（37.5℃・38.0℃でも印なし）
+      assert(cpIsUnusualVital(resNoGuidelines, { temperature: 37.5 }) === 0, "Test 175a-1: 目安がないときは体温37.5℃でも印が出ないこと");
+      assert(cpIsUnusualVital(resNoGuidelines, { temperature: 38.0 }) === 0, "Test 175a-2: 目安がないときは体温38.0℃でも印が出ないこと");
+      assert(cpIsUnusualVital(resNoGuidelines, { temperature: 36.5 }) === 0, "Test 175a-3: 平熱36.5℃で印が出ないこと");
+
+      // 2. 上の血圧: 目安（bp_high_max）がないときは 135 以上で印（日本高血圧学会 家庭血圧基準）
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_high: 134 }) === 0, "Test 175a-4: 上の血圧134mmHgでは印が出ないこと");
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_high: 135 }) === 1, "Test 175a-5: 上の血圧135mmHgで印が出ること (家庭血圧基準)");
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_high: 140 }) === 1, "Test 175a-6: 上の血圧140mmHgで印が出ること");
+
+      // 3. 下の血圧: 看護師が血圧の目安を入れていないときだけ 85 以上で印
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_low: 84 }) === 0, "Test 175a-7: 下の血圧84mmHgでは印が出ないこと");
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_low: 85 }) === 1, "Test 175a-8: 下の血圧85mmHgで印が出ること (家庭血圧基準)");
+      assert(cpIsUnusualVital(resNoGuidelines, { bp_low: 90 }) === 1, "Test 175a-9: 下の血圧90mmHgで印が出ること");
+
+      // 4. SpO2: 目安（spo2_min）がないときは 90 未満で印（日本呼吸器学会 呼吸不全基準。92や90は印なし）
+      assert(cpIsUnusualVital(resNoGuidelines, { spo2: 92 }) === 0, "Test 175a-10: SpO2 92%では印が出ないこと (旧基準の92%以下を撤廃)");
+      assert(cpIsUnusualVital(resNoGuidelines, { spo2: 90 }) === 0, "Test 175a-11: SpO2 90%では印が出ないこと (90%未満が基準)");
+      assert(cpIsUnusualVital(resNoGuidelines, { spo2: 89 }) === 1, "Test 175a-12: SpO2 89%で印が出ること (呼吸不全基準: 90%未満)");
+
+      // 5. 脈拍: 看護師の目安がないときは印を出さない
+      assert(cpIsUnusualVital(resNoGuidelines, { pulse: 120 }) === 0, "Test 175a-13: 目安がないときは脈拍120bpmでも印が出ないこと");
+
+
+      // 175b: 看護師の目安がある場合の基準検証（看護師の目安を優先）
+      const resWithGuidelines = {
+        id: 8882,
+        name: "目安あり利用者",
+        temp_max: 37.2,
+        bp_high_max: 145,
+        bp_high_min: 90,
+        spo2_min: 93,
+        pulse_max: 100,
+        pulse_min: 50
+      };
+
+      // 熱: temp_max (37.2) 超過で印
+      assert(cpIsUnusualVital(resWithGuidelines, { temperature: 37.2 }) === 0, "Test 175b-1: temp_max 37.2℃以下では印が出ないこと");
+      assert(cpIsUnusualVital(resWithGuidelines, { temperature: 37.3 }) === 1, "Test 175b-2: temp_max 37.2℃超過(37.3℃)で印が出ること");
+
+      // 上の血圧: bp_high_max (145) 超過、または bp_high_min (90) 未満で印
+      assert(cpIsUnusualVital(resWithGuidelines, { bp_high: 138 }) === 0, "Test 175b-3: bp_high_max 145 設定時は138mmHgでも印が出ないこと (看護師の目安を優先)");
+      assert(cpIsUnusualVital(resWithGuidelines, { bp_high: 146 }) === 1, "Test 175b-4: bp_high_max 145 超過(146mmHg)で印が出ること");
+      assert(cpIsUnusualVital(resWithGuidelines, { bp_high: 89 }) === 1, "Test 175b-5: bp_high_min 90 未満(89mmHg)で印が出ること");
+
+      // 下の血圧: 看護師が血圧の目安 (bp_high_max) を設定しているため、bp_low 85以上でも印を出さない (看護師の判断に任せる)
+      assert(cpIsUnusualVital(resWithGuidelines, { bp_low: 88 }) === 0, "Test 175b-6: 看護師が血圧目安を設定している方は下の血圧88mmHgでも印を出さないこと");
+
+      // SpO2: spo2_min (93) 未満で印
+      assert(cpIsUnusualVital(resWithGuidelines, { spo2: 93 }) === 0, "Test 175b-7: spo2_min 93%以上では印が出ないこと");
+      assert(cpIsUnusualVital(resWithGuidelines, { spo2: 92 }) === 1, "Test 175b-8: spo2_min 93%未満(92%)で印が出ること");
+
+      // 脈拍: pulse_max (100) 超過、または pulse_min (50) 未満で印
+      assert(cpIsUnusualVital(resWithGuidelines, { pulse: 100 }) === 0, "Test 175b-9: pulse_max 100bpm以下では印が出ないこと");
+      assert(cpIsUnusualVital(resWithGuidelines, { pulse: 101 }) === 1, "Test 175b-10: pulse_max 100bpm超過(101bpm)で印が出ること");
+      assert(cpIsUnusualVital(resWithGuidelines, { pulse: 49 }) === 1, "Test 175b-11: pulse_min 50bpm未満(49bpm)で印が出ること");
+
+
+      // 175c: 画面内の案内テキスト確認
+      const pvmEl = document.getElementById("personalVitalModal");
+      const vitalsTabEl = document.getElementById("tabCareVitals");
+      const expectedNoticePhrase = "血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。";
+      const expectedSpo2Phrase = "SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）";
+
+      assert(pvmEl && pvmEl.innerText.includes(expectedNoticePhrase), "Test 175c-1: 個人バイタル小窓内に目安の説明文が表示されていること");
+      assert(pvmEl && pvmEl.innerText.includes(expectedSpo2Phrase), "Test 175c-2: 個人バイタル小窓内にSpO2の測り方の目安が表示されていること");
+      assert(vitalsTabEl && vitalsTabEl.innerText.includes(expectedNoticePhrase), "Test 175c-3: まとめて入れるバイタル表内に目安の説明文が表示されていること");
+      assert(vitalsTabEl && vitalsTabEl.innerText.includes(expectedSpo2Phrase), "Test 175c-4: まとめて入れるバイタル表内にSpO2の測り方の目安が表示されていること");
+
+      // 34. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261027_a1">
+	<link rel="stylesheet" href="style.css?v=20261027_b1">
 </head>
 <body>
 
@@ -327,6 +327,16 @@
  <div class="panel-title">
  <span>バイタルチェック表 (入力すると個人記録・特変は連絡帳へ自動連携)</span>
  </div>
+  <!-- [Antigravity追加] バイタル「いつもと違う」印の判定基準とSpO2測定目安の案内 -->
+  <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:13px; line-height:1.5; color:var(--ink);">
+   <div style="font-weight:bold; color:var(--pine); margin-bottom:4px;">【「いつもと違う」印の判定の目安】</div>
+   <div style="margin-bottom:6px;">
+    看護師がこの方の目安を決めているときは、その目安で『いつもと違う』の印が付きます。決めていないときは次の数字で付きます：血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。
+   </div>
+   <div style="font-size:13px; color:var(--ink-2); border-top:1px dashed var(--line); padding-top:4px;">
+    <strong>SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）:</strong> 健康な方は 96〜99%。ふだんの値より 3〜4%低下したときは看護師へ報告します。指が冷たい・動かしているときは正しく測れません。
+   </div>
+  </div>
  <table class="data-table" id="vitalsTable">
  <thead>
  <tr>
@@ -3394,10 +3404,20 @@
  <button class="modal-close-btn" onclick="closeModal('personalVitalModal')">&times;</button>
  </div>
  <div style="padding:14px 0;">
- <div style="background:#f1f6f3; padding:10px 14px; border-radius:6px; margin-bottom:14px; font-size:13px; color:#1e5b47; border:1px solid #c9e0d5;">
- 対象利用者: <strong id="personalVitalModalResidentName" style="color:#173f33;"></strong> | 日付: <strong id="personalVitalModalDate" style="color:#173f33;"></strong>
+ <div style="background:var(--pine-tint-2); padding:10px 14px; border-radius:6px; margin-bottom:12px; font-size:13px; color:var(--pine); border:1px solid var(--line);">
+ 対象利用者: <strong id="personalVitalModalResidentName" style="color:var(--pine-dark);"></strong> | 日付: <strong id="personalVitalModalDate" style="color:var(--pine-dark);"></strong>
  </div>
- <input type="hidden" id="personalVitalDate">
+   <!-- [Antigravity追加] バイタル「いつもと違う」印の判定基準とSpO2測定目安の案内 -->
+  <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:12px; font-size:13px; line-height:1.5; color:var(--ink);">
+   <div style="font-weight:bold; color:var(--pine); margin-bottom:4px;">【「いつもと違う」印の判定の目安】</div>
+   <div style="margin-bottom:6px;">
+    看護師がこの方の目安を決めているときは、その目安で『いつもと違う』の印が付きます。決めていないときは次の数字で付きます：血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。
+   </div>
+   <div style="font-size:13px; color:var(--ink-2); border-top:1px dashed var(--line); padding-top:4px;">
+    <strong>SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）:</strong> 健康な方は 96〜99%。ふだんの値より 3〜4%低下したときは看護師へ報告します。指が冷たい・動かしているときは正しく測れません。
+   </div>
+  </div>
+<input type="hidden" id="personalVitalDate">
  <input type="hidden" id="personalVitalResidentId">
 
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
@@ -4572,26 +4592,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261027_a1"></script>
- <script src="js/02_terms.js?v=20261027_a1"></script>
- <script src="js/03_common.js?v=20261027_a1"></script>
- <script src="js/04_care_record.js?v=20261027_a1"></script>
- <script src="js/05_summary_print_audit.js?v=20261027_a1"></script>
- <script src="js/06_schema_history.js?v=20261027_a1"></script>
- <script src="js/07_daily_tables.js?v=20261027_a1"></script>
- <script src="js/08_meds.js?v=20261027_a1"></script>
- <script src="js/09_night_misc.js?v=20261027_a1"></script>
- <script src="js/10_office.js?v=20261027_a1"></script>
- <script src="js/11_karte_staff.js?v=20261027_a1"></script>
- <script src="js/12_hospital_photos.js?v=20261027_a1"></script>
- <script src="js/13_shift_units.js?v=20261027_a1"></script>
- <script src="js/14_auth_home.js?v=20261027_a1"></script>
- <script src="js/15_single_write.js?v=20261027_a1"></script>
- <script src="js/16_careplan.js?v=20261027_a1"></script>
-	<script src="js/17_kasan.js?v=20261027_a1"></script>
-	<script src="js/18_stats.js?v=20261027_a1"></script>
-	<script src="js/19_life.js?v=20261027_a1"></script>
-	<script src="js/20_invoice.js?v=20261027_a1"></script>
+ <script src="js/01_core.js?v=20261027_b1"></script>
+ <script src="js/02_terms.js?v=20261027_b1"></script>
+ <script src="js/03_common.js?v=20261027_b1"></script>
+ <script src="js/04_care_record.js?v=20261027_b1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261027_b1"></script>
+ <script src="js/06_schema_history.js?v=20261027_b1"></script>
+ <script src="js/07_daily_tables.js?v=20261027_b1"></script>
+ <script src="js/08_meds.js?v=20261027_b1"></script>
+ <script src="js/09_night_misc.js?v=20261027_b1"></script>
+ <script src="js/10_office.js?v=20261027_b1"></script>
+ <script src="js/11_karte_staff.js?v=20261027_b1"></script>
+ <script src="js/12_hospital_photos.js?v=20261027_b1"></script>
+ <script src="js/13_shift_units.js?v=20261027_b1"></script>
+ <script src="js/14_auth_home.js?v=20261027_b1"></script>
+ <script src="js/15_single_write.js?v=20261027_b1"></script>
+ <script src="js/16_careplan.js?v=20261027_b1"></script>
+	<script src="js/17_kasan.js?v=20261027_b1"></script>
+	<script src="js/18_stats.js?v=20261027_b1"></script>
+	<script src="js/19_life.js?v=20261027_b1"></script>
+	<script src="js/20_invoice.js?v=20261027_b1"></script>
   
 
   <!-- ============================================================ -->

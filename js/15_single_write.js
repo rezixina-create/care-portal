@@ -335,6 +335,16 @@ function cpRenderSingleWriteScreenInner(container) {
         <span style="font-size:11.5px; font-weight:normal; color:#5f6d66;">バイタルチェック表と連動（看護師・介護職共通）</span>
       </div>
       ${vitalFilledHtml}
+      <!-- [Antigravity追加] バイタル「いつもと違う」印の判定基準とSpO2測定目安の案内 -->
+      <div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:10px; font-size:13px; line-height:1.5; color:var(--ink);">
+        <div style="font-weight:bold; color:var(--pine); margin-bottom:4px;">【「いつもと違う」印の判定の目安】</div>
+        <div style="margin-bottom:6px;">
+          看護師がこの方の目安を決めているときは、その目安で『いつもと違う』の印が付きます。決めていないときは次の数字で付きます：血圧 上135以上 または 下85以上（日本高血圧学会 家庭血圧の基準）、SpO2 90%未満（日本呼吸器学会）。熱は平熱が人によって違うため、看護師の目安がないときは印を付けません。
+        </div>
+        <div style="font-size:13px; color:var(--ink-2); border-top:1px dashed var(--line); padding-top:4px;">
+          <strong>SpO2 の測り方の目安（日本呼吸器学会「よくわかるパルスオキシメータ」より）:</strong> 健康な方は 96〜99%。ふだんの値より 3〜4%低下したときは看護師へ報告します。指が冷たい・動かしているときは正しく測れません。
+        </div>
+      </div>
       <div class="cp-sw-grid">
         <div>
           <label class="cp-sw-label">体温 (℃)</label>

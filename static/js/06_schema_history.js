@@ -1227,30 +1227,49 @@ function openPersonalVitalModal(vitalId) {
  document.getElementById("personalVitalModal").style.display = "flex";
 }
 
-// [Claude修正] 「いつもと違う」の判定（項目ごとに、個別注意基準値があればそれを、なければ共通の値を使う）
-// 共通の値（血圧150以上・体温37.5℃以上・SpO2 92%以下）はサンプル。看護師と決めた値ではない
+// [Antigravity改定 2026-10-27] 「いつもと違う」印の判定基準
+// 1. 看護師がその方の目安（temp_max, bp_high_max, bp_high_min, spo2_min, pulse_max, pulse_min）を設定している場合はそちらに従う
+// 2. 看護師の目安がない場合の基準（資料で確認された家庭での数値）:
+//    - 熱: 看護師の目安（temp_max）がないときは印を出さない（平熱に個人差があるため）
+//    - 血圧 上: 目安（bp_high_max）がないときは 135 以上で印（日本高血圧学会 家庭血圧基準）
+//    - 血圧 下: 看護師が血圧の目安（bp_high_max か bp_high_min）を入れていないときだけ、85 以上で印（日本高血圧学会 家庭血圧基準）
+//    - SpO2: 目安（spo2_min）がないときは 90 未満で印（日本呼吸器学会 呼吸不全基準）
+//    - 脈拍: 看護師の目安があるときだけ
 function cpIsUnusualVital(res, v) {
- const r = res || {};
- const has = x => x !== null && x !== undefined && x !== "" && !isNaN(Number(x));
- const n = x => Number(x);
- if (has(v.temperature)) {
- if (has(r.temp_max) ? n(v.temperature) > n(r.temp_max) : n(v.temperature) >= 37.5) return 1;
- }
- if (has(v.bp_high)) {
- if (has(r.bp_high_max) ? n(v.bp_high) > n(r.bp_high_max) : n(v.bp_high) >= 150) return 1;
- if (has(r.bp_high_min) && n(v.bp_high) < n(r.bp_high_min)) return 1;
- }
- if (has(v.spo2)) {
- if (has(r.spo2_min) ? n(v.spo2) < n(r.spo2_min) : n(v.spo2) <= 92) return 1;
- }
- if (has(v.pulse)) {
- if (has(r.pulse_max) && n(v.pulse) > n(r.pulse_max)) return 1;
- if (has(r.pulse_min) && n(v.pulse) < n(r.pulse_min)) return 1;
- }
- return 0;
+	const r = res || {};
+	const has = x => x !== null && x !== undefined && x !== "" && !isNaN(Number(x));
+	const n = x => Number(x);
+
+	// 熱: 看護師の目安（temp_max）がないときは印を出さない。temp_max があるときは上限超過で印
+	if (has(v.temperature)) {
+		if (has(r.temp_max) && n(v.temperature) > n(r.temp_max)) return 1;
+	}
+
+	// 上の血圧: 目安（bp_high_max）がないときは 135 以上で印。bp_high_max・bp_high_min があるときは今のまま
+	if (has(v.bp_high)) {
+		if (has(r.bp_high_max) ? n(v.bp_high) > n(r.bp_high_max) : n(v.bp_high) >= 135) return 1;
+		if (has(r.bp_high_min) && n(v.bp_high) < n(r.bp_high_min)) return 1;
+	}
+
+	// 下の血圧: 看護師が血圧の目安（bp_high_max か bp_high_min）を入れていないときだけ、85 以上で印
+	if (has(v.bp_low)) {
+		if (!has(r.bp_high_max) && !has(r.bp_high_min) && n(v.bp_low) >= 85) return 1;
+	}
+
+	// SpO2: 目安（spo2_min）がないときは 90 未満で印。spo2_min があるときは今のまま
+	if (has(v.spo2)) {
+		if (has(r.spo2_min) ? n(v.spo2) < n(r.spo2_min) : n(v.spo2) < 90) return 1;
+	}
+
+	// 脈拍: 看護師の目安（pulse_max / pulse_min）があるときだけ
+	if (has(v.pulse)) {
+		if (has(r.pulse_max) && n(v.pulse) > n(r.pulse_max)) return 1;
+		if (has(r.pulse_min) && n(v.pulse) < n(r.pulse_min)) return 1;
+	}
+
+	return 0;
 }
 
-// 個人バイタル・体重編集モーダルの保存（全体連動） [Antigravity実装 2026-10-16]
 function submitPersonalVitalModal() {
  const resId = parseInt(document.getElementById("personalVitalResidentId").value, 10);
  const dt = document.getElementById("personalVitalDate").value;
