@@ -80,8 +80,25 @@ function renderSingleWriteScreen() {
       if (el.type === "checkbox") el.checked = true; else el.value = swKeep[id];
     });
   }
+  cpSwLockIfAway();
   if (typeof renderQuickTemplates === "function") renderQuickTemplates();
   updateRecordCharCount();
+}
+
+// [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は、「様子・出来事」だけ書ける（病院からの連絡など）。ほかの項目は止める
+function cpSwLockIfAway() {
+  const res = gState.residents.find(r => r.id === gState.selectedResidentId);
+  const away = res ? cpAwayAllDay(res, gState.selectedDate) : "";
+  if (!away) return;
+  Object.keys(CP_SW_SECTION_IDS).forEach(k => {
+    if (k === "event") return;
+    CP_SW_SECTION_IDS[k].forEach(id => { const el = document.getElementById(id); if (el) el.disabled = true; });
+    document.querySelectorAll(`button[onclick="saveSingleWriteScreen('${k}')"]`).forEach(b => { b.disabled = true; });
+  });
+  const container = document.getElementById("singleWriteContainer");
+  if (container && !container.querySelector(".cp-away-note-box")) {
+    container.insertAdjacentHTML("afterbegin", `<div class="cp-away-note-box">${escapeHtml(res.name)} 様は、この日は${away}です。バイタル・食事・排泄・入浴・体位変換・看護の処置は入力できません（${away === "入院中" ? "入院した日・退院した日" : "出かけた日・戻った日"}は入力できます）。${away}のようす（病院からの連絡など）は「様子・出来事」に書けます。</div>`);
+  }
 }
 
 function cpRenderSingleWriteScreenInner(container) {
@@ -287,7 +304,7 @@ function cpRenderSingleWriteScreenInner(container) {
       ${eventsFilledHtml}
       <div class="cp-sw-grid" style="align-items:end;">
         <div>
-          <label class="cp-sw-label">時間（例: 14:20 / 空欄なら現在時刻）</label>
+          <label class="cp-sw-label">時間（空欄なら今の時刻）</label>
           <input type="time" id="swEventTime" class="form-control" value="">
         </div>
         <div>
@@ -311,7 +328,7 @@ function cpRenderSingleWriteScreenInner(container) {
       <!-- [Claude修正 2026-10-16] 定型文・全画面・ヒヤリハットの作成をここへまとめた（前は下にたたんだ補助の欄にあった） -->
       <div style="margin-top:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">
-          <label class="cp-sw-label" style="margin:0;">あったこと・様子（例：14:20 居室で転びそうになり職員が支えた）</label>
+          <label class="cp-sw-label" style="margin:0;">あったこと・様子</label>
           <span style="font-size:12px; color:var(--text-muted);">文字数: <strong id="swEventCharCount" style="color:#1e5b47;">0</strong> 字</span>
         </div>
         <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center; margin-bottom:6px;">
@@ -860,7 +877,13 @@ function saveSingleWriteScreen(only) {
     }
   };
 
-  const keys = (only && CP_SW_SECTION_IDS[only]) ? [only] : Object.keys(CP_SW_SECTION_IDS);
+  let keys = (only && CP_SW_SECTION_IDS[only]) ? [only] : Object.keys(CP_SW_SECTION_IDS);
+  // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は「様子・出来事」だけ保存する
+  const swAway = cpAwayAllDay(res, dateStr);
+  if (swAway) {
+    if (only && only !== "event") { alert(cpAwayMessage(res, swAway)); return; }
+    keys = keys.filter(k => k === "event");
+  }
   const savedKeys = [];
   const stoppedKeys = [];
   for (const k of keys) {

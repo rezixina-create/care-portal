@@ -771,7 +771,7 @@ function checkGlobalAlerts(baseDate) {
             <div style="font-size:11px; color:#78350f; margin-top:2px;">理由: ${escapeHtml(o.reason || '-')} / 申請日: ${o.ordered_at || '-'}</div>
           </div>
           <div style="display:flex; gap:6px; align-items:center; white-space:nowrap; margin-left:8px;">
-            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#16a34a; border-color:#15803d; color:#fff;" onclick="approveOrder(${o.id}, '承認済')"> 承認する</button>
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px;" onclick="approveOrder(${o.id}, '承認済')"> 承認する</button>
             <button class="btn btn-danger" style="padding:3px 8px; font-size:12px; background:#ef4444; border-color:#dc2626; color:#fff;" onclick="approveOrder(${o.id}, '差戻し')"> 差戻し</button>
           </div>
         </div>

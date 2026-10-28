@@ -137,6 +137,39 @@ function cpRequireSelect(id, label) {
  if (el && !el.value) { alert(`${label}を選んでください。`); try { el.focus(); } catch (e) {} return false; }
  return true;
 }
+// [Claude修正 2026-10-28] 入院・外泊で一日ずっとホームにいない日は、毎日の記録（バイタル・食事・排泄・入浴など）を入れられないようにする
+// 入院した日・退院した日（外泊の出かけた日・戻った日）はホームにいる時間があるので入れられる（請求の数え方と同じ）
+// 入院中のようす（病院からの連絡など）は、経過記録の「様子・出来事」に書ける
+function cpAwayAllDay(r, dateStr) {
+ if (!r) return "";
+ const d = (typeof dateStr === "string" && /^\d{4}-\d{2}-\d{2}$/.test(dateStr)) ? dateStr : (gState.selectedDate || toLocalDateStr(new Date()));
+ const h = cpHospitalizationOn(r, d);
+ if (h && h.admission_date && d > h.admission_date && (!h.discharge_date || d < h.discharge_date)) return "入院中";
+ const o = cpOutingOn(r, d);
+ if (o && o.start_date && d > o.start_date && (!o.end_date || d < o.end_date)) return "外泊中";
+ return "";
+}
+function cpAwayMessage(r, away) {
+ return `${r.name} 様は、この日は${away}のため記録できません。\n（${away === "入院中" ? "入院した日・退院した日" : "出かけた日・戻った日"}は記録できます。${away}のようすは、経過記録の「様子・出来事」に書けます）`;
+}
+function cpBlockIfAway(r, dateStr) {
+ const away = cpAwayAllDay(r, dateStr);
+ if (!away) return false;
+ alert(cpAwayMessage(r, away));
+ return true;
+}
+// 表の1行（1人分）の入力をすべて止めて、理由を出す（薄くするだけにしない）
+function cpLockRowIfAway(tr, r, dateStr) {
+ const away = cpAwayAllDay(r, dateStr);
+ if (!tr || !away) return false;
+ tr.style.opacity = "";
+ tr.classList.add("cp-away-row");
+ tr.querySelectorAll("input, select, textarea, button").forEach(el => { el.disabled = true; });
+ const cells = tr.querySelectorAll("td");
+ const cell = cells.length > 1 ? cells[1] : cells[0];
+ if (cell && !cell.querySelector(".cp-away-note")) cell.insertAdjacentHTML("beforeend", `<div class="cp-away-note">${away}のため入力できません</div>`);
+ return true;
+}
 function cpResidentIsHere(r, dateStr) { const s = cpStatusOn(r, dateStr); return !!r && s !== "入院中" && s !== "退所" && s !== "入居前" && s !== "外泊中"; }
 function cpNowHHMM() { return toLocalDateTimeStr(new Date()).slice(11, 16); }
 function cpMinutes(hhmm) { const m = String(hhmm || "").match(/^(\d{1,2}):(\d{2})/); return m ? Number(m[1]) * 60 + Number(m[2]) : null; }

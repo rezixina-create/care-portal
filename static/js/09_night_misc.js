@@ -407,6 +407,7 @@ function renderWeightTable() {
  <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveWeight(${r.id})">測定登録</button></td>
  `;
  tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 
  renderWeightChart();
@@ -514,6 +515,7 @@ function renderWeightChart(selectedResId = null) {
 }
 
 function saveWeight(resId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = gState.residents.find(x => x.id === resId);
  const inputEl = document.getElementById(`wVal_${resId}`);
  if (!r || !inputEl) return;
@@ -624,6 +626,7 @@ function saveLinen(type) {
  const staff = document.getElementById("currentStaff").value;
  const tm = new Date().toTimeString().slice(0, 5);
  const r = gState.residents.find(x => x.id === gState.selectedResidentId);
+ if (r && cpBlockIfAway(r, gState.selectedDate)) return; // [Claude修正 2026-10-28]
  const linenId = Date.now();
 
  db.data.linens.unshift({
@@ -695,10 +698,12 @@ function renderGroomingTable() {
  <td><button class="btn btn-primary" style="padding:4px 10px; font-size:12px;" onclick="saveGrooming(${r.id})">保存</button></td>
  `;
  tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
 function saveGrooming(resId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const nail = document.getElementById(`gNail_${resId}`).checked ? 1 : 0;
  const shave = document.getElementById(`gShave_${resId}`).checked ? 1 : 0;
  const ear = document.getElementById(`gEar_${resId}`).checked ? 1 : 0;
@@ -730,6 +735,7 @@ function submitGroomingsBatch() {
  let savedCount = 0;
 
  cpResidentsOn(gState.selectedDate).forEach(r => {
+ if (cpAwayAllDay(r, gState.selectedDate)) return; // [Claude修正 2026-10-28]
  const nailEl = document.getElementById(`gNail_${r.id}`);
  const shaveEl = document.getElementById(`gShave_${r.id}`);
  const earEl = document.getElementById(`gEar_${r.id}`);
@@ -793,9 +799,29 @@ function renderRecreationTable() {
 	const tbody = document.querySelector("#recreationTable tbody");
 	if (!tbody) return;
 	tbody.innerHTML = "";
-	const list = db.data.recreations || [];
+	const all = db.data.recreations || [];
+	// [Claude修正 2026-10-28] 1年分をすべて古い順に出していて、最新を見るのに一番下まで動かす必要があった
+	// ふだんは「記録する日」の月だけ。去年の同じころを見たいときのために、月を選ぶ・1年分も出せる
+	const baseYm = String(gState.selectedDate || toLocalDateStr(new Date())).slice(0, 7);
+	const sel = document.getElementById("recPeriodSelect");
+	if (sel) {
+		const [by, bm] = baseYm.split("-").map(Number);
+		const opts = [`<option value="cur">記録する日の月（${by}年${bm}月）</option>`];
+		for (let i = 1; i <= 12; i++) { const d = new Date(by, bm - 1 - i, 1); const ym = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`; opts.push(`<option value="${ym}">${d.getFullYear()}年${d.getMonth() + 1}月</option>`); }
+		opts.push(`<option value="year">1年分（${by - 1}年${bm}月〜${by}年${bm}月）</option>`);
+		const keep = gState.recPeriod || "cur";
+		sel.innerHTML = opts.join("");
+		sel.value = [...sel.options].some(o => o.value === keep) ? keep : "cur";
+	}
+	const period = sel ? sel.value : "cur";
+	const ymOf = r => String(r.date || "").slice(0, 7);
+	const from = (() => { const [y, m] = baseYm.split("-").map(Number); return `${y - 1}-${String(m).padStart(2, "0")}`; })();
+	const list = all.filter(r => period === "year" ? (ymOf(r) >= from && ymOf(r) <= baseYm) : ymOf(r) === (period === "cur" ? baseYm : period))
+		.slice().sort((x, y) => String(x.date || "").localeCompare(String(y.date || "")));
+	const cnt = document.getElementById("recPeriodCount");
+	if (cnt) cnt.textContent = `${list.filter(r => !r.voided).length}件`;
 	if (list.length === 0) {
-		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">レクリエーション実施記録はありません。</td></tr>`;
+		tbody.innerHTML = `<tr><td colspan="9" style="text-align:center; color:var(--text-muted); padding:16px;">この期間のレクリエーション実施記録はありません。</td></tr>`;
 		return;
 	}
 	cpLedgerOrder(list).forEach(rec => {
@@ -1030,7 +1056,7 @@ function renderNotebook() {
 						<span style="font-size:13px; color:var(--ink-2);">記入: ${escapeHtml(nb.staff_name || '')} ${nb.resolved_staff ? `/ 対応: ${escapeHtml(nb.resolved_staff)}` : ''}</span>
 						<button class="btn btn-secondary" style="padding:2px 8px; font-size:13px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddDailyNotebookUpdateModal(${nb.id})">＋ 追記</button>
 						${nb.status === '未対応' ? `<button class="btn btn-success" style="padding:2px 8px; font-size:13px;" onclick="resolveNotebook(${nb.id})">完了にする</button>` : ''}
-						<button class="btn btn-secondary" style="padding:2px 6px; font-size:13px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">削除</button>
+						<button class="btn btn-secondary" style="padding:2px 6px; font-size:13px; color:#dc2626; border-color:#fca5a5;" onclick="deleteDailyNotebookItem(${nb.id})">取消</button>
 					</div>
 				</div>
 				${updatesHtml}
@@ -1374,7 +1400,7 @@ function renderMonthlyNotices() {
 		if (unconfirmed.length > 0 && alertArea) {
 			alertArea.innerHTML = `
 			<div style="background:#fee2e2; border:1px solid #fecaca; border-radius:6px; padding:10px 14px; margin-bottom:12px; color:#991b1b; font-size:13px; font-weight:bold;">
-				 ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の「見ました」未チェック連絡が <strong>${unconfirmed.length}件</strong> あります。各項目の「☑ 見ました」ボタンを押してください。
+				 ${escapeHtml(currentStaff)} さん、${curMonth.split("-")[1]}月分の未確認の連絡が <strong>${unconfirmed.length}件</strong> あります。読んでから、各項目の「☑ 確認済みにする」を押してください。
 			</div>
 			`;
 		}
@@ -1407,7 +1433,7 @@ function renderMonthlyNotices() {
 		if (stStatus.hasNewUpdate) {
 			statusBadgeHtml = `<span class="badge" style="background:#fef3c7; color:#92400e; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fde68a;">☐ 追記あり (要再チェック)</span>`;
 		} else if (stStatus.confirmed) {
-			statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #86efac;">☑ 見ました (確認済)</span>`;
+			statusBadgeHtml = `<span class="badge" style="background:#dcfce7; color:#166534; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #86efac;">☑ 確認済</span>`;
 		} else {
 			statusBadgeHtml = `<span class="badge" style="background:#fee2e2; color:#991b1b; font-size:12px; padding:3px 10px; font-weight:bold; border:1px solid #fca5a5;">☐ 未確認 (未チェック)</span>`;
 		}
@@ -1438,27 +1464,27 @@ function renderMonthlyNotices() {
 				<div style="display:flex; gap:6px; align-items:center;">
 					<span style="font-size:11px; color:#5f6d66;">投稿: ${escapeHtml(n.staff_name || '')} (${escapeHtml(n.created_at || '')})</span>
 					<button class="btn btn-secondary" style="padding:3px 8px; font-size:11.5px; color:#1e5b47; border-color:#a9cfbf; background:#f1f6f3;" onclick="openAddMonthlyNoticeUpdateModal(${n.id})">＋ 追記を追加</button>
-					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">削除</button>
+					<button class="btn btn-secondary" style="padding:3px 6px; font-size:11.5px; color:#dc2626; border-color:#fca5a5;" onclick="deleteMonthlyNotice(${n.id})">取消</button>
 				</div>
 			</div>
 			<div style="font-size:14px; line-height:1.7; color:#36443e; margin:10px 0; white-space:pre-wrap;">${escapeHtml(n.content)}</div>
 			${updatesHtml}
 			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-top:1px dashed #cdd6d0; padding-top:10px; margin-top:10px; font-size:12.5px;">
 				<div style="color:#4a5852;">
-					<strong>☑ 「見ました」確認済職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
+					<strong>☑ 確認済の職員:</strong> <span style="color:#166534; font-weight:bold;">${escapeHtml(confirmedListStr)}</span>
 				</div>
 				<div>
 					${stStatus.hasNewUpdate ? `
 						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#d97706; border-color:#b45309;" onclick="confirmMonthlyNotice(${n.id})">
-							☑ 追記も見ました (再チェック)
+							☑ 追記も読んだので確認済みにする
 						</button>
 					` : (stStatus.confirmed ? `
 						<button class="btn btn-secondary" style="padding:5px 14px; font-size:12.5px; background:#dcfce7; color:#166534; border-color:#86efac; font-weight:bold;" onclick="confirmMonthlyNotice(${n.id})">
-							☑ 「見ました」済 (クリックで解除)
+							☑ 確認済 (クリックで解除)
 						</button>
 					` : `
 						<button class="btn btn-primary" style="padding:6px 18px; font-size:13px; font-weight:bold; background:#1e5b47; border-color:#1a4f3d;" onclick="confirmMonthlyNotice(${n.id})">
-							☑ 見ました
+							☑ 確認済みにする
 						</button>
 					`)}
 				</div>

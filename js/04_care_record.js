@@ -237,7 +237,7 @@ function renderResidentDetail() {
  <td style="color:#5f6d66;">${escapeHtml(b.notes || '-')}</td>
  <td style="white-space:nowrap;">
  <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px;" onclick="openBelongingModal(${b.id})"> 編集</button>
- <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})"> 削除</button>
+ <button type="button" class="btn btn-secondary" style="padding:2px 6px; font-size:11px; color:#dc2626;" onclick="deleteBelonging(${b.id})">台帳から外す</button>
  </td>
  </tr>
  `).join("");

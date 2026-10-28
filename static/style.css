@@ -2782,3 +2782,9 @@ details.rx-section > summary { cursor: pointer; font-weight: bold; }
 .inv-fee-form summary { cursor: pointer; font-size: 14px; color: var(--pine); font-weight: bold; padding: 6px 0; }
 .inv-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 10px; margin: 8px 0 12px; font-size: 14px; }
 .inv-grid label { display: flex; flex-direction: column; gap: 4px; }
+
+/* [Claude修正 2026-10-28] 一日ずっと入院・外泊の日の行（入力を止めた理由を出す） */
+tr.cp-away-row td { background: #f3f4f3; }
+.cp-away-note { margin-top: 3px; font-size: 12px; font-weight: bold; color: #92400e; }
+.cp-away-note-box { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; border-radius: 8px; font-size: 13px; font-weight: bold; line-height: 1.6; }
+.cp-meal-done-note { margin-top: 4px; font-size: 12px; color: #4a5852; }

@@ -79,7 +79,7 @@ function renderOfficeCareRenewal() {
 
     tr.innerHTML = `
       <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
-      <td><span class="badge" style="background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;">${escapeHtml(r.care_level || '要介護3')}</span></td>
+      <td><span class="badge" style="background:#f1f6f3; color:#1e5b47; border:1px solid #a9cfbf;">${escapeHtml(r.care_level || '未登録')}</span></td>
       <td><strong>${r.care_expiry_date || '未設定'}</strong></td>
       <td>${daysBadge}</td>
       <td>
@@ -107,7 +107,7 @@ function renderOfficeCareRenewal() {
         </div>
       </td>
       <td>
-        <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px; background:#0284c7; border-color:#0284c7;" onclick="openUpdateCareLevelModal(${r.id})">
+        <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px;" onclick="openUpdateCareLevelModal(${r.id})">
           新認定へ更新
         </button>
       </td>

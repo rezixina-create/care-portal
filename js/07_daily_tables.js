@@ -238,31 +238,13 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  runPrintJob(printArea.innerHTML, { page: "A4 portrait", fitOnePage: true, minScale: 0.75 });
 }
 
-// [Antigravity実装 2026-10-16] 施設・フロア 一日の日課・業務スケジュール（デモ見本表示の切り替え）
-function toggleDailyScheduleDemo() {
- gState.showDailyScheduleDemo = !gState.showDailyScheduleDemo;
- renderDailyScheduleTimeline();
-}
 
 // 施設・フロア 一日の日課・業務スケジュール [Antigravity実装 2026-10-16]
 function renderDailyScheduleTimeline() {
  const container = document.getElementById("dailyScheduleTimeline");
  if (!container) return;
  const targetDate = gState.selectedDate;
- const demoBtn = document.getElementById("btnToggleDailyScheduleDemo");
- if (demoBtn) {
-  demoBtn.textContent = gState.showDailyScheduleDemo ? "デモを閉じる" : "デモ";
-  demoBtn.setAttribute("aria-pressed", gState.showDailyScheduleDemo ? "true" : "false");
-  if (gState.showDailyScheduleDemo) {
-   demoBtn.style.background = "#fef3c7";
-   demoBtn.style.color = "#92400e";
-   demoBtn.style.borderColor = "#f59e0b";
-  } else {
-   demoBtn.style.background = "#fffbeb";
-   demoBtn.style.color = "#b45309";
-   demoBtn.style.borderColor = "#fcd34d";
-  }
- }
+
 
  // 選んでいる日（gState.selectedDate）の取消していない記録だけを表示（日付のない見本データは記録としては表示しない）
  const list = (db.data.daily_schedules || [])
@@ -295,41 +277,7 @@ function renderDailyScheduleTimeline() {
   html += '</div>';
  }
 
- // [Antigravity実装 2026-10-16] デモボタン押下時は、日付のない見本12件を記録とは別の枠（色を変え「見本」と表示）に出す
- if (gState.showDailyScheduleDemo) {
-  const sampleList = (db.data.daily_schedules || [])
-   .filter(s => !s.date && !s.voided)
-   .slice()
-   .sort((a, b) => (a.time || "").localeCompare(b.time || ""));
-  html += `
-  <div id="dailyScheduleDemoBox" class="daily-schedule-demo-box no-print" style="margin-top:12px; padding:12px; background:#fffbeb; border:2px dashed #f59e0b; border-radius:8px;">
-   <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:8px;">
-    <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-     <span style="background:#d97706; color:#ffffff; font-weight:bold; font-size:11px; padding:2px 8px; border-radius:4px;">見本</span>
-     <strong style="font-size:13px; color:#92400e;">こんな感じで記録できます（一日の日課・業務スケジュールの記入例 ${sampleList.length}件）</strong>
-    </div>
-    <span style="font-size:11.5px; color:#b45309;">※この見本は保存・印刷されず、記録の件数にも数えません</span>
-   </div>
-   <div style="display:flex; flex-direction:column; gap:6px;">
-    ${sampleList.map(s => `
-    <div style="display:flex; gap:10px; align-items:flex-start; padding:6px 10px; background:#fef3c7; border:1px solid #fde68a; border-radius:6px; font-size:12.5px;">
-     <span style="background:#b45309; color:#ffffff; font-weight:bold; font-size:11.5px; padding:2px 7px; border-radius:4px; white-space:nowrap; flex-shrink:0;">
-      ${escapeHtml(s.time || "")}
-     </span>
-     <div style="min-width:0; flex:1; word-break:break-word;">
-      <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
-       <span style="font-size:10.5px; background:#fde68a; color:#92400e; padding:1px 5px; border-radius:3px; font-weight:bold;">見本</span>
-       <strong style="color:#78350f; font-size:13px;">${escapeHtml(s.title)}</strong>
-      </div>
-      ${s.content ? `<div style="font-size:12px; color:#92400e; margin-top:2px;">${escapeHtml(s.content)}</div>` : ''}
-      ${s.staff_name ? `<div style="font-size:11px; color:#b45309; margin-top:2px;">担当例: ${escapeHtml(s.staff_name)}</div>` : ''}
-     </div>
-    </div>
-    `).join("")}
-   </div>
-  </div>
-  `;
- }
+
 
  container.innerHTML = html;
 }
@@ -805,8 +753,7 @@ function renderVitalsTable() {
    const vList = cpDayVitals(r.id, gState.selectedDate);
    const v = null;
    const tr = document.createElement("tr");
-   if (cpStatusOn(r, gState.selectedDate) !== "在所") tr.style.opacity = "0.5";
-   const filledHtml = vList.map(x => `<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:2px;">${cpFilledBadgeHtml(cpFormatVitalBrief(x), x.staff_name, x.time || "", x.edit_history)}<button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="openPersonalVitalModal(${Number(x.id)})">訂正</button></div>`).join("");
+     const filledHtml = vList.map(x => `<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:2px;">${cpFilledBadgeHtml(cpFormatVitalBrief(x), x.staff_name, x.time || "", x.edit_history)}<button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="openPersonalVitalModal(${Number(x.id)})">訂正</button></div>`).join("");
 
    tr.innerHTML = `
      <td>${r.room_no}</td>
@@ -826,10 +773,12 @@ function renderVitalsTable() {
      <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveVital(${r.id})">${vList.length ? '再測定を登録' : '登録'}</button></td>
    `;
    tbody.appendChild(tr);
+   cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
 function saveVital(resId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const tempInput = document.getElementById(`vTemp_${resId}`);
  if (tempInput) formatTempInput(tempInput);
  const temp = normalizeTempValue(tempInput ? tempInput.value : "");
@@ -1058,6 +1007,7 @@ function submitExcretion() {
     alert("利用者が選択されていません。上部の選択欄から入力する方を選んでください。");
     return;
   }
+  if (cpBlockIfAway(targetRes, gState.selectedDate)) return; // [Claude修正 2026-10-28]
  const tmEl = document.getElementById("exTime");
  const urineEl = document.getElementById("exUrine");
  const amountEl = document.getElementById("exStoolAmount");
@@ -1134,12 +1084,23 @@ function cpOnMealTypeChange(resId) {
   // [Claude修正 2026-10-16] 記入済み・訂正になるのは朝食・昼食・夕食だけ。おやつ・その他（水分）は毎回新しい記録なので前の値を入れない
   const existing = ["朝食", "昼食", "夕食"].includes(type) ? (db.data.meals || []).find(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.meal_type === type) : null;
 
+  // [Claude修正 2026-10-28] 記録済みの時間帯は、上の一覧と同じ記録をもう一度出さない。入力欄は止めて、直すときは「訂正」（理由を残す）
   if (statusEl) {
-    statusEl.innerHTML = existing ? cpFilledBadgeHtml(cpFormatMealDetail(existing), existing.staff_name, existing.time || "", existing.edit_history) : "";
+    statusEl.innerHTML = existing ? `<div class="cp-meal-done-note">${escapeHtml(type)}は記録済みです。直すときは右の「訂正」を押してください。</div>` : "";
   }
   if (btnEl) {
-    btnEl.textContent = existing ? "訂正して保存" : "記録";
+    btnEl.textContent = existing ? "訂正" : "記録";
+    btnEl.onclick = existing ? (() => cpQuickEditMealRecord(Number(existing.id))) : (() => saveMeal(resId));
   }
+  if (existing) {
+    [mainEl, sideEl, waterEl].forEach(el => {
+      if (!el) return;
+      el.type = "text"; el.value = ""; el.placeholder = "記録済み"; el.disabled = true;
+      el.style.background = "#f1f5f9"; el.style.color = "#64748b";
+    });
+    return;
+  }
+  if (waterEl) { waterEl.disabled = false; waterEl.type = "number"; waterEl.placeholder = "ml"; waterEl.style.background = ""; waterEl.style.color = ""; }
 
   if (type === "その他") {
     mainEl.type = "text"; mainEl.value = "ー"; mainEl.disabled = true;
@@ -1147,18 +1108,18 @@ function cpOnMealTypeChange(resId) {
     sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
     sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
   } else if (type === "おやつ") {
-    mainEl.disabled = false; mainEl.type = "number";
+    mainEl.disabled = false; mainEl.type = "number"; mainEl.placeholder = "0-10";
     mainEl.min = "0"; mainEl.max = "10";
     mainEl.style.background = ""; mainEl.style.color = "";
     mainEl.value = (existing && existing.main_dish_ratio !== null && existing.main_dish_ratio !== undefined) ? existing.main_dish_ratio : "";
     sideEl.type = "text"; sideEl.value = "ー"; sideEl.disabled = true;
     sideEl.style.background = "#f1f5f9"; sideEl.style.color = "#64748b";
   } else {
-    mainEl.disabled = false; mainEl.type = "number";
+    mainEl.disabled = false; mainEl.type = "number"; mainEl.placeholder = "0-10";
     mainEl.min = "0"; mainEl.max = "10";
     mainEl.style.background = ""; mainEl.style.color = "";
     mainEl.value = (existing && existing.main_dish_ratio !== null && existing.main_dish_ratio !== undefined) ? existing.main_dish_ratio : "";
-    sideEl.disabled = false; sideEl.type = "number";
+    sideEl.disabled = false; sideEl.type = "number"; sideEl.placeholder = "0-10";
     sideEl.min = "0"; sideEl.max = "10";
     sideEl.style.background = ""; sideEl.style.color = "";
     sideEl.value = (existing && existing.side_dish_ratio !== null && existing.side_dish_ratio !== undefined) ? existing.side_dish_ratio : "";
@@ -1178,7 +1139,6 @@ function renderMealsTable() {
  const userMeals = meals.filter(m => m.resident_id === r.id);
  const totalWater = userMeals.reduce((acc, cur) => acc + (cur.water_ml || 0), 0);
  const tr = document.createElement("tr");
- if (cpStatusOn(r, gState.selectedDate) !== "在所") tr.style.opacity = "0.5";
 
  // 既に記録されている時間帯の一覧表示
  const allMealsSummaryHtml = userMeals.length > 0
@@ -1210,10 +1170,12 @@ function renderMealsTable() {
  `;
  tbody.appendChild(tr);
  cpOnMealTypeChange(r.id);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
 function saveMeal(resId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
   const type = document.getElementById(`mType_${resId}`).value;
   const mainEl = document.getElementById(`mMain_${resId}`);
   const sideEl = document.getElementById(`mSide_${resId}`);
@@ -1320,10 +1282,12 @@ function renderBathTable() {
  <td><button class="btn btn-primary" style="padding:6px 12px; font-size:13px;" onclick="saveBath(${r.id})">${b ? '訂正して保存' : '保存'}</button></td>
  `;
  tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
 function saveBath(resId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const type = document.getElementById(`bathType_${resId}`).value;
  const notes = document.getElementById(`bathNotes_${resId}`).value.trim();
  const staff = cpLedgerStaff();
@@ -1434,11 +1398,13 @@ function renderTopicalTable() {
  </td>
  <td><div class="topical-slots">${slots}</div></td>`;
  tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
  });
 }
 
 function toggleTopical(resId, pinId, slot) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
  const p = (db.data.body_schema_pins || []).find(x => Number(x.id) === Number(pinId));
  if (!p) { alert("シェーマ図の登録が見つかりません。画面を開き直してください。"); return; }
@@ -1540,10 +1506,12 @@ function renderOralTable() {
    <td><input type="text" id="oralNotes_${r.id}" class="form-control" style="font-size:13px;"></td>
   `;
   tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
 function saveOralCare(resId, timing) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = (gState.residents || []).find(x => Number(x.id) === Number(resId));
  const normTiming = (typeof cpNormalizeOralTiming === "function") ? cpNormalizeOralTiming(timing) : timing;
  const exists = (db.data.oral_cares || []).some(o =>
@@ -1680,6 +1648,7 @@ function renderMedTable() {
  <td>${eyedropCellHtml}</td>
  `;
  tbody.appendChild(tr);
+ cpLockRowIfAway(tr, r, gState.selectedDate);
  });
 }
 
@@ -1735,6 +1704,7 @@ function cpAppendEditHistory(target, old, fields, reason) {
 }
 
 function saveMed(resId, slot) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = gState.residents.find(x => x.id === resId);
  const exists = (db.data.meds || []).some(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
  if (exists) {
@@ -1753,6 +1723,7 @@ function saveMed(resId, slot) {
 }
 
 function toggleMed(resId, slot) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = gState.residents.find(x => x.id === resId);
  const idx = (db.data.meds || []).findIndex(m => !m.voided && m.date === gState.selectedDate && m.resident_id === resId && m.slot === slot);
  if (idx >= 0) {
@@ -1769,6 +1740,7 @@ function toggleMed(resId, slot) {
 
 // [Antigravity実装 2026-10-19] 複数の目薬がある場合も、それぞれの指示 (orderId) ごとに実施・取消を記録する
 function toggleEyedrop(resId, slot, orderId) {
+  { const _cpR = gState.residents.find(x => Number(x.id) === Number(resId)); if (_cpR && cpBlockIfAway(_cpR, gState.selectedDate)) return; } // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は記録しない
  const r = gState.residents.find(x => Number(x.id) === Number(resId));
  const staff = document.getElementById("currentStaff")?.value || "職員";
  const meds = db.data.meds || [];

@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261027_c2">
+	<link rel="stylesheet" href="style.css?v=20261028_c1">
 </head>
 <body>
 
@@ -299,7 +299,6 @@
  <span> 一日の日課・業務スケジュール実施記録 (施設共通・レク・口腔体操・食事など)</span>
  </h4>
  <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
- <button type="button" id="btnToggleDailyScheduleDemo" class="btn btn-secondary" style="font-size:12.5px; padding:4px 10px; background:#fffbeb; color:#b45309; border:1px solid #fcd34d; font-weight:bold;" onclick="toggleDailyScheduleDemo()">デモ</button>
  <button type="button" class="btn btn-secondary" style="font-size:13px; padding:4px 10px;" onclick="openDailyScheduleModal()">＋ 日課・業務を追加</button>
  </div>
  </div>
@@ -700,6 +699,11 @@
 				<span style="font-size:13px; color:var(--text-muted); margin-left:8px;">体操・脳トレ・音楽・季節行事・参加者の反応記録</span>
 			</div>
 			<button type="button" class="btn btn-primary" style="font-size:13px; font-weight:bold;" onclick="openRecreationModal()">＋ レクリエーション記録を追加</button>
+		</div>
+		<div style="display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin:6px 0 10px;">
+			<label for="recPeriodSelect" style="font-size:13px; font-weight:bold; color:#1c2622;">表示する期間</label>
+			<select id="recPeriodSelect" class="form-control" style="width:auto; font-size:13px;" onchange="gState.recPeriod = this.value; renderRecreationTable();"></select>
+			<span id="recPeriodCount" style="font-size:13px; color:var(--text-muted);"></span>
 		</div>
 		<table class="data-table" id="recreationTable">
 			<thead>
@@ -1413,7 +1417,7 @@
  親機PCと、その中の日時ごとの控えへ、いまのデータを保存します。
  </p>
  </div>
- <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px; background:#059669; border-color:#047857;" onclick="triggerManualBackup()">
+ <button class="btn btn-primary" style="width:100%; padding:9px 0; font-size:13px;" onclick="triggerManualBackup()">
  今すぐ親機PCに同期保存
  </button>
  </div>
@@ -1425,7 +1429,7 @@
  外出先のスマホや他フロアのタブレットから暗号化接続するためのCloudflare Tunnel URLおよび接続用QRコードを確認・コピーします。
  </p>
  </div>
- <button class="btn btn-secondary" style="width:100%; padding:9px 0; font-size:13px; background:#f5f3ff; color:#6d28d9; border:1px solid #c4b5fd;" onclick="openShareModal()">
+ <button class="btn btn-secondary" style="width:100%; padding:9px 0; font-size:13px;" onclick="openShareModal()">
  接続案内ダイアログを開く
  </button>
  </div>
@@ -2941,7 +2945,7 @@
  </div>
 
  <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom:10px;">
- <button class="btn btn-primary" style="flex:1; background:#059669; border-color:#059669; padding:8px 14px;" onclick="triggerManualBackup()">
+ <button class="btn btn-primary" style="flex:1; padding:8px 14px;" onclick="triggerManualBackup()">
  今すぐ最新バックアップを親機に同期
  </button>
  <button class="btn btn-primary" style="flex:1; background:#1e5b47; border-color:#173f33; padding:8px 14px;" onclick="runManualExternalBackup()">
@@ -2983,7 +2987,7 @@
  <button class="btn btn-secondary" style="font-size:13px; padding:5px 10px;" onclick="openPCFolder()" title="PCの実際の保存フォルダをエクスプローラーで開きます">
   PCの保存フォルダを開く
  </button>
- <button class="btn btn-primary" style="font-size:13px; padding:5px 12px; background:#10b981; border-color:#10b981;" onclick="toggleAddPhotoForm()">
+ <button class="btn btn-primary" style="font-size:13px; padding:5px 12px;" onclick="toggleAddPhotoForm()">
  写真・書類の追加
  </button>
  </div>
@@ -4275,7 +4279,7 @@
 
  <!-- ボタン類 -->
  <div style="display:flex; justify-content:space-between; align-items:center;">
- <button type="button" id="btnDeleteSchemaPin" class="btn btn-danger" style="font-size:13px; display:none;" onclick="deleteSchemaPin()">このピンを削除</button>
+ <button type="button" id="btnDeleteSchemaPin" class="btn btn-danger" style="font-size:13px; display:none;" onclick="deleteSchemaPin()">このピンを取消</button>
  <div style="display:flex; gap:6px; margin-left:auto;">
  <button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="resetSchemaPinForm()">新規入力に戻す</button>
  <button type="button" class="btn btn-primary" style="font-size:13px; background:#1c2622; border-color:#1c2622;" onclick="saveSchemaPin()">ピンを保存・登録</button>
@@ -4592,26 +4596,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261027_c2"></script>
- <script src="js/02_terms.js?v=20261027_c2"></script>
- <script src="js/03_common.js?v=20261027_c2"></script>
- <script src="js/04_care_record.js?v=20261027_c2"></script>
- <script src="js/05_summary_print_audit.js?v=20261027_c2"></script>
- <script src="js/06_schema_history.js?v=20261027_c2"></script>
- <script src="js/07_daily_tables.js?v=20261027_c2"></script>
- <script src="js/08_meds.js?v=20261027_c2"></script>
- <script src="js/09_night_misc.js?v=20261027_c2"></script>
- <script src="js/10_office.js?v=20261027_c2"></script>
- <script src="js/11_karte_staff.js?v=20261027_c2"></script>
- <script src="js/12_hospital_photos.js?v=20261027_c2"></script>
- <script src="js/13_shift_units.js?v=20261027_c2"></script>
- <script src="js/14_auth_home.js?v=20261027_c2"></script>
- <script src="js/15_single_write.js?v=20261027_c2"></script>
- <script src="js/16_careplan.js?v=20261027_c2"></script>
-	<script src="js/17_kasan.js?v=20261027_c2"></script>
-	<script src="js/18_stats.js?v=20261027_c2"></script>
-	<script src="js/19_life.js?v=20261027_c2"></script>
-	<script src="js/20_invoice.js?v=20261027_c2"></script>
+ <script src="js/01_core.js?v=20261028_c1"></script>
+ <script src="js/02_terms.js?v=20261028_c1"></script>
+ <script src="js/03_common.js?v=20261028_c1"></script>
+ <script src="js/04_care_record.js?v=20261028_c1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261028_c1"></script>
+ <script src="js/06_schema_history.js?v=20261028_c1"></script>
+ <script src="js/07_daily_tables.js?v=20261028_c1"></script>
+ <script src="js/08_meds.js?v=20261028_c1"></script>
+ <script src="js/09_night_misc.js?v=20261028_c1"></script>
+ <script src="js/10_office.js?v=20261028_c1"></script>
+ <script src="js/11_karte_staff.js?v=20261028_c1"></script>
+ <script src="js/12_hospital_photos.js?v=20261028_c1"></script>
+ <script src="js/13_shift_units.js?v=20261028_c1"></script>
+ <script src="js/14_auth_home.js?v=20261028_c1"></script>
+ <script src="js/15_single_write.js?v=20261028_c1"></script>
+ <script src="js/16_careplan.js?v=20261028_c1"></script>
+	<script src="js/17_kasan.js?v=20261028_c1"></script>
+	<script src="js/18_stats.js?v=20261028_c1"></script>
+	<script src="js/19_life.js?v=20261028_c1"></script>
+	<script src="js/20_invoice.js?v=20261028_c1"></script>
   
 
   <!-- ============================================================ -->

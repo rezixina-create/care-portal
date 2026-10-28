@@ -1667,7 +1667,7 @@ function renderOfficeSuppliers() {
      <div style="background:#f6f8f6; border:1px solid #dfe5e1; border-radius:6px; padding:12px;">
        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:8px;">
          <span style="font-size:13px; font-weight:bold; color:#36443e;">取扱商品一覧 (${items.length}品目)</span>
-         <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 12px; background:#0284c7; border-color:#0284c7;" onclick="openSupplierItemModal(${s.id})">＋ 取扱商品を追加</button>
+         <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 12px;" onclick="openSupplierItemModal(${s.id})">＋ 取扱商品を追加</button>
        </div>
        <table class="data-table" style="background:#ffffff; margin:0;">
          <thead>

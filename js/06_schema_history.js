@@ -132,7 +132,7 @@ function renderBodySchemaPins() {
  </td>
  <td style="padding:6px 8px; text-align:center; white-space:nowrap;">
  <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 7px;" onclick="editSchemaPin(${p.id})">訂正</button>
- <button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteSchemaPinById(${p.id})">削除</button>
+ <button type="button" class="btn btn-danger" style="font-size:11px; padding:2px 7px; margin-left:3px;" onclick="deleteSchemaPinById(${p.id})">取消</button>
  </td>
  </tr>
  `;
@@ -1273,6 +1273,7 @@ function cpIsUnusualVital(res, v) {
 function submitPersonalVitalModal() {
  const resId = parseInt(document.getElementById("personalVitalResidentId").value, 10);
  const dt = document.getElementById("personalVitalDate").value;
+ { const _cpR = gState.residents.find(x => x.id === resId); if (_cpR && cpBlockIfAway(_cpR, dt)) return; } // [Claude修正 2026-10-28]
  const staff = cpLedgerStaff();
 
  const tempVal = normalizeTempValue(document.getElementById("pvmTemp").value);
