@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261028_d1">
+	<link rel="stylesheet" href="style.css?v=20261028_e1">
 </head>
 <body>
 
@@ -1719,7 +1719,7 @@
    <div class="modal-body" style="padding:16px;">
     <input type="hidden" id="updateCareLevelResidentId">
     <div style="background:#f1f6f3; border:1px solid #c9e0d5; padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px; color:#1e5b47;">
-     新しい要介護認定結果および有効期限を入力してください。<br>更新を確定すると、進捗チェックリストが完了状態へ自動更新されます。
+     認定結果の通知書を見て、新しい要介護度と認定有効期間（始まり・終わり）を入力してください。<br>更新を確定すると、手続きの印が完了になります（次の期限の60日前から、次の更新の印として空に戻ります）。
     </div>
     <div class="form-group" style="margin-bottom:12px;">
      <label style="font-weight:bold; font-size:13px;">新しい要介護度:</label>
@@ -1736,7 +1736,11 @@
      </select>
     </div>
     <div class="form-group" style="margin-bottom:12px;">
-     <label style="font-weight:bold; font-size:13px;">新しい認定有効期限:</label>
+     <label style="font-weight:bold; font-size:13px;">新しい認定有効期間の始まり:</label>
+     <input type="date" id="newCareStartDateInput" class="form-control" style="font-size:13px;">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">新しい認定有効期限（終わり）:</label>
      <input type="date" id="newCareExpiryDateInput" class="form-control" style="font-size:13px;">
     </div>
    </div>
@@ -4665,26 +4669,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261028_d1"></script>
- <script src="js/02_terms.js?v=20261028_d1"></script>
- <script src="js/03_common.js?v=20261028_d1"></script>
- <script src="js/04_care_record.js?v=20261028_d1"></script>
- <script src="js/05_summary_print_audit.js?v=20261028_d1"></script>
- <script src="js/06_schema_history.js?v=20261028_d1"></script>
- <script src="js/07_daily_tables.js?v=20261028_d1"></script>
- <script src="js/08_meds.js?v=20261028_d1"></script>
- <script src="js/09_night_misc.js?v=20261028_d1"></script>
- <script src="js/10_office.js?v=20261028_d1"></script>
- <script src="js/11_karte_staff.js?v=20261028_d1"></script>
- <script src="js/12_hospital_photos.js?v=20261028_d1"></script>
- <script src="js/13_shift_units.js?v=20261028_d1"></script>
- <script src="js/14_auth_home.js?v=20261028_d1"></script>
- <script src="js/15_single_write.js?v=20261028_d1"></script>
- <script src="js/16_careplan.js?v=20261028_d1"></script>
-	<script src="js/17_kasan.js?v=20261028_d1"></script>
-	<script src="js/18_stats.js?v=20261028_d1"></script>
-	<script src="js/19_life.js?v=20261028_d1"></script>
-	<script src="js/20_invoice.js?v=20261028_d1"></script>
+ <script src="js/01_core.js?v=20261028_e1"></script>
+ <script src="js/02_terms.js?v=20261028_e1"></script>
+ <script src="js/03_common.js?v=20261028_e1"></script>
+ <script src="js/04_care_record.js?v=20261028_e1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261028_e1"></script>
+ <script src="js/06_schema_history.js?v=20261028_e1"></script>
+ <script src="js/07_daily_tables.js?v=20261028_e1"></script>
+ <script src="js/08_meds.js?v=20261028_e1"></script>
+ <script src="js/09_night_misc.js?v=20261028_e1"></script>
+ <script src="js/10_office.js?v=20261028_e1"></script>
+ <script src="js/11_karte_staff.js?v=20261028_e1"></script>
+ <script src="js/12_hospital_photos.js?v=20261028_e1"></script>
+ <script src="js/13_shift_units.js?v=20261028_e1"></script>
+ <script src="js/14_auth_home.js?v=20261028_e1"></script>
+ <script src="js/15_single_write.js?v=20261028_e1"></script>
+ <script src="js/16_careplan.js?v=20261028_e1"></script>
+	<script src="js/17_kasan.js?v=20261028_e1"></script>
+	<script src="js/18_stats.js?v=20261028_e1"></script>
+	<script src="js/19_life.js?v=20261028_e1"></script>
+	<script src="js/20_invoice.js?v=20261028_e1"></script>
   
 
   <!-- ============================================================ -->

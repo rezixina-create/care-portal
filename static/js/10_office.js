@@ -1616,7 +1616,7 @@ function openQualityEvalModal(editId) {
 	const nendoSel = document.getElementById("qualityEvalNendo");
 	if (nendoSel) {
 		nendoSel.innerHTML = '<option value="">選んでください</option>';
-		for (let y = curNendo + 1; y >= curNendo - 5; y--) {
+		for (let y = curNendo; y >= curNendo - 5; y--) { // [Claude修正 2026-10-28] 先の年度は選べない
 			const opt = document.createElement("option");
 			opt.value = String(y);
 			opt.textContent = `${y}年度`;
@@ -1683,6 +1683,11 @@ function saveQualityEvaluation() {
 	const nendoVal = Number(document.getElementById("qualityEvalNendo")?.value);
 	if (!nendoVal) {
 		alert("対象年度を選んでください。");
+		return false;
+	}
+	// [Claude修正 2026-10-28] まだ来ていない年度の記録は作らない（関数を直接呼んだときも止める）
+	if (nendoVal > cpGetCurrentFiscalYear()) {
+		alert(`${nendoVal}年度はまだ始まっていないため記録できません。`);
 		return false;
 	}
 	const extType = (document.getElementById("qualityEvalExternalType")?.value || "").trim();

@@ -1,6 +1,17 @@
 // ==========================================================
 // 要介護認定 有効期限・更新手続き進捗管理機能
 // ==========================================================
+// [Claude修正 2026-10-28] 更新の手続きの印は「どの認定期間の更新か」で見る
+// 前は更新が済むと印が全部「済」のまま残り、次の更新のときに最初から「完了」に見えていた
+// 更新を登録したときに、印に前の期限（cycle_expiry）を残す。次の期限の60日前になったら、次の更新の印として空から始める
+function cpRenewalStepsOf(r, daysDiff) {
+  const blank = { application_submitted: false, visit_scheduled: false, doctor_statement: false, result_pending: false, completed: false };
+  const st = r && r.renewal_steps ? r.renewal_steps : null;
+  if (!st) return blank;
+  const stale = st.completed && daysDiff <= 60 && (!st.cycle_expiry || (r.care_expiry_date && st.cycle_expiry < r.care_expiry_date));
+  return stale ? blank : Object.assign({}, blank, st);
+}
+
 function renderOfficeCareRenewal() {
   const tbody = document.querySelector("#careRenewalTable tbody");
   if (!tbody) return;
@@ -20,26 +31,20 @@ function renderOfficeCareRenewal() {
 
   cpCurrentResidents().forEach(r => {
     totalCount++;
-    r.renewal_steps = r.renewal_steps || {
-      application_submitted: false,
-      visit_scheduled: false,
-      doctor_statement: false,
-      result_pending: false,
-      completed: false
-    };
-
     let daysDiff = 999;
     if (r.care_expiry_date) {
       const exp = new Date(r.care_expiry_date);
       exp.setHours(0,0,0,0);
       daysDiff = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
     }
+    // [Claude修正 2026-10-28] 見るだけのときは利用者の記録を書き換えない（前は空の印を r に書き込んでいた）
+    const steps = cpRenewalStepsOf(r, daysDiff);
 
     if (daysDiff <= 30) urgentCount++;
     else if (daysDiff <= 60) warningCount++;
 
-    const isStepsStarted = Object.values(r.renewal_steps).some(v => v === true);
-    if (r.renewal_steps.completed) {
+    const isStepsStarted = ["application_submitted", "visit_scheduled", "doctor_statement", "result_pending", "completed"].some(k => steps[k] === true);
+    if (steps.completed) {
       completedCount++;
     } else if (isStepsStarted) {
       inProgressCount++;
@@ -54,8 +59,8 @@ function renderOfficeCareRenewal() {
 
     if (filter === "urgent" && daysDiff > 30) return;
     if (filter === "warning" && (daysDiff <= 30 || daysDiff > 60)) return;
-    if (filter === "in_progress" && (!isStepsStarted || r.renewal_steps.completed)) return;
-    if (filter === "completed" && !r.renewal_steps.completed) return;
+    if (filter === "in_progress" && (!isStepsStarted || steps.completed)) return;
+    if (filter === "completed" && !steps.completed) return;
 
     // Render row
     const tr = document.createElement("tr");
@@ -75,7 +80,7 @@ function renderOfficeCareRenewal() {
       daysBadge = `<span class="badge" style="background:#94a19a; color:#fff;">期限未設定</span>`;
     }
 
-    const s = r.renewal_steps;
+    const s = steps;
 
     tr.innerHTML = `
       <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
@@ -141,8 +146,13 @@ function renderOfficeCareRenewal() {
 function toggleCareRenewalStep(residentId, stepKey) {
   const r = gState.residents.find(x => x.id === residentId);
   if (!r) return;
-  r.renewal_steps = r.renewal_steps || {};
-  r.renewal_steps[stepKey] = !r.renewal_steps[stepKey];
+  // [Claude修正 2026-10-28] 今の認定期間の印として残す（前の更新の印が残っていたら空から）
+  const today0 = new Date(); today0.setHours(0, 0, 0, 0);
+  const dd = r.care_expiry_date ? Math.ceil((new Date(r.care_expiry_date + "T00:00:00") - today0) / 86400000) : 999;
+  const cur = cpRenewalStepsOf(r, dd);
+  cur[stepKey] = !cur[stepKey];
+  cur.cycle_expiry = r.care_expiry_date || "";
+  r.renewal_steps = cur;
   db.data.residents = gState.residents;
   db.save();
   renderOfficeCareRenewal();
@@ -155,12 +165,15 @@ function openUpdateCareLevelModal(residentId) {
   document.getElementById("updateCareLevelModalTitle").textContent = `要介護認定の更新登録 (${r.name} 様)`;
   document.getElementById("newCareLevelSelect").value = r.care_level || "";
   
-  const defaultNextYear = new Date();
-  defaultNextYear.setFullYear(defaultNextYear.getFullYear() + 1);
-  const yyyy = defaultNextYear.getFullYear();
-  const mm = String(defaultNextYear.getMonth() + 1).padStart(2, '0');
-  const dd = String(defaultNextYear.getDate()).padStart(2, '0');
-  document.getElementById("newCareExpiryDateInput").value = `${yyyy}-${mm}-${dd}`;
+  // [Claude修正 2026-10-28] 新しい認定期間の始まりの日も入れる（前は終わりの日だけ変わり、国保連の請求ファイルの認定期間が「前の始まり〜新しい終わり」になっていた）
+  // 初めの値: 始まり＝今の期限の次の日、終わり＝そこから12か月（通知書を見て直してもらう）
+  const fmt = d => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  let startD = new Date(); startD.setHours(0, 0, 0, 0);
+  if (r.care_expiry_date) { startD = new Date(r.care_expiry_date + "T00:00:00"); startD.setDate(startD.getDate() + 1); }
+  const endD = new Date(startD.getFullYear() + 1, startD.getMonth(), startD.getDate() - 1);
+  const stEl = document.getElementById("newCareStartDateInput");
+  if (stEl) stEl.value = fmt(startD);
+  document.getElementById("newCareExpiryDateInput").value = fmt(endD);
 
   openModal("updateCareLevelModal");
 }
@@ -173,21 +186,47 @@ function submitUpdateCareLevelModal() {
   if (!cpRequireSelect("newCareLevelSelect", "要介護度")) return;
   const newLevel = document.getElementById("newCareLevelSelect").value;
   const newExpiry = document.getElementById("newCareExpiryDateInput").value;
+  const newStart = (document.getElementById("newCareStartDateInput")?.value || "").trim();
 
+  if (!newStart) {
+    alert("新しい認定有効期間の始まりの日を入力してください。");
+    return;
+  }
   if (!newExpiry) {
     alert("新しい認定有効期限を入力してください。");
     return;
   }
+  if (newStart > newExpiry) {
+    alert("認定有効期間の始まりの日は、終わりの日（有効期限）より前にしてください。");
+    return;
+  }
+  // 今は介護度の履歴を持たないので、新しい期間が始まる前に登録すると、今の月の加算・請求も新しい介護度で計算されてしまう
+  if (newStart > toLocalDateStr(new Date())) {
+    alert(`新しい認定有効期間（${newStart}〜）が始まってから登録してください。
+今登録すると、今の月の加算・請求も新しい要介護度で計算されてしまいます。
+始まるまでは手続きの印（④ 認定結果待ち）で管理してください。`);
+    return;
+  }
+  if (r.care_start_date && newStart <= r.care_start_date) {
+    alert(`新しい認定有効期間の始まりの日は、今の認定期間の始まり（${r.care_start_date}）より後にしてください。`);
+    return;
+  }
 
+  const oldCopy = JSON.parse(JSON.stringify(r));
+  const oldExpiry = r.care_expiry_date || "";
   r.care_level = newLevel;
+  r.care_start_date = newStart;
   r.care_expiry_date = newExpiry;
+  // 手続きの印は「前の期限の更新が済んだ」として残す（次の期限の60日前から、次の更新の印として空から始まる）
   r.renewal_steps = {
     application_submitted: true,
     visit_scheduled: true,
     doctor_statement: true,
     result_pending: true,
-    completed: true
+    completed: true,
+    cycle_expiry: oldExpiry
   };
+  if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], "要介護認定の更新");
 
   db.data.residents = gState.residents;
   db.save();
@@ -197,7 +236,7 @@ function submitUpdateCareLevelModal() {
 	initGlobalTimeSync();
 	
   closeModal("updateCareLevelModal");
-  alert(`【認定更新完了】\n${r.name} 様の要介護度を「${newLevel}」、有効期限を「${newExpiry}」に更新いたしました。`);
+  alert(`【認定更新完了】\n${r.name} 様の要介護度を「${newLevel}」、認定有効期間を「${newStart}〜${newExpiry}」に更新しました。`);
 }
 
 function printCareRenewalList() {
