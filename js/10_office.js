@@ -80,6 +80,8 @@ function switchOfficeTab(tab) {
 		if (typeof renderOfficeInvoiceTab === "function") renderOfficeInvoiceTab();
 	} else if (tab === "incidents") {
 		renderOfficeIncidents();
+	} else if (tab === "committee") {
+		renderOfficeCommittees();
 	}
 	}
 }
@@ -1348,6 +1350,7 @@ window.renderCommitteeComplianceTable = renderCommitteeComplianceTable;
 
 function renderOfficeCommittees() {
 	renderCommitteeComplianceTable();
+	renderOfficeQualityEvaluations();
 
 	const canEdit = typeof isCurrentStaffAdminOrClerk === "function" ? isCurrentStaffAdminOrClerk() : false;
 	const btnOpen = document.getElementById("btnOpenCommitteeModal");
@@ -1493,6 +1496,395 @@ function deleteCommittee(id) {
 	cpVoidLedgerRecord("committees", id);
 	if (typeof checkGlobalAlerts === "function") checkGlobalAlerts();
 }
+
+// ============================================================
+// 自己評価・外部評価（年度ごと） [Antigravity実装 2026-10-28]
+// ============================================================
+function cpGetCurrentFiscalYear() {
+	const now = new Date();
+	const m = now.getMonth() + 1;
+	return (m >= 4) ? now.getFullYear() : now.getFullYear() - 1;
+}
+
+function renderOfficeQualityEvaluations() {
+	const tbody = document.getElementById("qualityEvalTableBody");
+	if (!tbody) return;
+	tbody.innerHTML = "";
+
+	const canEdit = typeof isCurrentStaffAdminOrClerk === "function" ? isCurrentStaffAdminOrClerk() : false;
+	const btnOpen = document.getElementById("btnOpenQualityEvalModal");
+	if (btnOpen) btnOpen.style.display = canEdit ? "inline-block" : "none";
+
+	const list = Array.isArray(db.data.quality_evaluations) ? [...db.data.quality_evaluations] : [];
+	// 年度の新しい順
+	list.sort((a, b) => (Number(b.nendo) || 0) - (Number(a.nendo) || 0) || (b.id - a.id));
+
+	// 今年度の行があるか判定（取消されていない有効な記録で見る）
+	const curNendo = cpGetCurrentFiscalYear();
+	const hasCurNendo = list.some(q => !q.voided && Number(q.nendo) === curNendo);
+	const noticeEl = document.getElementById("qualityEvalCurrentYearNotice");
+	if (noticeEl) {
+		if (!hasCurNendo) {
+			noticeEl.textContent = `今年度（${curNendo}年度）の自己評価・外部評価の記録はまだありません`;
+			noticeEl.style.display = "block";
+		} else {
+			noticeEl.style.display = "none";
+		}
+	}
+
+	if (list.length === 0) {
+		const tr = document.createElement("tr");
+		tr.innerHTML = `<td colspan="8" style="text-align:center; color:var(--ink-3); padding:20px;">登録された自己評価・外部評価の記録はありません。${canEdit ? '「+ 自己評価・外部評価を記録」から追加できます。' : ''}</td>`;
+		tbody.appendChild(tr);
+		return;
+	}
+
+	list.forEach(q => {
+		const tr = document.createElement("tr");
+		const isVoided = !!q.voided;
+		const nendoStr = `${escapeHtml(String(q.nendo))}年度`;
+
+		let typeDisp = escapeHtml(q.external_eval_type || "-");
+		if (q.external_eval_type === "今年度は受けない（市町村が認めた）") {
+			typeDisp = `<span class="badge" style="background:var(--caution-tint); color:var(--caution); font-weight:bold;">免除（市町村承認）</span>${q.reason_exempt ? `<div style="font-size:11px; color:var(--ink-2); margin-top:2px;">理由: ${escapeHtml(q.reason_exempt)}</div>` : ""}`;
+		}
+
+		let actionHtml = "";
+		if (isVoided) {
+			actionHtml = `
+				<div style="font-size:11px; color:var(--alert); font-weight:bold;">取消済</div>
+				<div style="font-size:10.5px; color:var(--ink-3); white-space:normal; max-width:180px;">
+					${escapeHtml(q.voided_at || '')} ${escapeHtml(q.voided_by || '')}<br>
+					理由: ${escapeHtml(q.void_reason || '-')}
+				</div>
+			`;
+		} else if (canEdit) {
+			const histCount = Array.isArray(q.edit_history) ? q.edit_history.length : 0;
+			actionHtml = `
+				<div style="display:flex; gap:6px; align-items:center;">
+					<button type="button" class="btn btn-secondary" style="padding:2px 7px; font-size:12px;" onclick="openQualityEvalModal(${Number(q.id)})">訂正</button>
+					<button type="button" class="btn btn-secondary" style="padding:2px 7px; font-size:12px; color:var(--alert); border-color:var(--alert-tint);" onclick="voidQualityEvaluation(${Number(q.id)})">取消</button>
+				</div>
+				${histCount > 0 ? `<div style="font-size:10.5px; color:var(--ink-3); margin-top:2px;">訂正 ${histCount}回</div>` : ""}
+			`;
+		} else {
+			actionHtml = `<span style="font-size:12px; color:var(--ink-3);">-</span>`;
+		}
+
+		tr.innerHTML = `
+			<td style="text-align:center; font-weight:bold;">${nendoStr}</td>
+			<td>${escapeHtml(q.self_eval_date || "-")}</td>
+			<td>${typeDisp}</td>
+			<td>${escapeHtml(q.external_eval_date || "-")}</td>
+			<td>${escapeHtml(q.agency_name || "-")}</td>
+			<td>${escapeHtml(q.committee_report_date || "-")}</td>
+			<td>${escapeHtml(q.submitted_date || "-")}</td>
+			<td>${actionHtml}</td>
+		`;
+		if (isVoided) cpMarkVoidedRow(tr);
+		tbody.appendChild(tr);
+	});
+}
+
+function onQualityEvalExternalTypeChange() {
+	const type = document.getElementById("qualityEvalExternalType")?.value || "";
+	const extWrap = document.getElementById("qualityEvalExternalWrap");
+	const agencyWrap = document.getElementById("qualityEvalAgencyWrap");
+	const exemptWrap = document.getElementById("qualityEvalExemptReasonWrap");
+
+	if (type === "今年度は受けない（市町村が認めた）") {
+		if (extWrap) extWrap.style.display = "none";
+		if (exemptWrap) exemptWrap.style.display = "block";
+	} else if (type === "評価機関による評価") {
+		if (extWrap) extWrap.style.display = "grid";
+		if (agencyWrap) agencyWrap.style.display = "block";
+		if (exemptWrap) exemptWrap.style.display = "none";
+	} else {
+		// 運営推進会議を活用した評価 or 空
+		if (extWrap) extWrap.style.display = "grid";
+		if (agencyWrap) agencyWrap.style.display = "none";
+		if (exemptWrap) exemptWrap.style.display = "none";
+	}
+}
+
+function openQualityEvalModal(editId) {
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("自己評価・外部評価の記録は管理者または事務員のみ可能です。");
+		return false;
+	}
+	const curNendo = cpGetCurrentFiscalYear();
+	const nendoSel = document.getElementById("qualityEvalNendo");
+	if (nendoSel) {
+		nendoSel.innerHTML = '<option value="">選んでください</option>';
+		for (let y = curNendo + 1; y >= curNendo - 5; y--) {
+			const opt = document.createElement("option");
+			opt.value = String(y);
+			opt.textContent = `${y}年度`;
+			nendoSel.appendChild(opt);
+		}
+	}
+
+	const today = toLocalDateStr(new Date());
+	const setMax = id => { const el = document.getElementById(id); if (el) { el.max = today; } };
+	setMax("qualityEvalSelfDate");
+	setMax("qualityEvalExternalDate");
+	setMax("qualityEvalCommitteeReportDate");
+	setMax("qualityEvalSubmittedDate");
+
+	const titleEl = document.getElementById("qualityEvalModalTitle");
+	const editReasonWrap = document.getElementById("qualityEvalEditReasonWrap");
+	const editReasonEl = document.getElementById("qualityEvalEditReason");
+	if (editReasonEl) editReasonEl.value = "";
+
+	if (editId) {
+		const q = (db.data.quality_evaluations || []).find(x => Number(x.id) === Number(editId));
+		if (!q) {
+			alert("対象の記録が見つかりません。");
+			return false;
+		}
+		if (titleEl) titleEl.textContent = `${q.nendo}年度 自己評価・外部評価の訂正`;
+		const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+		setVal("qualityEvalEditId", q.id);
+		if (nendoSel) { nendoSel.value = String(q.nendo); nendoSel.disabled = true; }
+		setVal("qualityEvalSelfDate", q.self_eval_date || "");
+		setVal("qualityEvalExternalType", q.external_eval_type || "");
+		setVal("qualityEvalExternalDate", q.external_eval_date || "");
+		setVal("qualityEvalAgencyName", q.agency_name || "");
+		setVal("qualityEvalExemptReason", q.reason_exempt || "");
+		setVal("qualityEvalCommitteeReportDate", q.committee_report_date || "");
+		setVal("qualityEvalSubmittedDate", q.submitted_date || "");
+		if (editReasonWrap) editReasonWrap.style.display = "block";
+	} else {
+		if (titleEl) titleEl.textContent = "自己評価・外部評価の記録";
+		const setVal = (id, v) => { const el = document.getElementById(id); if (el) el.value = v; };
+		setVal("qualityEvalEditId", "");
+		if (nendoSel) { nendoSel.value = ""; nendoSel.disabled = false; }
+		setVal("qualityEvalSelfDate", "");
+		setVal("qualityEvalExternalType", "");
+		setVal("qualityEvalExternalDate", "");
+		setVal("qualityEvalAgencyName", "");
+		setVal("qualityEvalExemptReason", "");
+		setVal("qualityEvalCommitteeReportDate", "");
+		setVal("qualityEvalSubmittedDate", "");
+		if (editReasonWrap) editReasonWrap.style.display = "none";
+	}
+
+	onQualityEvalExternalTypeChange();
+	openModal("qualityEvalModal");
+	return true;
+}
+
+function saveQualityEvaluation() {
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("自己評価・外部評価の保存は管理者または事務員のみ可能です。");
+		return false;
+	}
+	const editId = document.getElementById("qualityEvalEditId")?.value;
+	const nendoVal = Number(document.getElementById("qualityEvalNendo")?.value);
+	if (!nendoVal) {
+		alert("対象年度を選んでください。");
+		return false;
+	}
+	const extType = (document.getElementById("qualityEvalExternalType")?.value || "").trim();
+	if (!extType) {
+		alert("外部評価のやり方を選んでください。");
+		return false;
+	}
+
+	const selfDate = (document.getElementById("qualityEvalSelfDate")?.value || "").trim();
+	const extDate = (document.getElementById("qualityEvalExternalDate")?.value || "").trim();
+	const agencyName = (document.getElementById("qualityEvalAgencyName")?.value || "").trim();
+	const exemptReason = (document.getElementById("qualityEvalExemptReason")?.value || "").trim();
+	const commDate = (document.getElementById("qualityEvalCommitteeReportDate")?.value || "").trim();
+	const subDate = (document.getElementById("qualityEvalSubmittedDate")?.value || "").trim();
+	const editReason = (document.getElementById("qualityEvalEditReason")?.value || "").trim();
+
+	if (extType === "評価機関による評価" && !agencyName) {
+		alert("評価機関の名前を入力してください。");
+		return false;
+	}
+	if (extType === "今年度は受けない（市町村が認めた）" && !exemptReason) {
+		alert("今年度は受けない理由を入力してください。");
+		return false;
+	}
+
+	const today = toLocalDateStr(new Date());
+	const dateFields = [
+		{ label: "自己評価をした日", val: selfDate },
+		{ label: "外部評価を受けた日", val: (extType === "今年度は受けない（市町村が認めた）") ? "" : extDate },
+		{ label: "運営推進会議で報告した日", val: commDate },
+		{ label: "市町村へ出した日", val: subDate }
+	];
+	for (const df of dateFields) {
+		if (df.val && df.val > today) {
+			alert(`${df.label}に先の日付は入力できません。`);
+			return false;
+		}
+	}
+
+	// 日付の順序検査: 自己評価 → 外部評価 → 市町村提出日
+	if (extType !== "今年度は受けない（市町村が認めた）") {
+		if (selfDate && extDate && selfDate > extDate) {
+			alert("外部評価を受けた日は、自己評価をした日以降の日付にしてください。");
+			return false;
+		}
+		if (extDate && subDate && extDate > subDate) {
+			alert("市町村へ出した日は、外部評価を受けた日以降の日付にしてください。");
+			return false;
+		}
+		if (selfDate && subDate && selfDate > subDate) {
+			alert("市町村へ出した日は、自己評価をした日以降の日付にしてください。");
+			return false;
+		}
+		if (commDate && subDate && commDate > subDate) {
+			alert("市町村へ出した日は、運営推進会議で報告した日以降の日付にしてください。");
+			return false;
+		}
+	} else {
+		if (selfDate && subDate && selfDate > subDate) {
+			alert("市町村へ出した日は、自己評価をした日以降の日付にしてください。");
+			return false;
+		}
+	}
+
+	if (!Array.isArray(db.data.quality_evaluations)) db.data.quality_evaluations = [];
+
+	if (window._savingQualityEval) return false;
+	window._savingQualityEval = true;
+
+	try {
+		if (editId) {
+			if (!editReason) {
+				alert("訂正理由を入力してください。");
+				return false;
+			}
+			const cur = db.data.quality_evaluations.find(q => Number(q.id) === Number(editId));
+			if (!cur) {
+				alert("対象の記録が見つかりません。");
+				return false;
+			}
+			const cleanExtDate = (extType === "今年度は受けない（市町村が認めた）") ? "" : extDate;
+			const cleanAgency = (extType === "評価機関による評価") ? agencyName : "";
+			const cleanExempt = (extType === "今年度は受けない（市町村が認めた）") ? exemptReason : "";
+
+			// 変更があるか検査（何も変えていなければ履歴を増やさない）
+			const isSame = (
+				(cur.self_eval_date || "") === selfDate &&
+				(cur.external_eval_type || "") === extType &&
+				(cur.external_eval_date || "") === cleanExtDate &&
+				(cur.agency_name || "") === cleanAgency &&
+				(cur.reason_exempt || "") === cleanExempt &&
+				(cur.committee_report_date || "") === commDate &&
+				(cur.submitted_date || "") === subDate
+			);
+			if (isSame) {
+				closeModal("qualityEvalModal");
+				return true;
+			}
+
+			if (!Array.isArray(cur.edit_history)) cur.edit_history = [];
+			cur.edit_history.push({
+				edited_at: toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5),
+				edited_by: (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "未記録",
+				reason: editReason,
+				before_values: {
+					self_eval_date: cur.self_eval_date || "",
+					external_eval_type: cur.external_eval_type || "",
+					external_eval_date: cur.external_eval_date || "",
+					agency_name: cur.agency_name || "",
+					reason_exempt: cur.reason_exempt || "",
+					committee_report_date: cur.committee_report_date || "",
+					submitted_date: cur.submitted_date || ""
+				}
+			});
+
+			cur.self_eval_date = selfDate;
+			cur.external_eval_type = extType;
+			cur.external_eval_date = cleanExtDate;
+			cur.agency_name = cleanAgency;
+			cur.reason_exempt = cleanExempt;
+			cur.committee_report_date = commDate;
+			cur.submitted_date = subDate;
+			cur.updated_at = toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5);
+
+			db.save();
+			closeModal("qualityEvalModal");
+			renderOfficeQualityEvaluations();
+			alert("自己評価・外部評価の記録を訂正しました。");
+			return true;
+		} else {
+			// 新規作成時の年度重複検査（2件目は作れない）
+			const exists = db.data.quality_evaluations.some(q => !q.voided && Number(q.nendo) === nendoVal);
+			if (exists) {
+				alert(`${nendoVal}年度の自己評価・外部評価はすでに登録されています。変更する場合は該当年度の「訂正」を行ってください。`);
+				return false;
+			}
+
+			const newRec = {
+				id: Date.now(),
+				nendo: nendoVal,
+				self_eval_date: selfDate,
+				external_eval_type: extType,
+				external_eval_date: (extType === "今年度は受けない（市町村が認めた）") ? "" : extDate,
+				agency_name: (extType === "評価機関による評価") ? agencyName : "",
+				reason_exempt: (extType === "今年度は受けない（市町村が認めた）") ? exemptReason : "",
+				committee_report_date: commDate,
+				submitted_date: subDate,
+				created_at: toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5),
+				created_by: (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "未記録",
+				edit_history: [],
+				voided: false,
+				voided_at: "",
+				voided_by: "",
+				void_reason: ""
+			};
+
+			db.data.quality_evaluations.push(newRec);
+			db.save();
+			closeModal("qualityEvalModal");
+			renderOfficeQualityEvaluations();
+			alert("自己評価・外部評価の記録を保存しました。");
+			return true;
+		}
+	} finally {
+		window._savingQualityEval = false;
+	}
+}
+
+function voidQualityEvaluation(id, reasonOpt) {
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("自己評価・外部評価の取消は管理者または事務員のみ可能です。");
+		return false;
+	}
+	const q = (db.data.quality_evaluations || []).find(x => Number(x.id) === Number(id));
+	if (!q || q.voided) return false;
+
+	let reason = (reasonOpt !== undefined && reasonOpt !== null) ? String(reasonOpt).trim() : null;
+	if (reason === null) {
+		reason = prompt("自己評価・外部評価の記録を取り消す理由を入力してください（必須）:", "");
+		if (reason === null) return false;
+		reason = reason.trim();
+	}
+	if (!reason) {
+		alert("取消理由を入力してください。");
+		return false;
+	}
+
+	q.voided = true;
+	q.voided_at = toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5);
+	q.voided_by = (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "未記録";
+	q.void_reason = reason;
+	db.save();
+	renderOfficeQualityEvaluations();
+	return true;
+}
+
+window.renderOfficeQualityEvaluations = renderOfficeQualityEvaluations;
+window.openQualityEvalModal = openQualityEvalModal;
+window.onQualityEvalExternalTypeChange = onQualityEvalExternalTypeChange;
+window.saveQualityEvaluation = saveQualityEvaluation;
+window.voidQualityEvaluation = voidQualityEvaluation;
+
 
 // 発注 ＆ 上司承認 (管理者のみ認証・閲覧制限)
 function renderOfficeOrders() {

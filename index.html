@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261028_c1">
+	<link rel="stylesheet" href="style.css?v=20261028_d1">
 </head>
 <body>
 
@@ -1240,6 +1240,42 @@
 			</div>
 		</div>
 
+		<!-- 自己評価・外部評価（年度ごと） [Antigravity実装] -->
+		<div style="background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:20px;">
+			<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:8px; margin-bottom:12px;">
+				<div>
+					<h3 style="margin:0; font-size:15px; color:var(--pine-dark); font-weight:bold;">
+						📋 自己評価・外部評価（年度ごと）
+					</h3>
+					<p style="margin:4px 0 0 0; font-size:12px; color:var(--ink-2);">
+						認知症対応型共同生活介護の運営基準第97条第8項に基づく、年1回の自己評価および外部評価の実施記録です。
+					</p>
+				</div>
+				<button class="btn btn-primary" id="btnOpenQualityEvalModal" onclick="openQualityEvalModal()">+ 自己評価・外部評価を記録</button>
+			</div>
+
+			<!-- 今年度の未登録注意（今年度の記録がない場合のみ表示） -->
+			<div id="qualityEvalCurrentYearNotice" style="display:none; background:var(--caution-tint); border:1px solid var(--caution); border-radius:6px; padding:10px 14px; margin-bottom:12px; font-size:13px; color:var(--ink); font-weight:bold;"></div>
+
+			<div style="overflow-x:auto;">
+				<table class="data-table" id="qualityEvalTable" style="width:100%; font-size:13px;">
+					<thead>
+						<tr style="background:var(--pine-tint-2);">
+							<th style="width:80px; text-align:center;">年度</th>
+							<th style="width:110px;">自己評価日</th>
+							<th style="min-width:160px;">外部評価のやり方</th>
+							<th style="width:110px;">外部評価日</th>
+							<th style="min-width:140px;">評価機関名</th>
+							<th style="width:110px;">会議報告日</th>
+							<th style="width:110px;">市町村提出日</th>
+							<th style="min-width:140px;">操作</th>
+						</tr>
+					</thead>
+					<tbody id="qualityEvalTableBody"></tbody>
+				</table>
+			</div>
+		</div>
+
 		<!-- 過去の実施記録一覧 -->
 		<div style="margin-bottom:8px; font-weight:bold; font-size:14px; color:var(--pine-dark);">
 			📑 委員会・研修の実施記録一覧
@@ -1923,6 +1959,39 @@
      <div style="font-weight:bold; font-size:14px; color:var(--ink); margin-bottom:6px;">3. 保有している資格・研修の一覧（資格証の確認・取消）</div>
      <div id="staffQualOriginalTextNote" style="font-size:13px; color:var(--ink-2); margin-bottom:8px;"></div>
      <div id="staffQualRecordsList" style="display:flex; flex-direction:column; gap:8px;"></div>
+    </div>
+
+    <!-- 4. 健康診断の記録を追加する [Antigravity実装] -->
+    <div style="margin-top:20px; border-top:1px solid var(--line); padding-top:16px;">
+     <div style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:8px;">4. 健康診断の記録を追加する</div>
+     <div style="background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:12px; margin-bottom:12px;">
+      <div class="staff-add-grid">
+       <div>
+        <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">受けた日 <span style="color:var(--alert);">*</span>（先の日付は不可）</label>
+        <input type="date" id="staffHealthCheckDate" class="form-control" style="width:100%; font-size:13px;">
+       </div>
+       <div>
+        <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">種類 <span style="color:var(--alert);">*</span></label>
+        <select id="staffHealthCheckKind" class="form-control" style="width:100%; font-size:13px;" onchange="onStaffHealthCheckKindChange()">
+         <option value="">選んでください</option>
+         <option value="定期健康診断">定期健康診断</option>
+         <option value="夜勤などの業務の健康診断">夜勤などの業務の健康診断</option>
+         <option value="雇い入れのときの健康診断">雇い入れのときの健康診断</option>
+         <option value="その他">その他</option>
+        </select>
+       </div>
+      </div>
+      <div id="staffHealthCheckOtherWrap" style="display:none; margin-top:8px;">
+       <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">その他の健康診断名 <span style="color:var(--alert);">*</span></label>
+       <input type="text" id="staffHealthCheckOtherName" class="form-control" style="width:100%; font-size:13px;">
+      </div>
+      <div style="display:flex; justify-content:flex-end; margin-top:10px;">
+       <button type="button" class="btn btn-primary" id="btnAddStaffHealthCheck" style="font-size:13px;" onclick="addStaffHealthCheckRecord()">この健康診断を記録</button>
+      </div>
+     </div>
+
+     <div style="font-weight:bold; font-size:14px; color:var(--ink); margin-bottom:6px;">5. 健康診断の受診履歴（受診日・種類・記録者）</div>
+     <div id="staffHealthCheckRecordsList" style="display:flex; flex-direction:column; gap:8px;"></div>
     </div>
    </div>
    <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
@@ -4596,26 +4665,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261028_c1"></script>
- <script src="js/02_terms.js?v=20261028_c1"></script>
- <script src="js/03_common.js?v=20261028_c1"></script>
- <script src="js/04_care_record.js?v=20261028_c1"></script>
- <script src="js/05_summary_print_audit.js?v=20261028_c1"></script>
- <script src="js/06_schema_history.js?v=20261028_c1"></script>
- <script src="js/07_daily_tables.js?v=20261028_c1"></script>
- <script src="js/08_meds.js?v=20261028_c1"></script>
- <script src="js/09_night_misc.js?v=20261028_c1"></script>
- <script src="js/10_office.js?v=20261028_c1"></script>
- <script src="js/11_karte_staff.js?v=20261028_c1"></script>
- <script src="js/12_hospital_photos.js?v=20261028_c1"></script>
- <script src="js/13_shift_units.js?v=20261028_c1"></script>
- <script src="js/14_auth_home.js?v=20261028_c1"></script>
- <script src="js/15_single_write.js?v=20261028_c1"></script>
- <script src="js/16_careplan.js?v=20261028_c1"></script>
-	<script src="js/17_kasan.js?v=20261028_c1"></script>
-	<script src="js/18_stats.js?v=20261028_c1"></script>
-	<script src="js/19_life.js?v=20261028_c1"></script>
-	<script src="js/20_invoice.js?v=20261028_c1"></script>
+ <script src="js/01_core.js?v=20261028_d1"></script>
+ <script src="js/02_terms.js?v=20261028_d1"></script>
+ <script src="js/03_common.js?v=20261028_d1"></script>
+ <script src="js/04_care_record.js?v=20261028_d1"></script>
+ <script src="js/05_summary_print_audit.js?v=20261028_d1"></script>
+ <script src="js/06_schema_history.js?v=20261028_d1"></script>
+ <script src="js/07_daily_tables.js?v=20261028_d1"></script>
+ <script src="js/08_meds.js?v=20261028_d1"></script>
+ <script src="js/09_night_misc.js?v=20261028_d1"></script>
+ <script src="js/10_office.js?v=20261028_d1"></script>
+ <script src="js/11_karte_staff.js?v=20261028_d1"></script>
+ <script src="js/12_hospital_photos.js?v=20261028_d1"></script>
+ <script src="js/13_shift_units.js?v=20261028_d1"></script>
+ <script src="js/14_auth_home.js?v=20261028_d1"></script>
+ <script src="js/15_single_write.js?v=20261028_d1"></script>
+ <script src="js/16_careplan.js?v=20261028_d1"></script>
+	<script src="js/17_kasan.js?v=20261028_d1"></script>
+	<script src="js/18_stats.js?v=20261028_d1"></script>
+	<script src="js/19_life.js?v=20261028_d1"></script>
+	<script src="js/20_invoice.js?v=20261028_d1"></script>
   
 
   <!-- ============================================================ -->
@@ -6599,5 +6668,77 @@
 			</div>
 		</div>
 	</div>
+	<!-- 自己評価・外部評価 登録・訂正モーダル [Antigravity実装] -->
+	<div class="modal-overlay" id="qualityEvalModal" style="display:none;">
+		<div class="modal-card" style="max-width:680px;">
+			<div class="modal-header">
+				<h3 id="qualityEvalModalTitle" style="margin:0; font-size:16px;">自己評価・外部評価の記録</h3>
+				<button type="button" class="close-btn" onclick="closeModal('qualityEvalModal')">×</button>
+			</div>
+			<div style="padding:16px;">
+				<input type="hidden" id="qualityEvalEditId">
+				<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+					<div>
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">対象年度 <span style="color:var(--alert);">*</span></label>
+						<select id="qualityEvalNendo" class="form-control" style="width:100%; font-size:13px;">
+							<option value="">選んでください</option>
+						</select>
+					</div>
+					<div>
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">自己評価をした日（先の日付は不可）</label>
+						<input type="date" id="qualityEvalSelfDate" class="form-control" style="width:100%; font-size:13px;">
+					</div>
+				</div>
+
+				<div style="margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">外部評価のやり方 <span style="color:var(--alert);">*</span></label>
+					<select id="qualityEvalExternalType" class="form-control" style="width:100%; font-size:13px;" onchange="onQualityEvalExternalTypeChange()">
+						<option value="">選んでください</option>
+						<option value="評価機関による評価">評価機関による評価</option>
+						<option value="運営推進会議を活用した評価">運営推進会議を活用した評価</option>
+						<option value="今年度は受けない（市町村が認めた）">今年度は受けない（市町村が認めた）</option>
+					</select>
+				</div>
+
+				<div id="qualityEvalExternalWrap" style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+					<div>
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">外部評価を受けた日（先の日付は不可）</label>
+						<input type="date" id="qualityEvalExternalDate" class="form-control" style="width:100%; font-size:13px;">
+					</div>
+					<div id="qualityEvalAgencyWrap">
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">評価機関の名前 <span style="color:var(--alert);">*</span></label>
+						<input type="text" id="qualityEvalAgencyName" class="form-control" style="width:100%; font-size:13px;">
+					</div>
+				</div>
+
+				<div id="qualityEvalExemptReasonWrap" style="display:none; margin-bottom:12px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">今年度は受けない理由 <span style="color:var(--alert);">*</span>（市町村の承認内容・理由）</label>
+					<input type="text" id="qualityEvalExemptReason" class="form-control" style="width:100%; font-size:13px;">
+				</div>
+
+				<div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
+					<div>
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">運営推進会議で報告した日（先の日付は不可）</label>
+						<input type="date" id="qualityEvalCommitteeReportDate" class="form-control" style="width:100%; font-size:13px;">
+					</div>
+					<div>
+						<label style="display:block; font-size:13px; font-weight:bold; color:var(--ink-2); margin-bottom:2px;">市町村へ出した日（先の日付は不可）</label>
+						<input type="date" id="qualityEvalSubmittedDate" class="form-control" style="width:100%; font-size:13px;">
+					</div>
+				</div>
+
+				<!-- 訂正理由（編集時のみ必須表示） -->
+				<div id="qualityEvalEditReasonWrap" style="display:none; margin-top:12px; border-top:1px dashed var(--line); padding-top:10px;">
+					<label style="display:block; font-size:13px; font-weight:bold; color:var(--alert); margin-bottom:2px;">訂正理由 <span style="color:var(--alert);">*</span>（変更前の値は履歴に残ります）</label>
+					<input type="text" id="qualityEvalEditReason" class="form-control" style="width:100%; font-size:13px;">
+				</div>
+			</div>
+			<div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end; gap:8px;">
+				<button type="button" class="btn btn-secondary" style="font-size:13px;" onclick="closeModal('qualityEvalModal')">キャンセル</button>
+				<button type="button" class="btn btn-primary" id="btnSaveQualityEval" style="font-size:13px;" onclick="saveQualityEvaluation()">保存する</button>
+			</div>
+		</div>
+	</div>
+
 </body>
 </html>

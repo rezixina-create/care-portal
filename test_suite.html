@@ -206,6 +206,69 @@
     </div>
     <div id="portalCare"></div>
     <div id="portalOffice"></div>
+    <!-- テスト用追加DOM（職員健康診断・自己評価外部評価） [Antigravity実装] -->
+    <div class="modal-overlay" id="staffEditModal" style="display:none;">
+      <h3 id="staffEditModalTitle"></h3>
+      <input type="hidden" id="editStaffTargetName">
+      <select id="editStaffRole"></select>
+      <select id="editStaffEmploymentType"></select>
+      <select id="editStaffDutyType"></select>
+      <input type="date" id="editStaffHireDate">
+      <select id="editStaffUnit"></select>
+      <input type="text" id="editStaffReason">
+      <input type="text" id="staffQualSearchInput">
+      <div id="staffQualCandidateList"></div>
+      <select id="staffQualMasterSelect"></select>
+      <input type="date" id="staffQualAcquiredDate">
+      <input type="text" id="staffQualOtherName">
+      <div id="staffQualRecordsList"></div>
+      <input type="date" id="staffHealthCheckDate">
+      <select id="staffHealthCheckKind">
+        <option value="">選んでください</option>
+        <option value="定期健康診断">定期健康診断</option>
+        <option value="夜勤などの業務の健康診断">夜勤などの業務の健康診断</option>
+        <option value="雇い入れのときの健康診断">雇い入れのときの健康診断</option>
+        <option value="その他">その他</option>
+      </select>
+      <div id="staffHealthCheckOtherWrap" style="display:none;">
+        <input type="text" id="staffHealthCheckOtherName">
+      </div>
+      <button id="btnAddStaffHealthCheck"></button>
+      <div id="staffHealthCheckRecordsList"></div>
+    </div>
+
+    <button id="btnOpenQualityEvalModal"></button>
+    <div id="qualityEvalCurrentYearNotice" style="display:none;"></div>
+    <table id="qualityEvalTable">
+      <tbody id="qualityEvalTableBody"></tbody>
+    </table>
+    <div class="modal-overlay" id="qualityEvalModal" style="display:none;">
+      <h3 id="qualityEvalModalTitle"></h3>
+      <input type="hidden" id="qualityEvalEditId">
+      <select id="qualityEvalNendo"></select>
+      <input type="date" id="qualityEvalSelfDate">
+      <select id="qualityEvalExternalType">
+        <option value="">選んでください</option>
+        <option value="評価機関による評価">評価機関による評価</option>
+        <option value="運営推進会議を活用した評価">運営推進会議を活用した評価</option>
+        <option value="今年度は受けない（市町村が認めた）">今年度は受けない（市町村が認めた）</option>
+      </select>
+      <div id="qualityEvalExternalWrap">
+        <input type="date" id="qualityEvalExternalDate">
+        <div id="qualityEvalAgencyWrap">
+          <input type="text" id="qualityEvalAgencyName">
+        </div>
+      </div>
+      <div id="qualityEvalExemptReasonWrap" style="display:none;">
+        <input type="text" id="qualityEvalExemptReason">
+      </div>
+      <input type="date" id="qualityEvalCommitteeReportDate">
+      <input type="date" id="qualityEvalSubmittedDate">
+      <div id="qualityEvalEditReasonWrap" style="display:none;">
+        <input type="text" id="qualityEvalEditReason">
+      </div>
+      <button id="btnSaveQualityEval"></button>
+    </div>
     <div id="diseaseModal" style="display:none;">
       <h3 id="diseaseModalTitle"></h3>
       <div id="diseaseModalContent"></div>
@@ -3917,7 +3980,182 @@
       db._forbidCount = origForbidCount;
       db._forbidShown = origForbidShown;
 
-      // 35. 総合結果判定
+      // 35. 職員健康診断の記録・取消・権限の検証 (Test 177)
+      log("--- 35. 職員健康診断の記録・取消・権限の検証 (Test 177) ---");
+
+      const yoshidaStaff = (db.data.stamps || []).find(st => st.name === "吉田 誠");
+      assert(yoshidaStaff !== undefined, "Test 177a-1: デモデータに吉田 誠さんが存在すること");
+
+      window.cpLoginStaffName = () => "木村 健一";
+      window.isCurrentStaffAdminOrClerk = () => true;
+
+      yoshidaStaff.health_checks = [];
+      document.getElementById("editStaffTargetName").value = "吉田 誠";
+
+      // 1件目追加: 2026-04-10 定期健康診断
+      document.getElementById("staffHealthCheckDate").value = "2026-04-10";
+      document.getElementById("staffHealthCheckKind").value = "定期健康診断";
+      const addRes1 = addStaffHealthCheckRecord();
+      assert(addRes1 === true, "Test 177a-2: 定期健康診断 2026-04-10 が正常に追加されること");
+
+      // 2件目追加: 2026-10-08 夜勤などの業務の健康診断
+      document.getElementById("staffHealthCheckDate").value = "2026-10-08";
+      document.getElementById("staffHealthCheckKind").value = "夜勤などの業務の健康診断";
+      const addRes2 = addStaffHealthCheckRecord();
+      assert(addRes2 === true, "Test 177a-3: 夜勤などの業務の健康診断 2026-10-08 が正常に追加されること");
+
+      // 一覧描画の順序確認（受けた日の新しい順: 2026-10-08 が先、2026-04-10 が後）
+      renderStaffEditHealthCheckList(yoshidaStaff);
+      const listEl177 = document.getElementById("staffHealthCheckRecordsList");
+      assert(listEl177 && listEl177.children.length === 2, "Test 177a-4: 一覧に2件の健康診断が表示されること");
+      const firstItemText = listEl177.children[0].innerText;
+      const secondItemText = listEl177.children[1].innerText;
+      assert(firstItemText.includes("2026-10-08") && firstItemText.includes("夜勤などの業務の健康診断"), "Test 177a-5: 1件目が新しい日付 2026-10-08 であること");
+      assert(secondItemText.includes("2026-04-10") && secondItemText.includes("定期健康診断"), "Test 177a-6: 2件目が古い日付 2026-04-10 であること");
+
+      // 177b: バリデーション検証
+      let alertMsg177 = "";
+      const origAlert177 = window.alert;
+      window.alert = msg => { alertMsg177 = msg; };
+
+      // 未来日付
+      document.getElementById("staffHealthCheckDate").value = "2029-01-01";
+      document.getElementById("staffHealthCheckKind").value = "定期健康診断";
+      assert(addStaffHealthCheckRecord() === false, "Test 177b-1: 未来日の入力はブロックされること");
+      assert(alertMsg177.includes("未来"), "Test 177b-2: 未来日エラーのアラートが出ること");
+
+      // 種類未選択
+      document.getElementById("staffHealthCheckDate").value = "2026-05-01";
+      document.getElementById("staffHealthCheckKind").value = "";
+      assert(addStaffHealthCheckRecord() === false, "Test 177b-3: 種類未選択はブロックされること");
+
+      // その他選択時に名前未入力
+      document.getElementById("staffHealthCheckDate").value = "2026-05-01";
+      document.getElementById("staffHealthCheckKind").value = "その他";
+      document.getElementById("staffHealthCheckOtherName").value = "";
+      assert(addStaffHealthCheckRecord() === false, "Test 177b-4: その他で名前未入力はブロックされること");
+
+      // その他選択時に名前あり
+      document.getElementById("staffHealthCheckOtherName").value = "特定業務健康診断";
+      assert(addStaffHealthCheckRecord() === true, "Test 177b-5: その他で名前ありの場合は追加されること");
+      assert(yoshidaStaff.health_checks.some(r => r.kind === "その他" && r.kind_other === "特定業務健康診断"), "Test 177b-6: その他名がデータに保存されていること");
+
+      // 177c: 取消（理由必須）
+      const otherRec = yoshidaStaff.health_checks.find(r => r.kind === "その他");
+      assert(otherRec !== undefined, "Test 177c-1: 取消対象のレコードが存在すること");
+
+      assert(voidStaffHealthCheckRecord(otherRec.id, "") === false, "Test 177c-2: 理由なしの取消はブロックされること");
+      assert(voidStaffHealthCheckRecord(otherRec.id, "誤登録のため") === true, "Test 177c-3: 理由ありで取消が成功すること");
+      assert(otherRec.voided === true && otherRec.void_reason === "誤登録のため", "Test 177c-4: データに取消フラグと理由が残ること");
+      renderStaffEditHealthCheckList(yoshidaStaff);
+      assert(listEl177.innerHTML.includes("取消済") && listEl177.innerHTML.includes("誤登録のため"), "Test 177c-5: 画面に取消済バッジと理由が表示されること");
+
+      // 177d: 介護職員（井上 蓮）での権限ガード
+      window.isCurrentStaffAdminOrClerk = () => false;
+      window.cpLoginStaffName = () => "井上 蓮";
+
+      assert(addStaffHealthCheckRecord() === false, "Test 177d-1: 介護職員による追加はブロックされること");
+      assert(voidStaffHealthCheckRecord(yoshidaStaff.health_checks[0].id, "職員テスト") === false, "Test 177d-2: 介護職員による取消はブロックされること");
+
+      window.alert = origAlert177;
+
+      // 36. グループホーム自己評価・外部評価の記録・訂正・取消・権限検証 (Test 178)
+      log("--- 36. グループホーム自己評価・外部評価（年度ごと）の記録・訂正・取消・権限検証 (Test 178) ---");
+
+      window.cpLoginStaffName = () => "木村 健一";
+      window.isCurrentStaffAdminOrClerk = () => true;
+
+      // 178a: 今年度（2026年度）の注意文表示
+      db.data.quality_evaluations = [];
+      renderOfficeQualityEvaluations();
+      const curYearNoticeEl = document.getElementById("qualityEvalCurrentYearNotice");
+      assert(curYearNoticeEl && curYearNoticeEl.style.display !== "none" && curYearNoticeEl.textContent.includes("2026年度"), "Test 178a-1: 2026年度未登録時に注意メッセージが表示されること");
+
+      // 178b: 2025年度の追加
+      openQualityEvalModal();
+      document.getElementById("qualityEvalNendo").value = "2025";
+      document.getElementById("qualityEvalSelfDate").value = "2025-09-10";
+      document.getElementById("qualityEvalExternalType").value = "評価機関による評価";
+      onQualityEvalExternalTypeChange();
+      document.getElementById("qualityEvalExternalDate").value = "2025-11-20";
+      document.getElementById("qualityEvalAgencyName").value = "福祉評価機構";
+      document.getElementById("qualityEvalCommitteeReportDate").value = "2026-01-15";
+      document.getElementById("qualityEvalSubmittedDate").value = "2026-01-20";
+
+      assert(saveQualityEvaluation() === true, "Test 178b-1: 2025年度の自己評価・外部評価が正常に保存されること");
+      assert(db.data.quality_evaluations.length === 1, "Test 178b-2: quality_evaluations に1件保存されていること");
+      const saved2025 = db.data.quality_evaluations[0];
+      assert(saved2025.nendo === 2025 && saved2025.agency_name === "福祉評価機構", "Test 178b-3: 保存内容が一致すること");
+
+      // 178c: 重複・日付順序・未来日
+      let alertMsg178 = "";
+      const origAlert178 = window.alert;
+      window.alert = msg => { alertMsg178 = msg; };
+
+      openQualityEvalModal();
+      document.getElementById("qualityEvalNendo").value = "2025";
+      document.getElementById("qualityEvalExternalType").value = "運営推進会議を活用した評価";
+      assert(saveQualityEvaluation() === false, "Test 178c-1: 既存年度(2025年度)の重複作成はブロックされること");
+      assert(alertMsg178.includes("すでに登録されています"), "Test 178c-2: 重複エラーのアラートが出ること");
+
+      // 日付順序逆転
+      openQualityEvalModal();
+      document.getElementById("qualityEvalNendo").value = "2024";
+      document.getElementById("qualityEvalSelfDate").value = "2024-10-10";
+      document.getElementById("qualityEvalExternalType").value = "運営推進会議を活用した評価";
+      document.getElementById("qualityEvalExternalDate").value = "2024-09-01";
+      assert(saveQualityEvaluation() === false, "Test 178c-3: 外部評価日 < 自己評価日はブロックされること");
+
+      document.getElementById("qualityEvalExternalDate").value = "2024-11-01";
+      document.getElementById("qualityEvalSubmittedDate").value = "2024-10-01";
+      assert(saveQualityEvaluation() === false, "Test 178c-4: 市町村提出日 < 外部評価日はブロックされること");
+
+      document.getElementById("qualityEvalSubmittedDate").value = "2029-01-01";
+      assert(saveQualityEvaluation() === false, "Test 178c-5: 未来日の入力はブロックされること");
+
+      // 178d: 2026年度（今年度）免除記録追加で注意文非表示
+      openQualityEvalModal();
+      document.getElementById("qualityEvalNendo").value = "2026";
+      document.getElementById("qualityEvalSelfDate").value = "2026-05-10";
+      document.getElementById("qualityEvalExternalType").value = "今年度は受けない（市町村が認めた）";
+      onQualityEvalExternalTypeChange();
+      document.getElementById("qualityEvalExemptReason").value = "前年度受審・市町村承認済のため";
+      assert(saveQualityEvaluation() === true, "Test 178d-1: 2026年度の免除記録が保存できること");
+      assert(curYearNoticeEl.style.display === "none", "Test 178d-2: 今年度記録が存在するとき注意文が非表示になること");
+
+      // 178e: 訂正（理由必須・履歴保存）と取消（理由必須）
+      const rec2025 = db.data.quality_evaluations.find(q => q.nendo === 2025);
+      openQualityEvalModal(rec2025.id);
+      document.getElementById("qualityEvalAgencyName").value = "福祉評価機構（新名称）";
+      document.getElementById("qualityEvalEditReason").value = "";
+      assert(saveQualityEvaluation() === false, "Test 178e-1: 訂正理由なしの保存はブロックされること");
+
+      document.getElementById("qualityEvalAgencyName").value = "福祉評価機構";
+      document.getElementById("qualityEvalEditReason").value = "誤って開いた";
+      assert(saveQualityEvaluation() === true, "Test 178e-2: 変更なし保存は成功（クローズ）すること");
+      assert(rec2025.edit_history.length === 0, "Test 178e-3: 変更なしの場合は edit_history が増えないこと");
+
+      openQualityEvalModal(rec2025.id);
+      document.getElementById("qualityEvalAgencyName").value = "福祉評価機構（新名称）";
+      document.getElementById("qualityEvalEditReason").value = "評価機関名変更に伴う訂正";
+      assert(saveQualityEvaluation() === true, "Test 178e-4: 理由ありの訂正が成功すること");
+      assert(rec2025.agency_name === "福祉評価機構（新名称）", "Test 178e-5: 訂正後の値が反映されていること");
+      assert(rec2025.edit_history.length === 1 && rec2025.edit_history[0].before_values.agency_name === "福祉評価機構", "Test 178e-6: edit_history に変更前の値が記録されていること");
+
+      assert(voidQualityEvaluation(rec2025.id, "") === false, "Test 178e-7: 理由なしの取消はブロックされること");
+      assert(voidQualityEvaluation(rec2025.id, "誤登録のため取消") === true, "Test 178e-8: 理由ありの取消が成功すること");
+      assert(rec2025.voided === true && rec2025.void_reason === "誤登録のため取消", "Test 178e-9: データに取消フラグと理由が残ること");
+
+      // 178f: 介護職員（井上 蓮）での権限ガード
+      window.isCurrentStaffAdminOrClerk = () => false;
+      window.cpLoginStaffName = () => "井上 蓮";
+
+      assert(saveQualityEvaluation() === false, "Test 178f-1: 介護職員による保存はブロックされること");
+      assert(voidQualityEvaluation(rec2025.id, "職員取消") === false, "Test 178f-2: 介護職員による取消はブロックされること");
+
+      window.alert = origAlert178;
+
+      // 37. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");

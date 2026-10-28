@@ -746,6 +746,15 @@ function openStaffEditModal(staffName) {
  if (acqEl) { acqEl.value = ""; acqEl.max = today; }
 
  renderStaffEditQualRecordsList(s);
+
+ setVal("staffHealthCheckDate", "");
+ const hcd = document.getElementById("staffHealthCheckDate");
+ if (hcd) { hcd.value = ""; hcd.max = today; }
+ setVal("staffHealthCheckKind", "");
+ setVal("staffHealthCheckOtherName", "");
+ const hcWrap = document.getElementById("staffHealthCheckOtherWrap");
+ if (hcWrap) hcWrap.style.display = "none";
+ renderStaffEditHealthCheckList(s);
  openModal("staffEditModal");
  return true;
 }
@@ -2078,3 +2087,175 @@ window.openVoidDementiaAssessment = openVoidDementiaAssessment;
 window.cancelVoidDementiaAssessment = cancelVoidDementiaAssessment;
 window.confirmVoidDementiaAssessment = confirmVoidDementiaAssessment;
 window.submitVoidDementiaAssessment = submitVoidDementiaAssessment;
+
+// ============================================================
+// 職員の健康診断記録 [Antigravity実装 2026-10-28]
+// ============================================================
+function onStaffHealthCheckKindChange() {
+	const kind = document.getElementById("staffHealthCheckKind")?.value || "";
+	const wrap = document.getElementById("staffHealthCheckOtherWrap");
+	const input = document.getElementById("staffHealthCheckOtherName");
+	if (wrap) wrap.style.display = (kind === "その他") ? "block" : "none";
+	if (kind !== "その他" && input) input.value = "";
+}
+
+function addStaffHealthCheckRecord() {
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("健康診断の記録は、管理者または事務員のみ操作可能です。");
+		return false;
+	}
+	const staffName = (document.getElementById("editStaffTargetName")?.value || "").trim();
+	const s = cpFindStaffObj(staffName);
+	if (!s) {
+		alert("対象の職員が見つかりません。");
+		return false;
+	}
+	const dateVal = (document.getElementById("staffHealthCheckDate")?.value || "").trim();
+	if (!dateVal) {
+		alert("受けた日を入力してください。");
+		return false;
+	}
+	const today = toLocalDateStr(new Date());
+	if (dateVal > today) {
+		alert("未来の日付は入力できません。");
+		return false;
+	}
+	const kindVal = (document.getElementById("staffHealthCheckKind")?.value || "").trim();
+	if (!kindVal) {
+		alert("種類を選んでください。");
+		return false;
+	}
+	let otherVal = "";
+	if (kindVal === "その他") {
+		otherVal = (document.getElementById("staffHealthCheckOtherName")?.value || "").trim();
+		if (!otherVal) {
+			alert("その他の健康診断名を入力してください。");
+			return false;
+		}
+	}
+	if (!Array.isArray(s.health_checks)) s.health_checks = [];
+
+	if (window._savingStaffHealthCheck) return false;
+	window._savingStaffHealthCheck = true;
+	try {
+		const rec = {
+			id: Date.now(),
+			date: dateVal,
+			kind: kindVal,
+			kind_other: (kindVal === "その他") ? otherVal : "",
+			created_at: toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5),
+			created_by: (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "未記録",
+			voided: false,
+			voided_at: "",
+			voided_by: "",
+			void_reason: ""
+		};
+		s.health_checks.push(rec);
+		db.save();
+
+		const dEl = document.getElementById("staffHealthCheckDate");
+		if (dEl) dEl.value = "";
+		const kEl = document.getElementById("staffHealthCheckKind");
+		if (kEl) kEl.value = "";
+		const oEl = document.getElementById("staffHealthCheckOtherName");
+		if (oEl) oEl.value = "";
+		const wEl = document.getElementById("staffHealthCheckOtherWrap");
+		if (wEl) wEl.style.display = "none";
+
+		renderStaffEditHealthCheckList(s);
+		return true;
+	} finally {
+		window._savingStaffHealthCheck = false;
+	}
+}
+
+function voidStaffHealthCheckRecord(recId, reasonOpt) {
+	if (!isCurrentStaffAdminOrClerk()) {
+		alert("健康診断の取消は、管理者または事務員のみ操作可能です。");
+		return false;
+	}
+	const staffName = (document.getElementById("editStaffTargetName")?.value || "").trim();
+	const s = cpFindStaffObj(staffName);
+	if (!s) {
+		alert("対象の職員が見つかりません。");
+		return false;
+	}
+	if (!Array.isArray(s.health_checks)) return false;
+	const rec = s.health_checks.find(r => String(r.id) === String(recId));
+	if (!rec || rec.voided) return false;
+
+	let reason = (reasonOpt !== undefined && reasonOpt !== null) ? String(reasonOpt).trim() : null;
+	if (reason === null) {
+		reason = prompt("健康診断の記録を取り消す理由を入力してください（必須）:", "");
+		if (reason === null) return false;
+		reason = reason.trim();
+	}
+	if (!reason) {
+		alert("取消理由を入力してください。");
+		return false;
+	}
+
+	rec.voided = true;
+	rec.voided_at = toLocalDateStr(new Date()) + " " + new Date().toTimeString().slice(0, 5);
+	rec.voided_by = (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "未記録";
+	rec.void_reason = reason;
+	db.save();
+	renderStaffEditHealthCheckList(s);
+	return true;
+}
+
+function renderStaffEditHealthCheckList(s) {
+	const listEl = document.getElementById("staffHealthCheckRecordsList");
+	if (!listEl) return;
+	const recs = (s && Array.isArray(s.health_checks)) ? s.health_checks : [];
+	if (recs.length === 0) {
+		listEl.innerHTML = '<div style="font-size:13px; color:var(--ink-2); padding:8px 0;">健康診断の記録はありません。</div>';
+		return;
+	}
+	const sorted = [...recs].sort((a, b) => (b.date || "").localeCompare(a.date || "") || (b.id - a.id));
+	const canEdit = typeof isCurrentStaffAdminOrClerk === "function" ? isCurrentStaffAdminOrClerk() : false;
+
+	listEl.innerHTML = sorted.map(r => {
+		const kindDisp = (r.kind === "その他") ? (r.kind_other || "その他") : r.kind;
+		const isVoided = !!r.voided;
+		const rowStyle = isVoided
+			? "background:var(--ground); border:1px dashed var(--line); border-radius:6px; padding:10px; opacity:0.75;"
+			: "background:var(--surface); border:1px solid var(--line); border-radius:6px; padding:10px;";
+		const textStyle = isVoided ? "text-decoration:line-through; color:var(--ink-2);" : "";
+
+		return `
+			<div style="${rowStyle}">
+				<div style="display:flex; justify-content:space-between; align-items:flex-start; flex-wrap:wrap; gap:8px;">
+					<div>
+						<div style="font-size:13px; font-weight:bold; color:var(--pine-dark); margin-bottom:4px; ${textStyle}">
+							${escapeHtml(kindDisp)}
+							${isVoided ? `<span class="badge" style="background:var(--alert-tint); color:var(--alert); font-size:11px; margin-left:6px;">取消済</span>` : ""}
+						</div>
+						<div style="font-size:13px; color:var(--ink); ${textStyle}">
+							受診日: <strong>${escapeHtml(r.date || "-")}</strong>
+						</div>
+						<div style="font-size:12px; color:var(--ink-2); margin-top:3px;">
+							記録者: ${escapeHtml(r.created_by || "未記録")} (${escapeHtml(r.created_at || "-")})
+						</div>
+					</div>
+					<div>
+						${!isVoided && canEdit ? `
+							<button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px; color:var(--alert); border-color:var(--alert-tint);" onclick="voidStaffHealthCheckRecord('${escapeHtml(String(r.id))}')">取消</button>
+						` : ""}
+					</div>
+				</div>
+				${isVoided ? `
+					<div style="margin-top:6px; padding-top:6px; border-top:1px dashed var(--line); font-size:12px; color:var(--alert);">
+						取消日時: ${escapeHtml(r.voided_at || "-")} | 取消者: ${escapeHtml(r.voided_by || "-")}<br>
+						理由: ${escapeHtml(r.void_reason || "-")}
+					</div>
+				` : ""}
+			</div>
+		`;
+	}).join("");
+}
+
+window.onStaffHealthCheckKindChange = onStaffHealthCheckKindChange;
+window.addStaffHealthCheckRecord = addStaffHealthCheckRecord;
+window.voidStaffHealthCheckRecord = voidStaffHealthCheckRecord;
+window.renderStaffEditHealthCheckList = renderStaffEditHealthCheckList;

@@ -2408,7 +2408,7 @@ namespace CarePortal
             return p;
         }
         private static readonly string[] PermAdminKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
-            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "invoices", "invoice_fee_tables" };
+            "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "invoices", "invoice_fee_tables", "quality_evaluations" };
         private static readonly string[] PermNurseKeys = new string[] { "resident_medications", "eyedrop_orders" };
         private static readonly string[] PermPolicyKeys = new string[] { "dementia_assessments", "life_assessments" };
         private static readonly string[] PermResNurseFields = new string[] { "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min" };
@@ -2416,7 +2416,7 @@ namespace CarePortal
         private static readonly string[] PermResPolicyFields = new string[] { "policy_stamp" };
         private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
             "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
-            "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
+            "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "quality_evaluations", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
 
         private static bool PermEmpty(object v)
         {
@@ -2458,7 +2458,7 @@ namespace CarePortal
         // 1件分の変更（cur: 今の記録・なければ null、nv: 新しい記録・消すときは null）。止めるときは「だれができるか」を返す
         private static string PermElem(PermCtx p, string k, bool listWasEmpty, JObj cur, JObj nv)
         {
-            if (listWasEmpty) return null;
+            if (listWasEmpty && k != "quality_evaluations") return null;
             if (cur != null && nv != null && PermSame(cur, nv)) return null;
             string ro = PermRoleOnly(p, k);
             if (ro != null || Array.IndexOf(PermAdminKeys, k) >= 0 || Array.IndexOf(PermNurseKeys, k) >= 0 || Array.IndexOf(PermPolicyKeys, k) >= 0) return ro;
@@ -2552,7 +2552,7 @@ namespace CarePortal
         private static string PermWhole(PermCtx p, string k, object curVal, object newVal)
         {
             if (Array.IndexOf(PermWatchKeys, k) < 0) return null;
-            if (PermEmpty(curVal)) return null;
+            if (PermEmpty(curVal) && k != "quality_evaluations") return null;
             if (PermSame(curVal, newVal)) return null;
             if (k == "stamps") return PermStamps(p, curVal, newVal);
             if (k == "monthly_shifts") return PermMonthlyShifts(p, curVal, newVal);
