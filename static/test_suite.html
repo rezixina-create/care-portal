@@ -4113,6 +4113,13 @@
       document.getElementById("qualityEvalSubmittedDate").value = "2029-01-01";
       assert(saveQualityEvaluation() === false, "Test 178c-5: 未来日の入力はブロックされること");
 
+      // 来年度（先の年度）の選択肢除外および保存ブロック検証 [Claude修正 7ebe157 反映]
+      openQualityEvalModal();
+      const nendoOptions = Array.from(document.getElementById("qualityEvalNendo").options).map(o => o.value);
+      assert(!nendoOptions.includes("2027"), "Test 178c-6: 来年度（2027年度）が年度選択肢に含まれないこと");
+      document.getElementById("qualityEvalNendo").value = "2027";
+      assert(saveQualityEvaluation() === false, "Test 178c-7: 来年度（2027年度）の保存がブロックされること");
+
       // 178d: 2026年度（今年度）免除記録追加で注意文非表示
       openQualityEvalModal();
       document.getElementById("qualityEvalNendo").value = "2026";
