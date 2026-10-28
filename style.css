@@ -2788,3 +2788,28 @@ tr.cp-away-row td { background: #f3f4f3; }
 .cp-away-note { margin-top: 3px; font-size: 12px; font-weight: bold; color: #92400e; }
 .cp-away-note-box { margin: 0 0 12px; padding: 10px 14px; border: 1px solid #fcd34d; background: #fffbeb; color: #92400e; border-radius: 8px; font-size: 13px; font-weight: bold; line-height: 1.6; }
 .cp-meal-done-note { margin-top: 4px; font-size: 12px; color: #4a5852; }
+
+/* 事故報告書 写真添付 [Antigravity追加 2026-10-28] */
+.incident-photo-section {
+  background: var(--ground);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 12px;
+  margin-bottom: 12px;
+}
+.incident-photo-notice {
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  font-size: 12.5px;
+  background: var(--caution-tint);
+  color: var(--caution);
+  border: 1px solid var(--caution);
+  border-radius: 4px;
+  line-height: 1.4;
+}
+.incident-photo-card {
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 10px;
+}

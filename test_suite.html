@@ -34,6 +34,9 @@
       if (typeof url === 'string' && url.includes('/api/save')) {
         return Promise.resolve(new Response(JSON.stringify({success: true}), {status: 200, headers: {'Content-Type': 'application/json'}}));
       }
+      if (typeof url === 'string' && url.includes('/api/is-host')) {
+        return Promise.resolve(new Response(JSON.stringify({is_host: !!window.gIsHostMachine}), {status: 200, headers: {'Content-Type': 'application/json'}}));
+      }
       return origFetch.apply(this, arguments);
     };
 
@@ -4161,6 +4164,144 @@
       assert(voidQualityEvaluation(rec2025.id, "職員取消") === false, "Test 178f-2: 介護職員による取消はブロックされること");
 
       window.alert = origAlert178;
+
+      // 36. 事故報告書 写真機能の検証 [Antigravity追加 2026-10-28]
+      log("--- 事故報告書 写真添付・親機限定表示・印刷・取消の検証 ---");
+
+      // 179a: 画像縮小関数の存在確認
+      assert(typeof cpResizeImageToJpeg === "function", "Test 179a-1: cpResizeImageToJpeg が定義されていること");
+
+      // 179b: 事故報告書の写真メタデータ構造の検証（base64はDBに入らずメタデータのみ保持）
+      const mockPhotoSite = {
+        id: 10001,
+        filename: "site_20261028_120000_abc123.jpg",
+        photo_type: "site",
+        uploaded_at: "2026-10-28 12:00",
+        uploaded_by: "松田 健二",
+        voided: false,
+        voided_at: "",
+        voided_by: "",
+        void_reason: ""
+      };
+      const mockPhotoInjury = {
+        id: 10002,
+        filename: "injury_20261028_120500_def456.jpg",
+        photo_type: "injury",
+        uploaded_at: "2026-10-28 12:05",
+        uploaded_by: "加藤 由美",
+        voided: false,
+        voided_at: "",
+        voided_by: "",
+        void_reason: ""
+      };
+
+      gState.currentIncidentPhotos = [mockPhotoSite, mockPhotoInjury];
+      assert(gState.currentIncidentPhotos.length === 2, "Test 179b-1: 写真メタデータが2件保持されること");
+      assert(!JSON.stringify(gState.currentIncidentPhotos).includes("base64"), "Test 179b-2: メタデータにbase64画像データが含まれないこと");
+
+      // 179c: 取消処理の検証（物理削除せず理由と取消者を残す・再登録可能）
+      const origPrompt179 = window.prompt;
+      window.prompt = () => "誤った撮影のため取消";
+      voidIncidentPhoto("site", 10001);
+      assert(mockPhotoSite.voided === true, "Test 179c-1: 現場の写真が voided: true になること");
+      assert(mockPhotoSite.void_reason === "誤った撮影のため取消", "Test 179c-2: 取消理由が記録されること");
+      assert(mockPhotoSite.voided_at !== "", "Test 179c-3: 取消日時が記録されること");
+
+      // 取消後はアクティブな現場写真が0件になり、傷写真のみアクティブ
+      const activeAfterVoid = gState.currentIncidentPhotos.filter(p => !p.voided);
+      assert(activeAfterVoid.length === 1 && activeAfterVoid[0].photo_type === "injury", "Test 179c-4: 取消後はアクティブな現場写真がなく再撮影可能な状態になること");
+      window.prompt = origPrompt179;
+
+      // 179d: 報告書詳細での親機限定表示の検証
+      let secEl = document.getElementById("incDetailPhotosSection");
+      if (!secEl) {
+        secEl = document.createElement("div"); secEl.id = "incDetailPhotosSection";
+        secEl.innerHTML = `
+          <div id="incDetailNonHostNotice" style="display:none;"></div>
+          <div id="incDetailHostPhotosWrap" style="display:none;">
+            <div id="incDetailSitePhotoWrap" style="display:none;"><div id="incDetailSitePhotoImgWrap"></div></div>
+            <div id="incDetailInjuryPhotoWrap" style="display:none;"><button id="btnIncDetailViewInjuryPhoto"></button></div>
+          </div>
+        `;
+        document.body.appendChild(secEl);
+      }
+
+      const mockIncDetail = {
+        id: 99991,
+        photos: [
+          { id: 20001, filename: "site_test.jpg", photo_type: "site", uploaded_at: "2026-10-28 14:00", uploaded_by: "松田 健二", voided: false },
+          { id: 20002, filename: "injury_test.jpg", photo_type: "injury", uploaded_at: "2026-10-28 14:05", uploaded_by: "加藤 由美", voided: false }
+        ]
+      };
+
+      // 非親機（gIsHostMachine = false）の場合: 写真そのものは渡さず案内メッセージのみ
+      window.gIsHostMachine = false;
+      renderIncidentDetailPhotos(mockIncDetail);
+      const nonHostNotice = document.getElementById("incDetailNonHostNotice");
+      const hostWrapEl = document.getElementById("incDetailHostPhotosWrap");
+      assert(nonHostNotice.style.display !== "none" && nonHostNotice.textContent.includes("写真あり（現場・傷）— 親機で確認できます"), "Test 179d-1: 非親機では「写真あり（現場・傷）— 親機で確認できます」が表示されること");
+      assert(hostWrapEl.style.display === "none", "Test 179d-2: 非親機では写真本体領域が非表示であること");
+
+      // 親機（gIsHostMachine = true）の場合: 現場写真を直接表示、傷写真ボタンを表示
+      window.gIsHostMachine = true;
+      renderIncidentDetailPhotos(mockIncDetail);
+      const siteWrapEl = document.getElementById("incDetailSitePhotoWrap");
+      const injuryWrapEl = document.getElementById("incDetailInjuryPhotoWrap");
+      assert(nonHostNotice.style.display === "none", "Test 179d-3: 親機では非親機用案内が非表示であること");
+      assert(hostWrapEl.style.display !== "none", "Test 179d-4: 親機では写真本体領域が表示されること");
+      assert(siteWrapEl.style.display !== "none" && siteWrapEl.innerHTML.includes("site_test.jpg"), "Test 179d-5: 現場の写真が直接表示されること");
+      assert(injuryWrapEl.style.display !== "none", "Test 179d-6: 傷の写真があるときは「傷の写真を見る」ボタンが表示されること");
+
+      // 傷写真がない報告書の場合: ボタンが出ないこと
+      const mockIncDetailNoInjury = {
+        id: 99992,
+        photos: [
+          { id: 20003, filename: "site_only.jpg", photo_type: "site", uploaded_at: "2026-10-28 14:00", uploaded_by: "松田 健二", voided: false }
+        ]
+      };
+      renderIncidentDetailPhotos(mockIncDetailNoInjury);
+      assert(injuryWrapEl.style.display === "none", "Test 179d-7: 傷の写真がない報告書ではボタンが出ないこと");
+
+      // 写真が一切ない報告書の場合: セクションごと非表示
+      const mockIncDetailNoPhotos = { id: 99993, photos: [] };
+      renderIncidentDetailPhotos(mockIncDetailNoPhotos);
+      assert(secEl.style.display === "none", "Test 179d-8: 写真がない報告書では写真セクションが出ないこと");
+
+      // 179e: 印刷HTMLの検証
+      // 親機での印刷: 現場の写真のみ含み、傷写真やボタンは含まない
+      window.gIsHostMachine = true;
+      let printCapturedHtml = "";
+      const origWindowOpen = window.open;
+      window.open = () => ({
+        document: {
+          open: () => {},
+          write: (html) => { printCapturedHtml = html; },
+          close: () => {},
+          querySelector: () => null,
+          querySelectorAll: () => []
+        },
+        focus: () => {},
+        print: () => {}
+      });
+
+      if (!Array.isArray(db.data.incidents)) db.data.incidents = [];
+      db.data.incidents.push(mockIncDetail);
+
+      printIncidentReport(99991);
+      assert(printCapturedHtml.includes("現場の写真") && printCapturedHtml.includes("site_test.jpg"), "Test 179e-1: 親機からの印刷には現場の写真が含まれること");
+      assert(!printCapturedHtml.includes("傷の写真を見る") && !printCapturedHtml.includes("injury_test.jpg"), "Test 179e-2: 印刷には傷の写真およびボタンが含まれないこと");
+
+      // 非親機での印刷: 写真は含まれない
+      window.gIsHostMachine = false;
+      printCapturedHtml = "";
+      printIncidentReport(99991);
+      assert(!printCapturedHtml.includes("現場の写真") && !printCapturedHtml.includes("site_test.jpg"), "Test 179e-3: 非親機からの印刷には写真が含まれないこと");
+
+      // 後始末
+      window.open = origWindowOpen;
+      window.gIsHostMachine = false;
+      db.data.incidents = db.data.incidents.filter(x => x.id !== 99991);
+      if (secEl && secEl.parentNode) secEl.parentNode.removeChild(secEl);
 
       // 37. 総合結果判定
       log("====================================================");

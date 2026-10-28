@@ -1325,6 +1325,131 @@ namespace CarePortal
             SendJsonResponse(stream, 200, sb.ToString());
         }
 
+        // [Antigravity追加 2026-10-28] 親機からの接続か（127.0.0.1 または ::1 かつ トンネルヘッダーがない）
+        private static readonly string[] TunnelHeaderPrefixes = new string[] {
+            "cf-connecting-ip:",
+            "cf-ray:",
+            "x-forwarded-for:",
+            "x-real-ip:",
+            "forwarded:"
+        };
+
+        private bool HasTunnelHeaders(string[] lines)
+        {
+            if (lines == null) return false;
+            foreach (string line in lines)
+            {
+                string trimmed = line.Trim();
+                foreach (string prefix in TunnelHeaderPrefixes)
+                {
+                    if (trimmed.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return true;
+                    }
+                }
+            }
+            return false;
+        }
+
+        private bool IsHostConnection(TcpClient client, string[] lines)
+        {
+            if (client == null || client.Client == null) return false;
+            try
+            {
+                IPEndPoint ep = client.Client.RemoteEndPoint as IPEndPoint;
+                if (ep == null) return false;
+                bool isLoopback = IPAddress.IsLoopback(ep.Address) || ep.Address.ToString() == "127.0.0.1" || ep.Address.ToString() == "::1" || ep.Address.ToString() == "::ffff:127.0.0.1";
+                if (!isLoopback) return false;
+                if (HasTunnelHeaders(lines)) return false;
+                return true;
+            }
+            catch
+            {
+                return false;
+            }
+        }
+
+        // [Antigravity追加 2026-10-28] 事故報告書の写真保存（親機のみ受け取り・data/photos/incidents/ へ配置）
+        private void HandleIncidentPhotoUpload(NetworkStream stream, string body, string staff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string pType = (req.GetStr("photo_type") ?? "").Trim().ToLowerInvariant();
+            if (pType != "site" && pType != "injury")
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_photo_type\"}");
+                return;
+            }
+            string data = req.GetStr("data") ?? "";
+            int comma = data.IndexOf(',');
+            if (data.StartsWith("data:") && comma > 0) data = data.Substring(comma + 1);
+            byte[] img;
+            try { img = Convert.FromBase64String(data); } catch { img = null; }
+            if (img == null || img.Length < 4 || img.Length > 10 * 1024 * 1024 || img[0] != 0xFF || img[1] != 0xD8)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_image\"}");
+                return;
+            }
+
+            string folder = Path.Combine(Path.Combine(_dataDir, "photos"), "incidents");
+            string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string token = NewToken().Substring(0, 6);
+            string fileName = pType + "_" + ts + "_" + token + ".jpg";
+
+            try
+            {
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                File.WriteAllBytes(Path.Combine(folder, fileName), img);
+            }
+            catch
+            {
+                SendJsonResponse(stream, 500, "{\"error\":\"save_failed\"}");
+                return;
+            }
+
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            string who = (staff ?? "").Replace("\\", "").Replace("\"", "");
+            string json = "{\"success\":true,\"filename\":\"" + fileName + "\",\"photo_type\":\"" + pType + "\",\"uploaded_at\":\"" + nowStr + "\",\"uploaded_by\":\"" + who + "\"}";
+            SendJsonResponse(stream, 200, json);
+        }
+
+        // [Antigravity追加 2026-10-28] 事故報告書の写真取得（親機のみ閲覧可能）
+        private void HandleIncidentPhotoGet(NetworkStream stream, string rawUrl)
+        {
+            string fileName = "";
+            int q = rawUrl.IndexOf('?');
+            if (q >= 0)
+            {
+                string qs = rawUrl.Substring(q + 1);
+                string[] parts = qs.Split('&');
+                foreach (string part in parts)
+                {
+                    if (part.StartsWith("file=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fileName = Uri.UnescapeDataString(part.Substring(5));
+                        break;
+                    }
+                }
+            }
+            fileName = Path.GetFileName(fileName);
+            if (string.IsNullOrEmpty(fileName) || fileName.Contains("..") || fileName.Contains("/") || fileName.Contains("\\") || fileName.Contains(":"))
+            {
+                byte[] err = Encoding.UTF8.GetBytes("400 Bad Request");
+                SendResponse(stream, 400, "Bad Request", "text/plain", err);
+                return;
+            }
+            string filePath = Path.Combine(Path.Combine(_dataDir, "photos"), "incidents", fileName);
+            if (!File.Exists(filePath))
+            {
+                byte[] notFound = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", notFound);
+                return;
+            }
+            byte[] img = File.ReadAllBytes(filePath);
+            SendResponse(stream, 200, "OK", "image/jpeg", img);
+        }
+
+
         private void HandleLogin(NetworkStream stream, string body)
         {
             JObj req = null;
@@ -3110,6 +3235,13 @@ namespace CarePortal
                         HandleLoginInfo(stream);
                         return;
                     }
+                    if (urlPath == "/api/is-host")
+                    {
+                        bool isHost = IsHostConnection(client, lines);
+                        SendJsonResponse(stream, 200, "{\"is_host\":" + (isHost ? "true" : "false") + "}");
+                        return;
+                    }
+
                     if (urlPath == "/api/login" && method == "POST")
                     {
                         HandleLogin(stream, Encoding.UTF8.GetString(bodyBytes));
@@ -3125,6 +3257,16 @@ namespace CarePortal
                     string sessStaff = needsAuth ? CheckSession(lines) : null;
                     if (needsAuth && sessStaff == null)
                     {
+                        if (urlPath == "/api/open-folder" && !IsHostConnection(client, lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機で操作してください\"}");
+                            return;
+                        }
+                        if (urlPath.StartsWith("/api/incident-photo") || urlPath.StartsWith("/data/photos/incidents/"))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"ログインが必要です\"}");
+                            return;
+                        }
                         SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}");
                         return;
                     }
@@ -3182,8 +3324,49 @@ namespace CarePortal
                         return;
                     }
 
+                    // [Antigravity追加 2026-10-28] 事故報告書の写真送信（親機のみ受付・403）
+                    if (urlPath == "/api/incident-photo-upload" && method == "POST")
+                    {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機からのみ送信可能です\"}");
+                            return;
+                        }
+                        if (sessStaff == null)
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"unauthorized\",\"message\":\"ログインが必要です\"}");
+                            return;
+                        }
+                        HandleIncidentPhotoUpload(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        return;
+                    }
+
+                    // [Antigravity追加 2026-10-28] 事故報告書の写真取得（親機のみ閲覧可能・403）
+                    if (urlPath == "/api/incident-photo" && method == "GET")
+                    {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Host only");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", denied);
+                            return;
+                        }
+                        if (sessStaff == null)
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Login required");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", denied);
+                            return;
+                        }
+                        HandleIncidentPhotoGet(stream, rawUrl);
+                        return;
+                    }
+
                     if (urlPath == "/api/open-folder")
                     {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機で操作してください\"}");
+                            return;
+                        }
                         string fType = "documents";
                         if (rawUrl.Contains("type=personal")) fType = "personal";
                         string folder = Path.Combine(_dataDir, "photos", fType);
@@ -3335,6 +3518,15 @@ namespace CarePortal
                         return;
                     }
 
+                    if (urlPath.ToLowerInvariant().StartsWith("/data/photos/incidents/"))
+                    {
+                        if (!IsHostConnection(client, lines) || sessStaff == null)
+                        {
+                            byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
+                            return;
+                        }
+                    }
                     ServeStaticFile(stream, urlPath);
                 }
             }

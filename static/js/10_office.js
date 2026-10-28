@@ -2820,6 +2820,205 @@ function submitComplaint() {
 
 // 事故・ヒヤリハット
 
+// [Antigravity追加 2026-10-28] 親機（ホストマシン）判定
+window.window.gIsHostMachine = false;
+async function cpCheckIsHost() {
+	try {
+		const res = await fetch("/api/is-host");
+		if (res.ok) {
+			const data = await res.json();
+			window.gIsHostMachine = !!data.is_host;
+			return gIsHostMachine;
+		}
+	} catch (e) {
+		console.error("cpCheckIsHost error:", e);
+	}
+	window.gIsHostMachine = false;
+	return false;
+}
+window.cpCheckIsHost = cpCheckIsHost;
+
+// アプリ起動時に親機判定を非同期で確認
+if (typeof window !== "undefined") {
+	if (document.readyState === "loading") {
+		document.addEventListener("DOMContentLoaded", () => { cpCheckIsHost(); });
+	} else {
+		cpCheckIsHost();
+	}
+}
+
+// [Antigravity追加 2026-10-28] 端末内で画像を縮小（長い辺 1600px・JPEG形式）
+function cpResizeImageToJpeg(file, maxSide, quality) {
+	if (maxSide === undefined) maxSide = 1600;
+	if (quality === undefined) quality = 0.85;
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onload = (e) => {
+			const img = new Image();
+			img.onload = () => {
+				let w = img.width;
+				let h = img.height;
+				if (w > maxSide || h > maxSide) {
+					if (w > h) {
+						h = Math.round((h * maxSide) / w);
+						w = maxSide;
+					} else {
+						w = Math.round((w * maxSide) / h);
+						h = maxSide;
+					}
+				}
+				const canvas = document.createElement("canvas");
+				canvas.width = w;
+				canvas.height = h;
+				const ctx = canvas.getContext("2d");
+				ctx.drawImage(img, 0, 0, w, h);
+				const dataUrl = canvas.toDataURL("image/jpeg", quality);
+				resolve(dataUrl);
+			};
+			img.onerror = () => reject(new Error("画像の読み込みに失敗しました"));
+			img.src = e.target.result;
+		};
+		reader.onerror = () => reject(new Error("ファイルの読み込みに失敗しました"));
+		reader.readAsDataURL(file);
+	});
+}
+window.cpResizeImageToJpeg = cpResizeImageToJpeg;
+
+// [Antigravity追加 2026-10-28] 事故報告書の写真選択・アップロード処理
+async function handleIncidentPhotoSelected(type, inputEl) {
+	if (!inputEl || !inputEl.files || !inputEl.files[0]) return;
+	const file = inputEl.files[0];
+	const statusEl = document.getElementById(type === "site" ? "incSitePhotoStatus" : "incInjuryPhotoStatus");
+	if (statusEl) statusEl.textContent = "画像を縮小中...";
+
+	try {
+		const resizedDataUrl = await cpResizeImageToJpeg(file, 1600, 0.85);
+		if (statusEl) statusEl.textContent = "アップロード中...";
+
+		const res = await fetch("/api/incident-photo-upload", {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify({
+				photo_type: type,
+				data: resizedDataUrl
+			})
+		});
+
+		if (!res.ok) {
+			let errMsg = "写真の送信に失敗しました (" + res.status + ")";
+			try {
+				const errData = await res.json();
+				if (errData && errData.message) errMsg = errData.message;
+			} catch (_) {}
+			alert(errMsg);
+			inputEl.value = "";
+			if (statusEl) statusEl.textContent = "";
+			return;
+		}
+
+		const result = await res.json();
+		// 送信後は端末内のプレビュー・入力欄の選択をクリア
+		inputEl.value = "";
+		if (statusEl) statusEl.textContent = "";
+
+		if (!Array.isArray(gState.currentIncidentPhotos)) {
+			gState.currentIncidentPhotos = [];
+		}
+		gState.currentIncidentPhotos.push({
+			id: Date.now(),
+			filename: result.filename,
+			photo_type: result.photo_type || type,
+			uploaded_at: result.uploaded_at,
+			uploaded_by: result.uploaded_by,
+			voided: false,
+			voided_at: "",
+			voided_by: "",
+			void_reason: ""
+		});
+
+		renderIncidentPhotosEditUI();
+	} catch (e) {
+		console.error("handleIncidentPhotoSelected error:", e);
+		alert("画像の処理に失敗しました。");
+		inputEl.value = "";
+		if (statusEl) statusEl.textContent = "";
+	}
+}
+window.handleIncidentPhotoSelected = handleIncidentPhotoSelected;
+
+// [Antigravity追加 2026-10-28] 写真編集UI描画（現場1枚・傷1枚まで）
+function renderIncidentPhotosEditUI() {
+	const photos = Array.isArray(gState.currentIncidentPhotos) ? gState.currentIncidentPhotos : [];
+	const sitePhoto = photos.find(p => !p.voided && (p.photo_type === "site" || p.photo_type === "現場"));
+	const injuryPhoto = photos.find(p => !p.voided && (p.photo_type === "injury" || p.photo_type === "傷"));
+
+	// 現場の写真
+	const siteInfoEl = document.getElementById("incSitePhotoInfo");
+	const siteInputWrap = document.getElementById("incSitePhotoInputWrap");
+	if (siteInfoEl && siteInputWrap) {
+		if (sitePhoto) {
+			siteInfoEl.innerHTML = `
+				<div style="background:var(--ground); border:1px solid var(--line); border-radius:4px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center;">
+					<div>
+						<strong style="color:var(--ink);">登録済</strong>
+						<span style="font-size:11px; color:var(--ink-2); margin-left:6px;">${escapeHtml(sitePhoto.filename)}</span>
+						<div style="font-size:11px; color:var(--ink-3); margin-top:2px;">${escapeHtml(sitePhoto.uploaded_at)} (${escapeHtml(sitePhoto.uploaded_by)})</div>
+					</div>
+					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:var(--alert); border-color:var(--alert);" onclick="voidIncidentPhoto('site', ${sitePhoto.id})">取消</button>
+				</div>
+			`;
+			siteInputWrap.style.display = "none";
+		} else {
+			siteInfoEl.innerHTML = '<span style="color:var(--ink-3);">未登録</span>';
+			siteInputWrap.style.display = "block";
+		}
+	}
+
+	// 傷の写真
+	const injuryInfoEl = document.getElementById("incInjuryPhotoInfo");
+	const injuryInputWrap = document.getElementById("incInjuryPhotoInputWrap");
+	if (injuryInfoEl && injuryInputWrap) {
+		if (injuryPhoto) {
+			injuryInfoEl.innerHTML = `
+				<div style="background:var(--ground); border:1px solid var(--line); border-radius:4px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center;">
+					<div>
+						<strong style="color:var(--ink);">登録済</strong>
+						<span style="font-size:11px; color:var(--ink-2); margin-left:6px;">${escapeHtml(injuryPhoto.filename)}</span>
+						<div style="font-size:11px; color:var(--ink-3); margin-top:2px;">${escapeHtml(injuryPhoto.uploaded_at)} (${escapeHtml(injuryPhoto.uploaded_by)})</div>
+					</div>
+					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:var(--alert); border-color:var(--alert);" onclick="voidIncidentPhoto('injury', ${injuryPhoto.id})">取消</button>
+				</div>
+			`;
+			injuryInputWrap.style.display = "none";
+		} else {
+			injuryInfoEl.innerHTML = '<span style="color:var(--ink-3);">未登録</span>';
+			injuryInputWrap.style.display = "block";
+		}
+	}
+}
+window.renderIncidentPhotosEditUI = renderIncidentPhotosEditUI;
+
+// [Antigravity追加 2026-10-28] 写真の取消（ファイルは残し、取消理由・取消者を残す）
+function voidIncidentPhoto(type, photoId) {
+	const reason = prompt("写真を取り消す理由を入力してください（必須）:", "");
+	if (reason === null) return;
+	if (!reason.trim()) {
+		alert("取消理由を入力してください。");
+		return;
+	}
+
+	const photos = Array.isArray(gState.currentIncidentPhotos) ? gState.currentIncidentPhotos : [];
+	const p = photos.find(x => !x.voided && (x.id === photoId || x.photo_type === type));
+	if (p) {
+		p.voided = true;
+		p.voided_at = (typeof toLocalDateTimeStr === "function" ? toLocalDateTimeStr(new Date()) : new Date().toISOString());
+		p.voided_by = (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "") || "未記録";
+		p.void_reason = reason.trim();
+		renderIncidentPhotosEditUI();
+	}
+}
+window.voidIncidentPhoto = voidIncidentPhoto;
+
 function openNewIncidentModal() {
 	try {
 		const incId = document.getElementById("incId");
@@ -2844,6 +3043,8 @@ function openNewIncidentModal() {
 		if (incSup) incSup.value = "";
 		gState.currentIncidentInjuryPins = [];
 		if (typeof updateIncidentPinsSummaryUI === "function") updateIncidentPinsSummaryUI();
+		gState.currentIncidentPhotos = [];
+		renderIncidentPhotosEditUI();
 
 		const sel = document.getElementById("incResidentSelect");
 		if (sel) {
@@ -2984,6 +3185,10 @@ function editIncident(id) {
 		? JSON.parse(JSON.stringify(inc.injury_pins))
 		: [];
 	updateIncidentPinsSummaryUI();
+	gState.currentIncidentPhotos = (inc.photos && Array.isArray(inc.photos))
+		? JSON.parse(JSON.stringify(inc.photos))
+		: [];
+	renderIncidentPhotosEditUI();
 
 	const sel = document.getElementById("incResidentSelect");
 	sel.innerHTML = "";
@@ -3012,6 +3217,7 @@ function saveIncidentReport() {
 	// [Claude修正] 記録者はログインした本人（記録者の選ぶ欄や「担当職員」の代わりの言葉にしない）
 	const staff = (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "") || document.getElementById("currentStaff")?.value || "";
 	const injuryPins = gState.currentIncidentInjuryPins || [];
+	const photos = gState.currentIncidentPhotos || [];
 
 	if (!situation) {
 		alert("事故・ヒヤリハットの発生状況を入力してください。");
@@ -3027,15 +3233,15 @@ function saveIncidentReport() {
 			inc.report_type = type; inc.occurred_at = occurredAt; inc.resident_id = resId;
 			inc.place = place; inc.situation = situation; inc.cause = cause;
 			inc.prevention = prevention; inc.supervisor_comment = supervisor;
-			inc.injury_pins = injuryPins;
-			cpAppendEditHistory(inc, cpOld, ["report_type", "occurred_at", "resident_id", "place", "situation", "cause", "prevention", "supervisor_comment", "injury_pins"]);
+			inc.injury_pins = injuryPins; inc.photos = photos;
+			cpAppendEditHistory(inc, cpOld, ["report_type", "occurred_at", "resident_id", "place", "situation", "cause", "prevention", "supervisor_comment", "injury_pins", "photos"]);
 		}
 	} else {
 		db.data.incidents.unshift({
 			id: Date.now(), report_type: type, occurred_at: occurredAt, resident_id: resId,
 			place: place, situation: situation, cause: cause, prevention: prevention,
 			supervisor_comment: supervisor, status: "作成済", staff_name: staff,
-			injury_pins: injuryPins
+			injury_pins: injuryPins, photos: photos
 		});
 	}
 
@@ -3284,6 +3490,28 @@ function printIncidentReport(incId) {
 	}
 	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
 	const pins = inc.injury_pins || [];
+	// 現場の写真（親機から印刷した場合のみ掲載・傷の写真やボタンは含めない）
+	let sitePhotoPrintHtml = "";
+	const isHostPrint = !!window.gIsHostMachine;
+	if (isHostPrint && Array.isArray(inc.photos)) {
+		const activeSitePhoto = inc.photos.find(p => !p.voided && (p.photo_type === "site" || p.photo_type === "現場"));
+		if (activeSitePhoto && activeSitePhoto.filename) {
+			sitePhotoPrintHtml = `
+				<div class="sec">
+				<div style="border:1px solid #333; padding:8px; margin-bottom:8px; page-break-inside:avoid;">
+					<div style="font-weight:bold; font-size:10.5pt; margin-bottom:6px; border-bottom:1px solid #cdd6d0; padding-bottom:3px;">
+						現場の写真
+					</div>
+					<div style="text-align:center;">
+						<img src="/api/incident-photo?file=${encodeURIComponent(activeSitePhoto.filename)}" alt="現場の写真" style="max-width:180mm; max-height:70mm; object-fit:contain; border:1px solid #cdd6d0; display:block; margin:0 auto;">
+						<div style="font-size:9pt; color:#444; margin-top:4px;">撮影日時: ${escapeHtml(activeSitePhoto.uploaded_at || '')} (${escapeHtml(activeSitePhoto.uploaded_by || '')})</div>
+					</div>
+				</div>
+				</div>
+			`;
+		}
+	}
+
 	const facilityName = (typeof getFacilityName === "function") ? getFacilityName() : "陽だまりの家";
 
 	let pinsTableRows = "";
@@ -3406,6 +3634,8 @@ function printIncidentReport(incId) {
 				<tr><td style="min-height:70px; padding:10px;">${escapeHtml(inc.situation || '-').replace(/\n/g, '<br>')}</td></tr>
 			</table>
 			</div>
+
+			${sitePhotoPrintHtml}
 
 			<div class="sec">
 			<!-- 受傷部位シェーマ図 ＆ 外傷ピン一覧 -->
@@ -4336,6 +4566,93 @@ function submitResidentForm() {
 // ==============================================================
 // 事故・ヒヤリハット報告書 詳細モーダル表示 ＆ 印刷
 // ==============================================================
+// [Antigravity追加 2026-10-28] 報告書詳細の写真セクション描画（親機のみ閲覧可能）
+function renderIncidentDetailPhotos(inc) {
+	const secEl = document.getElementById("incDetailPhotosSection");
+	const nonHostEl = document.getElementById("incDetailNonHostNotice");
+	const hostWrap = document.getElementById("incDetailHostPhotosWrap");
+	const siteWrap = document.getElementById("incDetailSitePhotoWrap");
+	const siteImgWrap = document.getElementById("incDetailSitePhotoImgWrap");
+	const injuryWrap = document.getElementById("incDetailInjuryPhotoWrap");
+	const btnInjury = document.getElementById("btnIncDetailViewInjuryPhoto");
+
+	if (!secEl) return;
+
+	const activePhotos = (inc.photos && Array.isArray(inc.photos))
+		? inc.photos.filter(p => !p.voided)
+		: [];
+	const sitePhoto = activePhotos.find(p => p.photo_type === "site" || p.photo_type === "現場");
+	const injuryPhoto = activePhotos.find(p => p.photo_type === "injury" || p.photo_type === "傷");
+
+	if (activePhotos.length === 0) {
+		secEl.style.display = "none";
+		if (nonHostEl) nonHostEl.style.display = "none";
+		if (hostWrap) hostWrap.style.display = "none";
+		return;
+	}
+
+	secEl.style.display = "block";
+
+	// 親機判定
+	const isHost = !!window.gIsHostMachine;
+
+	if (!isHost) {
+		if (hostWrap) hostWrap.style.display = "none";
+		if (nonHostEl) {
+			nonHostEl.style.display = "block";
+			const types = [];
+			if (sitePhoto) types.push("現場");
+			if (injuryPhoto) types.push("傷");
+			nonHostEl.textContent = `写真あり（${types.join("・")}）— 親機で確認できます`;
+		}
+	} else {
+		if (nonHostEl) nonHostEl.style.display = "none";
+		if (hostWrap) hostWrap.style.display = "block";
+
+		// 現場の写真
+		if (sitePhoto && siteWrap && siteImgWrap) {
+			siteWrap.style.display = "block";
+			siteImgWrap.innerHTML = `
+				<div style="text-align:center;">
+					<img src="/api/incident-photo?file=${encodeURIComponent(sitePhoto.filename)}" alt="現場の写真" style="max-width:100%; max-height:360px; object-fit:contain; border-radius:4px; border:1px solid var(--line); display:block; margin:0 auto;">
+					<div style="font-size:11.5px; color:var(--ink-2); margin-top:4px;">
+						${escapeHtml(sitePhoto.uploaded_at || '')} (${escapeHtml(sitePhoto.uploaded_by || '未記録')})
+					</div>
+				</div>
+			`;
+		} else if (siteWrap) {
+			siteWrap.style.display = "none";
+			if (siteImgWrap) siteImgWrap.innerHTML = "";
+		}
+
+		// 傷の写真ボタン
+		if (injuryPhoto && injuryWrap && btnInjury) {
+			injuryWrap.style.display = "block";
+			btnInjury.onclick = function() {
+				openIncidentInjuryPhotoModal(injuryPhoto);
+			};
+		} else if (injuryWrap) {
+			injuryWrap.style.display = "none";
+		}
+	}
+}
+window.renderIncidentDetailPhotos = renderIncidentDetailPhotos;
+
+function openIncidentInjuryPhotoModal(photo) {
+	if (!photo || !photo.filename) return;
+	const container = document.getElementById("incidentInjuryPhotoContent");
+	if (container) {
+		container.innerHTML = `
+			<img src="/api/incident-photo?file=${encodeURIComponent(photo.filename)}" alt="傷の写真" style="max-width:100%; max-height:70vh; object-fit:contain; border-radius:4px; display:block; margin:0 auto; border:1px solid var(--line);">
+			<div style="font-size:12px; color:var(--ink-2); margin-top:8px;">
+				登録日時: ${escapeHtml(photo.uploaded_at || '')}（担当: ${escapeHtml(photo.uploaded_by || '未記録')}）
+			</div>
+		`;
+	}
+	openModal("incidentInjuryPhotoModal");
+}
+window.openIncidentInjuryPhotoModal = openIncidentInjuryPhotoModal;
+
 function openIncidentDetailModal(incId) {
 	const list = db.data.incidents || [];
 	const inc = list.find(x => Number(x.id) === Number(incId));
@@ -4403,6 +4720,17 @@ function openIncidentDetailModal(incId) {
 		pins: inc.injury_pins || [],
 		readOnly: true
 	});
+
+	// 写真セクションの描画（親機判定と連動）
+	if (typeof cpCheckIsHost === "function") {
+		cpCheckIsHost().then(() => {
+			renderIncidentDetailPhotos(inc);
+		}).catch(() => {
+			renderIncidentDetailPhotos(inc);
+		});
+	} else {
+		renderIncidentDetailPhotos(inc);
+	}
 
 	// モーダルを開く
 	const modal = document.getElementById("incidentDetailModal");
