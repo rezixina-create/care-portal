@@ -2539,6 +2539,7 @@ namespace CarePortal
         private static readonly string[] PermResNurseFields = new string[] { "bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min" };
         private static readonly string[] PermResCmFields = new string[] { "care_plan_goal", "care_plan_consent_date" };
         private static readonly string[] PermResPolicyFields = new string[] { "policy_stamp" };
+        private static readonly string[] PermResAdminCmFields = new string[] { "care_level", "care_start_date", "care_expiry_date", "renewal_steps" };
         private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
             "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
             "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "quality_evaluations", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
@@ -2593,6 +2594,7 @@ namespace CarePortal
                 foreach (string f in PermResNurseFields) if (!p.Nurse && PermFieldChanged(cur, nv, f)) return "看護師";
                 foreach (string f in PermResCmFields) if (!p.Cm && PermFieldChanged(cur, nv, f)) return "計画作成担当者";
                 foreach (string f in PermResPolicyFields) if (!(p.Director || p.Cm || p.Nurse) && PermFieldChanged(cur, nv, f)) return "管理者・計画作成担当者・看護師";
+                foreach (string f in PermResAdminCmFields) if (!(p.Admin || p.Cm) && PermFieldChanged(cur, nv, f)) return "管理者・事務員・計画作成担当者";
                 return null;
             }
             if (k == "care_plans")

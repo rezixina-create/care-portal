@@ -4328,6 +4328,8 @@ function cpLockResidentPlanFields() {
  lock(["resCarePlanGoal"], false, "ケアプランは「ケアプラン」のタブで計画作成担当者が作ります。この欄は以前の記録です");
  lock(["resPolicyStamp"], cpCanEditPolicy(), "基本方針を変えられるのは管理者・計画作成担当者・看護師です");
  lock(["resBpHighMax", "resBpHighMin", "resTempMax", "resSpo2Min", "resPulseMax", "resPulseMin"], cpCanEditVitalLimits(), "バイタルの注意の目安を変えられるのは看護師です");
+ const isEdit = !!(document.getElementById("resEditId") && document.getElementById("resEditId").value);
+ lock(["resCareLevel", "resCareStartDate", "resCareExpiryDate"], !isEdit || isCurrentStaffAdminOrClerkOrCm(), "要介護度・認定の期間を変更できるのは管理者・事務員・計画作成担当者です");
 }
 function submitResidentForm() {
  const roomNo = document.getElementById("resRoomNo").value.trim();
@@ -4521,10 +4523,11 @@ function submitResidentForm() {
  };
  // [Claude修正 2026-10-18] 変える権限のない欄は、前の値のまま（新しく登録するときは空）にする。ケアプラン目標はカルテの欄から（説明と同意の日を入れるため）
  { const prev = editId ? (gState.residents.find(x => x.id === parseInt(editId)) || {}) : {};
-  const keep = ks => ks.forEach(k2 => { residentData[k2] = (prev[k2] === undefined ? (k2 === "policy_stamp" || k2 === "care_plan_goal" ? "" : null) : prev[k2]); });
+  const keep = ks => ks.forEach(k2 => { residentData[k2] = (prev[k2] === undefined ? (k2 === "policy_stamp" || k2 === "care_plan_goal" || k2 === "care_level" || k2 === "care_start_date" || k2 === "care_expiry_date" ? "" : null) : prev[k2]); });
   keep(["care_plan_goal"]);
   if (!cpCanEditPolicy()) keep(["policy_stamp"]);
-  if (!cpCanEditVitalLimits()) keep(["bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]); }
+  if (!cpCanEditVitalLimits()) keep(["bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
+  if (editId && !isCurrentStaffAdminOrClerkOrCm()) keep(["care_level", "care_start_date", "care_expiry_date"]); }
  if (cpUnitAfterMove !== undefined) residentData.unit_id = cpUnitAfterMove;
 
  let targetId;

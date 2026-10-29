@@ -17,6 +17,12 @@ function renderOfficeCareRenewal() {
   if (!tbody) return;
   tbody.innerHTML = "";
 
+  const canManage = isCurrentStaffAdminOrClerkOrCm();
+  const noticeEl = document.getElementById("careRenewalPermissionNotice");
+  if (noticeEl) {
+    noticeEl.style.display = canManage ? "none" : "block";
+  }
+
   const filter = document.getElementById("careRenewalFilterSelect")?.value || "all";
   const search = (document.getElementById("careRenewalSearchInput")?.value || "").trim().toLowerCase();
 
@@ -89,32 +95,38 @@ function renderOfficeCareRenewal() {
       <td>${daysBadge}</td>
       <td>
         <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px;">
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
-            <input type="checkbox" ${s.application_submitted ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'application_submitted')">
+          <label style="cursor:${canManage ? 'pointer' : 'not-allowed'}; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.application_submitted ? 'checked' : ''} ${canManage ? `onchange="toggleCareRenewalStep(${r.id}, 'application_submitted')"` : 'disabled style="cursor:not-allowed;"'}>
             <span>① 申請提出済</span>
           </label>
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
-            <input type="checkbox" ${s.visit_scheduled ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'visit_scheduled')">
+          <label style="cursor:${canManage ? 'pointer' : 'not-allowed'}; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.visit_scheduled ? 'checked' : ''} ${canManage ? `onchange="toggleCareRenewalStep(${r.id}, 'visit_scheduled')"` : 'disabled style="cursor:not-allowed;"'}>
             <span>② 訪問調査確定</span>
           </label>
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
-            <input type="checkbox" ${s.doctor_statement ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'doctor_statement')">
+          <label style="cursor:${canManage ? 'pointer' : 'not-allowed'}; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.doctor_statement ? 'checked' : ''} ${canManage ? `onchange="toggleCareRenewalStep(${r.id}, 'doctor_statement')"` : 'disabled style="cursor:not-allowed;"'}>
             <span>③ 意見書依頼済</span>
           </label>
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px;">
-            <input type="checkbox" ${s.result_pending ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'result_pending')">
+          <label style="cursor:${canManage ? 'pointer' : 'not-allowed'}; display:inline-flex; align-items:center; gap:3px;">
+            <input type="checkbox" ${s.result_pending ? 'checked' : ''} ${canManage ? `onchange="toggleCareRenewalStep(${r.id}, 'result_pending')"` : 'disabled style="cursor:not-allowed;"'}>
             <span>④ 認定結果待ち</span>
           </label>
-          <label style="cursor:pointer; display:inline-flex; align-items:center; gap:3px; font-weight:bold; color:${s.completed?'#16a34a':'#4a5852'};">
-            <input type="checkbox" ${s.completed ? 'checked' : ''} onchange="toggleCareRenewalStep(${r.id}, 'completed')">
+          <label style="cursor:${canManage ? 'pointer' : 'not-allowed'}; display:inline-flex; align-items:center; gap:3px; font-weight:bold; color:${s.completed?'#16a34a':'#4a5852'};">
+            <input type="checkbox" ${s.completed ? 'checked' : ''} ${canManage ? `onchange="toggleCareRenewalStep(${r.id}, 'completed')"` : 'disabled style="cursor:not-allowed;"'}>
             <span>⑤ 新認定反映完了</span>
           </label>
         </div>
       </td>
       <td>
-        <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px;" onclick="openUpdateCareLevelModal(${r.id})">
-          新認定へ更新
-        </button>
+        ${canManage ? `
+          <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px;" onclick="openUpdateCareLevelModal(${r.id})">
+            新認定へ更新
+          </button>
+        ` : `
+          <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; cursor:not-allowed; opacity:0.65;" disabled title="管理者・事務員・計画作成担当者のみ更新できます">
+            新認定へ更新
+          </button>
+        `}
       </td>
     `;
     tbody.appendChild(tr);
@@ -144,6 +156,10 @@ function renderOfficeCareRenewal() {
 }
 
 function toggleCareRenewalStep(residentId, stepKey) {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("要介護認定の手続きの印は、管理者・事務員・計画作成担当者のみ変更できます。");
+    return;
+  }
   const r = gState.residents.find(x => x.id === residentId);
   if (!r) return;
   // [Claude修正 2026-10-28] 今の認定期間の印として残す（前の更新の印が残っていたら空から）
@@ -159,6 +175,10 @@ function toggleCareRenewalStep(residentId, stepKey) {
 }
 
 function openUpdateCareLevelModal(residentId) {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("要介護認定の更新登録は、管理者・事務員・計画作成担当者のみ行えます。");
+    return;
+  }
   const r = gState.residents.find(x => x.id === residentId);
   if (!r) return;
   document.getElementById("updateCareLevelResidentId").value = r.id;
@@ -179,6 +199,10 @@ function openUpdateCareLevelModal(residentId) {
 }
 
 function submitUpdateCareLevelModal() {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("要介護認定の更新登録は、管理者・事務員・計画作成担当者のみ行えます。");
+    return;
+  }
   const residentId = Number(document.getElementById("updateCareLevelResidentId").value);
   const r = gState.residents.find(x => x.id === residentId);
   if (!r) return;

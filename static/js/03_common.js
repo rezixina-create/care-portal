@@ -403,6 +403,22 @@ function isCurrentStaffAdminOrClerk() {
  return isStaffAdminOrClerk(staff);
 }
 
+// 職員ロール判定（管理者・事務員・計画作成担当者）
+function isStaffAdminOrClerkOrCm(staff) {
+ if (!staff) return false;
+ if (isStaffAdminOrClerk(staff)) return true;
+ const list = (gState.stamps && gState.stamps.length) ? gState.stamps : ((db && db.data && Array.isArray(db.data.stamps)) ? db.data.stamps : []);
+ const staffObj = list.find(s => (s.name || s) === staff);
+ const role = staffObj ? (staffObj.role || "") : "";
+ return /計画作成|介護支援専門員|ケアマネ/.test(role);
+}
+
+function isCurrentStaffAdminOrClerkOrCm() {
+ const staffSelect = document.getElementById("currentStaff");
+ const staff = (gState.session && gState.session.staffName) || (staffSelect ? staffSelect.value : "") || gState.currentStaff || "";
+ return isStaffAdminOrClerkOrCm(staff);
+}
+
 // 権限に応じたUI表示切替 (＋職員管理ボタン、初期設定ボタン、事務所管理タブ)
 function updateStaffRoleUI() {
  const isAdminOrClerk = isCurrentStaffAdminOrClerk();
@@ -443,6 +459,10 @@ function updateStaffRoleUI() {
  // [Antigravity実装 2026-10-19] 職種切り替え時に「職員・保有資格の一覧」の操作ボタン表示も即時更新
  if (typeof renderStaffQualificationsTable === "function") {
   renderStaffQualificationsTable();
+ }
+ // [Antigravity実装 2026-10-29] 職種切り替え時に「認定更新」画面の権限表示も即時更新
+ if (typeof renderOfficeCareRenewal === "function" && gState.activePortal === "office" && gState.activeOfficeTab === "care_renewal") {
+  renderOfficeCareRenewal();
  }
 }
 

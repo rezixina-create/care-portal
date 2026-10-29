@@ -55,7 +55,7 @@
   </script>
 </head>
 <body style="padding: 20px;">
-  <h1>[検証] 介護施設統合ポータル 全36項目・全機能自動検証テスト</h1>
+  <h1>[検証] 介護施設統合ポータル 全37項目・全機能自動検証テスト</h1>
   <div id="testSummary" style="font-size: 18px; margin: 10px 0; font-weight: bold;">テスト待機中...</div>
   <div id="testLog"></div>
 
@@ -128,6 +128,63 @@
       <input type="checkbox" id="chkExport_meds" value="meds">
       <input type="checkbox" id="exportRecordIncludeVoided">
       <span id="exportRecordStatusNotice"></span>
+    </div>
+    <!-- 認定更新・利用者編集のテスト用ダミーDOM -->
+    <div id="tabOfficeCareRenewal" style="display:none;">
+      <div id="careRenewalSummaryCards"></div>
+      <select id="careRenewalFilterSelect"><option value="all">all</option></select>
+      <input type="text" id="careRenewalSearchInput">
+      <div id="careRenewalPermissionNotice" style="display:none;">認定の更新の登録・手続きの印は、管理者・事務員・計画作成担当者が行います</div>
+      <table class="data-table" id="careRenewalTable"><tbody></tbody></table>
+    </div>
+    <div id="updateCareLevelModal" style="display:none;">
+      <input type="hidden" id="updateCareLevelResidentId">
+      <div id="updateCareLevelModalTitle"></div>
+      <select id="newCareLevelSelect"><option value="">選んでください</option><option value="要介護1">要介護1</option><option value="要介護2">要介護2</option><option value="要介護3">要介護3</option></select>
+      <input type="date" id="newCareStartDateInput">
+      <input type="date" id="newCareExpiryDateInput">
+    </div>
+    <div id="residentModal" style="display:none;">
+      <span id="resModalTitle"></span>
+      <input type="hidden" id="resEditId">
+      <input type="text" id="resRoomNo">
+      <input type="text" id="resName">
+      <select id="resUsageType"><option value="resident">resident</option></select>
+      <select id="resUnit"></select>
+      <select id="resCareLevel"><option value="">選んでください</option><option value="要介護1">要介護1</option><option value="要介護2">要介護2</option><option value="要介護3">要介護3</option></select>
+      <select id="resStatus"><option value="在所">在所</option></select>
+      <input type="date" id="resBirthDate">
+      <input type="date" id="resAdmissionDate">
+      <select id="resPolicyStamp"><option value="">選んでください</option><option value="緊急搬送">緊急搬送</option></select>
+      <select id="resDietType"><option value="">選んでください</option><option value="普通食">普通食</option></select>
+      <input type="text" id="resAllergies">
+      <input type="text" id="resParalysis">
+      <input type="text" id="resOralState">
+      <input type="text" id="resDiseases">
+      <input type="text" id="resEmergencyContact">
+      <input type="text" id="resSensorAlert">
+      <input type="text" id="resCarePlanGoal">
+      <input type="text" id="resFamilyWishes">
+      <input type="text" id="resLifeHistory">
+      <input type="text" id="resDrInstructions">
+      <input type="date" id="resNextClinicDate">
+      <input type="date" id="resCareExpiryDate">
+      <input type="text" id="resInsuredNo">
+      <input type="text" id="resInsurerNo">
+      <input type="text" id="resGender">
+      <input type="text" id="resBenefitRate">
+      <input type="date" id="resCareStartDate">
+      <input type="text" id="resPreAdmissionStatus">
+      <input type="text" id="resPostDischargeStatus">
+      <input type="text" id="resClinicSpecialNotes">
+      <input type="number" id="resBpHighMax">
+      <input type="number" id="resBpHighMin">
+      <input type="number" id="resTempMax">
+      <input type="number" id="resSpo2Min">
+      <input type="number" id="resPulseMax">
+      <input type="number" id="resPulseMin">
+      <input type="text" id="resLastNameKana">
+      <input type="text" id="resFirstNameKana">
     </div>
     <div id="printArea" style="display:none;"></div>
     <input type="text" id="searchInput">
@@ -4303,7 +4360,146 @@
       db.data.incidents = db.data.incidents.filter(x => x.id !== 99991);
       if (secEl && secEl.parentNode) secEl.parentNode.removeChild(secEl);
 
-      // 37. 総合結果判定
+      // 37. 要介護認定の更新登録・手続きの印の権限テスト（Test 180）
+      log("37. 要介護認定の更新登録・手続きの印の権限テスト (管理者・事務員・計画作成担当者のみ変更可)");
+
+      // Test 180a: ロール判定関数 isStaffAdminOrClerkOrCm
+      const origStamps180 = db.data.stamps;
+      db.data.stamps = [
+        { name: "木村 健一", role: "管理者・施設長" },
+        { name: "松本 陽子", role: "事務員" },
+        { name: "小林 恵子", role: "計画作成担当者（ケアマネ）" },
+        { name: "井上 蓮", role: "介護職員" },
+        { name: "鈴木 美智子", role: "看護師" }
+      ];
+      gState.stamps = db.data.stamps;
+
+      assert(isStaffAdminOrClerkOrCm("木村 健一") === true, "Test 180a-1: 管理者(木村 健一)は true");
+      assert(isStaffAdminOrClerkOrCm("松本 陽子") === true, "Test 180a-2: 事務員(松本 陽子)は true");
+      assert(isStaffAdminOrClerkOrCm("小林 恵子") === true, "Test 180a-3: 計画作成担当者(小林 恵子)は true");
+      assert(isStaffAdminOrClerkOrCm("井上 蓮") === false, "Test 180a-4: 介護職員(井上 蓮)は false");
+      assert(isStaffAdminOrClerkOrCm("鈴木 美智子") === false, "Test 180a-5: 看護師(鈴木 美智子)は false");
+
+      // Test 180b: 事務ポータル「認定更新」画面 (renderOfficeCareRenewal) の案内表示とボタン・チェックボックスの制御
+      const origResidents180 = db.data.residents;
+      const testResident180 = {
+        id: 99992,
+        name: "テスト 利用者",
+        room_no: "901",
+        care_level: "要介護1",
+        care_start_date: "2025-10-01",
+        care_expiry_date: "2026-10-31",
+        renewal_steps: { application_submitted: true, visit_scheduled: false }
+      };
+      db.data.residents = [testResident180];
+      gState.residents = db.data.residents;
+
+      // 介護職員でログイン
+      gState.session = { staffName: "井上 蓮", role: "介護職員" };
+      gState.currentStaff = "井上 蓮";
+      if (document.getElementById("currentStaff")) document.getElementById("currentStaff").value = "井上 蓮";
+
+      renderOfficeCareRenewal();
+      const notice180 = document.getElementById("careRenewalPermissionNotice");
+      assert(notice180 && notice180.style.display !== "none", "Test 180b-1: 介護職員のとき案内が表示されること");
+
+      const tbody180 = document.querySelector("#careRenewalTable tbody");
+      const row180 = tbody180 ? tbody180.querySelector("tr") : null;
+      assert(row180 !== null, "Test 180b-2: 認定更新テーブルに利用者が描画されること");
+      const chks180 = row180.querySelectorAll("input[type='checkbox']");
+      assert(chks180.length === 5, "Test 180b-3: 手続き①〜⑤の5つのチェックボックスが存在すること");
+      assert(Array.from(chks180).every(c => c.disabled), "Test 180b-4: 介護職員のとき手続きチェックボックスが disabled であること");
+      assert(chks180[0].checked === true && chks180[1].checked === false, "Test 180b-5: disabled でも現在の印の状態が確認できること");
+
+      const btnUpdate180 = row180.querySelector("button");
+      assert(btnUpdate180 && btnUpdate180.disabled, "Test 180b-6: 介護職員のとき「新認定へ更新」ボタンが disabled であること");
+
+      // 管理者でログイン
+      gState.session = { staffName: "木村 健一", role: "管理者・施設長" };
+      gState.currentStaff = "木村 健一";
+      if (document.getElementById("currentStaff")) document.getElementById("currentStaff").value = "木村 健一";
+
+      renderOfficeCareRenewal();
+      assert(notice180 && notice180.style.display === "none", "Test 180c-1: 管理者のとき案内が非表示であること");
+      const rowAdmin180 = tbody180.querySelector("tr");
+      const chksAdmin180 = rowAdmin180.querySelectorAll("input[type='checkbox']");
+      assert(Array.from(chksAdmin180).every(c => !c.disabled), "Test 180c-2: 管理者のとき手続きチェックボックスが押せること");
+      const btnAdmin180 = rowAdmin180.querySelector("button");
+      assert(btnAdmin180 && !btnAdmin180.disabled, "Test 180c-3: 管理者のとき「新認定へ更新」ボタンが押せること");
+
+      // 計画作成担当者でログイン
+      gState.session = { staffName: "小林 恵子", role: "計画作成担当者（ケアマネ）" };
+      gState.currentStaff = "小林 恵子";
+      if (document.getElementById("currentStaff")) document.getElementById("currentStaff").value = "小林 恵子";
+
+      renderOfficeCareRenewal();
+      assert(notice180 && notice180.style.display === "none", "Test 180c-4: 計画作成担当者のとき案内が非表示であること");
+      const btnCm180 = tbody180.querySelector("button");
+      assert(btnCm180 && !btnCm180.disabled, "Test 180c-5: 計画作成担当者のとき「新認定へ更新」ボタンが押せること");
+
+      // Test 180d: 権限のない職員による関数直接呼び出しのガード
+      gState.session = { staffName: "井上 蓮", role: "介護職員" };
+      gState.currentStaff = "井上 蓮";
+      if (document.getElementById("currentStaff")) document.getElementById("currentStaff").value = "井上 蓮";
+
+      // toggleCareRenewalStep の呼び出しブロック
+      const prevStepVal = testResident180.renewal_steps ? testResident180.renewal_steps.visit_scheduled : false;
+      toggleCareRenewalStep(99992, "visit_scheduled");
+      assert(testResident180.renewal_steps.visit_scheduled === prevStepVal, "Test 180d-1: 介護職員による toggleCareRenewalStep はブロックされ値が変化しないこと");
+
+      // openUpdateCareLevelModal の呼び出しブロック
+      openUpdateCareLevelModal(99992);
+      const updateModal180 = document.getElementById("updateCareLevelModal");
+      assert(!updateModal180 || updateModal180.style.display === "none", "Test 180d-2: 介護職員による openUpdateCareLevelModal はモーダルを開かないこと");
+
+      // submitUpdateCareLevelModal の呼び出しブロック
+      document.getElementById("updateCareLevelResidentId").value = "99992";
+      document.getElementById("newCareLevelSelect").value = "要介護2";
+      document.getElementById("newCareStartDateInput").value = "2026-11-01";
+      document.getElementById("newCareExpiryDateInput").value = "2027-10-31";
+      submitUpdateCareLevelModal();
+      assert(testResident180.care_level === "要介護1", "Test 180d-3: 介護職員による submitUpdateCareLevelModal はブロックされ要介護度が変わらないこと");
+
+      // Test 180e: 利用者情報の編集モーダル (residentModal) での制御
+      // 既存利用者の編集を開く (介護職員)
+      openEditResidentModal(99992);
+      assert(document.getElementById("resCareLevel").disabled === true, "Test 180e-1: 介護職員の既存利用者編集で resCareLevel が disabled であること");
+      assert(document.getElementById("resCareStartDate").disabled === true, "Test 180e-2: 介護職員の既存利用者編集で resCareStartDate が disabled であること");
+      assert(document.getElementById("resCareExpiryDate").disabled === true, "Test 180e-3: 介護職員の既存利用者編集で resCareExpiryDate が disabled であること");
+
+      // 介護職員が無理やり書き換えて submitResidentForm を呼んでも元の値が保持されること
+      document.getElementById("resCareLevel").disabled = false;
+      document.getElementById("resCareLevel").value = "要介護3";
+      document.getElementById("resCareStartDate").value = "2026-01-01";
+      document.getElementById("resCareExpiryDate").value = "2027-01-01";
+      document.getElementById("resUsageType").value = "resident";
+      document.getElementById("resRoomNo").value = "901";
+      document.getElementById("resName").value = "テスト 利用者";
+      document.getElementById("resStatus").value = "在所";
+      submitResidentForm();
+      const updatedR180 = gState.residents.find(x => x.id === 99992);
+      assert(updatedR180.care_level === "要介護1", "Test 180e-4: 介護職員による submitResidentForm で要介護度の書き換えが弾かれ元の値が保持されること");
+      assert(updatedR180.care_start_date === "2025-10-01", "Test 180e-5: 認定開始日も元の値が保持されること");
+      assert(updatedR180.care_expiry_date === "2026-10-31", "Test 180e-6: 認定有効期限も元の値が保持されること");
+
+      // 新規登録モーダル (介護職員でも新規登録時は要介護度を選べること)
+      openAddResidentModal();
+      assert(document.getElementById("resCareLevel").disabled === false, "Test 180e-7: 新規登録時は resCareLevel が disabled にならないこと（新規登録は可能）");
+
+      // 管理者で既存利用者編集を開いたときは編集可能であること
+      gState.session = { staffName: "木村 健一", role: "管理者・施設長" };
+      gState.currentStaff = "木村 健一";
+      if (document.getElementById("currentStaff")) document.getElementById("currentStaff").value = "木村 健一";
+      openEditResidentModal(99992);
+      assert(document.getElementById("resCareLevel").disabled === false, "Test 180e-8: 管理者の既存利用者編集では resCareLevel が編集可能であること");
+
+      // 後始末
+      db.data.stamps = origStamps180;
+      gState.stamps = origStamps180;
+      db.data.residents = origResidents180;
+      gState.residents = origResidents180;
+
+      // 38. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
