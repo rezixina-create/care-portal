@@ -654,7 +654,8 @@ function openLifeAssessmentModal(residentId, defaultDate, assessmentId) {
   updateLifeModalDementiaRank(r.id, evalDate);
 
   // 要介護度（表示のみ・登録から取得）
-  document.getElementById("lifeEvalCareLevelDisplay").textContent = r.care_level || "未登録";
+  const lCert = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDate) : { level: r.care_level };
+    document.getElementById("lifeEvalCareLevelDisplay").textContent = lCert.level || r.care_level || "未登録";
 
   // ADL 10項目
   const adlFields = [
@@ -894,7 +895,8 @@ function submitLifeAssessment() {
   // 利用者情報取得
   const allResidents = (gState && gState.residents) ? gState.residents : ((db && db.data && db.data.residents) || []);
   const r = allResidents.find(x => Number(x.id) === resId);
-  const careLevelCode = cpCareLevelToLifeCode(r ? r.care_level : "");
+  const lCertSubmit = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDate) : { level: r ? r.care_level : "" };
+  const careLevelCode = cpCareLevelToLifeCode(lCertSubmit.level || (r ? r.care_level : ""));
   // [Claude修正] 入居日より前の評価日は入れない
   if (r && r.admission_date && evalDate < r.admission_date) {
     alert("評価日が入居日（" + r.admission_date + "）より前になっています。");
@@ -1201,9 +1203,11 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
     const bDayVal = cpFormatDateToYmd8(r.birth_date || r.birthday);
     // [Claude修正] 認定日は有効期間の開始日と同じとは限らないので、登録の欄ができるまで空にする（必須ではない）
     const certDateVal = cpFormatDateToYmd8(r.certified_date || "");
-    const startPeriodVal = cpFormatDateToYmd8(r.care_start_date);
-    const endPeriodVal = cpFormatDateToYmd8(r.care_expiry_date);
-    const careLevelVal = cpCareLevelToLifeCode(r.care_level);
+    const evalDateStr = a.evaluation_date || toLocalDateStr(new Date());
+    const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+    const startPeriodVal = cpFormatDateToYmd8(lCertCsv.start_date || r.care_start_date);
+    const endPeriodVal = cpFormatDateToYmd8(lCertCsv.end_date || r.care_expiry_date);
+    const careLevelVal = cpCareLevelToLifeCode(lCertCsv.level || r.care_level);
 
     const startDateVal = cpFormatDateToYmd8(r.admission_date);
     const endDateVal = cpFormatDateToYmd8(r.discharge_date);

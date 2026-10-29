@@ -118,15 +118,23 @@ function renderOfficeCareRenewal() {
         </div>
       </td>
       <td>
-        ${canManage ? `
-          <button type="button" class="btn btn-primary" style="font-size:12px; padding:4px 10px;" onclick="openUpdateCareLevelModal(${r.id})">
-            新認定へ更新
+        <div style="display:flex; flex-direction:column; gap:4px;">
+          ${canManage ? `
+            <button type="button" class="btn btn-primary" style="font-size:12px; padding:3px 8px;" onclick="openUpdateCareLevelModal(${r.id})">
+              新認定へ更新
+            </button>
+            <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openCareCategoryChangeModal(${r.id})">
+              区分変更
+            </button>
+          ` : `
+            <button type="button" class="btn btn-secondary" style="font-size:12px; padding:3px 8px; cursor:not-allowed; opacity:0.65;" disabled title="管理者・事務員・計画作成担当者のみ更新できます">
+              新認定へ更新
+            </button>
+          `}
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="openCareCertHistoryModal(${r.id})">
+            認定履歴
           </button>
-        ` : `
-          <button type="button" class="btn btn-secondary" style="font-size:12px; padding:4px 10px; cursor:not-allowed; opacity:0.65;" disabled title="管理者・事務員・計画作成担当者のみ更新できます">
-            新認定へ更新
-          </button>
-        `}
+        </div>
       </td>
     `;
     tbody.appendChild(tr);
@@ -224,13 +232,16 @@ function submitUpdateCareLevelModal() {
     alert("認定有効期間の始まりの日は、終わりの日（有効期限）より前にしてください。");
     return;
   }
-  // 今は介護度の履歴を持たないので、新しい期間が始まる前に登録すると、今の月の加算・請求も新しい介護度で計算されてしまう
-  if (newStart > toLocalDateStr(new Date())) {
-    alert(`新しい認定有効期間（${newStart}〜）が始まってから登録してください。
-今登録すると、今の月の加算・請求も新しい要介護度で計算されてしまいます。
-始まるまでは手続きの印（④ 認定結果待ち）で管理してください。`);
-    return;
-  }
+  // 過去日にさかのぼる登録または変更の場合、送付済み請求の過誤申立注意チェック
+  const affectedSentMonths = [];
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  submissions.forEach(sub => {
+    if (!sub.voided && sub.status === "提出済" && Number(sub.resident_id) === residentId) {
+      if (sub.service_ym && sub.service_ym >= newStart.slice(0, 7)) {
+        affectedSentMonths.push(sub.service_ym);
+      }
+    }
+  });
   if (r.care_start_date && newStart <= r.care_start_date) {
     alert(`新しい認定有効期間の始まりの日は、今の認定期間の始まり（${r.care_start_date}）より後にしてください。`);
     return;
@@ -241,6 +252,36 @@ function submitUpdateCareLevelModal() {
   r.care_level = newLevel;
   r.care_start_date = newStart;
   r.care_expiry_date = newExpiry;
+  if (!Array.isArray(r.care_cert_history)) {
+    r.care_cert_history = [];
+    if (oldCopy.care_level && oldCopy.care_start_date && oldCopy.care_expiry_date) {
+      r.care_cert_history.push({
+        id: 1,
+        level: oldCopy.care_level,
+        start_date: oldCopy.care_start_date,
+        end_date: oldCopy.care_expiry_date,
+        kind: "新規",
+        applied_date: oldCopy.care_start_date,
+        created_by: cpLoginStaffName() || "松本 陽子",
+        created_at: toLocalDateTimeStr(new Date()),
+        voided: false,
+        void_reason: ""
+      });
+    }
+  }
+  const nextCertId = r.care_cert_history.length > 0 ? Math.max(...r.care_cert_history.map(x => x.id || 0)) + 1 : 1;
+  r.care_cert_history.push({
+    id: nextCertId,
+    level: newLevel,
+    start_date: newStart,
+    end_date: newExpiry,
+    kind: "更新",
+    applied_date: newStart,
+    created_by: cpLoginStaffName() || "松本 陽子",
+    created_at: toLocalDateTimeStr(new Date()),
+    voided: false,
+    void_reason: ""
+  });
   // 手続きの印は「前の期限の更新が済んだ」として残す（次の期限の60日前から、次の更新の印として空から始まる）
   r.renewal_steps = {
     application_submitted: true,
@@ -260,7 +301,12 @@ function submitUpdateCareLevelModal() {
 	initGlobalTimeSync();
 	
   closeModal("updateCareLevelModal");
-  alert(`【認定更新完了】\n${r.name} 様の要介護度を「${newLevel}」、認定有効期間を「${newStart}〜${newExpiry}」に更新しました。`);
+  let finishMsg = `【認定更新完了】\n${r.name} 様の要介護度を「${newLevel}」、認定有効期間を「${newStart}〜${newExpiry}」に更新しました。`;
+  if (affectedSentMonths.length > 0) {
+    const uniqMonths = Array.from(new Set(affectedSentMonths)).sort();
+    finishMsg += `\n\n【注意】すでに国保連へ請求書を送付済みの月が含まれています：\n${uniqMonths.map(m => `・直す必要がある月: ${m.replace("-", "年")}月分（提出済）`).join("\n")}\n加算・請求管理の台帳から過誤申立を行ってください。`;
+  }
+  alert(finishMsg);
 }
 
 function printCareRenewalList() {
@@ -273,6 +319,10 @@ window.toggleCareRenewalStep = toggleCareRenewalStep;
 window.openUpdateCareLevelModal = openUpdateCareLevelModal;
 window.submitUpdateCareLevelModal = submitUpdateCareLevelModal;
 window.printCareRenewalList = printCareRenewalList;
+window.openCareCategoryChangeModal = openCareCategoryChangeModal;
+window.submitCareCategoryChangeModal = submitCareCategoryChangeModal;
+window.openCareCertHistoryModal = openCareCertHistoryModal;
+window.voidCareCertHistoryItem = voidCareCertHistoryItem;
 
 window.openSupplierModal = openSupplierModal;
 window.submitSupplierModal = submitSupplierModal;
@@ -1532,3 +1582,216 @@ window.cpToggleItemBilling = cpToggleItemBilling;
 window.cpSubmitBillingOverride = cpSubmitBillingOverride;
 window.cpVoidBillingOverride = cpVoidBillingOverride;
 
+
+// ==========================================
+// 区分変更登録・認定履歴モーダル
+// ==========================================
+function openCareCategoryChangeModal(residentId) {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("区分変更の登録は、管理者・事務員・計画作成担当者のみ行えます。");
+    return;
+  }
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+  document.getElementById("catChangeResidentId").value = r.id;
+  document.getElementById("catChangeModalTitle").textContent = `要介護認定の区分変更登録 (${r.name} 様)`;
+  document.getElementById("catChangeLevelSelect").value = "";
+  const todayS = toLocalDateStr(new Date());
+  document.getElementById("catChangeAppliedDateInput").value = todayS;
+  document.getElementById("catChangeStartDateInput").value = todayS;
+  const nextYear = new Date();
+  nextYear.setFullYear(nextYear.getFullYear() + 1);
+  nextYear.setDate(nextYear.getDate() - 1);
+  document.getElementById("catChangeExpiryDateInput").value = toLocalDateStr(nextYear);
+  openModal("careCategoryChangeModal");
+}
+
+function submitCareCategoryChangeModal() {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("区分変更の登録は、管理者・事務員・計画作成担当者のみ行えます。");
+    return;
+  }
+  const residentId = Number(document.getElementById("catChangeResidentId").value);
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+
+  if (!cpRequireSelect("catChangeLevelSelect", "新しい要介護度")) return;
+  const newLevel = document.getElementById("catChangeLevelSelect").value;
+  const appliedDate = (document.getElementById("catChangeAppliedDateInput")?.value || "").trim();
+  const startDate = (document.getElementById("catChangeStartDateInput")?.value || "").trim();
+  const expiryDate = (document.getElementById("catChangeExpiryDateInput")?.value || "").trim();
+
+  if (!appliedDate) { alert("申請日を入力してください。"); return; }
+  if (!startDate) { alert("新しい認定有効期間の始まりを入力してください。"); return; }
+  if (!expiryDate) { alert("新しい認定有効期限（終わり）を入力してください。"); return; }
+  if (startDate > expiryDate) { alert("始まりの日は終わりの日（有効期限）より前にしてください。"); return; }
+
+  // 過去月にさかのぼる場合の提出済月チェック
+  const affectedSentMonths = [];
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  submissions.forEach(sub => {
+    if (!sub.voided && sub.status === "提出済" && Number(sub.resident_id) === residentId) {
+      if (sub.service_ym && sub.service_ym >= startDate.slice(0, 7)) {
+        affectedSentMonths.push(sub.service_ym);
+      }
+    }
+  });
+
+  const oldCopy = JSON.parse(JSON.stringify(r));
+  if (!Array.isArray(r.care_cert_history)) {
+    r.care_cert_history = [];
+    if (oldCopy.care_level && oldCopy.care_start_date && oldCopy.care_expiry_date) {
+      r.care_cert_history.push({
+        id: 1,
+        level: oldCopy.care_level,
+        start_date: oldCopy.care_start_date,
+        end_date: oldCopy.care_expiry_date,
+        kind: "新規",
+        applied_date: oldCopy.care_start_date,
+        created_by: cpLoginStaffName() || "松本 陽子",
+        created_at: toLocalDateTimeStr(new Date()),
+        voided: false,
+        void_reason: ""
+      });
+    }
+  }
+
+  // 既存の有効な認定期間で、新しいstartDate以降に重なる部分のend_dateをstartDateの前日に調整
+  const prevDate = new Date(startDate);
+  prevDate.setDate(prevDate.getDate() - 1);
+  const prevDateStr = toLocalDateStr(prevDate);
+  r.care_cert_history.forEach(h => {
+    if (!h.voided && h.start_date <= prevDateStr && h.end_date >= startDate) {
+      h.end_date = prevDateStr;
+    }
+  });
+
+  const nextCertId = r.care_cert_history.length > 0 ? Math.max(...r.care_cert_history.map(x => x.id || 0)) + 1 : 1;
+  r.care_cert_history.push({
+    id: nextCertId,
+    level: newLevel,
+    start_date: startDate,
+    end_date: expiryDate,
+    kind: "区分変更",
+    applied_date: appliedDate,
+    created_by: cpLoginStaffName() || "松本 陽子",
+    created_at: toLocalDateTimeStr(new Date()),
+    voided: false,
+    void_reason: ""
+  });
+
+  // 最新情報に同期（startDateが今日以前または最新の場合）
+  r.care_level = newLevel;
+  r.care_start_date = startDate;
+  r.care_expiry_date = expiryDate;
+
+  if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], "要介護認定の区分変更");
+
+  db.data.residents = gState.residents;
+  db.save();
+
+  renderOfficeCareRenewal();
+  if (typeof renderResidentsStrip === "function") renderResidentsStrip();
+  initGlobalTimeSync();
+
+  closeModal("careCategoryChangeModal");
+  let finishMsg = `【区分変更完了】\n${r.name} 様の要介護度を「${newLevel}」、認定有効期間を「${startDate}〜${expiryDate}」（申請日: ${appliedDate}）に登録しました。`;
+  if (affectedSentMonths.length > 0) {
+    const uniqMonths = Array.from(new Set(affectedSentMonths)).sort();
+    finishMsg += `\n\n【注意】すでに国保連へ請求書を送付済みの月が含まれています：\n${uniqMonths.map(m => `・直す必要がある月: ${m.replace("-", "年")}月分（提出済）`).join("\n")}\n加算・請求管理の台帳から過誤申立を行ってください。`;
+  }
+  alert(finishMsg);
+}
+
+function openCareCertHistoryModal(residentId) {
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+  document.getElementById("careCertHistoryResidentId").value = r.id;
+  document.getElementById("careCertHistoryModalTitle").textContent = `要介護認定の履歴 (${r.name} 様)`;
+  renderCareCertHistoryTable(r);
+  openModal("careCertHistoryModal");
+}
+
+function renderCareCertHistoryTable(resident) {
+  const tbody = document.querySelector("#careCertHistoryTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const list = Array.isArray(resident.care_cert_history) ? [...resident.care_cert_history] : [];
+  if (list.length === 0) {
+    list.push({
+      id: 1,
+      level: resident.care_level || "未登録",
+      start_date: resident.care_start_date || "-",
+      end_date: resident.care_expiry_date || "-",
+      kind: "新規",
+      applied_date: resident.care_start_date || "-",
+      created_by: "初期登録",
+      created_at: "-",
+      voided: false,
+      void_reason: ""
+    });
+  }
+  list.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.id || 0) - (a.id || 0));
+  const canManage = isCurrentStaffAdminOrClerkOrCm();
+
+  list.forEach(item => {
+    const tr = document.createElement("tr");
+    if (item.voided) tr.style.opacity = "0.55";
+    const statusText = item.voided ? `<span class="badge" style="background:#fee2e2; color:#b91c1c;">取消済: ${escapeHtml(item.void_reason || "")}</span>` : `<span class="badge" style="background:#f0fdf4; color:#15803d;">有効</span>`;
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(item.kind || "更新")}</strong></td>
+      <td><span class="badge" style="background:#f1f6f3; color:#1e5b47;">${escapeHtml(item.level || "-")}</span></td>
+      <td>${escapeHtml(item.start_date || "-")} 〜 ${escapeHtml(item.end_date || "-")}</td>
+      <td>${escapeHtml(item.applied_date || "-")}</td>
+      <td>${escapeHtml(item.created_by || "-")}<br><small style="color:#64748b;">${escapeHtml(item.created_at || "")}</small></td>
+      <td>${statusText}</td>
+      <td>
+        ${(!item.voided && canManage && item.id) ? `
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px; color:#b91c1c;" onclick="voidCareCertHistoryItem(${resident.id}, ${item.id})">取消</button>
+        ` : `-`}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function voidCareCertHistoryItem(residentId, certId) {
+  if (!isCurrentStaffAdminOrClerkOrCm()) {
+    alert("認定履歴の取消は、管理者・事務員・計画作成担当者のみ行えます。");
+    return;
+  }
+  const reason = prompt("この認定履歴を取り消す理由を入力してください（必須）：");
+  if (reason === null) return;
+  const trimmed = reason.trim();
+  if (!trimmed) { alert("取消理由を入力してください。"); return; }
+
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r || !Array.isArray(r.care_cert_history)) return;
+  const item = r.care_cert_history.find(x => x.id === certId);
+  if (!item) return;
+
+  const oldCopy = JSON.parse(JSON.stringify(r));
+  item.voided = true;
+  item.void_reason = trimmed;
+  item.voided_by = cpLoginStaffName() || "松本 陽子";
+  item.voided_at = toLocalDateTimeStr(new Date());
+
+  // 最新有効な認定に同期
+  const valid = r.care_cert_history.filter(h => !h.voided);
+  if (valid.length > 0) {
+    valid.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.id || 0) - (a.id || 0));
+    r.care_level = valid[0].level;
+    r.care_start_date = valid[0].start_date;
+    r.care_expiry_date = valid[0].end_date;
+  }
+
+  if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], `要介護認定履歴の取消(${trimmed})`);
+
+  db.data.residents = gState.residents;
+  db.save();
+
+  renderCareCertHistoryTable(r);
+  renderOfficeCareRenewal();
+  if (typeof renderResidentsStrip === "function") renderResidentsStrip();
+  alert("認定履歴を取り消しました。");
+}

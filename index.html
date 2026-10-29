@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261029_a4">
+	<link rel="stylesheet" href="style.css?v=20261029_a5">
 </head>
 <body>
 
@@ -1751,6 +1751,145 @@
     <button type="button" class="btn btn-primary" onclick="submitUpdateCareLevelModal()">更新内容を保存</button>
    </div>
   </div>
+
+
+ <!-- 区分変更登録モーダル -->
+ <div class="modal-overlay" id="careCategoryChangeModal" style="display:none;">
+  <div class="modal-card" style="max-width:480px;">
+   <div class="modal-header">
+    <h3 id="catChangeModalTitle" style="margin:0; font-size:16px;">要介護認定の区分変更登録</h3>
+    <button type="button" class="close-btn" onclick="closeModal('careCategoryChangeModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px;">
+    <input type="hidden" id="catChangeResidentId">
+    <div style="background:#f1f6f3; border:1px solid #c9e0d5; padding:10px; border-radius:6px; margin-bottom:14px; font-size:13px; color:#1e5b47;">
+     要介護認定の区分変更は、介護保険法第27条第8項に基づき<strong>申請日にさかのぼって効力が発生</strong>します。<br>
+     申請日と認定有効期間（始まり・終わり）を入力してください。
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">新しい要介護度:</label>
+     <select id="catChangeLevelSelect" class="form-control" style="font-size:13px;">
+      <option value="">選んでください</option>
+      <option value="自立">自立</option>
+      <option value="要支援1">要支援1</option>
+      <option value="要支援2">要支援2</option>
+      <option value="要介護1">要介護1</option>
+      <option value="要介護2">要介護2</option>
+      <option value="要介護3">要介護3</option>
+      <option value="要介護4">要介護4</option>
+      <option value="要介護5">要介護5</option>
+     </select>
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">区分変更の申請日:</label>
+     <input type="date" id="catChangeAppliedDateInput" class="form-control" style="font-size:13px;">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">認定有効期間の始まり（原則申請日）:</label>
+     <input type="date" id="catChangeStartDateInput" class="form-control" style="font-size:13px;">
+    </div>
+    <div class="form-group" style="margin-bottom:12px;">
+     <label style="font-weight:bold; font-size:13px;">認定有効期限（終わり）:</label>
+     <input type="date" id="catChangeExpiryDateInput" class="form-control" style="font-size:13px;">
+    </div>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end; gap:8px;">
+    <button type="button" class="btn btn-secondary" onclick="closeModal('careCategoryChangeModal')">キャンセル</button>
+    <button type="button" class="btn btn-primary" onclick="submitCareCategoryChangeModal()">区分変更を登録</button>
+   </div>
+  </div>
+ </div>
+
+ <!-- 認定履歴一覧モーダル -->
+ <div class="modal-overlay" id="careCertHistoryModal" style="display:none;">
+  <div class="modal-card" style="max-width:720px; width:95%;">
+   <div class="modal-header">
+    <h3 id="careCertHistoryModalTitle" style="margin:0; font-size:16px;">要介護認定の履歴</h3>
+    <button type="button" class="close-btn" onclick="closeModal('careCertHistoryModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px; max-height:480px; overflow-y:auto;">
+    <input type="hidden" id="careCertHistoryResidentId">
+    <table class="data-table" id="careCertHistoryTable" style="width:100%; font-size:13px;">
+     <thead>
+      <tr>
+       <th style="width:12%;">区分</th>
+       <th style="width:14%;">要介護度</th>
+       <th style="width:28%;">認定有効期間</th>
+       <th style="width:14%;">申請日</th>
+       <th style="width:16%;">登録者</th>
+       <th style="width:10%;">状態</th>
+       <th style="width:6%;">操作</th>
+      </tr>
+     </thead>
+     <tbody></tbody>
+    </table>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" onclick="closeModal('careCertHistoryModal')">閉じる</button>
+   </div>
+  </div>
+ </div>
+
+ <!-- 負担割合履歴モーダル -->
+ <div class="modal-overlay" id="benefitRateHistoryModal" style="display:none;">
+  <div class="modal-card" style="max-width:680px; width:95%;">
+   <div class="modal-header">
+    <h3 id="benefitRateModalTitle" style="margin:0; font-size:16px;">負担割合の履歴</h3>
+    <button type="button" class="close-btn" onclick="closeModal('benefitRateHistoryModal')">×</button>
+   </div>
+   <div class="modal-body" style="padding:16px; max-height:480px; overflow-y:auto;">
+    <input type="hidden" id="benefitRateResidentId">
+    
+    <!-- 新規期間追加フォーム (管理者・事務員のみ) -->
+    <div id="benefitRateAddFormBox" style="background:#f8fafc; border:1px solid #cbd5e1; border-radius:6px; padding:12px; margin-bottom:14px;">
+     <div style="font-weight:bold; font-size:13px; margin-bottom:8px; color:#334155;">新しい負担割合期間の登録:</div>
+     <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(130px, 1fr)); gap:8px; align-items:end;">
+      <div>
+       <label style="font-size:12px;">給付率:</label>
+       <select id="newBenefitRateSelect" class="form-control" style="font-size:12px; padding:4px;">
+        <option value="90">90%（1割負担）</option>
+        <option value="80">80%（2割負担）</option>
+        <option value="70">70%（3割負担）</option>
+       </select>
+      </div>
+      <div>
+       <label style="font-size:12px;">開始年月 (YYYY-MM):</label>
+       <input type="text" id="newBenefitStartYm" class="form-control" style="font-size:12px; padding:4px;" placeholder="2026-08" maxlength="7">
+      </div>
+      <div>
+       <label style="font-size:12px;">終了年月 (空欄可):</label>
+       <input type="text" id="newBenefitEndYm" class="form-control" style="font-size:12px; padding:4px;" placeholder="2027-07" maxlength="7">
+      </div>
+      <div>
+       <label style="font-size:12px;">備考:</label>
+       <input type="text" id="newBenefitNote" class="form-control" style="font-size:12px; padding:4px;" placeholder="年次更新など">
+      </div>
+      <div>
+       <button type="button" class="btn btn-primary" style="font-size:12px; padding:5px 12px; width:100%;" onclick="submitBenefitRateHistoryItem()">期間追加</button>
+      </div>
+     </div>
+    </div>
+
+    <table class="data-table" id="benefitRateHistoryTable" style="width:100%; font-size:13px;">
+     <thead>
+      <tr>
+       <th style="width:14%;">給付率</th>
+       <th style="width:28%;">適用期間</th>
+       <th style="width:22%;">備考</th>
+       <th style="width:18%;">登録者</th>
+       <th style="width:10%;">状態</th>
+       <th style="width:8%;">操作</th>
+      </tr>
+     </thead>
+     <tbody></tbody>
+    </table>
+   </div>
+   <div class="modal-footer" style="padding:12px 16px; display:flex; justify-content:flex-end;">
+    <button type="button" class="btn btn-secondary" onclick="closeModal('benefitRateHistoryModal')">閉じる</button>
+   </div>
+  </div>
+ </div>
+
  </div>
 
 
@@ -2398,7 +2537,10 @@
 				</select>
 			</div>
 			<div class="form-group">
-				<label>保険給付率:</label>
+				<div style="display:flex; justify-content:space-between; align-items:center;">
+					<label style="margin:0;">保険給付率:</label>
+					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px;" onclick="const eid = document.getElementById('resEditId').value; if(eid) openBenefitRateHistoryModal(Number(eid)); else alert('利用者登録後に履歴管理が利用できます。');">負担割合履歴</button>
+				</div>
 				<select id="resBenefitRate" class="form-control">
 					<option value="">選んでください</option>
 					<option value="90">90 %</option>
@@ -4723,26 +4865,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261029_a4"></script>
- <script src="js/02_terms.js?v=20261029_a4"></script>
- <script src="js/03_common.js?v=20261029_a4"></script>
- <script src="js/04_care_record.js?v=20261029_a4"></script>
- <script src="js/05_summary_print_audit.js?v=20261029_a4"></script>
- <script src="js/06_schema_history.js?v=20261029_a4"></script>
- <script src="js/07_daily_tables.js?v=20261029_a4"></script>
- <script src="js/08_meds.js?v=20261029_a4"></script>
- <script src="js/09_night_misc.js?v=20261029_a4"></script>
- <script src="js/10_office.js?v=20261029_a4"></script>
- <script src="js/11_karte_staff.js?v=20261029_a4"></script>
- <script src="js/12_hospital_photos.js?v=20261029_a4"></script>
- <script src="js/13_shift_units.js?v=20261029_a4"></script>
- <script src="js/14_auth_home.js?v=20261029_a4"></script>
- <script src="js/15_single_write.js?v=20261029_a4"></script>
- <script src="js/16_careplan.js?v=20261029_a4"></script>
-	<script src="js/17_kasan.js?v=20261029_a4"></script>
-	<script src="js/18_stats.js?v=20261029_a4"></script>
-	<script src="js/19_life.js?v=20261029_a4"></script>
-	<script src="js/20_invoice.js?v=20261029_a4"></script>
+ <script src="js/01_core.js?v=20261029_a5"></script>
+ <script src="js/02_terms.js?v=20261029_a5"></script>
+ <script src="js/03_common.js?v=20261029_a5"></script>
+ <script src="js/04_care_record.js?v=20261029_a5"></script>
+ <script src="js/05_summary_print_audit.js?v=20261029_a5"></script>
+ <script src="js/06_schema_history.js?v=20261029_a5"></script>
+ <script src="js/07_daily_tables.js?v=20261029_a5"></script>
+ <script src="js/08_meds.js?v=20261029_a5"></script>
+ <script src="js/09_night_misc.js?v=20261029_a5"></script>
+ <script src="js/10_office.js?v=20261029_a5"></script>
+ <script src="js/11_karte_staff.js?v=20261029_a5"></script>
+ <script src="js/12_hospital_photos.js?v=20261029_a5"></script>
+ <script src="js/13_shift_units.js?v=20261029_a5"></script>
+ <script src="js/14_auth_home.js?v=20261029_a5"></script>
+ <script src="js/15_single_write.js?v=20261029_a5"></script>
+ <script src="js/16_careplan.js?v=20261029_a5"></script>
+	<script src="js/17_kasan.js?v=20261029_a5"></script>
+	<script src="js/18_stats.js?v=20261029_a5"></script>
+	<script src="js/19_life.js?v=20261029_a5"></script>
+	<script src="js/20_invoice.js?v=20261029_a5"></script>
   
 
   <!-- ============================================================ -->

@@ -4311,6 +4311,12 @@ function openEditResidentModal(id) {
  document.getElementById("resInsurerNo").value = r.insurer_no || "";
  document.getElementById("resGender").value = r.gender || "";
  document.getElementById("resBenefitRate").value = r.benefit_rate || "";
+ const canManageBenefitRate = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+ const brEl = document.getElementById("resBenefitRate");
+ if (brEl) {
+   brEl.disabled = !canManageBenefitRate;
+   brEl.title = canManageBenefitRate ? "" : "負担割合は管理者・事務員のみ変更できます";
+ }
  document.getElementById("resCareStartDate").value = r.care_start_date || "";
  document.getElementById("resPreAdmissionStatus").value = r.pre_admission_status || "";
  document.getElementById("resPostDischargeStatus").value = r.post_discharge_status || "";
@@ -4531,7 +4537,9 @@ function submitResidentForm() {
   keep(["care_plan_goal"]);
   if (!cpCanEditPolicy()) keep(["policy_stamp"]);
   if (!cpCanEditVitalLimits()) keep(["bp_high_max", "bp_high_min", "temp_max", "spo2_min", "pulse_max", "pulse_min"]);
-  if (editId && !isCurrentStaffAdminOrClerkOrCm()) keep(["care_level", "care_start_date", "care_expiry_date"]); }
+  if (editId && !isCurrentStaffAdminOrClerkOrCm()) keep(["care_level", "care_start_date", "care_expiry_date"]);
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  if (editId && !canAdminClerk) keep(["benefit_rate"]); }
  if (cpUnitAfterMove !== undefined) residentData.unit_id = cpUnitAfterMove;
 
  let targetId;
@@ -4751,3 +4759,195 @@ function printCurrentIncidentDetail() {
 
 window.openIncidentDetailModal = openIncidentDetailModal;
 window.printCurrentIncidentDetail = printCurrentIncidentDetail;
+
+// ==========================================
+// 負担割合履歴モーダル
+// ==========================================
+function openBenefitRateHistoryModal(residentId) {
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+  document.getElementById("benefitRateResidentId").value = r.id;
+  document.getElementById("benefitRateModalTitle").textContent = `負担割合の履歴 (${r.name} 様)`;
+  
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  const formBox = document.getElementById("benefitRateAddFormBox");
+  if (formBox) formBox.style.display = canAdminClerk ? "block" : "none";
+
+  // フォーム初期値（新年度の8月〜翌7月）
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const baseYear = curM >= 8 ? curY : curY - 1;
+  const startEl = document.getElementById("newBenefitStartYm");
+  const endEl = document.getElementById("newBenefitEndYm");
+  if (startEl) startEl.value = `${baseYear + 1}-08`;
+  if (endEl) endEl.value = `${baseYear + 2}-07`;
+  const rateEl = document.getElementById("newBenefitRateSelect");
+  if (rateEl) rateEl.value = r.benefit_rate || "90";
+  const noteEl = document.getElementById("newBenefitNote");
+  if (noteEl) noteEl.value = "";
+
+  renderBenefitRateHistoryTable(r);
+  openModal("benefitRateHistoryModal");
+}
+
+function renderBenefitRateHistoryTable(resident) {
+  const tbody = document.querySelector("#benefitRateHistoryTable tbody");
+  if (!tbody) return;
+  tbody.innerHTML = "";
+  const list = Array.isArray(resident.benefit_rate_history) ? [...resident.benefit_rate_history] : [];
+  if (list.length === 0) {
+    list.push({
+      id: 1,
+      rate: resident.benefit_rate || 90,
+      start_ym: "2025-08",
+      end_ym: "2026-07",
+      note: "初期登録",
+      created_by: "松本 陽子",
+      created_at: "-",
+      voided: false,
+      void_reason: ""
+    });
+  }
+  list.sort((a, b) => (b.start_ym || "").localeCompare(a.start_ym || "") || (b.id || 0) - (a.id || 0));
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+
+  list.forEach(item => {
+    const tr = document.createElement("tr");
+    if (item.voided) tr.style.opacity = "0.55";
+    const statusText = item.voided ? `<span class="badge" style="background:#fee2e2; color:#b91c1c;">取消済: ${escapeHtml(item.void_reason || "")}</span>` : `<span class="badge" style="background:#f0fdf4; color:#15803d;">有効</span>`;
+    tr.innerHTML = `
+      <td><strong>${escapeHtml(String(item.rate))}%</strong></td>
+      <td>${escapeHtml(item.start_ym || "-")} 〜 ${escapeHtml(item.end_ym || "制限なし")}</td>
+      <td>${escapeHtml(item.note || "-")}</td>
+      <td>${escapeHtml(item.created_by || "-")}<br><small style="color:#64748b;">${escapeHtml(item.created_at || "")}</small></td>
+      <td>${statusText}</td>
+      <td>
+        ${(!item.voided && canAdminClerk && item.id) ? `
+          <button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 6px; color:#b91c1c;" onclick="voidBenefitRateHistoryItem(${resident.id}, ${item.id})">取消</button>
+        ` : `-`}
+      </td>
+    `;
+    tbody.appendChild(tr);
+  });
+}
+
+function submitBenefitRateHistoryItem() {
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  if (!canAdminClerk) {
+    alert("負担割合の登録は、管理者および事務員のみ行えます。");
+    return;
+  }
+  const residentId = Number(document.getElementById("benefitRateResidentId").value);
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r) return;
+
+  const rate = Number(document.getElementById("newBenefitRateSelect").value);
+  const startYm = (document.getElementById("newBenefitStartYm")?.value || "").trim();
+  const endYm = (document.getElementById("newBenefitEndYm")?.value || "").trim();
+  const note = (document.getElementById("newBenefitNote")?.value || "").trim();
+
+  if (!rate || ![90, 80, 70].includes(rate)) { alert("負担割合を選んでください。"); return; }
+  if (!startYm || !/^\d{4}-\d{2}$/.test(startYm)) { alert("開始年月（YYYY-MM）を入力してください。"); return; }
+  if (endYm && !/^\d{4}-\d{2}$/.test(endYm)) { alert("終了年月（YYYY-MM）を正しく入力してください。"); return; }
+  if (endYm && startYm > endYm) { alert("開始年月は終了年月以前にしてください。"); return; }
+
+  const oldCopy = JSON.parse(JSON.stringify(r));
+  if (!Array.isArray(r.benefit_rate_history)) {
+    r.benefit_rate_history = [];
+    if (oldCopy.benefit_rate) {
+      r.benefit_rate_history.push({
+        id: 1,
+        rate: Number(oldCopy.benefit_rate),
+        start_ym: "2025-08",
+        end_ym: "2026-07",
+        note: "初期登録",
+        created_by: cpLoginStaffName() || "松本 陽子",
+        created_at: toLocalDateTimeStr(new Date()),
+        voided: false,
+        void_reason: ""
+      });
+    }
+  }
+
+  // 重複チェック
+  const hasOverlap = r.benefit_rate_history.some(h => {
+    if (h.voided) return false;
+    const hStart = h.start_ym;
+    const hEnd = h.end_ym || "9999-99";
+    const myEnd = endYm || "9999-99";
+    return !(myEnd < hStart || startYm > hEnd);
+  });
+  if (hasOverlap) {
+    alert("指定された適用期間は、すでに登録されている有効な負担割合の期間と重複しています。\n期間を調整するか、既存の履歴を取り消してください。");
+    return;
+  }
+
+  const nextId = r.benefit_rate_history.length > 0 ? Math.max(...r.benefit_rate_history.map(x => x.id || 0)) + 1 : 1;
+  r.benefit_rate_history.push({
+    id: nextId,
+    rate: rate,
+    start_ym: startYm,
+    end_ym: endYm,
+    note: note,
+    created_by: cpLoginStaffName() || "松本 陽子",
+    created_at: toLocalDateTimeStr(new Date()),
+    voided: false,
+    void_reason: ""
+  });
+
+  // 最新有効期間であれば r.benefit_rate も同期
+  const curYm = toLocalDateStr(new Date()).slice(0, 7);
+  if (startYm <= curYm && (!endYm || curYm <= endYm)) {
+    r.benefit_rate = String(rate);
+  }
+
+  if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["benefit_rate"], `負担割合の追加(${rate}%, ${startYm}〜)`);
+
+  db.data.residents = gState.residents;
+  db.save();
+
+  renderBenefitRateHistoryTable(r);
+  if (typeof renderOfficeResidentsTable === "function") renderOfficeResidentsTable();
+  alert(`【登録完了】${r.name} 様の負担割合（${rate}%, ${startYm}〜）を登録しました。`);
+}
+
+function voidBenefitRateHistoryItem(residentId, itemId) {
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  if (!canAdminClerk) {
+    alert("負担割合履歴の取消は、管理者および事務員のみ行えます。");
+    return;
+  }
+  const reason = prompt("この負担割合履歴を取り消す理由を入力してください（必須）：");
+  if (reason === null) return;
+  const trimmed = reason.trim();
+  if (!trimmed) { alert("取消理由を入力してください。"); return; }
+
+  const r = gState.residents.find(x => x.id === residentId);
+  if (!r || !Array.isArray(r.benefit_rate_history)) return;
+  const item = r.benefit_rate_history.find(x => x.id === itemId);
+  if (!item) return;
+
+  const oldCopy = JSON.parse(JSON.stringify(r));
+  item.voided = true;
+  item.void_reason = trimmed;
+  item.voided_by = cpLoginStaffName() || "松本 陽子";
+  item.voided_at = toLocalDateTimeStr(new Date());
+
+  const curYm = toLocalDateStr(new Date()).slice(0, 7);
+  const activeRate = cpBenefitRateOn(r, curYm);
+  r.benefit_rate = String(activeRate);
+
+  if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["benefit_rate"], `負担割合履歴の取消(${trimmed})`);
+
+  db.data.residents = gState.residents;
+  db.save();
+
+  renderBenefitRateHistoryTable(r);
+  if (typeof renderOfficeResidentsTable === "function") renderOfficeResidentsTable();
+  alert("負担割合履歴を取り消しました。");
+}
+
+window.openBenefitRateHistoryModal = openBenefitRateHistoryModal;
+window.submitBenefitRateHistoryItem = submitBenefitRateHistoryItem;
+window.voidBenefitRateHistoryItem = voidBenefitRateHistoryItem;

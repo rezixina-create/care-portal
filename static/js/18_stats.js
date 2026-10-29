@@ -173,7 +173,8 @@ function cpComputeYearStats(fiscalYear) {
 
         // [Claude修正] 地域区分が未設定だと全員が「計算対象外」になり、単位数まで0になっていた。
         // 単位数は要介護度があれば数える。100％の金額は地域区分、保険請求額・利用者負担は保険給付率が要る
-        if (calc.levelMissing || !r.care_level) {
+        const certStats = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, `${ym}-01`) : { level: r.care_level };
+        if (calc.levelMissing || !certStats.level) {
           uncomputableList.push({ resident: r, reasons: ["要介護度未登録"] });
           return;
         }
@@ -191,7 +192,7 @@ function cpComputeYearStats(fiscalYear) {
         if (unitPriceInt === null) return; // 金額は出さない（画面に「地域区分未設定」）
         const c100 = Math.floor(uTotal * unitPriceInt / 100);
         monthCost100 += c100;
-        const bRate = parseInt(String(r.benefit_rate), 10);
+        const bRate = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, ym) : parseInt(String(r.benefit_rate), 10);
         if (![90, 80, 70].includes(bRate)) {
           uncomputableList.push({ resident: r, reasons: ["保険給付率未設定（100％の金額には入れ、保険請求額・利用者負担には入れていません）"] });
           return;

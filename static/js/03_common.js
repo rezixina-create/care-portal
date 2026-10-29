@@ -1139,6 +1139,44 @@ function checkGlobalAlerts(baseDate) {
     }
   }
 
+  // 7-2. 【事務専用：負担割合証有効期限・新年度登録アラート (7月31日期限、6月1日以降または期限切れ)】
+  {
+    const curYm = todayStr.slice(0, 7);
+    const curYear = parseInt(todayStr.slice(0, 4), 10);
+    const curMonth = parseInt(todayStr.slice(5, 7), 10);
+    const baseYear = curMonth >= 8 ? curYear : curYear - 1;
+    const currentEndLimit = `${baseYear + 1}-07`;
+    const nextStartYm = `${baseYear + 1}-08`;
+    const shouldCheckBenefitAlert = (curMonth === 6 || curMonth === 7 || (curMonth >= 8 && curYm > currentEndLimit));
+    if (shouldCheckBenefitAlert) {
+      const missingNewRateResidents = [];
+      cpCurrentResidents().forEach(r => {
+        const history = r.benefit_rate_history;
+        let hasNext = false;
+        if (Array.isArray(history) && history.length > 0) {
+          hasNext = history.some(h => !h.voided && h.start_ym && h.start_ym >= nextStartYm);
+        }
+        if (!hasNext) {
+          const bKey = `benefit_rate_renewal_${r.id}_${nextStartYm}`;
+          if (!isAlertDismissed(bKey)) {
+            missingNewRateResidents.push({ id: r.id, name: r.name, key: bKey });
+          }
+        }
+      });
+      gState.lastBenefitRateAlertKeys = missingNewRateResidents.map(e => e.key);
+      if (missingNewRateResidents.length > 0) {
+        const list = missingNewRateResidents.map(e => `${e.name}様`).join(" / ");
+        officeAlertHtml += `
+          <div class="alert-banner alert-warning notice-card-warning">
+            <span> <strong>【負担割合証更新アラート】</strong> 新年度（${nextStartYm}〜）の負担割合の登録が必要です：${list}</span>
+            <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, gState.lastBenefitRateAlertKeys || [])"> 確認済・閉じる</button>
+          </div>
+        `;
+      }
+    }
+  }
+
+
   // 7. 【事務ポータル専用】法定委員会・研修 実施状況アラート [Antigravity実装]
   if (typeof cpGetCommitteeComplianceStatus === "function") {
     const comStatuses = cpGetCommitteeComplianceStatus();
@@ -1420,3 +1458,58 @@ document.addEventListener("click", (e) => {
  e.stopPropagation();
  e.preventDefault();
 }, true);
+
+
+// ==========================================
+// 要介護認定履歴・負担割合履歴 アクセサ関数
+// ==========================================
+function cpCareCertOn(resident, targetDate) {
+  if (!resident) return { id: null, level: "", start_date: "", end_date: "", kind: "", applied_date: "" };
+  const d = targetDate || toLocalDateStr(new Date());
+  const history = resident.care_cert_history;
+  if (Array.isArray(history) && history.length > 0) {
+    const valid = history.filter(h => !h.voided && h.start_date && h.end_date && d >= h.start_date && d <= h.end_date);
+    if (valid.length > 0) {
+      valid.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.applied_date || "").localeCompare(a.applied_date || "") || (b.id || 0) - (a.id || 0));
+      const match = valid[0];
+      return {
+        id: match.id,
+        level: match.level || resident.care_level || "",
+        start_date: match.start_date,
+        end_date: match.end_date,
+        kind: match.kind || "更新",
+        applied_date: match.applied_date || match.start_date
+      };
+    }
+  }
+  return {
+    id: null,
+    level: resident.care_level || "",
+    start_date: resident.care_start_date || "",
+    end_date: resident.care_expiry_date || "",
+    kind: "新規",
+    applied_date: resident.care_start_date || ""
+  };
+}
+
+function cpBenefitRateOn(resident, targetYm) {
+  if (!resident) return 90;
+  let ym = targetYm;
+  if (!ym) {
+    const now = new Date();
+    ym = now.getFullYear() + "-" + String(now.getMonth() + 1).padStart(2, "0");
+  } else if (ym.length > 7) {
+    ym = ym.slice(0, 7);
+  }
+  const history = resident.benefit_rate_history;
+  if (Array.isArray(history) && history.length > 0) {
+    const valid = history.filter(h => !h.voided && h.start_ym && ym >= h.start_ym && (!h.end_ym || ym <= h.end_ym));
+    if (valid.length > 0) {
+      valid.sort((a, b) => (b.start_ym || "").localeCompare(a.start_ym || "") || (b.id || 0) - (a.id || 0));
+      const rate = parseInt(valid[0].rate, 10);
+      if (!isNaN(rate)) return rate;
+    }
+  }
+  const fallback = parseInt(resident.benefit_rate, 10);
+  return !isNaN(fallback) && fallback > 0 ? fallback : 90;
+}

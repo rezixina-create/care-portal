@@ -57,7 +57,7 @@ function cpInvCompute(r, ym) {
     const calc = (typeof cpComputeMonthlyKasan === "function") ? cpComputeMonthlyKasan(r, ym) : null;
     const settings = (typeof cpGetKasanSettings === "function") ? cpGetKasanSettings() : {};
     const regionObj = (typeof CP_KASAN_REGION_RATES !== "undefined") ? CP_KASAN_REGION_RATES.find(x => x.key === settings.region_type) : null;
-    const rate = parseInt(String(r.benefit_rate || ""), 10);
+    const rate = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, ym) : parseInt(String(r.benefit_rate || ""), 10);
     if (!calc || calc.levelMissing) problems.push("要介護度が登録されていないため、介護保険の分を計算できません");
     else if (!regionObj) problems.push("地域区分が設定されていないため、介護保険の分を計算できません（加算・減算の設定）");
     else if (![90, 80, 70].includes(rate)) problems.push("保険給付率（9割・8割・7割）が登録されていないため、介護保険の分を計算できません");

@@ -1514,142 +1514,133 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   const items = [];
   const reductions = cpGetActiveReductions(yearMonth);
 
-  // 1. 基本サービスコード（減算コード置換）
+  // 1. 基本サービスコード（日ごとの要介護度判定・減算コード置換）
   const isShort = (r.usage_type === "short");
-  const serviceType = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
+  const getBasicCodeForLevel = (lvl) => {
+    const sType = isShort ? (lvl === "要支援2" ? "39" : "38") : (lvl === "要支援2" ? "37" : "32");
+    let bObj = null, bCat = "基本", bNote = "";
+    if (isShort && sType === "39") {
+      if (lvl !== "要支援2") return null;
+      const def39 = CP_KASAN_SHORT_CODES_39[unitKey];
+      if (reductions.has_cho && reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? def39.yagen_cho : def39.cho;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "超過・人員・夜減重複（要支援2）" : "超過・人員重複（要支援2）";
+      } else if (reductions.has_cho) {
+        bObj = reductions.has_yagen ? def39.yagen_cho : def39.cho;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "超過減算・夜減（要支援2）" : "超過減算（要支援2）";
+      } else if (reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? def39.yagen_ketsu : def39.ketsu;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "人員基準欠如減算・夜減（要支援2）" : "人員基準欠如減算（要支援2）";
+      } else if (reductions.has_yagen) {
+        bObj = def39.yagen; bCat = "基本（夜減）"; bNote = "夜勤減算（要支援2）";
+      } else {
+        bObj = def39.normal; bCat = "基本"; bNote = "通常（要支援2）";
+      }
+    } else if (isShort && sType === "38") {
+      if (!CP_KASAN_CARE_LEVEL_CODES[lvl] || lvl === "要支援2") return null;
+      const def38Norm = CP_KASAN_SHORT_BASIC_CODES_38[unitKey];
+      const def38Red = CP_KASAN_SHORT_REDUCED_CODES_38[unitKey];
+      if (reductions.has_cho && reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? (def38Red.yagen_cho[lvl] || null) : (def38Red.cho[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "定員超過・人員欠如・夜減重複" : "定員超過・人員欠如重複";
+      } else if (reductions.has_cho) {
+        bObj = reductions.has_yagen ? (def38Red.yagen_cho[lvl] || null) : (def38Red.cho[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "定員超過減算・夜勤減算" : "定員超過減算";
+      } else if (reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? (def38Red.yagen_ketsu[lvl] || null) : (def38Red.ketsu[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "人員基準欠如減算・夜勤減算" : "人員基準欠如減算";
+      } else if (reductions.has_yagen) {
+        bObj = def38Red.yagen[lvl] || null; bCat = "基本（夜減）"; bNote = "夜勤減算（97/100）";
+      } else {
+        bObj = def38Norm[lvl] || null; bCat = "基本"; bNote = "";
+      }
+    } else if (!isShort && sType === "37") {
+      if (lvl !== "要支援2") return null;
+      const def37Norm = CP_KASAN_BASIC_CODES_37[unitKey];
+      const def37Red = CP_KASAN_REDUCED_CODES_37[unitKey];
+      if (reductions.has_cho && reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "定員超過・人員欠如・夜減重複（要支援2）" : "定員超過・人員欠如重複（要支援2）";
+      } else if (reductions.has_cho) {
+        bObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "定員超過減算・夜勤減算（要支援2）" : "定員超過減算（要支援2）";
+      } else if (reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? def37Red.yagen_ketsu : def37Red.ketsu;
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "人員基準欠如減算・夜勤減算（要支援2）" : "人員基準欠如減算（要支援2）";
+      } else if (reductions.has_yagen) {
+        bObj = def37Red.yagen; bCat = "基本（夜減）"; bNote = "夜勤減算（97/100）";
+      } else {
+        bObj = def37Norm; bCat = "基本"; bNote = "通常（要支援2）";
+      }
+    } else {
+      if (lvl === "要支援2" || !CP_KASAN_CARE_LEVEL_CODES[lvl]) return null;
+      if (reductions.has_cho && reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_cho[lvl] || null) : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].cho[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "超過・人員・夜減重複（要相談確認）" : "超過・人員重複（要相談確認）";
+      } else if (reductions.has_cho) {
+        bObj = reductions.has_yagen ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_cho[lvl] || null) : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].cho[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "超過減算・夜減" : "超過減算";
+      } else if (reductions.has_ketsu) {
+        bObj = reductions.has_yagen ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_ketsu[lvl] || null) : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].ketsu[lvl] || null);
+        bCat = "基本（減算）"; bNote = reductions.has_yagen ? "人員基準欠如減算・夜減" : "人員基準欠如減算";
+      } else if (reductions.has_yagen) {
+        bObj = CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen[lvl] || null; bCat = "基本（夜減）"; bNote = "夜勤減算（97/100）";
+      } else {
+        bObj = CP_KASAN_BASIC_CODES[unitKey][lvl] || null;
+      }
+    }
+    return bObj ? { codeObj: bObj, category: bCat, note: bNote, serviceType: sType } : null;
+  };
 
-  // 1. 基本サービスコード（減算コード含む）
-  const careLevel = r.care_level || "";
-  let basicCodeObj = null;
-  let basicCategory = "基本";
-  let basicNote = "";
+  // 月末時点の要介護度
+  const lastDateOfMonth = `${yStr}-${String(m).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
+  const endCert = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, lastDateOfMonth) : { level: r.care_level || "" };
+  const careLevel = endCert.level || r.care_level || "";
+  const serviceType = isShort ? (careLevel === "要支援2" ? "39" : "38") : (careLevel === "要支援2" ? "37" : "32");
 
-  if (isShort && serviceType === "39") {
-    if (careLevel !== "要支援2") {
-      return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: 0, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: true, serviceType: "39", managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
-    }
-    const def39 = CP_KASAN_SHORT_CODES_39[unitKey];
-    if (reductions.has_cho && reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? def39.yagen_cho : def39.cho;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "超過・人員・夜減重複（要支援2）" : "超過・人員重複（要支援2）";
-    } else if (reductions.has_cho) {
-      basicCodeObj = reductions.has_yagen ? def39.yagen_cho : def39.cho;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "超過減算・夜減（要支援2）" : "超過減算（要支援2）";
-    } else if (reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? def39.yagen_ketsu : def39.ketsu;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "人員基準欠如減算・夜減（要支援2）" : "人員基準欠如減算（要支援2）";
-    } else if (reductions.has_yagen) {
-      basicCodeObj = def39.yagen;
-      basicCategory = "基本（夜減）";
-      basicNote = "夜勤減算（要支援2）";
-    } else {
-      basicCodeObj = def39.normal;
-      basicCategory = "基本";
-      basicNote = "通常（要支援2）";
-    }
-  } else if (isShort && serviceType === "38") {
-    if (!CP_KASAN_CARE_LEVEL_CODES[careLevel] || careLevel === "要支援2") {
-      return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: 0, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: true, serviceType: "38", managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
-    }
-    const def38Norm = CP_KASAN_SHORT_BASIC_CODES_38[unitKey];
-    const def38Red = CP_KASAN_SHORT_REDUCED_CODES_38[unitKey];
-    if (reductions.has_cho && reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? (def38Red.yagen_cho[careLevel] || null) : (def38Red.cho[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "定員超過・人員欠如・夜減重複" : "定員超過・人員欠如重複";
-    } else if (reductions.has_cho) {
-      basicCodeObj = reductions.has_yagen ? (def38Red.yagen_cho[careLevel] || null) : (def38Red.cho[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "定員超過減算・夜勤減算" : "定員超過減算";
-    } else if (reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? (def38Red.yagen_ketsu[careLevel] || null) : (def38Red.ketsu[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "人員基準欠如減算・夜勤減算" : "人員基準欠如減算";
-    } else if (reductions.has_yagen) {
-      basicCodeObj = def38Red.yagen[careLevel] || null;
-      basicCategory = "基本（夜減）";
-      basicNote = "夜勤減算（97/100）";
-    } else {
-      basicCodeObj = def38Norm[careLevel] || null;
-      basicCategory = "基本";
-      basicNote = "";
-    }
-  } else if (!isShort && serviceType === "37") {
-    if (careLevel !== "要支援2") {
-      return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: 0, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: false, serviceType: "37", managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
-    }
-    const def37Norm = CP_KASAN_BASIC_CODES_37[unitKey];
-    const def37Red = CP_KASAN_REDUCED_CODES_37[unitKey];
-    if (reductions.has_cho && reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "定員超過・人員欠如・夜減重複（要支援2）" : "定員超過・人員欠如重複（要支援2）";
-    } else if (reductions.has_cho) {
-      basicCodeObj = reductions.has_yagen ? def37Red.yagen_cho : def37Red.cho;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "定員超過減算・夜勤減算（要支援2）" : "定員超過減算（要支援2）";
-    } else if (reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen ? def37Red.yagen_ketsu : def37Red.ketsu;
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "人員基準欠如減算・夜勤減算（要支援2）" : "人員基準欠如減算（要支援2）";
-    } else if (reductions.has_yagen) {
-      basicCodeObj = def37Red.yagen;
-      basicCategory = "基本（夜減）";
-      basicNote = "夜勤減算（97/100）";
-    } else {
-      basicCodeObj = def37Norm;
-      basicCategory = "基本";
-      basicNote = "通常（要支援2）";
-    }
-  } else {
-    // 32 通常入居
-    if (careLevel === "要支援2" || !CP_KASAN_CARE_LEVEL_CODES[careLevel]) {
-      return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: hospDaysCount, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: false, serviceType: "32", managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
-    }
-    if (reductions.has_cho && reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen
-        ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_cho[careLevel] || null)
-        : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].cho[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "超過・人員・夜減重複（要相談確認）" : "超過・人員重複（要相談確認）";
-    } else if (reductions.has_cho) {
-      basicCodeObj = reductions.has_yagen
-        ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_cho[careLevel] || null)
-        : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].cho[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "超過減算・夜減" : "超過減算";
-    } else if (reductions.has_ketsu) {
-      basicCodeObj = reductions.has_yagen
-        ? (CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen_ketsu[careLevel] || null)
-        : (CP_KASAN_REDUCED_BASIC_CODES[unitKey].ketsu[careLevel] || null);
-      basicCategory = "基本（減算）";
-      basicNote = reductions.has_yagen ? "人員基準欠如減算・夜減" : "人員基準欠如減算";
-    } else if (reductions.has_yagen) {
-      basicCodeObj = CP_KASAN_REDUCED_BASIC_CODES[unitKey].yagen[careLevel] || null;
-      basicCategory = "基本（夜減）";
-      basicNote = "夜勤減算（97/100）";
-    } else {
-      basicCodeObj = CP_KASAN_BASIC_CODES[unitKey][careLevel] || null;
-    }
-  }
-
-  if (!basicCodeObj) {
-    return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: hospDaysCount, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: isShort, serviceType: serviceType, managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
-  }
-  if (basicDays > 0) {
-    items.push({
-      category: basicCategory,
-      code: basicCodeObj.code,
-      name: basicCodeObj.name,
-      unit_price: basicCodeObj.units,
-      count: basicDays,
-      unit_label: "日",
-      subtotal: basicCodeObj.units * basicDays,
-      note: basicNote
+  // 日ごとの算定対象日をグルーピング
+  const basicDaysByLevel = {};
+  if (daysCalc && daysCalc.details) {
+    Object.keys(daysCalc.details).forEach(dStr => {
+      if (daysCalc.details[dStr] === "BASIC") {
+        const certD = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, dStr) : { level: careLevel };
+        const lvl = certD.level || careLevel;
+        basicDaysByLevel[lvl] = (basicDaysByLevel[lvl] || 0) + 1;
+      }
     });
+  } else if (basicDays > 0) {
+    basicDaysByLevel[careLevel] = basicDays;
+  }
+  // 基本サービスコードの計上（介護度ごとに分納）
+  let anyLevelMissing = false;
+  const levelKeys = Object.keys(basicDaysByLevel);
+  if (levelKeys.length === 0 && basicDays > 0) {
+    anyLevelMissing = true;
+  } else {
+    for (const lvl of levelKeys) {
+      const bRes = getBasicCodeForLevel(lvl);
+      if (!bRes) {
+        anyLevelMissing = true;
+      } else {
+        const cnt = basicDaysByLevel[lvl];
+        items.push({
+          category: bRes.category,
+          code: bRes.codeObj.code,
+          name: bRes.codeObj.name,
+          unit_price: bRes.codeObj.units,
+          count: cnt,
+          unit_label: "日",
+          subtotal: bRes.codeObj.units * cnt,
+          note: bRes.note,
+          care_level: lvl,
+          service_type: bRes.serviceType
+        });
+      }
+    }
+  }
+
+  if (anyLevelMissing || (!careLevel && basicDays > 0)) {
+    return { resident: r, yearMonth: yearMonth, unitKey: unitKey, basicDays: basicDays, hospDays: hospDaysCount, items: [], totalUnits: 0, regionType: settings.region_type, regionRate: null, estimatedYen: null, levelMissing: true, careLevel: careLevel, reductions: reductions, isShort: isShort, serviceType: serviceType, managedUnits: 0, unmanagedUnits: 0, planUnits: 0, isLimitExceeded: false, excessUnits: 0 };
   }
 
   // 2. 利用者ごとの加算
@@ -1699,7 +1690,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   // 入居の月で初期加算を付けないときは、基本の行の注にわけを出す（請求の明細には出さない）
   if (!isShort && r.admission_date && r.admission_date.slice(0, 7) === yearMonth) {
     const info = cpKasanInitialAdmissionCheck(r);
-    const basicItem = items.find(it => it && it.code === basicCodeObj.code);
+    const basicItem = items.find(it => it && it.category && it.category.startsWith("基本"));
     if (!info.allowed && basicItem) basicItem.note = (basicItem.note ? basicItem.note + "。" : "") + "初期加算なし: " + info.note;
   }
 
@@ -3344,17 +3335,23 @@ function cpValidateResidentForKasanCsv(r, ym) {
     missing.push("性別");
   }
 
-  if (!r.benefit_rate || !["90", "80", "70"].includes(String(r.benefit_rate))) {
+  const bRate = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, ym) : parseInt(String(r.benefit_rate), 10);
+  if (![90, 80, 70].includes(bRate)) {
     missing.push("保険給付率");
   }
 
-  if (!r.care_start_date) {
+  const [vyStr, vmStr] = (ym || "").split("-");
+  const vDaysInMonth = (vyStr && vmStr) ? new Date(parseInt(vyStr, 10), parseInt(vmStr, 10), 0).getDate() : 30;
+  const vLastDate = `${ym}-${String(vDaysInMonth).padStart(2, "0")}`;
+  const certEnd = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, vLastDate) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+
+  if (!certEnd.start_date) {
     missing.push("認定有効期間開始日");
   }
-  if (!r.care_expiry_date) {
+  if (!certEnd.end_date) {
     missing.push("認定有効期間終了日（要介護認定有効期間）");
   }
-  if (r.care_start_date && r.care_expiry_date && r.care_start_date >= r.care_expiry_date) {
+  if (certEnd.start_date && certEnd.end_date && certEnd.start_date >= certEnd.end_date) {
     missing.push("認定有効期間（開始日＜終了日）");
   }
 
@@ -3398,9 +3395,9 @@ function cpValidateResidentForKasanCsv(r, ym) {
   }
 
   // 要介護度（通常入居・短期利用ともに要支援2または要介護1〜5）
-  const careCode = CP_KASAN_CARE_LEVEL_CODES[r.care_level || ""];
+  const careCode = CP_KASAN_CARE_LEVEL_CODES[certEnd.level || r.care_level || ""];
   if (!careCode) {
-    missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${r.care_level || "未登録"}）`);
+    missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${certEnd.level || r.care_level || "未登録"}）`);
   }
 
   return {
@@ -3612,6 +3609,24 @@ function renderKasanCsvValidation(regularYm, currentProcessYm, baseDate) {
       `;
     }
   }
+  // 要支援と要介護をまたぐ月の注意喚起
+  const spanningResidents = [];
+  candidateResults.forEach(cand => {
+    if (cand.calc && cand.calc.items) {
+      const types = new Set(cand.calc.items.filter(it => !it.candidate).map(it => it.service_type).filter(Boolean));
+      if ((types.has("32") && types.has("37")) || (types.has("38") && types.has("39"))) {
+        spanningResidents.push(cand.resident.name);
+      }
+    }
+  });
+  if (spanningResidents.length > 0) {
+    summaryHtml += `
+      <div style="background:var(--warn-tint, #fffbeb); color:var(--warn, #b45309); border:1px solid var(--warn, #f59e0b); border-radius:4px; padding:8px 12px; font-size:13px; margin-bottom:8px;">
+        <strong>【要支援・要介護またぎ注意】</strong> ${escapeHtml(spanningResidents.join("、"))} 様は要支援と要介護をまたぐ月です。明細書の分け方を保険者・国保連に確かめてください。
+      </div>
+    `;
+  }
+
   if (summaryEl) summaryEl.innerHTML = summaryHtml;
 
   // 通常分一覧描画
@@ -3786,118 +3801,145 @@ function generateKasanCsvFile() {
     const itemServiceYm = item.serviceYm || regularYm;
     const itemYmRaw = itemServiceYm.replace("-", "");
     const isShort = (r.usage_type === "short");
-    const formCode = isShort ? (r.care_level === "要支援2" ? "7176" : "7175") : (r.care_level === "要支援2" ? "7172" : "7171");
-    const serviceTypeCode = isShort ? (r.care_level === "要支援2" ? "39" : "38") : (r.care_level === "要支援2" ? "37" : "32");
-    const benefitRateInt = parseInt(String(r.benefit_rate), 10) || 90;
+    const [iyStr, imStr] = itemServiceYm.split("-");
+    const iDaysInMonth = new Date(parseInt(iyStr, 10), parseInt(imStr, 10), 0).getDate();
+    const itemLastDate = `${itemServiceYm}-${String(iDaysInMonth).padStart(2, "0")}`;
+    const certAtEnd = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, itemLastDate) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+    const benefitRateInt = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, itemServiceYm) : (parseInt(String(r.benefit_rate), 10) || 90);
 
-    const totalUnits = calc.totalUnits;
-    const cost100 = Math.floor(totalUnits * unitPriceInt / 100);
-    const hokenDemand = Math.floor(cost100 * benefitRateInt / 100);
-    const userBurden = cost100 - hokenDemand;
-
-    genItems.push({
-      resident_id: Number(r.id),
-      service_ym: itemServiceYm,
-      service_type_code: serviceTypeCode,
-      total_units: totalUnits,
-      insurance_demand: hokenDemand,
-      user_burden: userBurden
+    // サービス種類の分割判定（要支援2と要介護の混在時は明細書を2件に分割）
+    const itemsByServiceType = {};
+    (calc.items || []).forEach(it => {
+      if (it.candidate) return;
+      let st = it.service_type;
+      if (!st) {
+        st = isShort ? (certAtEnd.level === "要支援2" ? "39" : "38") : (certAtEnd.level === "要支援2" ? "37" : "32");
+      }
+      if (!itemsByServiceType[st]) itemsByServiceType[st] = [];
+      itemsByServiceType[st].push(it);
     });
 
-    // 基本情報レコード (7171 / 7172 / 7175 / 7176) 01（56項目）
-    const insNo10 = String(r.insured_no || "").trim().padStart(10, "0");
-    const insurerNo8 = String(r.insurer_no || "").trim();
-    const birthRaw = (r.birth_date || "").replace(/-/g, "");
-    const genderCode = String(r.gender || "");
-    const careCode = CP_KASAN_CARE_LEVEL_CODES[r.care_level || ""] || "";
-    const careStartRaw = (r.care_start_date || "").replace(/-/g, "");
-    const careExpiryRaw = (r.care_expiry_date || "").replace(/-/g, "");
-    const preStatus = isShort ? "" : String(r.pre_admission_status || "");
-    const admissionRaw = (r.admission_date || "").replace(/-/g, "");
+    // 分割されたサービス種類（例: ["37", "32"]）
+    const targetServiceTypes = Object.keys(itemsByServiceType);
+    if (targetServiceTypes.length === 0) {
+      const defaultSt = isShort ? (certAtEnd.level === "要支援2" ? "39" : "38") : (certAtEnd.level === "要支援2" ? "37" : "32");
+      targetServiceTypes.push(defaultSt);
+      itemsByServiceType[defaultSt] = [];
+    }
 
-    const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === itemServiceYm);
-    const shortDischargeDate = r.short_end_date || r.discharge_date || "";
-    const isShortDischargeMonth = (shortDischargeDate && shortDischargeDate.slice(0, 7) === itemServiceYm);
-    const dischargeRaw = isShort ? (isShortDischargeMonth ? shortDischargeDate.replace(/-/g, "") : "") : (isDischargeMonth ? (r.discharge_date || "").replace(/-/g, "") : "");
-    const postStatus = isShort ? "" : (isDischargeMonth ? String(r.post_discharge_status || "") : "");
+    targetServiceTypes.forEach(stCode => {
+      const stItems = itemsByServiceType[stCode] || [];
+      const formCode = isShort ? (stCode === "39" ? "7176" : "7175") : (stCode === "37" ? "7172" : "7171");
+      const stTotalUnits = stItems.reduce((sum, it) => sum + (it.subtotal || 0), 0);
+      const stCost100 = Math.floor(stTotalUnits * unitPriceInt / 100);
+      const stHokenDemand = Math.floor(stCost100 * benefitRateInt / 100);
+      const stUserBurden = stCost100 - stHokenDemand;
 
-    // [Claude修正 2026-10-29] 外泊日数（27）は、グループホームでは入院の日数を含む（介護給付費請求書等の記載要領 3⑨エ。
-    // 外泊・入院を始めた日と戻った日は含まない＝基本の単位の日）。前は外泊の間の日だけを数え、入院の間の日（入院時費用の日・それを超えた日）が入っていなかった
-    const cpIsAwayMidDay = kd => kd === "OUTING_MID" || kd === "HOSP_EXPENSE" || kd === "HOSP_OVER";
-    let outingMidDays = 0;
-    if (calc.daysCalc && calc.daysCalc.details) {
-      Object.values(calc.daysCalc.details).forEach(kd => {
-        if (cpIsAwayMidDay(kd)) outingMidDays++;
+      genItems.push({
+        resident_id: Number(r.id),
+        service_ym: itemServiceYm,
+        service_type_code: stCode,
+        total_units: stTotalUnits,
+        insurance_demand: stHokenDemand,
+        user_burden: stUserBurden
       });
-    } else {
-      const dCalc = cpKasanBasicDays(r, itemServiceYm);
-      if (dCalc && dCalc.details) {
-        Object.values(dCalc.details).forEach(kd => {
+
+      // 基本情報レコード 01（被保険者欄: 月末時点の要介護状態区分および認定有効期間 老老発第31号 p.8）
+      const insNo10 = String(r.insured_no || "").trim().padStart(10, "0");
+      const insurerNo8 = String(r.insurer_no || "").trim();
+      const birthRaw = (r.birth_date || "").replace(/-/g, "");
+      const genderCode = String(r.gender || "");
+      // 月末日の要介護度コード
+      const careCode = CP_KASAN_CARE_LEVEL_CODES[certAtEnd.level || ""] || "";
+      const careStartRaw = (certAtEnd.start_date || "").replace(/-/g, "");
+      const careExpiryRaw = (certAtEnd.end_date || "").replace(/-/g, "");
+      const preStatus = isShort ? "" : String(r.pre_admission_status || "");
+      const admissionRaw = (r.admission_date || "").replace(/-/g, "");
+
+      const isDischargeMonth = (r.status === "退所" && r.discharge_date && r.discharge_date.slice(0, 7) === itemServiceYm);
+      const shortDischargeDate = r.short_end_date || r.discharge_date || "";
+      const isShortDischargeMonth = (shortDischargeDate && shortDischargeDate.slice(0, 7) === itemServiceYm);
+      const dischargeRaw = isShort ? (isShortDischargeMonth ? shortDischargeDate.replace(/-/g, "") : "") : (isDischargeMonth ? (r.discharge_date || "").replace(/-/g, "") : "");
+      const postStatus = isShort ? "" : (isDischargeMonth ? String(r.post_discharge_status || "") : "");
+
+      const cpIsAwayMidDay = kd => kd === "OUTING_MID" || kd === "HOSP_EXPENSE" || kd === "HOSP_OVER";
+      let outingMidDays = 0;
+      if (calc.daysCalc && calc.daysCalc.details) {
+        Object.values(calc.daysCalc.details).forEach(kd => {
           if (cpIsAwayMidDay(kd)) outingMidDays++;
         });
+      } else {
+        const dCalc = cpKasanBasicDays(r, itemServiceYm);
+        if (dCalc && dCalc.details) {
+          Object.values(dCalc.details).forEach(kd => {
+            if (cpIsAwayMidDay(kd)) outingMidDays++;
+          });
+        }
       }
-    }
-    const outingDaysStr = (!isShort && outingMidDays > 0) ? String(outingMidDays) : "";
-    const inResidenceDaysStr = isShort ? "" : String(calc.basicDays);
+      const outingDaysStr = (!isShort && outingMidDays > 0) ? String(outingMidDays) : "";
+      // 当該サービス種類の基本日数
+      const stBasicDays = stItems.filter(it => it.category && it.category.startsWith("基本")).reduce((s, it) => s + (it.count || 0), 0) || (targetServiceTypes.length === 1 ? calc.basicDays : 0);
+      const inResidenceDaysStr = isShort ? "" : String(stBasicDays);
 
-    const r01_fields = [
-      formCode, "01", itemYmRaw, settings.office_no, insurerNo8, insNo10,
-      "", "", "", "", "", "", // 7..12 公費1〜3
-      birthRaw, genderCode, careCode, "", // 13..16 (16: 空)
-      careStartRaw, careExpiryRaw, // 17..18
-      isShort ? String(r.short_plan_type || "") : "", // 19 居宅サービス計画作成区分
-      (isShort && (r.short_plan_type === "1" || r.short_plan_type === "3")) ? String(r.short_plan_office_no || "") : "", // 20 事業所番号
-      "", "", // 21..22
-      preStatus, // 23 入所前の状況コード (短期利用は空)
-      admissionRaw, dischargeRaw, inResidenceDaysStr, outingDaysStr, postStatus, // 24..28 (26..28: 短期利用は空)
-      String(benefitRateInt), "", "", "", // 29..32 給付率
-      String(totalUnits), String(hokenDemand), String(userBurden), "", "", "" // 33..38 (36..38: 空)
-    ];
-    while (r01_fields.length < 56) {
-      r01_fields.push("");
-    }
-
-    // 明細情報レコード (7171 / 7172 / 7175 / 7176) 02（各行18項目）
-    const r02_list = [];
-    calc.items.forEach(it => {
-      if (it.candidate) return;
-      const r02_fields = [
-        formCode, "02", itemYmRaw, settings.office_no, insurerNo8, insNo10,
-        serviceTypeCode, String(it.code), String(it.unit_price), String(it.count),
-        "", "", "", // 11..13
-        String(it.subtotal), // 14
-        "", "", "", // 15..17
-        "" // 18 単位・日数
+      const r01_fields = [
+        formCode, "01", itemYmRaw, settings.office_no, insurerNo8, insNo10,
+        "", "", "", "", "", "", // 7..12 公費1〜3
+        birthRaw, genderCode, careCode, "", // 13..16 (16: 空)
+        careStartRaw, careExpiryRaw, // 17..18
+        isShort ? String(r.short_plan_type || "") : "", // 19 居宅サービス計画作成区分
+        (isShort && (r.short_plan_type === "1" || r.short_plan_type === "3")) ? String(r.short_plan_office_no || "") : "", // 20 事業所番号
+        "", "", // 21..22
+        preStatus, // 23 入所前の状況コード (短期利用は空)
+        admissionRaw, dischargeRaw, inResidenceDaysStr, outingDaysStr, postStatus, // 24..28 (26..28: 短期利用は空)
+        String(benefitRateInt), "", "", "", // 29..32 給付率
+        String(stTotalUnits), String(stHokenDemand), String(stUserBurden), "", "", "" // 33..38 (36..38: 空)
       ];
-      r02_list.push(r02_fields);
-    });
+      while (r01_fields.length < 56) {
+        r01_fields.push("");
+      }
 
-    // 集計情報レコード (7171 / 7172 / 7175 / 7176) 10（38項目）
-    const r10_fields = [
-      formCode, "10", itemYmRaw, settings.office_no, insurerNo8, insNo10,
-      serviceTypeCode,
-      isShort ? String(calc.basicDays) : "", // 8 サービス実日数
-      isShort ? String(calc.planUnits || 0) : "", // 9 計画単位数
-      isShort ? String(calc.managedUnits || 0) : "", // 10 限度額管理対象単位数
-      isShort ? String(calc.unmanagedUnits || 0) : "", // 11 限度額管理対象外単位数
-      "", "", // 12..13
-      String(totalUnits), String(unitPriceInt), String(hokenDemand), String(userBurden) // 14..17
-    ];
-    while (r10_fields.length < 38) {
-      r10_fields.push("");
-    }
+      // 明細情報レコード 02
+      const r02_list = [];
+      stItems.forEach(it => {
+        const r02_fields = [
+          formCode, "02", itemYmRaw, settings.office_no, insurerNo8, insNo10,
+          stCode, String(it.code), String(it.unit_price), String(it.count),
+          "", "", "", // 11..13
+          String(it.subtotal), // 14
+          "", "", "", // 15..17
+          "" // 18 単位・日数
+        ];
+        r02_list.push(r02_fields);
+      });
 
-    residentBlocks.push({
-      resident: r,
-      serviceYm: itemServiceYm,
-      formCode: formCode,
-      totalUnits: totalUnits,
-      cost100: cost100,
-      hokenDemand: hokenDemand,
-      userBurden: userBurden,
-      r01: r01_fields,
-      r02_list: r02_list,
-      r10: r10_fields
+      // 集計情報レコード 10
+      const r10_fields = [
+        formCode, "10", itemYmRaw, settings.office_no, insurerNo8, insNo10,
+        stCode,
+        isShort ? String(stBasicDays) : "", // 8 サービス実日数
+        isShort ? String(calc.planUnits || 0) : "", // 9 計画単位数
+        isShort ? String(calc.managedUnits || 0) : "", // 10 限度額管理対象単位数
+        isShort ? String(calc.unmanagedUnits || 0) : "", // 11 限度額管理対象外単位数
+        "", "", // 12..13
+        String(stTotalUnits), String(unitPriceInt), String(stHokenDemand), String(stUserBurden) // 14..17
+      ];
+      while (r10_fields.length < 38) {
+        r10_fields.push("");
+      }
+
+      residentBlocks.push({
+        resident: r,
+        serviceYm: itemServiceYm,
+        serviceTypeCode: stCode,
+        formCode: formCode,
+        totalUnits: stTotalUnits,
+        cost100: stCost100,
+        hokenDemand: stHokenDemand,
+        userBurden: stUserBurden,
+        r01: r01_fields,
+        r02_list: r02_list,
+        r10: r10_fields
+      });
     });
   }
 

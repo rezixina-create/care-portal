@@ -4557,7 +4557,105 @@
         db.data.complaints = origC182; db.data.orders = origO182;
       }
 
-      // 38. 総合結果判定
+      // Test 183: [Antigravity追加 2026-10-29] 要介護度・負担割合の期間履歴化・請求CSV計算・権限検査
+      {
+        log("38. 要介護度・負担割合の期間履歴化・請求CSV計算・権限検査 (Test 183)");
+        // 1. アクセサ関数 cpCareCertOn / cpBenefitRateOn の動作確認
+        const mockRes = {
+          id: 998,
+          name: "テスト 履歴様",
+          care_level: "要介護3",
+          care_start_date: "2026-10-15",
+          care_expiry_date: "2028-01-14",
+          benefit_rate: "80",
+          care_cert_history: [
+            { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-12-10", voided: false },
+            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+          ],
+          benefit_rate_history: [
+            { id: 1, rate: 90, start_ym: "2025-08", end_ym: "2026-07", voided: false },
+            { id: 2, rate: 80, start_ym: "2026-08", end_ym: "2027-07", voided: false }
+          ]
+        };
+
+        const certMidOctBefore = cpCareCertOn(mockRes, "2026-10-10");
+        assert(certMidOctBefore.level === "要介護2", "Test 183-1: 10/10 時点の認定は要介護2であること");
+        const certMidOctAfter = cpCareCertOn(mockRes, "2026-10-20");
+        assert(certMidOctAfter.level === "要介護3", "Test 183-2: 10/20 時点の認定は要介護3であること");
+        const ratePrevYear = cpBenefitRateOn(mockRes, "2026-06");
+        assert(ratePrevYear === 90, "Test 183-3: 2026-06 の負担割合は前年度の 90% であること");
+        const rateNewYear = cpBenefitRateOn(mockRes, "2026-08");
+        assert(rateNewYear === 80, "Test 183-4: 2026-08 の負担割合は新年度の 80% であること");
+
+        // 2. 履歴が空の場合でも既存プロパティから安全にフォールバックすること
+        const emptyRes = { id: 997, name: "テスト 空様", care_level: "要介護1", care_start_date: "2025-04-01", care_expiry_date: "2027-03-31", benefit_rate: "70" };
+        const certFallback = cpCareCertOn(emptyRes, "2026-05-01");
+        assert(certFallback.level === "要介護1", "Test 183-5: 履歴空時の care_level フォールバック確認");
+        const rateFallback = cpBenefitRateOn(emptyRes, "2026-05");
+        assert(rateFallback === 70, "Test 183-6: 履歴空時の benefit_rate フォールバック確認");
+
+        // 3. 田中 ハナ 様 (ID 2) の 2026-10 月区分変更計算検証（実マスタ定義またはモック設定）
+        const r2Model = {
+          id: 2,
+          room_no: "102",
+          unit_id: 1,
+          name: "田中 ハナ",
+          care_level: "要介護3",
+          care_start_date: "2026-10-15",
+          care_expiry_date: "2028-01-14",
+          benefit_rate: "90",
+          admission_date: "2024-02-01",
+          care_cert_history: [
+            { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-12-10", voided: false },
+            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+          ],
+          benefit_rate_history: [
+            { id: 1, rate: 90, start_ym: "2025-08", end_ym: "2026-07", voided: false },
+            { id: 2, rate: 90, start_ym: "2026-08", end_ym: "2027-07", voided: false }
+          ]
+        };
+
+        const origSettings = db.data.kasan_settings ? JSON.parse(JSON.stringify(db.data.kasan_settings)) : null;
+        db.data.kasan_settings = {
+          office_no: "9900000001", media_code: "7", region_type: "その他", capacity: 18, shogu_type: "1_a",
+          taisei_items: { medical_coop: { option_key: "1_a" }, service_supply: { option_key: "2" } }
+        };
+
+        const calcR2 = cpComputeMonthlyKasan(r2Model, "2026-10");
+        const b2121 = calcR2.items.find(it => it.code === "2121");
+        const b2131 = calcR2.items.find(it => it.code === "2131");
+        assert(!!b2121 && b2121.count === 14, "Test 183-7: 田中 ハナ 様 2026-10の要介護2基本サービスコード(2121)が14日であること");
+        assert(!!b2131 && b2131.count === 17, "Test 183-8: 田中 ハナ 様 2026-10の要介護3基本サービスコード(2131)が17日であること");
+        assert(calcR2.totalUnits === 32865, "Test 183-9: 田中 ハナ 様 2026-10の全算定単位数が 32865 単位であること");
+        if (origSettings) db.data.kasan_settings = origSettings;
+
+        // 4. 要支援2と要介護をまたぐ月の2明細分割検証
+        const rSpan = {
+          id: 996,
+          name: "テスト またぎ様",
+          care_level: "要介護1",
+          care_start_date: "2026-10-15",
+          care_expiry_date: "2028-01-14",
+          benefit_rate: "90",
+          insured_no: "9900000996",
+          insurer_no: "990001",
+          birth_date: "1940-01-01",
+          gender: "2",
+          admission_date: "2024-01-01",
+          pre_admission_status: "1",
+          care_cert_history: [
+            { id: 1, level: "要支援2", start_date: "2025-10-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-10-01", voided: false },
+            { id: 2, level: "要介護1", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+          ]
+        };
+        const calcSpan = cpComputeMonthlyKasan(rSpan, "2026-10");
+        const span37 = calcSpan.items.find(it => it.service_type === "37");
+        const span32 = calcSpan.items.find(it => it.service_type === "32");
+        assert(!!span37 && span37.count === 14, "Test 183-10: 要支援2期間(14日間)がサービス種類37として計上されること");
+        assert(!!span32 && span32.count === 17, "Test 183-11: 要介護1期間(17日間)がサービス種類32として計上されること");
+      }
+
+            // 38. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
