@@ -1449,6 +1449,96 @@ namespace CarePortal
             SendResponse(stream, 200, "OK", "image/jpeg", img);
         }
 
+        // [Antigravity追加 2026-10-30] 保管庫の写真保存（親機・LANタブレットから受付、トンネル禁止、data/photos/vault/ に配置）
+        private void HandleVaultPhotoUpload(NetworkStream stream, string body, string staff)
+        {
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string pType = (req.GetStr("photo_type") ?? "").Trim().ToLowerInvariant();
+            if (pType != "documents" && pType != "personal")
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_photo_type\"}");
+                return;
+            }
+            string data = req.GetStr("data") ?? "";
+            int comma = data.IndexOf(',');
+            if (data.StartsWith("data:") && comma > 0) data = data.Substring(comma + 1);
+            byte[] img;
+            try { img = Convert.FromBase64String(data); } catch { img = null; }
+            if (img == null || img.Length < 4 || img.Length > 10 * 1024 * 1024 || img[0] != 0xFF || img[1] != 0xD8)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_image\"}");
+                return;
+            }
+
+            string folder = Path.Combine(Path.Combine(_dataDir, "photos"), "vault", pType);
+            string ts = DateTime.Now.ToString("yyyyMMdd_HHmmss");
+            string token = NewToken().Substring(0, 6);
+            string fileName = pType + "_" + ts + "_" + token + ".jpg";
+
+            try
+            {
+                if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
+                File.WriteAllBytes(Path.Combine(folder, fileName), img);
+            }
+            catch
+            {
+                SendJsonResponse(stream, 500, "{\"error\":\"save_failed\"}");
+                return;
+            }
+
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm");
+            string who = (staff ?? "").Replace("\\", "").Replace("\"", "");
+            string json = "{\"success\":true,\"filename\":\"" + fileName + "\",\"photo_type\":\"" + pType + "\",\"uploaded_at\":\"" + nowStr + "\",\"uploaded_by\":\"" + who + "\"}";
+            SendJsonResponse(stream, 200, json);
+        }
+
+        // [Antigravity追加 2026-10-30] 保管庫の写真取得（親機のみ閲覧可能）
+        private void HandleVaultPhotoGet(NetworkStream stream, string rawUrl)
+        {
+            string fileName = "";
+            string pType = "documents";
+            int q = rawUrl.IndexOf('?');
+            if (q >= 0)
+            {
+                string qs = rawUrl.Substring(q + 1);
+                string[] parts = qs.Split('&');
+                foreach (string part in parts)
+                {
+                    if (part.StartsWith("file=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        fileName = Uri.UnescapeDataString(part.Substring(5));
+                    }
+                    else if (part.StartsWith("type=", StringComparison.OrdinalIgnoreCase))
+                    {
+                        pType = Uri.UnescapeDataString(part.Substring(5)).Trim().ToLowerInvariant();
+                    }
+                }
+            }
+            if (pType != "documents" && pType != "personal")
+            {
+                byte[] err = Encoding.UTF8.GetBytes("400 Bad Request: Invalid type");
+                SendResponse(stream, 400, "Bad Request", "text/plain", err);
+                return;
+            }
+            fileName = Path.GetFileName(fileName);
+            if (string.IsNullOrEmpty(fileName) || fileName.Contains("..") || fileName.Contains("/") || fileName.Contains("\\") || fileName.Contains(":"))
+            {
+                byte[] err = Encoding.UTF8.GetBytes("400 Bad Request");
+                SendResponse(stream, 400, "Bad Request", "text/plain", err);
+                return;
+            }
+            string filePath = Path.Combine(Path.Combine(_dataDir, "photos"), "vault", pType, fileName);
+            if (!File.Exists(filePath))
+            {
+                byte[] notFound = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", notFound);
+                return;
+            }
+            byte[] img = File.ReadAllBytes(filePath);
+            SendResponse(stream, 200, "OK", "image/jpeg", img);
+        }
+
 
         private void HandleLogin(NetworkStream stream, string body)
         {
@@ -3257,7 +3347,14 @@ namespace CarePortal
                         return;
                     }
                     // [Claude修正] これより下の API と写真は、ログイン済み (有効なセッション) の場合だけ応答する
-                    bool needsAuth = urlPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) || urlPath.StartsWith("/data/photos/", StringComparison.OrdinalIgnoreCase);
+                    string relChk = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                    string fullChk = "";
+                    try { fullChk = Path.GetFullPath(Path.Combine(_baseDir, relChk)); } catch { }
+                    string incChkDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "incidents")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    string vaultChkDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "vault")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                    bool isVaultReq = urlPath.StartsWith("/api/vault-photo", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(fullChk) && fullChk.StartsWith(vaultChkDir, StringComparison.OrdinalIgnoreCase));
+                    bool isIncReq = urlPath.StartsWith("/api/incident-photo", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(fullChk) && fullChk.StartsWith(incChkDir, StringComparison.OrdinalIgnoreCase));
+                    bool needsAuth = urlPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) || urlPath.StartsWith("/data/photos/", StringComparison.OrdinalIgnoreCase) || isVaultReq || isIncReq;
                     string sessStaff = needsAuth ? CheckSession(lines) : null;
                     if (needsAuth && sessStaff == null)
                     {
@@ -3266,11 +3363,7 @@ namespace CarePortal
                             SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機で操作してください\"}");
                             return;
                         }
-                        string relChk = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-                        string fullChk = "";
-                        try { fullChk = Path.GetFullPath(Path.Combine(_baseDir, relChk)); } catch { }
-                        string incChkDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "incidents")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-                        if (urlPath.StartsWith("/api/incident-photo", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(fullChk) && fullChk.StartsWith(incChkDir, StringComparison.OrdinalIgnoreCase)))
+                        if (isIncReq || isVaultReq)
                         {
                             SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"ログインが必要です\"}");
                             return;
@@ -3369,6 +3462,43 @@ namespace CarePortal
                         return;
                     }
 
+                    // [Antigravity追加 2026-10-30] 保管庫の写真送信
+                    // 施設のタブレット（LAN接続）および親機から受付可能。トンネル接続（HasTunnelHeaders）のみ拒絶（403）
+                    if (urlPath == "/api/vault-photo-upload" && method == "POST")
+                    {
+                        if (HasTunnelHeaders(lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"外部接続トンネルからの送信は禁止されています\"}");
+                            return;
+                        }
+                        if (sessStaff == null)
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"unauthorized\",\"message\":\"ログインが必要です\"}");
+                            return;
+                        }
+                        HandleVaultPhotoUpload(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        return;
+                    }
+
+                    // [Antigravity追加 2026-10-30] 保管庫の写真取得（親機のみ閲覧可能・403）
+                    if (urlPath == "/api/vault-photo" && method == "GET")
+                    {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Host only");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", denied);
+                            return;
+                        }
+                        if (sessStaff == null)
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Login required");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", denied);
+                            return;
+                        }
+                        HandleVaultPhotoGet(stream, rawUrl);
+                        return;
+                    }
+
                     if (urlPath == "/api/open-folder")
                     {
                         if (!IsHostConnection(client, lines))
@@ -3378,7 +3508,7 @@ namespace CarePortal
                         }
                         string fType = "documents";
                         if (rawUrl.Contains("type=personal")) fType = "personal";
-                        string folder = Path.Combine(_dataDir, "photos", fType);
+                        string folder = Path.Combine(Path.Combine(_dataDir, "photos"), "vault", fType);
                         if (!Directory.Exists(folder)) Directory.CreateDirectory(folder);
                         try
                         {
@@ -3544,34 +3674,15 @@ namespace CarePortal
                 urlPath = "/index.html";
             }
 
-            // [Claude修正] 配信してよいファイルだけを返す。データ・設定・.git・スクリプト等は配信しない。
-            // 旧実装はフォルダ内の全ファイル (全利用者のデータを含む) と、「..」でフォルダ外のファイルまで返していた。
-            string lowerPath = urlPath.ToLowerInvariant();
-            // [Claude整理 2026-10-19] 画面のプログラムは js/ に分けたので、js/ の .js も渡す
-            bool allowedPath = lowerPath == "/index.html" || lowerPath == "/app.js" || lowerPath == "/style.css"
-                || (lowerPath.StartsWith("/js/") && lowerPath.EndsWith(".js") && lowerPath.IndexOf('/', 4) < 0)
-                || lowerPath == "/favicon.ico" || lowerPath.StartsWith("/assets/") || lowerPath.StartsWith("/data/photos/");
-            if (!allowedPath || urlPath.Contains("..") || urlPath.Contains("\\") || urlPath.Contains(":"))
-            {
-                byte[] deniedBytes = Encoding.UTF8.GetBytes("404 Not Found");
-                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes);
-                return;
-            }
-
             string relativePath = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
-            string filePath = Path.GetFullPath(Path.Combine(_baseDir, relativePath));
-            string baseFull = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (!filePath.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
-            {
-                byte[] deniedBytes2 = Encoding.UTF8.GetBytes("404 Not Found");
-                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes2);
-                return;
-            }
-
-            // [Antigravity修正 2026-10-29] 実際に開くファイルの場所（Path.GetFullPath の結果）が
-            // data/photos/incidents/ の中かで判定し、親機かつログイン済みでなければ 403 で拒絶する（文字列比較の抜け道を防止）
+            string filePath = "";
+            try { filePath = Path.GetFullPath(Path.Combine(_baseDir, relativePath)); } catch { }
             string incidentsDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "incidents")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
-            if (filePath.StartsWith(incidentsDir, StringComparison.OrdinalIgnoreCase))
+            string vaultDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "vault")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+
+            // [Antigravity修正 2026-10-29/2026-10-30] 実際に開くファイルの場所（Path.GetFullPath の結果）が
+            // data/photos/incidents/ または data/photos/vault/ の中かで判定し、親機かつログイン済みでなければ 403 で拒絶する（文字列比較の抜け道を防止）
+            if (!string.IsNullOrEmpty(filePath) && (filePath.StartsWith(incidentsDir, StringComparison.OrdinalIgnoreCase) || filePath.StartsWith(vaultDir, StringComparison.OrdinalIgnoreCase)))
             {
                 if (!isHost || string.IsNullOrEmpty(sessStaff))
                 {
@@ -3579,6 +3690,32 @@ namespace CarePortal
                     SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
                     return;
                 }
+            }
+
+            // [Claude修正] 配信してよいファイルだけを返す。データ・設定・.git・スクリプト等は配信しない。
+            // 旧実装はフォルダ内の全ファイル (全利用者のデータを含む) と、「..」でフォルダ外のファイルまで返していた。
+            string lowerPath = urlPath.ToLowerInvariant();
+            string lowerRel = relativePath.Replace(Path.DirectorySeparatorChar, '/').ToLowerInvariant();
+            // [Claude整理 2026-10-19] 画面のプログラムは js/ に分けたので、js/ の .js も渡す
+            bool allowedPath = lowerPath == "/index.html" || lowerPath == "/app.js" || lowerPath == "/style.css"
+                || (lowerPath.StartsWith("/js/") && lowerPath.EndsWith(".js") && lowerPath.IndexOf('/', 4) < 0)
+                || lowerPath == "/favicon.ico" || lowerPath.StartsWith("/assets/") || lowerPath.StartsWith("/data/photos/")
+                || lowerRel == "index.html" || lowerRel == "app.js" || lowerRel == "style.css"
+                || (lowerRel.StartsWith("js/") && lowerRel.EndsWith(".js") && lowerRel.IndexOf('/', 3) < 0)
+                || lowerRel == "favicon.ico" || lowerRel.StartsWith("assets/") || lowerRel.StartsWith("data/photos/");
+            if (!allowedPath || urlPath.Contains("..") || urlPath.Contains("\\") || urlPath.Contains(":"))
+            {
+                byte[] deniedBytes = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes);
+                return;
+            }
+
+            string baseFull = Path.GetFullPath(_baseDir).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (string.IsNullOrEmpty(filePath) || !filePath.StartsWith(baseFull, StringComparison.OrdinalIgnoreCase))
+            {
+                byte[] deniedBytes2 = Encoding.UTF8.GetBytes("404 Not Found");
+                SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes2);
+                return;
             }
 
             if (!File.Exists(filePath))

@@ -37,6 +37,15 @@
       if (typeof url === 'string' && url.includes('/api/is-host')) {
         return Promise.resolve(new Response(JSON.stringify({is_host: !!window.gIsHostMachine}), {status: 200, headers: {'Content-Type': 'application/json'}}));
       }
+      if (typeof url === 'string' && url.includes('/api/vault-photo-upload')) {
+        return Promise.resolve(new Response(JSON.stringify({
+          success: true,
+          filename: "documents_20261030_120000_abc123.jpg",
+          photo_type: "documents",
+          uploaded_at: "2026-10-30 12:00",
+          uploaded_by: "管理者 木村 健一"
+        }), {status: 200, headers: {'Content-Type': 'application/json'}}));
+      }
       return origFetch.apply(this, arguments);
     };
 
@@ -92,6 +101,29 @@
     <span id="recordB5Badge"></span>
     <span id="fsB5Badge"></span>
     <div id="fullscreenRecordModal" style="display:none;"></div>
+    <!-- [Antigravity追加 2026-10-30] 写真・重要書類保管庫テスト用DOM -->
+    <div class="modal-overlay" id="photoModal" style="display:none;">
+      <h3 id="photoModalTitle"></h3>
+      <button id="tabBtnDocPhotos"></button>
+      <button id="tabBtnPersonalPhotos"></button>
+      <div id="addPhotoFormArea" style="display:none;">
+        <div class="vault-photo-notice" style="margin-bottom:10px; padding:8px 10px; font-size:12.5px; background:var(--caution-tint); color:var(--caution); border:1px solid var(--caution); border-radius:4px; line-height:1.4;">
+          施設のタブレットで撮影してください。個人のスマホでの撮影は禁止されています。撮影したあと端末のアルバムに残ったときは消してください。
+        </div>
+        <select id="photoNewCategory">
+          <option value="documents">重要書類・同意書</option>
+          <option value="personal">日常・個人写真</option>
+        </select>
+        <input type="text" id="photoNewTitle">
+        <input type="file" id="photoFileInput">
+        <div id="photoPreviewContainer" style="display:none;"><img id="photoPreviewImg"></div>
+      </div>
+      <div id="photoGridArea"></div>
+    </div>
+    <div class="modal-overlay" id="lightboxModal" style="display:none;">
+      <img id="lightboxImg">
+      <div id="lightboxCaption"></div>
+    </div>
     <div id="selectedDateRecordsTitle"></div>
     <div id="selectedDateRecordsList"></div>
     <div id="personalDailySummaryArea"></div>
@@ -617,7 +649,7 @@
       }
     }
 
-    function runAllTests() {
+    async function runAllTests() {
       log("====================================================");
       log("  介護施設ポータル 全自動機能検証テスト 開始");
       log("====================================================");
@@ -4827,7 +4859,125 @@
         assert(tanakaUserCols[14] === "22", `Test 183-34: 田中様の評価日(2026-09-15)時点の介護度「22」(要介護2)が出力され、現在の要介護3(23)にならないこと (実際: ${tanakaUserCols[14]})`);
       }
 
-            // 38. 総合結果判定
+      
+        // ----------------------------------------------------
+        // Test 184: [Antigravity追加 2026-10-30] 写真・重要書類保管庫の写真分離・親機限定閲覧・メタデータ保持の検証
+        // ----------------------------------------------------
+        {
+        log("39. 写真・重要書類保管庫の写真分離・親機限定閲覧・メタデータ保持の検証 (Test 184)");
+
+        // Test 184-1: ログイン職員名が未取得（空文字）のときは登録を中止し、db.data.photos に保存されないこと（「職員」などの合成値で埋めない）
+        const origLoginFn = window.cpLoginStaffName;
+        window.cpLoginStaffName = () => "";
+        const countBeforeUnauth = (db.data.photos || []).length;
+        currentPickedPhotoDataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+        let alertMsgUnauth = "";
+        const origAlert = window.alert;
+        window.alert = (msg) => { alertMsgUnauth = msg; };
+        saveNewPhoto();
+        assert((db.data.photos || []).length === countBeforeUnauth, "Test 184-1: 未ログイン時は写真登録が中止され、db.data.photos に追加されないこと");
+        assert(alertMsgUnauth.includes("ログイン"), "Test 184-2: 未ログイン時の警告メッセージが表示されること");
+
+        // Test 184-3: 二重送信防止（isVaultPhotoSubmittingフラグによるガード）
+        window.cpLoginStaffName = () => "管理者 木村 健一";
+        isVaultPhotoSubmitting = true;
+        const countBeforeSubmitting = (db.data.photos || []).length;
+        saveNewPhoto();
+        assert((db.data.photos || []).length === countBeforeSubmitting, "Test 184-3: isVaultPhotoSubmitting実行中は多重登録がガードされること");
+        isVaultPhotoSubmitting = false;
+
+        // Test 184-4: 正常登録時、db.data.photos にはメタデータ（filename等）のみが保存され、base64画像（url）が入らないこと
+        gState.selectedResidentId = 1;
+        const titleInputEl = document.getElementById("photoNewTitle");
+        if (titleInputEl) titleInputEl.value = "重要書類同意書テスト";
+        const catSelectEl = document.getElementById("photoNewCategory");
+        if (catSelectEl) catSelectEl.value = "documents";
+        currentPhotoCategory = "documents";
+
+        saveNewPhoto();
+        await new Promise(r => setTimeout(r, 60));
+
+        const latestPhoto = (db.data.photos || [])[0];
+        assert(latestPhoto && latestPhoto.title === "重要書類同意書テスト", "Test 184-4a: 登録した写真メタデータが db.data.photos の先頭に追加されること");
+        assert(latestPhoto && latestPhoto.filename === "documents_20261030_120000_abc123.jpg", "Test 184-4b: 保存されたレコードにサーバー発番の filename が記録されること");
+        assert(latestPhoto && !latestPhoto.url, "Test 184-4c: 保存データに base64 の url プロパティが含まれないこと");
+        assert(latestPhoto && !JSON.stringify(latestPhoto).includes("data:image"), "Test 184-4d: 保存データのJSON内に base64 画像実体が含まれないこと");
+        assert(latestPhoto && latestPhoto.uploader === "管理者 木村 健一", "Test 184-4e: 登録者にログインした本人の名前が正しく記録されること");
+
+        // Test 184-5: 親機環境（window.gIsHostMachine = true）での表示検証
+        window.gIsHostMachine = true;
+        currentPhotoCategory = "documents";
+        renderPhotoGrid();
+        const gridHostEl = document.getElementById("photoGridArea");
+        const hostImg = gridHostEl.querySelector("img");
+        assert(!!hostImg, "Test 184-5a: 親機では一覧に img 要素が描画されること");
+        assert(hostImg && hostImg.src.includes("/api/vault-photo?type=documents&file=documents_20261030_120000_abc123.jpg"), "Test 184-5b: 親機の画像srcが /api/vault-photo エンドポイントを参照していること");
+        const hostCards = gridHostEl.children;
+        assert(hostCards.length > 0 && hostCards[0].textContent.includes("拡大表示"), "Test 184-5c: 親機では「拡大表示」ボタンが存在すること");
+
+        // Test 184-6: 親機以外（window.gIsHostMachine = false、タブレット等）での表示検証
+        window.gIsHostMachine = false;
+        renderPhotoGrid();
+        const gridNonHostEl = document.getElementById("photoGridArea");
+        const nonHostImg = gridNonHostEl.querySelector("img");
+        assert(!nonHostImg, "Test 184-6a: 非親機では img 要素が描画されないこと（画像実体非表示）");
+        assert(gridNonHostEl.textContent.includes("写真は親機で確認できます"), "Test 184-6b: 非親機では「写真は親機で確認できます」という案内が表示されること");
+        assert(!gridNonHostEl.textContent.includes("拡大表示"), "Test 184-6c: 非親機では拡大表示ボタンが表示されないこと");
+        assert(gridNonHostEl.textContent.includes("重要書類同意書テスト") && gridNonHostEl.textContent.includes("担当: 管理者 木村 健一"), "Test 184-6d: 非親機でも題名・登録日・担当者メタデータは確認できること");
+
+        // Test 184-7: 過去データ互換性検証（url に data:image/... が入っている旧レコード）
+        db.data.photos.unshift({
+          id: 999988,
+          resident_id: 1,
+          category: "documents",
+          title: "旧形式の同意書",
+          url: "data:image/jpeg;base64,/9j/4AAQSkZJRg==",
+          uploader: "管理者 木村 健一",
+          uploaded_at: "2026-10-25 10:00",
+          voided: false
+        });
+        // 親機では旧urlで表示されること
+        window.gIsHostMachine = true;
+        renderPhotoGrid();
+        const legacyCardHost = gridHostEl.children[0];
+        const legacyImg = legacyCardHost.querySelector("img");
+        assert(legacyImg && legacyImg.src.startsWith("data:image/jpeg;base64"), "Test 184-7a: 親機では過去の data: URL 形式の写真も正常に表示されること");
+        // 非親機では旧形式でも画像は出ず「写真は親機で確認できます」になること
+        window.gIsHostMachine = false;
+        renderPhotoGrid();
+        const legacyCardNonHost = gridNonHostEl.children[0];
+        assert(!legacyCardNonHost.querySelector("img"), "Test 184-7b: 非親機では過去の data: URL 形式でも画像タグは出ないこと");
+        assert(legacyCardNonHost.textContent.includes("写真は親機で確認できます"), "Test 184-7c: 非親機では過去データも「写真は親機で確認できます」が表示されること");
+
+        // Test 184-8: 取消機能の検証（理由必須、レコードとファイルは残し voided: true になること）
+        let promptReason = "書類改訂のため取消";
+        const origPrompt = window.prompt;
+        window.prompt = () => promptReason;
+        const targetPhotoId = latestPhoto.id;
+        deletePhoto(targetPhotoId);
+        const voidedPhoto = (db.data.photos || []).find(p => p.id === targetPhotoId);
+        assert(voidedPhoto && voidedPhoto.voided === true, "Test 184-8a: deletePhoto 実行後に該当レコードの voided が true になること");
+        assert(voidedPhoto && voidedPhoto.void_reason === "書類改訂のため取消", "Test 184-8b: 取消理由が記録に残ること");
+        renderPhotoGrid();
+        assert(!gridNonHostEl.textContent.includes(latestPhoto.filename), "Test 184-8c: 取消された写真は active 一覧から除外されること");
+
+        // Test 184-9: 撮影フォームの案内バナー（index.html）の存在と表記検証
+        const noticeBanner = document.querySelector("#addPhotoFormArea .vault-photo-notice, #addPhotoFormArea [style*='var(--caution)']");
+        assert(!!noticeBanner, "Test 184-9a: 撮影フォーム内に注意バナーが存在すること");
+        assert(noticeBanner && noticeBanner.textContent.includes("施設のタブレットで撮影してください"), "Test 184-9b: バナーに「施設のタブレットで撮影してください」が含まれること");
+        assert(noticeBanner && noticeBanner.textContent.includes("個人のスマホでの撮影は禁止されています"), "Test 184-9c: バナーに「個人のスマホでの撮影は禁止されています」が含まれること");
+        assert(noticeBanner && noticeBanner.textContent.includes("撮影したあと端末のアルバムに残ったときは消してください"), "Test 184-9d: バナーに「撮影したあと端末のアルバムに残ったときは消してください」が含まれること");
+
+        // 後始末
+        window.cpLoginStaffName = origLoginFn;
+        window.alert = origAlert;
+        window.prompt = origPrompt;
+        window.gIsHostMachine = false;
+        // テスト用に追加したモック写真のクリーンアップ
+        db.data.photos = (db.data.photos || []).filter(p => p.id !== latestPhoto.id && p.id !== 999988);
+        }
+
+      // 40. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
       log("====================================================");
