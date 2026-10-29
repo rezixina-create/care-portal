@@ -3821,16 +3821,19 @@ function generateKasanCsvFile() {
     const dischargeRaw = isShort ? (isShortDischargeMonth ? shortDischargeDate.replace(/-/g, "") : "") : (isDischargeMonth ? (r.discharge_date || "").replace(/-/g, "") : "");
     const postStatus = isShort ? "" : (isDischargeMonth ? String(r.post_discharge_status || "") : "");
 
+    // [Claude修正 2026-10-29] 外泊日数（27）は、グループホームでは入院の日数を含む（介護給付費請求書等の記載要領 3⑨エ。
+    // 外泊・入院を始めた日と戻った日は含まない＝基本の単位の日）。前は外泊の間の日だけを数え、入院の間の日（入院時費用の日・それを超えた日）が入っていなかった
+    const cpIsAwayMidDay = kd => kd === "OUTING_MID" || kd === "HOSP_EXPENSE" || kd === "HOSP_OVER";
     let outingMidDays = 0;
     if (calc.daysCalc && calc.daysCalc.details) {
       Object.values(calc.daysCalc.details).forEach(kd => {
-        if (kd === "OUTING_MID") outingMidDays++;
+        if (cpIsAwayMidDay(kd)) outingMidDays++;
       });
     } else {
       const dCalc = cpKasanBasicDays(r, itemServiceYm);
       if (dCalc && dCalc.details) {
         Object.values(dCalc.details).forEach(kd => {
-          if (kd === "OUTING_MID") outingMidDays++;
+          if (cpIsAwayMidDay(kd)) outingMidDays++;
         });
       }
     }

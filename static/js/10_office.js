@@ -3326,9 +3326,13 @@ function renderIncidentInjuryPins(options) {
 			: "background:var(--alert); color:var(--surface); border:2px solid var(--surface); z-index:10; box-shadow:0 2px 5px rgba(0,0,0,0.6);";
 		const clickAttr = isReadOnly ? "" : `onclick="event.stopPropagation(); editIncidentInjuryPin(${p.id});"`;
 		const cursorStyle = isReadOnly ? "cursor:default;" : "cursor:pointer;";
+		// [Claude修正 2026-10-29] 詳細の小窓（読み取り専用）は人体図が小さい（幅 約210px）ので、ピンも小さくする（近いピンが重ならないように）
+		const pinSize = isReadOnly ? 16 : 26;
+		const pinFont = isReadOnly ? 10 : 13;
+		const pinBorder = isReadOnly ? "border-width:1.5px;" : "";
 
 		pinsHtml += `
-			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:26px; height:26px; margin-left:-13px; margin-top:-13px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:13px; ${cursorStyle} pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${style}"
+			<div style="position:absolute; left:${p.x_pct}%; top:${p.y_pct}%; width:${pinSize}px; height:${pinSize}px; margin-left:-${pinSize / 2}px; margin-top:-${pinSize / 2}px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-weight:bold; font-size:${pinFont}px; ${cursorStyle} pointer-events:auto; user-select:none; transition:transform 0.15s ease; ${style} ${pinBorder}"
 				title="[${p.pin_no}] ${escapeHtml(p.site_name || '')}: ${escapeHtml(p.injury_type || '')} (${escapeHtml(p.treatment || '-')})"
 				${clickAttr}>
 				${p.pin_no}
