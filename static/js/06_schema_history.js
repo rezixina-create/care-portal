@@ -26,7 +26,7 @@ function openBodySchemaModal(residentId) {
  const badge = document.getElementById("schemaResidentBadge");
  if (badge) {
  if (r) {
- badge.textContent = `${r.name} 様 (${r.room_no}号室 / ${r.care_level})`;
+ badge.textContent = `${r.name} 様 (${r.room_no}号室 / ${(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "未登録"})`;
  } else {
  badge.textContent = "利用者情報";
  }
@@ -572,7 +572,7 @@ function printBodySchema() {
  <th style="padding:4px 6px; border:1px solid #000; width:12%; text-align:left;">利用者氏名</th>
  <td style="padding:4px 6px; border:1px solid #000; width:28%; font-size:13px; font-weight:bold;">${r ? escapeHtml(r.name) : '-'} 様</td>
  <th style="padding:4px 6px; border:1px solid #000; width:10%; text-align:left;">居室 / 介護度</th>
- <td style="padding:4px 6px; border:1px solid #000; width:20%;">${r ? escapeHtml(r.room_no) : '-'}号室 / ${r ? escapeHtml(r.care_level) : '-'}</td>
+ <td style="padding:4px 6px; border:1px solid #000; width:20%;">${r ? escapeHtml(r.room_no) : '-'}号室 / ${r ? (escapeHtml(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || '-') : '-'}</td>
  <th style="padding:4px 6px; border:1px solid #000; width:10%; text-align:left;">年齢 / 生年月日</th>
  <td style="padding:4px 6px; border:1px solid #000; width:20%;">${ageText} (${r ? escapeHtml(r.birth_date || '-') : '-'})</td>
  </tr>
@@ -2007,7 +2007,7 @@ ${cpCareRecordPrintNote(r)}${escapeHtml(r.content || '')}
  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:10px; margin-bottom:16px;">
  <div>
  <h1 style="font-size:22px; margin:0; color:#173f33;">個別介護記録・カルテ報告書</h1>
- <p style="font-size:13px; color:#4a5852; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? res.care_level : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
+ <p style="font-size:13px; color:#4a5852; margin:4px 0 0 0;">対象利用者: <strong>${escapeHtml(resName)}</strong> (${res ? (typeof cpCurrentCareLevel === "function" ? (cpCurrentCareLevel(res) || '未登録') : '') : ''}) / 対象日: <strong>${isAllScope ? '全期間履歴' : escapeHtml(gState.selectedDate)}</strong></p>
  </div>
  <div style="text-align:right; font-size:12px; color:#5f6d66;">
  <div>印刷日時: ${nowStr}</div>

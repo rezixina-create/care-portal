@@ -614,7 +614,7 @@ function getStaffRoleCategory(staffName) {
   const name = staffName || "";
   if (name.includes("木村")) return "director";
   if (name.includes("鈴木 美智子") || name.includes("加藤 由美")) return "nurse";
-  if (name.includes("田中 慎一") || name.includes("松本 陽子")) return "office";
+  if (name.includes("事務")) return "office";
   return "care";
 }
 

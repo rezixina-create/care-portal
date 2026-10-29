@@ -180,7 +180,7 @@ function openCareSummaryModal(resId, summaryId) {
 	});
 
  const badgeEl = document.getElementById("csResidentBadge");
- const curLvl5 = (typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "";
+ const curLvl5 = (typeof cpCurrentCareLevel === "function") ? cpCurrentCareLevel(r) : "";
  if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${curLvl5})`;
 
  const resIdEl = document.getElementById("csResidentId");
@@ -870,7 +870,7 @@ function printPeriodRecords() {
  <div style="font-family:'Hiragino Kaku Gothic ProN','Meiryo',sans-serif; color:#000;">
  <div style="display:flex; justify-content:space-between; align-items:flex-end; border-bottom:2px solid #173f33; padding-bottom:6px;">
  <div><h1 style="font-size:18px; margin:0;">個別記録（期間指定）</h1>
- <div style="font-size:12px;">対象利用者: <strong>${escapeHtml(r.room_no + "号室 " + r.name)} 様</strong> (${escapeHtml(r.care_level || "")}) / 期間: ${escapeHtml(from)} 〜 ${escapeHtml(to)}${incVoid ? " / 取消済みを含む" : ""}</div></div>
+ <div style="font-size:12px;">対象利用者: <strong>${escapeHtml(r.room_no + "号室 " + r.name)} 様</strong> (${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "")}) / 期間: ${escapeHtml(from)} 〜 ${escapeHtml(to)}${incVoid ? " / 取消済みを含む" : ""}</div></div>
  <div style="font-size:11px; text-align:right;">施設名: ${escapeHtml(getFacilityName())}<br>印刷日時: ${escapeHtml(toLocalDateTimeStr(new Date()))}<br>出力担当者: ${escapeHtml(cpLedgerStaff())}</div>
  </div>
  ${body || "<p>印刷する記録が選ばれていません。</p>"}
@@ -960,7 +960,7 @@ function printCareSummary() {
  <div>
  <h1 style="font-size:22px; margin:0; color:#173f33;">介護サマリー (生活・ADLアセスメント詳細)</h1>
  <p style="font-size:13px; color:#36443e; margin:4px 0 0 0;">
- 対象利用者: <strong>${r ? escapeHtml(r.name) : ""} 様</strong> (${r ? escapeHtml(r.room_no) : ""}号室 / ${r ? escapeHtml(r.care_level) : ""})
+ 対象利用者: <strong>${r ? escapeHtml(r.name) : ""} 様</strong> (${r ? escapeHtml(r.room_no) : ""}号室 / ${r ? escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "") : ""})
  / サマリー種別: <strong>${escapeHtml(summaryType)}</strong>
  </p>
  </div>
@@ -1080,7 +1080,7 @@ function openEmergencySummaryModal(resId) {
  }
 
  const badgeEl = document.getElementById("emgResidentBadge");
- const curLvlPrint = (typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "";
+ const curLvlPrint = (typeof cpCurrentCareLevel === "function") ? cpCurrentCareLevel(r) : "";
  if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${curLvlPrint}) 救急隊・受診医療機関提出用`;
 
  const reasonInput = document.getElementById("emgReasonInput");
@@ -1146,7 +1146,7 @@ function renderEmergencySummaryPreview(r) {
  <th style="width:120px; background:#f6f8f6; padding:6px; text-align:left;">氏名</th>
  <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${escapeHtml(r.room_no)}号室)</td>
  <th style="width:100px; background:#f6f8f6; padding:6px; text-align:left;">要介護度</th>
- <td style="padding:6px; font-weight:bold;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "")}</td>
+ <td style="padding:6px; font-weight:bold;">${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "")}</td>
  </tr>
  <tr>
  <th style="background:#f6f8f6; padding:6px; text-align:left;">生年月日 / 年齢</th>
@@ -1240,7 +1240,7 @@ ${reasonText}
 
 ■ 基本情報
 氏名: ${r.name} 様 (${r.room_no}号室)
-要介護度: ${(typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || ""}
+要介護度: ${(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || ""}
 生年月日: ${r.birth_date || "-"}
 基本方針: ［${r.policy_stamp || "未設定"}］
 緊急連絡先: ${r.emergency_contact || "未登録"}

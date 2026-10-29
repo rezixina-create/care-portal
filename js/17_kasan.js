@@ -1595,7 +1595,7 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   // 月末時点の要介護度
   const lastDateOfMonth = `${yStr}-${String(m).padStart(2, "0")}-${String(daysInMonth).padStart(2, "0")}`;
   const endCert = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, lastDateOfMonth) : { level: r.care_level || "" };
-  const careLevel = endCert.level || r.care_level || "";
+  const careLevel = endCert.level || "";
   const serviceType = isShort ? (careLevel === "要支援2" ? "39" : "38") : (careLevel === "要支援2" ? "37" : "32");
 
   // 日ごとの算定対象日をグルーピング
@@ -2459,7 +2459,7 @@ function renderOfficeKasanTab() {
   // 表の各行HTML
   const rowsHtml = monthlyResults.map(res => {
     const r = res.resident;
-    const codesHtml = (res.levelMissing ? `<div style="font-size:13px; color:var(--caution); font-weight:bold;">要介護度が未登録か対象（要介護1〜5・要支援2）ではないため、数えていません（${escapeHtml(res.careLevel || "未登録")}）</div>` : "") + res.items.map(it => {
+    const codesHtml = (res.levelMissing ? `<div style="font-size:13px; color:var(--alert); font-weight:bold;">要介護度が入っていません（算定対象外）</div>` : "") + res.items.map(it => {
       if (it.candidate) {
         return `<div style="font-size:13px; margin-bottom:2px; color:var(--caution);"><span class="badge" style="background:var(--ground); color:var(--ink-2); font-size:13px; padding:1px 5px;">${escapeHtml(it.code)}</span> <strong>${escapeHtml(it.name)}</strong>: ${it.unit_price}単位（${escapeHtml(it.note)}）</div>`;
       }
@@ -2488,7 +2488,7 @@ function renderOfficeKasanTab() {
           ${res.isShort ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">短期利用（${res.serviceType}）</span>` : (res.hasMixedServiceType ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:12px; margin-left:4px;">32/37混在</span>` : (res.serviceType === "37" ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">介護予防（37）</span>` : ""))}
           ${r.status === "退所" ? `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:13px; margin-left:4px;">退所</span>` : ""}
         </td>
-        <td style="text-align:center; white-space:nowrap;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "-")}</td>
+        <td style="text-align:center; white-space:nowrap;">${escapeHtml((res.levelMissing && !res.careLevel) ? "要介護度が入っていません" : ((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || (res.careLevel || "-")))}</td>
         <td style="text-align:right; font-weight:bold; white-space:nowrap;">
           ${res.basicDays} 日
           ${res.hasMixedServiceType ? `<div style="font-size:12px; font-weight:normal; color:var(--ink-2); line-height:1.3; margin-top:2px;">介護: ${res.byServiceType["32"]?.days || 0}日<br>予防: ${res.byServiceType["37"]?.days || 0}日</div>` : ""}
@@ -3194,7 +3194,7 @@ function printEmergencyResidentSheets() {
             <th style="width:18%; background:#f5f5f5; padding:4px 6px;">氏名 / 居室</th>
             <td style="width:32%; padding:4px 6px; font-weight:bold;">${val(r.name)}（${val(r.room_no)}号室）</td>
             <th style="width:18%; background:#f5f5f5; padding:4px 6px;">要介護度 / 生年月日</th>
-            <td style="width:32%; padding:4px 6px;">${val(r.care_level)} ／ ${val(r.birth_date)}</td>
+            <td style="width:32%; padding:4px 6px;">${val(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "")} ／ ${val(r.birth_date)}</td>
           </tr>
           <tr>
             <th style="background:#f5f5f5; padding:4px 6px;">緊急連絡先</th>
@@ -3755,7 +3755,7 @@ function renderKasanCsvValidation(regularYm, currentProcessYm, baseDate) {
           <tr>
             <td style="text-align:center; white-space:nowrap;">${statusBadge}</td>
             <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)}</td>
-            <td style="text-align:center; white-space:nowrap;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "未登録")}</td>
+            <td style="text-align:center; white-space:nowrap;">${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "未登録")}</td>
             <td style="text-align:right; font-weight:bold; white-space:nowrap;">${item.calc.totalUnits.toLocaleString()} 単位</td>
             <td>${missingText}</td>
           </tr>
@@ -5444,7 +5444,7 @@ function renderKasanClaimStatusTable(ym) {
           ${escapeHtml(roomStr)}${escapeHtml(r.name)} 様
         </td>
         <td style="text-align:center; font-size:13px; white-space:nowrap;">
-          ${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "-")}
+          ${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "-")}
         </td>
         <td style="text-align:right; font-size:13px; white-space:nowrap;">
           ${calc.totalUnits.toLocaleString()} 単位

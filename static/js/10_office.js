@@ -3262,7 +3262,7 @@ function openIncidentInjurySchemaModal() {
 	const r = (gState.residents || []).find(x => Number(x.id) === resId);
 
 	const badge = document.getElementById("incInjuryResidentBadge");
-	if (badge) badge.textContent = r ? `${r.room_no}号室 ${r.name} 様 (${r.care_level})` : "利用者情報";
+	if (badge) badge.textContent = r ? `${r.room_no}号室 ${r.name} 様 (${(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "未登録"})` : "利用者情報";
 
 	if (!Array.isArray(gState.currentIncidentInjuryPins)) {
 		gState.currentIncidentInjuryPins = [];
@@ -3626,7 +3626,7 @@ function printIncidentReport(incId) {
 				</tr>
 				<tr>
 					<th>対象利用者</th>
-					<td>${res ? `${escapeHtml(res.room_no)}号室 <strong>${escapeHtml(res.name)} 様</strong> (${escapeHtml(res.care_level)})` : '-'}</td>
+					<td>${res ? `${escapeHtml(res.room_no)}号室 <strong>${escapeHtml(res.name)} 様</strong> (${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(res) : "") || "未登録")})` : '-'}</td>
 					<th>報告者氏名</th>
 					<td>${escapeHtml(inc.staff_name || '担当職員')}</td>
 				</tr>
@@ -4696,7 +4696,7 @@ function openIncidentDetailModal(incId) {
 	// 利用者情報
 	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
 	const resDisplay = res
-		? `${escapeHtml(res.room_no || '')}号室 ${escapeHtml(res.name || '')} 様 (${escapeHtml(res.care_level || '-')})`
+		? `${escapeHtml(res.room_no || '')}号室 ${escapeHtml(res.name || '')} 様 (${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(res) : "") || '-')})`
 		: (escapeHtml(inc.resident_name || '未設定'));
 
 	// 基本情報
@@ -4797,8 +4797,8 @@ function renderBenefitRateHistoryTable(resident) {
   tbody.innerHTML = "";
   const list = Array.isArray(resident.benefit_rate_history) ? [...resident.benefit_rate_history] : [];
   if (list.length === 0) {
-    const curRate = resident.benefit_rate ? parseInt(String(resident.benefit_rate), 10) : 90;
-    const curLabel = curRate === 90 ? "9割給付" : (curRate === 80 ? "8割給付" : (curRate === 70 ? "7割給付" : `${curRate}%給付`));
+    const curRate = resident.benefit_rate ? parseInt(String(resident.benefit_rate), 10) : null;
+    const curLabel = curRate ? (curRate === 90 ? "9割給付" : (curRate === 80 ? "8割給付" : (curRate === 70 ? "7割給付" : `${curRate}%給付`))) : "未登録";
     tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--ink-2);">登録はありません（今の値: ${escapeHtml(curLabel)}）</td></tr>`;
     return;
   }

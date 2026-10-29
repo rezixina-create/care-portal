@@ -4673,27 +4673,52 @@
         assert(calcOkada.totalUnits === 29023, `Test 183-17: 岡田様モデル 月合計単位数が 29023 単位であること (実際: ${calcOkada.totalUnits})`);
         if (origSettings2) db.data.kasan_settings = origSettings2;
 
-        // 4. 区分変更取消時の直前認定終了日復帰検証
-        const rCatModel = {
-          id: 993,
-          name: "区分変更テスト様",
-          care_level: "要介護3",
-          care_start_date: "2026-10-15",
-          care_expiry_date: "2027-04-14",
-          care_cert_history: [
-            { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", original_end_date: "2028-01-14", kind: "更新", voided: false },
-            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2027-04-14", kind: "区分変更", voided: false }
-          ]
-        };
-        // 取り消し処理を模倣（voidCareCertHistoryItemの復元ロジック）
-        rCatModel.care_cert_history[1].voided = true;
-        rCatModel.care_cert_history.forEach(h => {
-          if (h.original_end_date && h.end_date < h.original_end_date) {
-            h.end_date = h.original_end_date;
-            delete h.original_end_date;
-          }
-        });
-        assert(rCatModel.care_cert_history[0].end_date === "2028-01-14", "Test 183-18: 区分変更取消時に直前認定のend_dateがoriginal_end_date(2028-01-14)に復帰すること");
+        // 4. 区分変更の取消・直前認定復元（本物のvoidCareCertHistoryItemを呼び出して検証）
+        const origPrompt183 = window.prompt;
+        const origAlert183 = window.alert;
+        const origSession183 = gState.session;
+        const origStamps183 = gState.stamps;
+        const origLogin183 = window.cpLoginStaffName;
+        window.prompt = () => "テスト取消理由";
+        window.alert = () => {};
+        window.cpLoginStaffName = () => "本田 正";
+        gState.session = { staffName: "本田 正", role: "管理者" };
+        gState.stamps = [{ name: "本田 正", role: "管理者" }];
+
+        let rTanakaOrig = gState.residents ? gState.residents.find(x => x.id === 2) : null;
+        if (!rTanakaOrig) {
+          if (!gState.residents) gState.residents = [];
+          rTanakaOrig = { id: 2, name: "田中 ハナ", care_level: "要介護3", status: "入居", room_no: "102" };
+          gState.residents.push(rTanakaOrig);
+        }
+        const rTanakaBackup = JSON.parse(JSON.stringify(rTanakaOrig));
+        rTanakaOrig.care_cert_history = [
+          { id: 1, level: "要介護2", start_date: "2024-01-15", end_date: "2026-01-14", kind: "更新", applied_date: "2023-12-10", voided: false, void_reason: "" },
+          { id: 2, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", original_end_date: "2028-01-14", kind: "更新", applied_date: "2025-12-10", modified_reason: "区分変更(開始日:2026-10-15)による期間短縮", voided: false, void_reason: "" },
+          { id: 3, level: "要介護3", start_date: "2026-10-15", end_date: "2027-04-14", kind: "区分変更", applied_date: "2026-10-15", voided: false, void_reason: "" }
+        ];
+
+        // 4-a: 田中様の2024-01-15認定（id:1、更新）を取り消しても、2026-01-15認定（id:2）のend_dateは2026-10-14のまま
+        voidCareCertHistoryItem(2, 1);
+        const cert2AfterVoid1 = rTanakaOrig.care_cert_history.find(h => h.id === 2);
+        assert(cert2AfterVoid1.end_date === "2026-10-14", "Test 183-18a: 関係ない認定(2024-01-15)を取り消しても、直後認定のend_dateは2026-10-14のまま維持されること");
+
+        // 4-b: 区分変更認定（id:3）を取り消すと、2026-01-15認定（id:2）のend_dateがoriginal_end_date(2028-01-14)に復元され、前の値と復元記録が残ること
+        voidCareCertHistoryItem(2, 3);
+
+        const cert2AfterVoid3 = rTanakaOrig.care_cert_history.find(h => h.id === 2);
+        assert(cert2AfterVoid3.end_date === "2028-01-14", "Test 183-18b: 区分変更取消に伴い直前認定のend_dateがoriginal_end_date(2028-01-14)に復元されること");
+        assert(cert2AfterVoid3.original_end_date === "2028-01-14", "Test 183-18c: 復元後もoriginal_end_dateが保持されていること");
+        assert(cert2AfterVoid3.modified_reason && cert2AfterVoid3.modified_reason.includes("期間短縮"), "Test 183-18d: 短縮時のmodified_reasonが削除されず残っていること");
+        assert(cert2AfterVoid3.restored_by === "本田 正" && cert2AfterVoid3.restored_reason && cert2AfterVoid3.restored_reason.includes("期間復元"), "Test 183-18e: restored_byおよびrestored_reasonが記録されていること");
+
+        // 田中様のデータをバックアップから復元
+        Object.assign(rTanakaOrig, rTanakaBackup);
+        window.prompt = origPrompt183;
+        window.alert = origAlert183;
+        window.cpLoginStaffName = origLogin183;
+        gState.session = origSession183;
+        gState.stamps = origStamps183;
 
         // 5. 認定期間外でのCSV検証失敗確認（「要介護度が入っていません」）
         const rNoCert = {
@@ -4714,6 +4739,31 @@
         const valNoCert = cpValidateResidentForKasanCsv(rNoCert, "2026-10");
         assert(!valNoCert.valid, "Test 183-19: 対象月(2026-10)を覆う認定がない利用者はCSV検証で無効となること");
         assert(valNoCert.missing.some(m => m.includes("要介護度が入っていません")), "Test 183-20: 不足項目に「要介護度が入っていません」が含まれること");
+
+        // 6. 前田勝様の認定を2026-10-20までにした場合、17_kasanの確認表・算定で「要介護度が入っていません」・0単位となること
+        const rMaeda = JSON.parse(JSON.stringify(gState.residents.find(x => x.name === "前田 勝") || {}));
+        if (rMaeda.care_cert_history && rMaeda.care_cert_history.length > 1) {
+          rMaeda.care_cert_history[1].end_date = "2026-10-20";
+        }
+        const maedaCalc = cpComputeMonthlyKasan(rMaeda, "2026-10");
+        assert(maedaCalc.levelMissing === true, "Test 183-21: 月末時点で認定が切れている前田様の計算でlevelMissingがtrueになること");
+        assert(maedaCalc.totalUnits === 0, "Test 183-22: 認定切れ月の単位数合計が0単位になること");
+
+        // 7. 未来日からの認定登録時、ブラウザ日付がその日より後になると新しい介護度を返すこと
+        const rFutureModel = {
+          id: 994,
+          name: "未来認定テスト様",
+          care_level: "要介護1",
+          care_start_date: "2024-01-01",
+          care_expiry_date: "2026-11-30",
+          care_cert_history: [
+            { id: 1, level: "要介護1", start_date: "2024-01-01", end_date: "2026-11-30", voided: false },
+            { id: 2, level: "要介護4", start_date: "2026-12-01", end_date: "2028-11-30", voided: false }
+          ]
+        };
+        assert(cpCurrentCareLevel(rFutureModel, "2026-11-15") === "要介護1", "Test 183-23: 2026-11-15時点では前認定の要介護1を返すこと");
+        assert(cpCurrentCareLevel(rFutureModel, "2026-12-02") === "要介護4", "Test 183-24: 2026-12-01以降（2026-12-02）では新認定の要介護4を返すこと");
+        assert(cpCurrentCareLevel(rFutureModel, "2029-01-01") === "", "Test 183-25: 認定有効期間外では空文字を返し静的care_levelにフォールバックしないこと");
       }
 
             // 38. 総合結果判定

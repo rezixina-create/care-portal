@@ -1133,7 +1133,7 @@ function checkGlobalAlerts(baseDate) {
         if (diffDays > 0 && diffDays <= 60) {
           const expKey = `care_expiry_${r.id}_${curExpiry}`;
           if (!isAlertDismissed(expKey)) {
-            expiringResidents.push({ id: r.id, name: r.name, level: curCert.level || r.care_level, date: curExpiry, days: diffDays, key: expKey });
+            expiringResidents.push({ id: r.id, name: r.name, level: curCert.level || "未登録", date: curExpiry, days: diffDays, key: expKey });
           }
         }
       }
@@ -1541,3 +1541,14 @@ function cpBenefitRateOn(resident, targetYm) {
   }
   return null;
 }
+
+// [Antigravity追加] 今日の介護度を返す共通関数（有効期間外や未登録時は空文字を返す。静的なr.care_levelに依存しない）
+function cpCurrentCareLevel(resident, targetDate) {
+  if (!resident) return "";
+  const dStr = targetDate || toLocalDateStr(new Date());
+  const cert = (typeof cpCareCertOn === "function") ? cpCareCertOn(resident, dStr) : null;
+  return (cert && cert.level) ? cert.level : "";
+}
+window.cpCurrentCareLevel = cpCurrentCareLevel;
+window.cpCareCertOn = cpCareCertOn;
+window.cpBenefitRateOn = cpBenefitRateOn;

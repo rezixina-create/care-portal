@@ -39,7 +39,7 @@ function renderOfficeCareRenewal() {
   cpCurrentResidents().forEach(r => {
     totalCount++;
     const curCert = cpCareCertOn(r, todayStr);
-    const curExpiry = curCert.end_date || r.care_expiry_date || "";
+    const curExpiry = curCert.end_date || "";
     let daysDiff = 999;
     if (curExpiry) {
       const exp = new Date(curExpiry);
@@ -98,7 +98,7 @@ function renderOfficeCareRenewal() {
     }
 
     const s = steps;
-    const curLevel = curCert.level || r.care_level || "未登録";
+    const curLevel = curCert.level || "未登録";
 
     tr.innerHTML = `
       <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
@@ -1835,18 +1835,22 @@ function voidCareCertHistoryItem(residentId, certId) {
   item.voided_by = staffName;
   item.voided_at = toLocalDateTimeStr(new Date());
 
-  // 区分変更などの取消に伴い、短縮されていた前の認定期間があれば元に戻す
-  r.care_cert_history.forEach(h => {
-    if (h.original_end_date && h.end_date < h.original_end_date) {
-      h.end_date = h.original_end_date;
-      delete h.original_end_date;
-      delete h.modified_by;
-      delete h.modified_at;
-      delete h.modified_reason;
-    }
-  });
+  // 区分変更の取消に伴い、その前の日に終わるよう短縮されていた直前の認定期間のみ元に戻す（前の値は消さず、復元情報を残す）
+  if (item.kind === "区分変更" && item.start_date) {
+    const prevDate = new Date(item.start_date);
+    prevDate.setDate(prevDate.getDate() - 1);
+    const prevDateStr = toLocalDateStr(prevDate);
+    r.care_cert_history.forEach(h => {
+      if (!h.voided && h.original_end_date && h.end_date === prevDateStr && h.end_date < h.original_end_date) {
+        h.end_date = h.original_end_date;
+        h.restored_by = staffName;
+        h.restored_at = toLocalDateTimeStr(new Date());
+        h.restored_reason = `区分変更(開始日:${item.start_date})の取消に伴う期間復元`;
+      }
+    });
+  }
 
-  // 今日の認定に同期
+  // 今日の認定に同期（有効期間外なら空にし、約束事25に従い過去・未来の値で埋めない）
   const todayStrVoid = toLocalDateStr(new Date());
   const todayCert = cpCareCertOn(r, todayStrVoid);
   if (todayCert && todayCert.level) {
@@ -1854,13 +1858,9 @@ function voidCareCertHistoryItem(residentId, certId) {
     r.care_start_date = todayCert.start_date;
     r.care_expiry_date = todayCert.end_date;
   } else {
-    const valid = r.care_cert_history.filter(h => !h.voided);
-    if (valid.length > 0) {
-      valid.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.id || 0) - (a.id || 0));
-      r.care_level = valid[0].level;
-      r.care_start_date = valid[0].start_date;
-      r.care_expiry_date = valid[0].end_date;
-    }
+    r.care_level = "";
+    r.care_start_date = "";
+    r.care_expiry_date = "";
   }
 
   if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], `要介護認定履歴の取消(${trimmed})`);

@@ -488,7 +488,7 @@ function renderCareExpiryNotes() {
 
  item.innerHTML = `
  <div>
- <strong>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</strong> (${escapeHtml(r.care_level)})
+ <strong>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</strong> (${escapeHtml((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "-")})
  <span style="margin-left:12px;">満了日: ${escapeHtml(r.care_expiry_date)}</span>
  </div>
  <div>

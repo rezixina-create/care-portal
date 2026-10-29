@@ -865,7 +865,7 @@ function printCarePlanDocument(planId) {
   const r = (gState.residents || []).find(x => Number(x.id) === Number(plan.resident_id));
   const resName = r ? `${r.name} 様` : "利用者様";
   const roomNo = r && r.room_no ? `${r.room_no}号室` : "";
-  const careLevel = r && r.care_level ? r.care_level : "";
+  const careLevel = r ? ((typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r) : "") || "") : "";
   const birthDate = r && r.birth_date ? r.birth_date : "";
   const facName = typeof getFacilityName === "function" ? getFacilityName() : "介護施設";
   const periodStr = cpCarePlanPeriodText(plan);
