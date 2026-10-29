@@ -1181,7 +1181,7 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
     const r = item.resident ? item.resident : item;
     const a = item.assessment || {};
 
-    const evalDateStr = a.evaluation_date || toLocalDateStr(new Date());
+    const evalDateStr = a.evaluate_date || toLocalDateStr(new Date());
     const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: "", start_date: "", end_date: "" };
     const certLevel = lCertCsv.level || "";
     const isPrevGH = (certLevel && certLevel.includes("要支援2"));
