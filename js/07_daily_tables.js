@@ -756,9 +756,9 @@ function renderVitalsTable() {
      const filledHtml = vList.map(x => `<div style="display:flex; align-items:center; gap:4px; flex-wrap:wrap; margin-top:2px;">${cpFilledBadgeHtml(cpFormatVitalBrief(x), x.staff_name, x.time || "", x.edit_history)}<button type="button" class="btn btn-secondary" style="font-size:11px; padding:1px 6px;" onclick="openPersonalVitalModal(${Number(x.id)})">訂正</button></div>`).join("");
 
    tr.innerHTML = `
-     <td>${r.room_no}</td>
+     <td>${escapeHtml(r.room_no)}</td>
      <td>
-       <strong>${r.name} 様</strong> ${cpStatusOn(r, gState.selectedDate) !== '在所' ? `(${cpStatusOn(r, gState.selectedDate)})` : ''}
+       <strong>${escapeHtml(r.name)} 様</strong> ${cpStatusOn(r, gState.selectedDate) !== '在所' ? `(${cpStatusOn(r, gState.selectedDate)})` : ''}
        ${filledHtml}
      </td>
      <td><input type="number" step="0.1" class="form-control" style="width:85px;" id="vTemp_${r.id}" value="${v && v.temperature !== null && v.temperature !== undefined ? v.temperature : ''}" placeholder="体温" onblur="formatTempInput(this)" oninput="formatTempInput(this)"></td>
@@ -1146,9 +1146,9 @@ function renderMealsTable() {
    : "";
 
  tr.innerHTML = `
- <td>${r.room_no}</td>
+ <td>${escapeHtml(r.room_no)}</td>
  <td>
-   <strong>${r.name} 様</strong>
+   <strong>${escapeHtml(r.name)} 様</strong>
    ${allMealsSummaryHtml}
    <div id="mStatus_${r.id}"></div>
  </td>
@@ -1270,9 +1270,9 @@ function renderBathTable() {
  const filledHtml = b ? cpFilledBadgeHtml(cpFormatBathDetail(b), b.staff_name, b.time || "") : "";
 
  tr.innerHTML = `
- <td>${r.room_no}</td>
+ <td>${escapeHtml(r.room_no)}</td>
  <td>
-   <strong>${r.name} 様</strong>
+   <strong>${escapeHtml(r.name)} 様</strong>
    ${filledHtml}
  </td>
  <td>
@@ -1368,7 +1368,7 @@ function renderTopicalTable() {
  const pins = cpTopicalPins(r.id);
  if (!pins.length) {
  const tr = document.createElement("tr");
- tr.innerHTML = `<td>${r.room_no}</td><td><strong>${escapeHtml(r.name)} 様</strong></td>
+ tr.innerHTML = `<td>${escapeHtml(r.room_no)}</td><td><strong>${escapeHtml(r.name)} 様</strong></td>
  <td colspan="2" class="topical-empty">塗り薬・湿布の登録なし</td>`;
  tbody.appendChild(tr);
  return;
@@ -1390,7 +1390,7 @@ function renderTopicalTable() {
  return `<button type="button" class="topical-slot" onclick="toggleTopical(${r.id}, ${p.id}, '${slot}')">${slot}</button>`;
  }).join("");
  tr.innerHTML = `
- ${i === 0 ? `<td rowspan="${pins.length}">${r.room_no}</td><td rowspan="${pins.length}"><strong>${escapeHtml(r.name)} 様</strong></td>` : ""}
+ ${i === 0 ? `<td rowspan="${pins.length}">${escapeHtml(r.room_no)}</td><td rowspan="${pins.length}"><strong>${escapeHtml(r.name)} 様</strong></td>` : ""}
  <td>
  ${cpDrugLink(p.item_name, "topical-item rx-med-name")}
  <div class="topical-meta">${escapeHtml(p.category || "")} ／ ${escapeHtml(p.site_name || "")}${p.frequency ? ` ／ 指示: ${escapeHtml(p.frequency)}` : ""}</div>
@@ -1643,8 +1643,8 @@ function renderMedTable() {
  }
 
  tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>${escapeHtml(r.room_no)}</td>
+ <td><strong>${escapeHtml(r.name)} 様</strong></td>
  <td>${eyedropCellHtml}</td>
  `;
  tbody.appendChild(tr);

@@ -589,21 +589,21 @@ function renderOfficeInventory() {
    if (isLow) tr.style.backgroundColor = "#fee2e2";
 
    tr.innerHTML = `
-     <td><strong>${i.name}</strong></td>
+     <td><strong>${escapeHtml(i.name)}</strong></td>
      <td>${cpBillingModeFor(null, i).mode === "personal" ? '<span style="color:#0284c7; font-weight:bold;">個人対象</span>' : '<span style="color:#16a34a; font-weight:bold;">施設負担</span>'}</td>
-     <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${i.unit}</td>
+     <td><strong style="font-size:16px; ${isLow?'color:#dc2626;':''}">${i.current_stock}</strong> ${escapeHtml(i.unit)}</td>
      <td>
        <div style="display:inline-flex; align-items:center; gap:4px;">
          <input type="number" class="form-control" style="width:70px; font-size:12px; padding:2px 6px;" value="${alertThreshold}" min="0" onchange="updateItemAlertThreshold(${i.id}, this.value)" title="在庫がこの数を下回るとアラートが出ます">
-         <span style="font-size:12px; color:#5f6d66;">${i.unit}</span>
+         <span style="font-size:12px; color:#5f6d66;">${escapeHtml(i.unit)}</span>
        </div>
      </td>
      <td>¥${Number(i.unit_price || 0).toLocaleString()}</td>
      <td>${isLow ? '<span style="color:#dc2626; font-weight:bold;"> 要補充</span>' : '<span style="color:#16a34a;">適正</span>'}</td>
-     <td>${i.supplier_name || '-'}</td>
+     <td>${escapeHtml(i.supplier_name || '-')}</td>
      <td style="display:flex; gap:6px;">
        <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openOrderModalWithItem(${i.id})">発注起案</button>
-       <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openInventoryAdjustModal(${i.id}, '${i.name}', ${i.current_stock})">棚卸</button>
+       <button class="btn btn-secondary" style="padding:4px 8px; font-size:12px;" onclick="openInventoryAdjustModal(${i.id}, '${escapeHtml(i.name)}', ${i.current_stock})">棚卸</button>
      </td>
    `;
    tbody.appendChild(tr);
@@ -615,14 +615,14 @@ function renderOfficeInventory() {
    (db.data.inventory_logs || []).slice(0, 30).forEach(l => {
      const tr = document.createElement("tr");
      tr.innerHTML = `
-       <td>${l.timestamp}</td>
-       <td><strong>${l.item_name}</strong></td>
+       <td>${escapeHtml(l.timestamp)}</td>
+       <td><strong>${escapeHtml(l.item_name)}</strong></td>
        <td><span class="badge" style="${l.action_type==='出庫'?'background:#fee2e2;color:#991b1b;':'background:#dcfce7;color:#166534;'}">${l.action_type}</span></td>
        <td>${l.change_qty > 0 ? '+' : ''}${l.change_qty}</td>
        <td><strong>${l.after_qty}</strong></td>
-       <td>${l.resident_name ? l.resident_name + ' 様' : '-'}</td>
-       <td><strong>${l.staff_name}</strong></td>
-       <td>${l.reason || '-'}</td>
+       <td>${l.resident_name ? escapeHtml(l.resident_name) + ' 様' : '-'}</td>
+       <td><strong>${escapeHtml(l.staff_name)}</strong></td>
+       <td>${escapeHtml(l.reason || '-')}</td>
      `;
      logTbody.appendChild(tr);
    });
@@ -1922,13 +1922,13 @@ function renderOfficeOrders() {
  }
 
  tr.innerHTML = `
- <td>${o.ordered_at || o.order_date || '-'}${o.received_at ? `<div style="font-size:11px; color:#166534;">受取: ${o.received_at}</div>` : ''}</td>
- <td><strong>${o.item_name}</strong></td>
+ <td>${o.ordered_at || o.order_date || '-'}${o.received_at ? `<div style="font-size:11px; color:#166534;">受取: ${escapeHtml(o.received_at)}</div>` : ''}</td>
+ <td><strong>${escapeHtml(o.item_name)}</strong></td>
  <td>${o.quantity}</td>
  <td>¥${(o.total_price || 0).toLocaleString()}</td>
- <td>${o.supplier_name || '-'}</td>
- <td>${o.reason || '-'}</td>
- <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${o.status}</span></td>
+ <td>${escapeHtml(o.supplier_name || '-')}</td>
+ <td>${escapeHtml(o.reason || '-')}</td>
+ <td><span style="font-size:12px; font-weight:bold; padding:2px 8px; border-radius:4px; background:${badgeColor}">${escapeHtml(o.status)}</span></td>
  <td>${escapeHtml(o.applicant || '未記録')}</td>
  <td>${escapeHtml(o.approver || '-')}</td>
  <td>${escapeHtml(o.received_by || '-')}</td>
@@ -2768,14 +2768,14 @@ function renderOfficeComplaints() {
  const res = gState.residents.find(x => x.id === c.resident_id);
  const tr = document.createElement("tr");
  tr.innerHTML = `
- <td>${c.received_at}</td>
- <td><strong>${c.claimant}</strong></td>
- <td>${res ? res.name + ' 様' : '全体'}</td>
- <td>${c.content}</td>
- <td>${c.investigation || '-'}</td>
- <td>${c.improvement_plan || '-'}</td>
- <td>${c.reported_at || '-'}</td>
- <td><span style="font-weight:bold; color:#d97706;">${c.status}</span></td>
+ <td>${escapeHtml(c.received_at)}</td>
+ <td><strong>${escapeHtml(c.claimant)}</strong></td>
+ <td>${res ? escapeHtml(res.name) + ' 様' : '全体'}</td>
+ <td>${escapeHtml(c.content)}</td>
+ <td>${escapeHtml(c.investigation || '-')}</td>
+ <td>${escapeHtml(c.improvement_plan || '-')}</td>
+ <td>${escapeHtml(c.reported_at || '-')}</td>
+ <td><span style="font-weight:bold; color:#d97706;">${escapeHtml(c.status)}</span></td>
  `;
  tbody.appendChild(tr);
  });

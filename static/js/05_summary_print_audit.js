@@ -1137,7 +1137,7 @@ function renderEmergencySummaryPreview(r) {
  <table style="width:100%; border-collapse:collapse; font-size:12px; margin-bottom:10px;" border="1">
  <tr>
  <th style="width:120px; background:#f6f8f6; padding:6px; text-align:left;">氏名</th>
- <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${r.room_no}号室)</td>
+ <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${escapeHtml(r.room_no)}号室)</td>
  <th style="width:100px; background:#f6f8f6; padding:6px; text-align:left;">要介護度</th>
  <td style="padding:6px; font-weight:bold;">${escapeHtml(r.care_level)}</td>
  </tr>

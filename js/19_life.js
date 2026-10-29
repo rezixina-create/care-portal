@@ -1076,7 +1076,7 @@ function openLifeAssessmentHistoryModal(residentId) {
           <div style="margin-top:6px; font-size:13px; color:var(--ink-2); display:flex; gap:16px; flex-wrap:wrap;">
             <span>ADL: <strong>${adlScore}点</strong> / 100点</span>
             <span>障害自立度: <strong>${CP_IMPAIRED_DEGREE_LABELS[a.impaired_elderly_independence_degree] || a.impaired_elderly_independence_degree || "-"}</strong></span>
-            <span>認知症自立度コード: <strong>${a.dementia_elderly_independence_degree || "-"}</strong></span>
+            <span>認知症自立度コード: <strong>${escapeHtml(a.dementia_elderly_independence_degree || "-")}</strong></span>
             <span>身長/体重: ${a.height ? `${a.height}cm` : "-"} / ${a.weight ? `${a.weight}kg` : "-"}</span>
           </div>
           ${histHtml}
@@ -1117,7 +1117,7 @@ function cpLifeSectionHtml(r) {
         <div style="display:flex; gap:14px; flex-wrap:wrap; margin-top:2px;">
           <span>ADL総合: <strong>${adlScore}点</strong> / 100点</span>
           <span>障害自立度: <strong>${CP_IMPAIRED_DEGREE_LABELS[latest.impaired_elderly_independence_degree] || latest.impaired_elderly_independence_degree || "-"}</strong></span>
-          <span>認知症自立度コード: <strong>${latest.dementia_elderly_independence_degree || "-"}</strong></span>
+          <span>認知症自立度コード: <strong>${escapeHtml(latest.dementia_elderly_independence_degree || "-")}</strong></span>
         </div>
       </div>
     `;

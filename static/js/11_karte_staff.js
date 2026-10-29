@@ -1631,8 +1631,8 @@ function onItemChangeInOrder() {
  if (headerEl) {
  headerEl.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:4px;">
- <span> <strong>在庫現況:</strong> 現在庫: <strong style="${isLow ? 'color:#dc2626;' : ''}">${invItem.current_stock}${invItem.unit}</strong> / 安全基準: ${invItem.safety_stock}${invItem.unit} / 平常時定数: <strong>${normalStock}${invItem.unit}</strong></span>
- <span style="font-weight:bold; color:#1a4f3d;"> 平常時不足: +${deficit}${invItem.unit}</span>
+ <span> <strong>在庫現況:</strong> 現在庫: <strong style="${isLow ? 'color:#dc2626;' : ''}">${invItem.current_stock}${escapeHtml(invItem.unit)}</strong> / 安全基準: ${invItem.safety_stock}${escapeHtml(invItem.unit)} / 平常時定数: <strong>${normalStock}${escapeHtml(invItem.unit)}</strong></span>
+ <span style="font-weight:bold; color:#1a4f3d;"> 平常時不足: +${deficit}${escapeHtml(invItem.unit)}</span>
  </div>
  `;
  }
@@ -1658,7 +1658,7 @@ function calcOrderTotal() {
  const after = invItem.current_stock + qty;
  const diffToNormal = after - normalStock;
  let note = diffToNormal === 0 ? "（平常時定数とピッタリ一致 ）" : (diffToNormal > 0 ? `（平常時定数より ＋${diffToNormal}${invItem.unit} 多め）` : `（平常時定数まであと ${Math.abs(diffToNormal)}${invItem.unit} 不足）`);
- projText.innerHTML = `※ 発注納品後の想定在庫: <strong>${after}${invItem.unit}</strong> <span style="color:#0369a1; font-weight:bold;">${note}</span>`;
+ projText.innerHTML = `※ 発注納品後の想定在庫: <strong>${after}${escapeHtml(invItem.unit)}</strong> <span style="color:#0369a1; font-weight:bold;">${note}</span>`;
  }
 }
 

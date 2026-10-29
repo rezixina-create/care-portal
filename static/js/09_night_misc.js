@@ -235,7 +235,7 @@ function renderNightTable() {
  tr.style.opacity = "0.7";
  const cells = times.map(() => `<td style="text-align:center; color:#94a19a; font-size:11px;">(対象外)</td>`).join("");
  tr.innerHTML = `
- <td>${r.room_no}</td>
+ <td>${escapeHtml(r.room_no)}</td>
  <td><strong>${escapeHtml(r.name)} 様</strong> <span class="badge" style="background:#5f6d66; color:#fff; font-size:10px; margin-left:4px;">${escapeHtml(r.status)}</span></td>
  ${cells}
  `;
@@ -286,8 +286,8 @@ function renderNightTable() {
     }).join("");
 
  tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>${escapeHtml(r.room_no)}</td>
+ <td><strong>${escapeHtml(r.name)} 様</strong></td>
  ${cells}
  `;
  tbody.appendChild(tr);
@@ -398,8 +398,8 @@ function renderWeightTable() {
 
  const tr = document.createElement("tr");
  tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>${escapeHtml(r.room_no)}</td>
+ <td><strong>${escapeHtml(r.name)} 様</strong></td>
  <td>${gState.currentMonth}</td>
  <td><input type="number" step="0.1" class="form-control" style="width:90px;" id="wVal_${r.id}" value="${currentVal}"></td>
  <td>${diffDisplay}</td>
@@ -497,7 +497,7 @@ function renderWeightChart(selectedResId = null) {
  container.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px; flex-wrap:wrap; gap:8px;">
  <div style="font-weight:bold; font-size:14px; color:#173f33;">
- 過去1年間の体重推移グラフ (${targetRes ? `${targetRes.name} 様` : ''})
+ 過去1年間の体重推移グラフ (${targetRes ? `${escapeHtml(targetRes.name)} 様` : ''})
  </div>
  <div style="display:flex; gap:6px; flex-wrap:wrap;">
  ${resButtons}
@@ -689,8 +689,8 @@ function renderGroomingTable() {
  const g = groomings.find(x => x.resident_id === r.id);
  const tr = document.createElement("tr");
  tr.innerHTML = `
- <td>${r.room_no}</td>
- <td><strong>${r.name} 様</strong></td>
+ <td>${escapeHtml(r.room_no)}</td>
+ <td><strong>${escapeHtml(r.name)} 様</strong></td>
  <td><label><input type="checkbox" id="gNail_${r.id}" ${g && g.nail_done ? 'checked' : ''}> 爪切り済</label></td>
  <td><label><input type="checkbox" id="gShave_${r.id}" ${g && g.shave_done ? 'checked' : ''}> 髭剃り済</label></td>
  <td><label><input type="checkbox" id="gEar_${r.id}" ${g && g.ear_done ? 'checked' : ''}> 耳掃除済</label></td>
@@ -1655,14 +1655,14 @@ function renderQuickConsume() {
 
  card.innerHTML = `
  <div>
- <div style="font-weight:bold; font-size:14px; color:#22302b;">${item.name}</div>
+ <div style="font-weight:bold; font-size:14px; color:#22302b;">${escapeHtml(item.name)}</div>
  <div style="font-size:12px; color:var(--text-muted); margin-top:2px;">
- 現在庫: <strong>${item.current_stock}</strong> ${item.unit} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
+ 現在庫: <strong>${item.current_stock}</strong> ${escapeHtml(item.unit)} | 単価: ¥${(item.unit_price || 0).toLocaleString()}
  ${cpBillingModeFor(gState.selectedResidentId, item).mode === 'personal' ? '<span style="color:#0284c7; font-weight:bold;">[個人請求対象]</span>' : '<span style="color:#16a34a; font-weight:bold;">[施設負担]</span>'}
  </div>
  </div>
  <div style="margin-top:10px;">
- <button class="btn btn-primary" style="width:100%; padding:8px; font-size:13px; font-weight:bold;" onclick="consumeItem(${item.id}, 1)"> 1${item.unit}使用する</button>
+ <button class="btn btn-primary" style="width:100%; padding:8px; font-size:13px; font-weight:bold;" onclick="consumeItem(${item.id}, 1)"> 1${escapeHtml(item.unit)}使用する</button>
  </div>
  `;
  grid.appendChild(card);
@@ -1701,8 +1701,8 @@ function consumeItem(itemId, qty) {
  const msgEl = document.getElementById("confirmConsumeMsg");
  if (msgEl) {
  msgEl.innerHTML = `
- <strong style="font-size:16px; color:#173f33;">${res.room_no}号室 ${res.name} 様</strong> に<br>
- 【<strong>${item.name}</strong>】 を <strong>${qty} ${item.unit}</strong> 使用します。<br><br>
+ <strong style="font-size:16px; color:#173f33;">${escapeHtml(res.room_no)}号室 ${escapeHtml(res.name)} 様</strong> に<br>
+ 【<strong>${escapeHtml(item.name)}</strong>】 を <strong>${qty} ${escapeHtml(item.unit)}</strong> 使用します。<br><br>
  対象者と物品はお間違いないですか？
  ${billNote}
  `;
@@ -1801,8 +1801,8 @@ function renderRecentConsumeLogs() {
 
  row.innerHTML = `
  <div>
- <span> ${timeDisplay} <strong>${l.resident_name || ''} 様</strong>: ${l.item_name} (${Math.abs(l.change_qty)})</span>
- <span style="color:var(--text-muted); margin-left:8px;">担当: ${l.staff_name || '未設定'}</span>
+ <span> ${timeDisplay} <strong>${escapeHtml(l.resident_name || '')} 様</strong>: ${escapeHtml(l.item_name)} (${Math.abs(l.change_qty)})</span>
+ <span style="color:var(--text-muted); margin-left:8px;">担当: ${escapeHtml(l.staff_name || '未設定')}</span>
  </div>
  <div>
  <button class="btn btn-secondary" style="padding:3px 8px; font-size:12px;" onclick="rollbackConsume(${l.id})">［ 修正 ］</button>

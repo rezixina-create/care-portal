@@ -276,12 +276,12 @@ function renderResidentDetail() {
  container.innerHTML = `
  <div style="display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:12px;">
  <div>
- <span class="room-badge" style="font-size:13px;">${r.room_no}号室</span>
- <h2 style="font-size:20px; font-weight:bold; margin-top:4px;">${r.name} 様</h2>
- <span style="font-size:13px; color:var(--text-muted);">${r.care_level} / 生年月日: ${r.birth_date || "-"} / 入居日: ${r.admission_date || "-"}</span>
+ <span class="room-badge" style="font-size:13px;">${escapeHtml(r.room_no)}号室</span>
+ <h2 style="font-size:20px; font-weight:bold; margin-top:4px;">${escapeHtml(r.name)} 様</h2>
+ <span style="font-size:13px; color:var(--text-muted);">${escapeHtml(r.care_level)} / 生年月日: ${r.birth_date || "-"} / 入居日: ${r.admission_date || "-"}</span>
  </div>
  <div style="text-align:right;">
- <div class="policy-stamp ${stampClass}" style="font-size:14px; padding:4px 10px;">［ ${r.policy_stamp} ］</div>
+ <div class="policy-stamp ${stampClass}" style="font-size:14px; padding:4px 10px;">［ ${escapeHtml(r.policy_stamp)} ］</div>
  ${cpIsDischarged(r) ? `
  <div class="discharge-banner">退所 ${escapeHtml(r.discharge_date || "")}（${escapeHtml(r.discharge_reason || "")}）${r.discharge_note ? `<br>${escapeHtml(r.discharge_note)}` : ""}<br><span class="discharge-by">手続き ${escapeHtml(r.discharged_at || "")} ${escapeHtml(r.discharged_by || "")}</span></div>
  <div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end;">
@@ -426,7 +426,7 @@ function renderResidentDetail() {
  <div style="font-size:13px; display:flex; justify-content:space-between; align-items:center; background:#f0f9ff; padding:8px 10px; border-radius:6px;">
  <div>
  <strong style="color:#0369a1;"> 次回受診・往診予定日:</strong>
- <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${r.next_clinic_date || '未定'}</span>
+ <span style="font-weight:bold; margin-left:6px; color:#0284c7;">${escapeHtml(r.next_clinic_date || '未定')}</span>
  </div>
  <button type="button" class="btn btn-secondary" style="padding:2px 8px; font-size:11px; white-space:nowrap; margin-left:8px;" onclick="event.preventDefault(); event.stopPropagation(); openClinicInstructionModal(${r.id}, 'date'); return false;">予定日を変更</button>
  </div>

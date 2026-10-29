@@ -488,8 +488,8 @@ function renderCareExpiryNotes() {
 
  item.innerHTML = `
  <div>
- <strong>${r.room_no}号室 ${r.name} 様</strong> (${r.care_level})
- <span style="margin-left:12px;">満了日: ${r.care_expiry_date}</span>
+ <strong>${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様</strong> (${escapeHtml(r.care_level)})
+ <span style="margin-left:12px;">満了日: ${escapeHtml(r.care_expiry_date)}</span>
  </div>
  <div>
  <strong style="${isUrgent ? 'color:#dc2626;' : 'color:#b45309;'}">あと ${diffDays} 日で満了</strong>
@@ -695,22 +695,22 @@ function renderPhotoGrid() {
  card.onmouseenter = () => { card.style.transform = "translateY(-2px)"; card.style.boxShadow = "0 4px 10px rgba(0,0,0,0.12)"; };
  card.onmouseleave = () => { card.style.transform = "none"; card.style.boxShadow = "0 1px 3px rgba(0,0,0,0.06)"; };
 
- const safeTitle = (p.title || "").replace(/'/g, "\\'");
+ // [Claude修正 2026-10-29] 題名に " や < があると画面が崩れ、書いた文字がそのまま動く（スクリプトになる）おそれがあった。拡大は data- 属性から渡す
  card.innerHTML = `
- <div style="position:relative; width:100%; height:130px; background:#1c2622; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" onclick="openLightbox('${p.url}', '${safeTitle}')">
- <img src="${p.url}" alt="${p.title || '写真'}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a19a; font-size:12px;\\'> 画像読込エラー</span>';">
+ <div style="position:relative; width:100%; height:130px; background:#1c2622; cursor:pointer; overflow:hidden; display:flex; align-items:center; justify-content:center;" data-u="${escapeHtml(p.url)}" data-t="${escapeHtml(p.title || '')}" onclick="openLightbox(this.dataset.u, this.dataset.t)">
+ <img src="${escapeHtml(p.url)}" alt="${escapeHtml(p.title || '写真')}" style="width:100%; height:100%; object-fit:cover;" onerror="this.onerror=null; this.src=''; this.parentElement.innerHTML='<span style=\\'color:#94a19a; font-size:12px;\\'> 画像読込エラー</span>';">
  <div style="position:absolute; bottom:4px; right:4px; background:rgba(0,0,0,0.6); color:white; font-size:10px; padding:2px 6px; border-radius:4px;"> 拡大</div>
  </div>
  <div style="padding:10px; flex:1; display:flex; flex-direction:column; justify-content:space-between;">
  <div>
- <div style="font-weight:bold; font-size:13px; color:#22302b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${p.title || ''}">
- ${p.title || "名称未設定"}
+ <div style="font-weight:bold; font-size:13px; color:#22302b; margin-bottom:4px; line-height:1.3; overflow:hidden; text-overflow:ellipsis; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical;" title="${escapeHtml(p.title || '')}">
+ ${escapeHtml(p.title || "名称未設定")}
  </div>
- <div style="font-size:11px; color:#5f6d66;"> ${p.uploaded_at || "-"}</div>
- <div style="font-size:11px; color:#5f6d66;"> 担当: ${p.uploader || "-"}</div>
+ <div style="font-size:11px; color:#5f6d66;"> ${escapeHtml(p.uploaded_at || "-")}</div>
+ <div style="font-size:11px; color:#5f6d66;"> 担当: ${escapeHtml(p.uploader || "-")}</div>
  </div>
  <div style="margin-top:8px; display:flex; justify-content:space-between; align-items:center; border-top:1px solid #eef2ef; padding-top:6px;">
- <button class="btn btn-secondary" style="font-size:11px; padding:3px 8px;" onclick="openLightbox('${p.url}', '${safeTitle}')">拡大表示</button>
+ <button class="btn btn-secondary" style="font-size:11px; padding:3px 8px;" data-u="${escapeHtml(p.url)}" data-t="${escapeHtml(p.title || '')}" onclick="openLightbox(this.dataset.u, this.dataset.t)">拡大表示</button>
  <button class="btn" style="background:#fee2e2; color:#b91c1c; border:1px solid #fca5a5; font-size:11px; padding:3px 8px;" onclick="deletePhoto(${p.id})">取消</button>
  </div>
  </div>

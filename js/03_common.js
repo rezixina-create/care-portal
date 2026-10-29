@@ -884,9 +884,9 @@ function checkGlobalAlerts(baseDate) {
       const deficit = Math.max(1, normalStock - item.current_stock);
       officeAlertHtml += `
         <div class="alert-banner alert-danger notice-card-urgent">
-          <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${item.unit}</strong> / 安全基準: ${item.safety_stock}${item.unit} / 平常時定数: <strong>${normalStock}${item.unit}</strong> → 不足: <strong>+${deficit}${item.unit}</strong>）</span>
+          <span> <strong>【要発注アラート】</strong> 『<strong>${escapeHtml(item.name)}</strong>』の在庫が不足しています（現在庫: <strong>${item.current_stock}${escapeHtml(item.unit)}</strong> / 安全基準: ${item.safety_stock}${escapeHtml(item.unit)} / 平常時定数: <strong>${normalStock}${escapeHtml(item.unit)}</strong> → 不足: <strong>+${deficit}${escapeHtml(item.unit)}</strong>）</span>
           <div style="display:flex; gap:6px; flex-wrap:wrap; align-items:center;">
-            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#1e5b47; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${item.unit})</button>
+            <button class="btn btn-primary" style="padding:3px 10px; font-size:12px; background:#1e5b47; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 『${escapeHtml(item.name)}』の発注を申請 (推奨+${deficit}${escapeHtml(item.unit)})</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, 'stock_${item.id}_${item.current_stock}')"> 閉じる</button>
           </div>
         </div>
@@ -897,7 +897,7 @@ function checkGlobalAlerts(baseDate) {
         const deficit = Math.max(1, normalStock - item.current_stock);
         return `
           <div style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.85); padding:4px 8px; border-radius:4px; margin-top:4px; border:1px solid #fca5a5;">
-            <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${item.unit}</strong> / 基準: ${item.safety_stock}${item.unit} / 平常定数: ${normalStock}${item.unit} → 不足: <strong>+${deficit}${item.unit}</strong>)</span>
+            <span style="color:#991b1b;">・<strong>${escapeHtml(item.name)}</strong> (残: <strong>${item.current_stock}${escapeHtml(item.unit)}</strong> / 基準: ${item.safety_stock}${escapeHtml(item.unit)} / 平常定数: ${normalStock}${escapeHtml(item.unit)} → 不足: <strong>+${deficit}${escapeHtml(item.unit)}</strong>)</span>
             <div style="display:flex; gap:4px;">
               <button class="btn btn-primary" style="padding:2px 8px; font-size:11px; background:#1e5b47; color:#fff;" onclick="openOrderModalWithItem(${item.id})"> 発注申請 (+${deficit})</button>
             </div>
@@ -934,7 +934,7 @@ function checkGlobalAlerts(baseDate) {
         if (!isAlertDismissed(todayClinicKey)) {
           careAlertHtml += `
             <div class="alert-banner alert-danger notice-card-urgent" style="background:#fef2f2; border-left:5px solid #ef4444; color:#991b1b;">
-              <span><strong>【本日受診・往診日】</strong> ${r.room_no}号室 ${r.name} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
+              <span><strong>【本日受診・往診日】</strong> ${escapeHtml(r.room_no)}号室 ${escapeHtml(r.name)} 様 本日受診/往診です！${specialNoteBadge} 指示内容: ${escapeHtml(r.dr_instructions || '定期診察')}</span>
               <div style="display:flex; gap:6px; align-items:center;">
                 <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#fee2e2; color:#991b1b; border-color:#fca5a5;" onclick="openClinicInstructionModal(${r.id})">指示確認・変更</button>
                 <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${todayClinicKey}')"> 受診対応完了</button>
@@ -949,7 +949,7 @@ function checkGlobalAlerts(baseDate) {
           const tag = diffDays <= 7 ? "【1週間前】" : "【2週間前】";
           careAlertHtml += `
             <div class="alert-banner ${alertClass}">
-              <span> ${tag} ${r.name}様 次回受診・往診日: ${r.next_clinic_date} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
+              <span> ${tag} ${escapeHtml(r.name)}様 次回受診・往診日: ${escapeHtml(r.next_clinic_date)} (あと${diffDays}日) - 残薬確認・指示受け準備 ${specialNoteBadge}</span>
               <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px;" onclick="requestDismissAlertFromButton(this, '${upcomingKey}')"> 確認済・閉じる</button>
             </div>
           `;
@@ -984,7 +984,7 @@ function checkGlobalAlerts(baseDate) {
         : `便が3日以上出ていません（現在 <strong>${daysNoStool}日目</strong>）。水分補給・腹部マッサージ・処方された下剤の服用を確認し、看護師へ共有してください。`;
       careAlertHtml += `
         <div class="alert-banner alert-danger notice-card-urgent" style="background:#fff1f2; border-left:5px solid #e11d48; color:#9f1239;">
-          <span>  <strong>【排便アラート】</strong> ${r.room_no}号室 <strong>${r.name} 様</strong>：${cpStoolMsg}</span>
+          <span>  <strong>【排便アラート】</strong> ${escapeHtml(r.room_no)}号室 <strong>${escapeHtml(r.name)} 様</strong>：${cpStoolMsg}</span>
           <div style="display:flex; gap:6px; align-items:center;">
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:12px; background:#ffe4e6; color:#9f1239; border-color:#f43f5e;" onclick="switchCareTab('excretion')">排泄表を開く</button>
             <button class="btn btn-secondary" style="padding:2px 8px; font-size:11px; background:#fff; color:#9f1239;" onclick="requestDismissAlertFromButton(this, '${stoolKey}')"> 処置・対応完了</button>

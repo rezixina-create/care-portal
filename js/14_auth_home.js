@@ -91,7 +91,7 @@ function renderOfficeCareRenewal() {
     tr.innerHTML = `
       <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
       <td><span class="badge" style="background:#f1f6f3; color:#1e5b47; border:1px solid #a9cfbf;">${escapeHtml(r.care_level || '未登録')}</span></td>
-      <td><strong>${r.care_expiry_date || '未設定'}</strong></td>
+      <td><strong>${escapeHtml(r.care_expiry_date || '未設定')}</strong></td>
       <td>${daysBadge}</td>
       <td>
         <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px;">

@@ -282,8 +282,8 @@ function renderOfficeUnits() {
  </div>
  <div class="unit-count">利用者 ${res.length}名・職員 ${st.length}名</div>
  ${res.length || st.length ? `<details class="unit-members"><summary>この区分の利用者・職員（別の区分へ移す）</summary>
- ${res.map(r => memberRow(`${r.room_no || ""}号室 ${r.name} 様`, r.name, u.id, `moveResidentUnit(${r.id}, this.value)`)).join("")}
- ${st.map(s => memberRow(`${s.name}（${s.role || "職員"}）`, s.name, u.id, "moveStaffUnit(this.dataset.staff, this.value)", `data-staff="${escapeHtml(s.name)}"`)).join("")}
+ ${res.map(r => memberRow(`${escapeHtml(r.room_no || "")}号室 ${escapeHtml(r.name)} 様`, r.name, u.id, `moveResidentUnit(${r.id}, this.value)`)).join("")}
+ ${st.map(s => memberRow(`${escapeHtml(s.name)}（${escapeHtml(s.role || "職員")}）`, s.name, u.id, "moveStaffUnit(this.dataset.staff, this.value)", `data-staff="${escapeHtml(s.name)}"`)).join("")}
  </details>` : ""}
  </div>`;
  }).join("");
@@ -291,7 +291,7 @@ function renderOfficeUnits() {
  box.innerHTML = `
  ${rows || `<p class="panel-note">区分はまだありません。区分がないあいだは、利用者一覧の切り替えは出ません。</p>`}
  ${units.length && noUnit.length ? `<div class="unit-card unit-none"><div class="unit-count">区分が決まっていない利用者 ${noUnit.length}名</div>
- ${noUnit.map(r => `<div class="unit-member"><span>${escapeHtml(`${r.room_no || ""}号室 ${r.name} 様`)}</span><select class="form-control unit-move" onchange="moveResidentUnit(${r.id}, this.value)"><option value="">区分を選ぶ</option>${units.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("")}</select></div>`).join("")}</div>` : ""}
+ ${noUnit.map(r => `<div class="unit-member"><span>${escapeHtml(`${escapeHtml(r.room_no || "")}号室 ${escapeHtml(r.name)} 様`)}</span><select class="form-control unit-move" onchange="moveResidentUnit(${r.id}, this.value)"><option value="">区分を選ぶ</option>${units.map(u => `<option value="${u.id}">${escapeHtml(u.name)}</option>`).join("")}</select></div>`).join("")}</div>` : ""}
  <div class="unit-add">
  <input type="text" class="form-control" id="newUnitName" maxlength="20" aria-label="追加する区分の名前">
  <button type="button" class="btn btn-primary" onclick="addUnit()">区分を追加</button>
@@ -1302,7 +1302,7 @@ function renderShiftTable(yearMonth) {
  ${getStaffRoleBadgeHtml(st.name)} ${escapeHtml(st.name)}${staffUnitBadge}
  </td>
  <td style="border:1px solid #cdd6d0; padding:4px 2px; white-space:nowrap;">
- <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${st.role || '介護'}</span>
+ <span style="display:inline-block; font-size:11px; padding:2px 4px; border-radius:4px; font-weight:bold; background:${roleBg}; color:${roleColor};">${escapeHtml(st.role || '介護')}</span>
  </td>
  `;
 
@@ -1361,7 +1361,7 @@ function renderShiftTable(yearMonth) {
     }
   }
   tbodyHtml += `
-    <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${st.name} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
+    <td class="shift-cell ${hol.isHoliday ? 'shift-holiday-col' : ''} ${isHope ? 'shift-cell-hope' : ''}" style="background:${cellBg};" onclick="openShiftCellPopover(event, '${safeName}', ${d}, '${sym}')" ondblclick="cycleShiftCell('${safeName}', ${d})" title="${escapeHtml(st.name)} ${month}月${d}日: ${isHope ? '【希望休】' + (hopeInfo.reason || '申請済') + ' - ' : ''}クリックして即時変更">
     ${sym ? `<span class="${badgeClass}">${sym}</span>${unitTag}${hopeTag}` : `<span style="color:#cdd6d0;">-</span>`}
   </td>
   `;

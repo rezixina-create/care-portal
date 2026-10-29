@@ -4542,6 +4542,21 @@
         assert(!!term181 && !term181.meaning.includes("浅く速く") && !term181.checkPoint.includes("肩や首"), "Test 181-5: 資料にない文（浅く速く・肩や首の筋肉）が残っていないこと");
       }
 
+      // Test 182: [Claude追加 2026-10-29] 職員や家族が書いた文字（苦情・発注の理由など）をそのまま HTML として動かさないこと
+      {
+        const ev182 = '<img src=x id="xss182" onerror="window.__xss182=1">';
+        const origC182 = db.data.complaints, origO182 = db.data.orders;
+        const mk182 = (id) => { const t = document.createElement("table"); t.id = id; t.innerHTML = "<tbody></tbody>"; document.body.appendChild(t); return t; };
+        const tc182 = mk182("complaintsTable"), to182 = mk182("ordersTable");
+        db.data.complaints = [{ id: 1820001, received_at: "2026-10-29", claimant: ev182, resident_id: 0, content: ev182, investigation: ev182, improvement_plan: ev182, status: "対応中" }];
+        db.data.orders = [{ id: 1820002, ordered_at: "2026-10-29", item_name: ev182, quantity: 1, total_price: 1, supplier_name: ev182, reason: ev182, status: "納品完了", applicant: ev182 }];
+        try { renderOfficeComplaints(); renderOfficeOrders(); } catch (e) { log("Test 182 例外: " + e, "fail"); }
+        assert(!tc182.querySelector("img") && tc182.innerText.includes("<img src=x"), "Test 182-1: 苦情受付簿の文字が、HTML ではなく文字のまま出ること");
+        assert(!to182.querySelector("img") && to182.innerText.includes("<img src=x"), "Test 182-2: 発注申請の品名・業者・理由が、HTML ではなく文字のまま出ること");
+        tc182.remove(); to182.remove();
+        db.data.complaints = origC182; db.data.orders = origO182;
+      }
+
       // 38. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
