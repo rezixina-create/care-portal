@@ -174,13 +174,37 @@ if toS >= VD:
             v.update({"status": "未接種", "reactions": "", "notes": "接種の日に入院中のため、退院後に主治医と相談"})
 
 # ---- 委員会・研修・避難訓練（決まった日） ----
-ATT = "木村 健一、山田 孝之、吉田 誠、鈴木 美智子、小林 恵子、佐々木 浩二"
-COM = [("2026-11-10", "法定委員会", "感染症対策委員会", ATT, "冬の感染症への備え", "インフルエンザ・ノロウイルスの流行期に向け、手洗い・換気・嘔吐物の処理の手順を確認。予防接種の結果を共有した。"),
-       ("2026-12-15", "法定委員会", "身体拘束適正化委員会", ATT, "冬の夜間の見守り", "夜が長くなり、夜間の離床が増える時期。センサーマットを使っている方が、本人の動きを妨げていないか確認。今期も身体拘束は0件。"),
-       ("2027-01-12", "法定委員会", "感染症対策委員会", ATT, "年末年始の振り返り", "年末年始に発熱した方はいなかった。面会の方にも手指の消毒と体調の確認をお願いすることを続ける。")]
-for (dt_, cat, name, att, ag, ct) in COM:
-    if lastS < dt_ <= toS and not any(c.get("date") == dt_ and c.get("committee_name") == name for c in d.get("committees", [])):
-        d.setdefault("committees", []).append({"id": nid(), "date": dt_, "category": cat, "committee_name": name, "attendees": att, "agenda": ag, "content": ct})
+def com_attendees(dt_str, is_promo=False):
+    ym = dt_str[:7]
+    d_str = str(int(dt_str[8:10]))
+    shifts = d.get("monthly_shifts", {}).get(ym, {})
+    working = [staff for staff, days in shifts.items() if days.get(d_str) in ("日", "早", "遅")]
+    prio_mgmt = ["木村 健一", "佐々木 浩二", "小林 恵子", "鈴木 美智子", "加藤 由美"]
+    selected_mgmt = [s for s in prio_mgmt if s in working][:4]
+    selected_care = [s for s in working if s not in prio_mgmt][:3]
+    facility_att = selected_mgmt + selected_care
+    if is_promo:
+        return "、".join(facility_att) + "、利用者のご家族、地域の方（自治会）、地域包括支援センターの職員"
+    return "、".join(facility_att)
+
+COM = [
+    ("2026-11-10", "法定委員会", "感染症対策委員会", "infection_committee", "冬の感染症への備え", "インフルエンザ・ノロウイルスの流行期に向け、手洗い・換気・嘔吐物の処理の手順を確認。予防接種の結果を共有した。"),
+    ("2026-11-26", "施設内研修", "感染対策研修", "infection_training", "冬期感染症対策と嘔吐物処理手順の徹底", "ノロウイルス流行期を前に、防護具の確実な着脱と汚染拡大防止の初動手順を再確認した。"),
+    ("2026-12-10", "訓練", "感染症対策訓練", "infection_drill", "夜間発生を想定した感染症隔離訓練", "夜間帯の発熱者発生を想定し、少人数でのゾーニングと応援要請手順の実技訓練を実施した。"),
+    ("2026-12-15", "法定委員会", "身体拘束適正化委員会", "restraint_committee", "冬の夜間の見守り", "夜が長くなり、夜間の離床が増える時期。センサーマットを使っている方が、本人の動きを妨げていないか確認。今期も身体拘束は0件。"),
+    ("2026-12-17", "会議", "運営推進会議", "promotion_meeting", "冬期の生活環境と感染症・防火対策について", "冬期の暖房・加湿状況とインフルエンザ予防接種の実施状況を報告。年末年始の面会ルールについて協議した。"),
+    ("2027-01-12", "法定委員会", "感染症対策委員会", "infection_committee", "年末年始の振り返り", "年末年始に発熱した方はいなかった。面会の方にも手指の消毒と体調の確認をお願いすることを続ける。"),
+    ("2027-01-21", "施設内研修", "業務継続計画（BCP）研修", "bcp_training", "感染症まん延時における業務継続と優先度判定", "職員の複数感染を想定した最小人員体制と、食事・排泄など生命維持に直結する優先ケアの整理を行った。"),
+    ("2027-02-18", "会議", "運営推進会議", "promotion_meeting", "外部評価の活用と新年度に向けた地域連携", "今年度の外部評価結果および事業改善の進捗を報告。地域行事との連携やボランティア受入れについて意見交換を行った。"),
+    ("2027-02-25", "訓練", "業務継続計画（BCP）訓練", "bcp_drill", "非常用電源立ち上げ及び安否確認システム訓練", "停電時を想定した発電機稼働訓練と、職員緊急連絡網を用いた安否確認の実地テストを行った。")
+]
+for (dt_, cat, name, ikey, ag, ct) in COM:
+    if lastS < dt_ <= toS and not any(c.get("date") == dt_ and (c.get("item_key") == ikey or c.get("committee_name") == name) for c in d.get("committees", [])):
+        att = com_attendees(dt_, is_promo=(ikey == "promotion_meeting"))
+        d.setdefault("committees", []).append({
+            "id": nid(), "date": dt_, "category": cat, "committee_name": name, "item_key": ikey,
+            "attendees": att, "agenda": ag, "content": ct
+        })
         added["committees"] += 1
 FD = [("2026-11-19", "昼間想定 避難・消火訓練", "西棟の台所からの出火を想定。全員の避難が4分20秒で完了。", 16),
       ("2027-02-18", "夜間想定 通報・避難訓練", "夜勤2名を想定し、東棟の居室からの出火。通報と、近い方から順に避難。避難完了6分50秒。", 17)]
