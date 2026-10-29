@@ -1182,7 +1182,7 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
     const a = item.assessment || {};
 
     const evalDateStr = a.evaluation_date || toLocalDateStr(new Date());
-    const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+    const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: "", start_date: "", end_date: "" };
     const certLevel = lCertCsv.level || "";
     const isPrevGH = (certLevel && certLevel.includes("要支援2"));
     const serviceCode = isPrevGH ? CP_LIFE_SERVICE_CODE_PREV : CP_LIFE_SERVICE_CODE_GH;
@@ -1265,7 +1265,7 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
     const a = item.assessment || {};
 
     const evalDateStr = a.evaluate_date || toLocalDateStr(new Date());
-    const lCertEval = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level };
+    const lCertEval = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: "" };
     const certLevel = lCertEval.level || "";
     const isPrevGH = (certLevel && certLevel.includes("要支援2"));
     const serviceCode = isPrevGH ? CP_LIFE_SERVICE_CODE_PREV : CP_LIFE_SERVICE_CODE_GH;
@@ -1281,7 +1281,7 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
       insured_no: paddedInsuredNo,
       external_system_management_number: extNo,
       facility_outpatient_category: CP_LIFE_FACILITY_CATEGORY,
-      care_level: a.care_level || cpCareLevelToLifeCode(r.care_level),
+      care_level: a.care_level || cpCareLevelToLifeCode(typeof cpCurrentCareLevel === "function" ? cpCurrentCareLevel(r, a.evaluate_date) : ""),
       impaired_elderly_independence_degree: a.impaired_elderly_independence_degree,
       dementia_elderly_independence_degree: a.dementia_elderly_independence_degree,
       evaluate_date: evalDateVal,

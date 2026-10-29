@@ -598,24 +598,19 @@ window.renderResidentsStrip = renderResidentsStrip;
 
 // 2. 職員の職種識別マークとカテゴリ判定
 function getStaffRoleCategory(staffName) {
-  // [Claude修正] 役職（role）で判定する。名前での判定（「鈴木」「加藤」なら看護師など）は、役職が空のときだけ使う
   const allStamps = db.data.stamps || [];
   const staff = allStamps.find(s => (s.name || s) === staffName);
   const role = staff && staff.role ? staff.role : "";
   if (role) {
     if (role.includes("施設長") || role.includes("管理者")) return "director";
-    if (role.includes("計画作成") || role.includes("介護支援専門員") || role.includes("ケアマネ")) return "caremanager";
+    if (role.includes("計画作成") || role.includes("支援専門") || role.includes("ケアマネ")) return "caremanager";
     if (role.includes("相談員")) return "counselor";
     if (role.includes("看護")) return "nurse";
     if (role.includes("事務") && role.includes("パート")) return "parttime";
     if (role.includes("事務")) return "office";
     return "care";
   }
-  const name = staffName || "";
-  if (name.includes("木村")) return "director";
-  if (name.includes("鈴木 美智子") || name.includes("加藤 由美")) return "nurse";
-  if (name.includes("事務")) return "office";
-  return "care";
+  return "";
 }
 
 // 職種識別バッジ生成ヘルパー (管, 生, ケ, 看, リ, 介, 事, パ)
@@ -1566,7 +1561,7 @@ function openShiftCellPopover(event, staffName, day, currentSymbol) {
 
  let contentHtml = "";
 
- if (roleCategory !== "care") {
+ if (roleCategory && roleCategory !== "care") {
  // 施設長・事務員・看護師: 日勤または公休のみ！夜勤・早・遅は完全除外で誤操作を絶対防止
  contentHtml = `
  <div class="shift-popover-header">
@@ -1713,7 +1708,7 @@ function cycleShiftCell(staffName, day) {
  const roleCategory = getStaffRoleCategory(staffName);
 
  let nextSym = "日";
- if (roleCategory !== "care") {
+ if (roleCategory && roleCategory !== "care") {
  // 施設長・事務員・看護師: 「日 ⇄ 休」のみ安全にトグル！決して夜勤や早出・遅出にならない！
  nextSym = (cur === "日") ? "休" : "日";
  } else {
@@ -1769,7 +1764,7 @@ function openShiftCellModal(staffName, day) {
  const btnDawn = document.querySelector("#shiftEditButtonsContainer button:nth-child(5)");
  const btnHoliday = document.querySelector("#shiftEditButtonsContainer button:nth-child(6)");
 
- if (roleCategory !== "care") {
+ if (roleCategory && roleCategory !== "care") {
  if (notice) notice.innerHTML = "<span style='color:#0369a1; font-weight:bold;'> 日勤専従の職種（管理者・計画作成担当者・相談員・看護師・事務員）は日勤専従（土日祝・年末年始休み）です。<br>日勤または公休のみ選択可能です。</span>";
  if (btnEarly) { btnEarly.disabled = true; btnEarly.style.opacity = "0.35"; btnEarly.style.pointerEvents = "none"; }
  if (btnLate) { btnLate.disabled = true; btnLate.style.opacity = "0.35"; btnLate.style.pointerEvents = "none"; }
@@ -1796,7 +1791,7 @@ function applyShiftCellEdit(symbol) {
  const roleCategory = getStaffRoleCategory(staffName);
 
  // 職種制約ガード: 施設長・事務員・看護師は「日」「休」「クリア」以外を厳格に拒絶
- if (roleCategory !== "care" && symbol && symbol !== "日" && symbol !== "休") {
+ if (roleCategory && roleCategory !== "care" && symbol && symbol !== "日" && symbol !== "休") {
  alert(` 【職種制約ガード】\n${staffName} は日勤専従のため、「日勤」または「公休」のみ設定可能です。\n（夜勤・早番・遅番・明けへの誤変更を防止しました）`);
  return;
  }

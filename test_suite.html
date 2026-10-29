@@ -4681,9 +4681,9 @@
         const origLogin183 = window.cpLoginStaffName;
         window.prompt = () => "テスト取消理由";
         window.alert = () => {};
-        window.cpLoginStaffName = () => "本田 正";
-        gState.session = { staffName: "本田 正", role: "管理者" };
-        gState.stamps = [{ name: "本田 正", role: "管理者" }];
+        window.cpLoginStaffName = () => "木村 健一";
+        gState.session = { staffName: "木村 健一", role: "管理者" };
+        gState.stamps = [{ name: "木村 健一", role: "管理者" }];
 
         let rTanakaOrig = gState.residents ? gState.residents.find(x => x.id === 2) : null;
         if (!rTanakaOrig) {
@@ -4710,7 +4710,7 @@
         assert(cert2AfterVoid3.end_date === "2028-01-14", "Test 183-18b: 区分変更取消に伴い直前認定のend_dateがoriginal_end_date(2028-01-14)に復元されること");
         assert(cert2AfterVoid3.original_end_date === "2028-01-14", "Test 183-18c: 復元後もoriginal_end_dateが保持されていること");
         assert(cert2AfterVoid3.modified_reason && cert2AfterVoid3.modified_reason.includes("期間短縮"), "Test 183-18d: 短縮時のmodified_reasonが削除されず残っていること");
-        assert(cert2AfterVoid3.restored_by === "本田 正" && cert2AfterVoid3.restored_reason && cert2AfterVoid3.restored_reason.includes("期間復元"), "Test 183-18e: restored_byおよびrestored_reasonが記録されていること");
+        assert(cert2AfterVoid3.restored_by === "木村 健一" && cert2AfterVoid3.restored_reason && cert2AfterVoid3.restored_reason.includes("期間復元"), "Test 183-18e: restored_byおよびrestored_reasonが記録されていること");
 
         // 田中様のデータをバックアップから復元
         Object.assign(rTanakaOrig, rTanakaBackup);
@@ -4764,6 +4764,38 @@
         assert(cpCurrentCareLevel(rFutureModel, "2026-11-15") === "要介護1", "Test 183-23: 2026-11-15時点では前認定の要介護1を返すこと");
         assert(cpCurrentCareLevel(rFutureModel, "2026-12-02") === "要介護4", "Test 183-24: 2026-12-01以降（2026-12-02）では新認定の要介護4を返すこと");
         assert(cpCurrentCareLevel(rFutureModel, "2029-01-01") === "", "Test 183-25: 認定有効期間外では空文字を返し静的care_levelにフォールバックしないこと");
+
+        // 8. 職種判定（getStaffRoleCategory）: 役職がない場合は名前（木村・加藤・事務など）で決めつけず空文字を返すこと
+        assert(getStaffRoleCategory("木村 テスト") === "", "Test 183-26: スタンプに登録がない「木村」は管理者と決めつけず空文字を返すこと");
+        assert(getStaffRoleCategory("加藤 由美 テスト") === "", "Test 183-27: スタンプに登録がない「加藤 由美」は看護師と決めつけず空文字を返すこと");
+        assert(getStaffRoleCategory("事務員 太郎") === "", "Test 183-28: スタンプに登録がない「事務」は事務職と決めつけず空文字を返すこと");
+
+        // 9. LIFE CSV出力（cpBuildLifeEvalCsvLines）: care_levelは評価日の認定（cpCurrentCareLevel）で決定され静的値にフォールバックしないこと
+        const mockLifeItem = {
+          resident: {
+            id: 995,
+            name: "LIFEテスト様",
+            care_level: "要介護5", // 静的ダミー値
+            care_cert_history: [
+              { id: 1, level: "要介護1", start_date: "2026-01-01", end_date: "2026-06-30", voided: false },
+              { id: 2, level: "要介護3", start_date: "2026-07-01", end_date: "2026-12-31", voided: false }
+            ]
+          },
+          assessment: {
+            id: 1,
+            evaluate_date: "2026-04-15"
+          }
+        };
+        const linesLifeEval1 = cpBuildLifeEvalCsvLines([mockLifeItem]);
+        assert(linesLifeEval1[2].includes(",21,"), "Test 183-29: 2026-04-15の評価日では要介護1のLIFEコード「21」が出力されること");
+
+        mockLifeItem.assessment.evaluate_date = "2026-08-20";
+        const linesLifeEval2 = cpBuildLifeEvalCsvLines([mockLifeItem]);
+        assert(linesLifeEval2[2].includes(",23,"), "Test 183-30: 2026-08-20の評価日では要介護3のLIFEコード「23」が出力されること");
+
+        mockLifeItem.assessment.evaluate_date = "2027-02-01";
+        const linesLifeEval3 = cpBuildLifeEvalCsvLines([mockLifeItem]);
+        assert(linesLifeEval3[2].includes(",,"), "Test 183-31: 認定期間外（2027-02-01）では空文字となり静的介護度5（25）にフォールバックしないこと");
       }
 
             // 38. 総合結果判定
