@@ -179,12 +179,14 @@ def com_attendees(dt_str, is_promo=False):
     d_str = str(int(dt_str[8:10]))
     shifts = d.get("monthly_shifts", {}).get(ym, {})
     working = [staff for staff, days in shifts.items() if days.get(d_str) in ("日", "早", "遅")]
+    if is_promo:
+        promo_mgmt = ["木村 健一", "小林 恵子", "佐々木 浩二"]
+        facility_att = [s for s in promo_mgmt if s in working]
+        return "、".join(facility_att) + "、利用者のご家族、地域の方（自治会）、地域包括支援センターの職員"
     prio_mgmt = ["木村 健一", "佐々木 浩二", "小林 恵子", "鈴木 美智子", "加藤 由美"]
     selected_mgmt = [s for s in prio_mgmt if s in working][:4]
     selected_care = [s for s in working if s not in prio_mgmt][:3]
     facility_att = selected_mgmt + selected_care
-    if is_promo:
-        return "、".join(facility_att) + "、利用者のご家族、地域の方（自治会）、地域包括支援センターの職員"
     return "、".join(facility_att)
 
 COM = [

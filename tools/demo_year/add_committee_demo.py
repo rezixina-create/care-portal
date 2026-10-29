@@ -52,13 +52,16 @@ def main():
 
     def build_attendees(dt_str, is_promotion=False):
         working = get_working_staff(dt_str)
-        prio_mgmt = ["木村 健一", "佐々木 浩二", "小林 恵子", "鈴木 美智子", "加藤 由美"]
-        selected_mgmt = [s for s in prio_mgmt if s in working][:4]
-        selected_care = [s for s in working if s not in prio_mgmt][:3]
-        facility_attendees = selected_mgmt + selected_care
         if is_promotion:
+            # 運営推進会議: 施設からは管理者（木村 健一）・計画作成担当者（小林 恵子）・生活相談員（佐々木 浩二）のうち、その日に出勤している人だけ（看護師・介護職員は現場の人手を減らさないため含めない）
+            promo_mgmt = ["木村 健一", "小林 恵子", "佐々木 浩二"]
+            facility_attendees = [s for s in promo_mgmt if s in working]
             return "、".join(facility_attendees) + "、利用者のご家族、地域の方（自治会）、地域包括支援センターの職員"
         else:
+            prio_mgmt = ["木村 健一", "佐々木 浩二", "小林 恵子", "鈴木 美智子", "加藤 由美"]
+            selected_mgmt = [s for s in prio_mgmt if s in working][:4]
+            selected_care = [s for s in working if s not in prio_mgmt][:3]
+            facility_attendees = selected_mgmt + selected_care
             return "、".join(facility_attendees)
 
     # ----------------------------------------------------
@@ -78,6 +81,13 @@ def main():
             key = ITEM_KEY_MAP.get(name, "other")
             c["item_key"] = key
             updated_existing += 1
+        # 運営推進会議の出席者を更新（管理者・計画作成担当者・生活相談員のうち出勤者のみ）
+        if c.get("item_key") == "promotion_meeting" or c.get("committee_name") == "運営推進会議":
+            c["item_key"] = "promotion_meeting"
+            expected_att = build_attendees(c["date"], is_promotion=True)
+            if c.get("attendees") != expected_att:
+                c["attendees"] = expected_att
+                updated_existing += 1
 
     # ----------------------------------------------------
     # 2. 委員会・研修・訓練・運営推進会議の記録を追加
