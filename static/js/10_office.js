@@ -4797,17 +4797,10 @@ function renderBenefitRateHistoryTable(resident) {
   tbody.innerHTML = "";
   const list = Array.isArray(resident.benefit_rate_history) ? [...resident.benefit_rate_history] : [];
   if (list.length === 0) {
-    list.push({
-      id: 1,
-      rate: resident.benefit_rate || 90,
-      start_ym: "2025-08",
-      end_ym: "2026-07",
-      note: "初期登録",
-      created_by: "松本 陽子",
-      created_at: "-",
-      voided: false,
-      void_reason: ""
-    });
+    const curRate = resident.benefit_rate ? parseInt(String(resident.benefit_rate), 10) : 90;
+    const curLabel = curRate === 90 ? "9割給付" : (curRate === 80 ? "8割給付" : (curRate === 70 ? "7割給付" : `${curRate}%給付`));
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center; padding:16px; color:var(--ink-2);">登録はありません（今の値: ${escapeHtml(curLabel)}）</td></tr>`;
+    return;
   }
   list.sort((a, b) => (b.start_ym || "").localeCompare(a.start_ym || "") || (b.id || 0) - (a.id || 0));
   const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
@@ -4833,7 +4826,12 @@ function renderBenefitRateHistoryTable(resident) {
 }
 
 function submitBenefitRateHistoryItem() {
-  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  const staffName = cpLoginStaffName();
+  if (!staffName) {
+    alert("ログイン情報が取得できないため、保存できません。ログインし直してください。");
+    return;
+  }
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(staffName) : isCurrentStaffAdminOrClerk();
   if (!canAdminClerk) {
     alert("負担割合の登録は、管理者および事務員のみ行えます。");
     return;
@@ -4852,22 +4850,20 @@ function submitBenefitRateHistoryItem() {
   if (endYm && !/^\d{4}-\d{2}$/.test(endYm)) { alert("終了年月（YYYY-MM）を正しく入力してください。"); return; }
   if (endYm && startYm > endYm) { alert("開始年月は終了年月以前にしてください。"); return; }
 
+  // 過去月にさかのぼる場合の提出済月チェック
+  const affectedSentMonths = [];
+  const submissions = (db && db.data && Array.isArray(db.data.claim_submissions)) ? db.data.claim_submissions : [];
+  submissions.forEach(sub => {
+    if (!sub.voided && sub.status === "提出済" && Number(sub.resident_id) === residentId) {
+      if (sub.service_ym && sub.service_ym >= startYm && (!endYm || sub.service_ym <= endYm)) {
+        affectedSentMonths.push(sub.service_ym);
+      }
+    }
+  });
+
   const oldCopy = JSON.parse(JSON.stringify(r));
   if (!Array.isArray(r.benefit_rate_history)) {
     r.benefit_rate_history = [];
-    if (oldCopy.benefit_rate) {
-      r.benefit_rate_history.push({
-        id: 1,
-        rate: Number(oldCopy.benefit_rate),
-        start_ym: "2025-08",
-        end_ym: "2026-07",
-        note: "初期登録",
-        created_by: cpLoginStaffName() || "松本 陽子",
-        created_at: toLocalDateTimeStr(new Date()),
-        voided: false,
-        void_reason: ""
-      });
-    }
   }
 
   // 重複チェック
@@ -4890,7 +4886,7 @@ function submitBenefitRateHistoryItem() {
     start_ym: startYm,
     end_ym: endYm,
     note: note,
-    created_by: cpLoginStaffName() || "松本 陽子",
+    created_by: staffName,
     created_at: toLocalDateTimeStr(new Date()),
     voided: false,
     void_reason: ""
@@ -4909,11 +4905,23 @@ function submitBenefitRateHistoryItem() {
 
   renderBenefitRateHistoryTable(r);
   if (typeof renderOfficeResidentsTable === "function") renderOfficeResidentsTable();
-  alert(`【登録完了】${r.name} 様の負担割合（${rate}%, ${startYm}〜）を登録しました。`);
+
+  const rateLabel = rate === 90 ? "9割給付（1割負担）" : (rate === 80 ? "8割給付（2割負担）" : (rate === 70 ? "7割給付（3割負担）" : `${rate}%`));
+  let finishMsg = `【負担割合登録完了】\n${r.name} 様の負担割合を「${rateLabel}」、適用期間を「${startYm}〜${endYm || "制限なし"}」に登録しました。`;
+  if (affectedSentMonths.length > 0) {
+    const uniqMonths = Array.from(new Set(affectedSentMonths)).sort();
+    finishMsg += `\n\n【注意】すでに国保連へ請求書を送付済みの月が含まれています：\n${uniqMonths.map(m => `・直す必要がある月: ${m.replace("-", "年")}月分（提出済）`).join("\n")}\n加算・請求管理の台帳から過誤申立を行ってください。`;
+  }
+  alert(finishMsg);
 }
 
 function voidBenefitRateHistoryItem(residentId, itemId) {
-  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(cpLoginStaffName()) : isCurrentStaffAdminOrClerk();
+  const staffName = cpLoginStaffName();
+  if (!staffName) {
+    alert("ログイン情報が取得できないため、取り消せません。ログインし直してください。");
+    return;
+  }
+  const canAdminClerk = (typeof isStaffAdminOrClerk === "function") ? isStaffAdminOrClerk(staffName) : isCurrentStaffAdminOrClerk();
   if (!canAdminClerk) {
     alert("負担割合履歴の取消は、管理者および事務員のみ行えます。");
     return;
@@ -4931,12 +4939,12 @@ function voidBenefitRateHistoryItem(residentId, itemId) {
   const oldCopy = JSON.parse(JSON.stringify(r));
   item.voided = true;
   item.void_reason = trimmed;
-  item.voided_by = cpLoginStaffName() || "松本 陽子";
+  item.voided_by = staffName;
   item.voided_at = toLocalDateTimeStr(new Date());
 
   const curYm = toLocalDateStr(new Date()).slice(0, 7);
   const activeRate = cpBenefitRateOn(r, curYm);
-  r.benefit_rate = String(activeRate);
+  r.benefit_rate = activeRate !== null ? String(activeRate) : "";
 
   if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["benefit_rate"], `負担割合履歴の取消(${trimmed})`);
 

@@ -35,19 +35,28 @@ function renderOfficeCareRenewal() {
   let inProgressCount = 0;
   let completedCount = 0;
 
+  const todayStr = toLocalDateStr(today);
   cpCurrentResidents().forEach(r => {
     totalCount++;
+    const curCert = cpCareCertOn(r, todayStr);
+    const curExpiry = curCert.end_date || r.care_expiry_date || "";
     let daysDiff = 999;
-    if (r.care_expiry_date) {
-      const exp = new Date(r.care_expiry_date);
+    if (curExpiry) {
+      const exp = new Date(curExpiry);
       exp.setHours(0,0,0,0);
       daysDiff = Math.ceil((exp - today) / (1000 * 60 * 60 * 24));
     }
     // [Claude修正 2026-10-28] 見るだけのときは利用者の記録を書き換えない（前は空の印を r に書き込んでいた）
     const steps = cpRenewalStepsOf(r, daysDiff);
 
-    if (daysDiff <= 30) urgentCount++;
-    else if (daysDiff <= 60) warningCount++;
+    // 次の期間が登録済みか確認
+    const history = Array.isArray(r.care_cert_history) ? r.care_cert_history : [];
+    const nextCert = history.filter(c => !c.voided && c.start_date && c.start_date > todayStr).sort((a,b) => a.start_date.localeCompare(b.start_date))[0];
+
+    if (!nextCert) {
+      if (daysDiff <= 30) urgentCount++;
+      else if (daysDiff <= 60) warningCount++;
+    }
 
     const isStepsStarted = ["application_submitted", "visit_scheduled", "doctor_statement", "result_pending", "completed"].some(k => steps[k] === true);
     if (steps.completed) {
@@ -72,7 +81,9 @@ function renderOfficeCareRenewal() {
     const tr = document.createElement("tr");
 
     let daysBadge = "";
-    if (r.care_expiry_date) {
+    if (nextCert) {
+      daysBadge = `<span class="badge" style="background:#16a34a; color:#fff;">次の認定 登録済み（${escapeHtml(nextCert.start_date)}〜）</span>`;
+    } else if (curExpiry) {
       if (daysDiff < 0) {
         daysBadge = `<span class="badge" style="background:#dc2626; color:#fff;">期限切れ (${Math.abs(daysDiff)}日前)</span>`;
       } else if (daysDiff <= 30) {
@@ -87,11 +98,12 @@ function renderOfficeCareRenewal() {
     }
 
     const s = steps;
+    const curLevel = curCert.level || r.care_level || "未登録";
 
     tr.innerHTML = `
       <td><strong>${escapeHtml(r.room_no || '-')}号室</strong><br><span style="font-size:14px; font-weight:bold;">${escapeHtml(r.name || '-')}</span> 様</td>
-      <td><span class="badge" style="background:#f1f6f3; color:#1e5b47; border:1px solid #a9cfbf;">${escapeHtml(r.care_level || '未登録')}</span></td>
-      <td><strong>${escapeHtml(r.care_expiry_date || '未設定')}</strong></td>
+      <td><span class="badge" style="background:#f1f6f3; color:#1e5b47; border:1px solid #a9cfbf;">${escapeHtml(curLevel)}</span></td>
+      <td><strong>${escapeHtml(curExpiry || '未設定')}</strong></td>
       <td>${daysBadge}</td>
       <td>
         <div style="display:flex; flex-wrap:wrap; gap:6px 12px; font-size:12px;">
@@ -242,16 +254,37 @@ function submitUpdateCareLevelModal() {
       }
     }
   });
+  const staffName = cpLoginStaffName();
+  if (!staffName) {
+    alert("ログイン情報が取得できないため、保存できません。ログインし直してください。");
+    return;
+  }
+
   if (r.care_start_date && newStart <= r.care_start_date) {
     alert(`新しい認定有効期間の始まりの日は、今の認定期間の始まり（${r.care_start_date}）より後にしてください。`);
     return;
   }
 
+  // 既存認定期間との重複チェック
+  const certHistory = Array.isArray(r.care_cert_history) ? r.care_cert_history : [];
+  const hasOverlap = certHistory.some(h => {
+    if (h.voided) return false;
+    return !(newExpiry < h.start_date || newStart > h.end_date);
+  });
+  if (hasOverlap) {
+    alert("指定された有効期間は、すでに登録されている有効な認定期間と重複しています。");
+    return;
+  }
+
   const oldCopy = JSON.parse(JSON.stringify(r));
   const oldExpiry = r.care_expiry_date || "";
-  r.care_level = newLevel;
-  r.care_start_date = newStart;
-  r.care_expiry_date = newExpiry;
+  const todayStrUpdate = toLocalDateStr(new Date());
+  if (newStart <= todayStrUpdate) {
+    r.care_level = newLevel;
+    r.care_start_date = newStart;
+    r.care_expiry_date = newExpiry;
+  }
+
   if (!Array.isArray(r.care_cert_history)) {
     r.care_cert_history = [];
     if (oldCopy.care_level && oldCopy.care_start_date && oldCopy.care_expiry_date) {
@@ -262,7 +295,7 @@ function submitUpdateCareLevelModal() {
         end_date: oldCopy.care_expiry_date,
         kind: "新規",
         applied_date: oldCopy.care_start_date,
-        created_by: cpLoginStaffName() || "松本 陽子",
+        created_by: staffName,
         created_at: toLocalDateTimeStr(new Date()),
         voided: false,
         void_reason: ""
@@ -277,7 +310,7 @@ function submitUpdateCareLevelModal() {
     end_date: newExpiry,
     kind: "更新",
     applied_date: newStart,
-    created_by: cpLoginStaffName() || "松本 陽子",
+    created_by: staffName,
     created_at: toLocalDateTimeStr(new Date()),
     voided: false,
     void_reason: ""
@@ -1637,6 +1670,19 @@ function submitCareCategoryChangeModal() {
     }
   });
 
+  const staffName = cpLoginStaffName();
+  if (!staffName) {
+    alert("ログイン情報が取得できないため、保存できません。ログインし直してください。");
+    return;
+  }
+
+  // 区分変更より後に始まる認定（先に登録した更新など）と重なるときは止める
+  const futureOverlap = (r.care_cert_history || []).some(h => !h.voided && h.start_date >= startDate);
+  if (futureOverlap) {
+    alert("区分変更の開始日以降に始まる認定がすでに登録されています。先に未来の認定を整理してください。");
+    return;
+  }
+
   const oldCopy = JSON.parse(JSON.stringify(r));
   if (!Array.isArray(r.care_cert_history)) {
     r.care_cert_history = [];
@@ -1648,7 +1694,7 @@ function submitCareCategoryChangeModal() {
         end_date: oldCopy.care_expiry_date,
         kind: "新規",
         applied_date: oldCopy.care_start_date,
-        created_by: cpLoginStaffName() || "松本 陽子",
+        created_by: staffName,
         created_at: toLocalDateTimeStr(new Date()),
         voided: false,
         void_reason: ""
@@ -1656,13 +1702,17 @@ function submitCareCategoryChangeModal() {
     }
   }
 
-  // 既存の有効な認定期間で、新しいstartDate以降に重なる部分のend_dateをstartDateの前日に調整
+  // 既存の有効な認定期間で、新しいstartDate以降に重なる部分のend_dateをstartDateの前日に調整（前の終了日を残す）
   const prevDate = new Date(startDate);
   prevDate.setDate(prevDate.getDate() - 1);
   const prevDateStr = toLocalDateStr(prevDate);
   r.care_cert_history.forEach(h => {
     if (!h.voided && h.start_date <= prevDateStr && h.end_date >= startDate) {
+      h.original_end_date = h.original_end_date || h.end_date;
       h.end_date = prevDateStr;
+      h.modified_by = staffName;
+      h.modified_at = toLocalDateTimeStr(new Date());
+      h.modified_reason = `区分変更(開始日:${startDate})による期間短縮`;
     }
   });
 
@@ -1674,16 +1724,19 @@ function submitCareCategoryChangeModal() {
     end_date: expiryDate,
     kind: "区分変更",
     applied_date: appliedDate,
-    created_by: cpLoginStaffName() || "松本 陽子",
+    created_by: staffName,
     created_at: toLocalDateTimeStr(new Date()),
     voided: false,
     void_reason: ""
   });
 
-  // 最新情報に同期（startDateが今日以前または最新の場合）
-  r.care_level = newLevel;
-  r.care_start_date = startDate;
-  r.care_expiry_date = expiryDate;
+  // 最新情報に同期（startDateが今日以前の場合のみ上書き）
+  const todayStrCat = toLocalDateStr(new Date());
+  if (startDate <= todayStrCat) {
+    r.care_level = newLevel;
+    r.care_start_date = startDate;
+    r.care_expiry_date = expiryDate;
+  }
 
   if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], "要介護認定の区分変更");
 
@@ -1771,18 +1824,43 @@ function voidCareCertHistoryItem(residentId, certId) {
   if (!item) return;
 
   const oldCopy = JSON.parse(JSON.stringify(r));
+  const staffName = cpLoginStaffName();
+  if (!staffName) {
+    alert("ログイン情報が取得できないため、取り消せません。ログインし直してください。");
+    return;
+  }
+
   item.voided = true;
   item.void_reason = trimmed;
-  item.voided_by = cpLoginStaffName() || "松本 陽子";
+  item.voided_by = staffName;
   item.voided_at = toLocalDateTimeStr(new Date());
 
-  // 最新有効な認定に同期
-  const valid = r.care_cert_history.filter(h => !h.voided);
-  if (valid.length > 0) {
-    valid.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.id || 0) - (a.id || 0));
-    r.care_level = valid[0].level;
-    r.care_start_date = valid[0].start_date;
-    r.care_expiry_date = valid[0].end_date;
+  // 区分変更などの取消に伴い、短縮されていた前の認定期間があれば元に戻す
+  r.care_cert_history.forEach(h => {
+    if (h.original_end_date && h.end_date < h.original_end_date) {
+      h.end_date = h.original_end_date;
+      delete h.original_end_date;
+      delete h.modified_by;
+      delete h.modified_at;
+      delete h.modified_reason;
+    }
+  });
+
+  // 今日の認定に同期
+  const todayStrVoid = toLocalDateStr(new Date());
+  const todayCert = cpCareCertOn(r, todayStrVoid);
+  if (todayCert && todayCert.level) {
+    r.care_level = todayCert.level;
+    r.care_start_date = todayCert.start_date;
+    r.care_expiry_date = todayCert.end_date;
+  } else {
+    const valid = r.care_cert_history.filter(h => !h.voided);
+    if (valid.length > 0) {
+      valid.sort((a, b) => (b.start_date || "").localeCompare(a.start_date || "") || (b.id || 0) - (a.id || 0));
+      r.care_level = valid[0].level;
+      r.care_start_date = valid[0].start_date;
+      r.care_expiry_date = valid[0].end_date;
+    }
   }
 
   if (typeof cpAppendEditHistory === "function") cpAppendEditHistory(r, oldCopy, ["care_level", "care_start_date", "care_expiry_date"], `要介護認定履歴の取消(${trimmed})`);

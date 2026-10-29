@@ -180,7 +180,8 @@ function openCareSummaryModal(resId, summaryId) {
 	});
 
  const badgeEl = document.getElementById("csResidentBadge");
- if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${r.care_level})`;
+ const curLvl5 = (typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "";
+ if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${curLvl5})`;
 
  const resIdEl = document.getElementById("csResidentId");
  if (resIdEl) resIdEl.value = r.id;
@@ -328,7 +329,8 @@ function startNewCareSummary(summaryType = "新規入所時サマリー") {
  const list = cpSummariesOfResident(rId);
  const prev = list.length > 0 ? list[0] : null;
 
- const basicText = prev ? prev.basic_info : `${r ? r.name : ""} 様。${r ? r.care_level : ""}。生年月日: ${r ? (r.birth_date || "未登録") : ""}。緊急連絡先: ${r ? (r.emergency_contact || "未登録") : ""}。看取り方針: ［${r ? (r.policy_stamp || "未設定") : ""}］。`;
+ const curLvlBasic = (r && typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || (r ? r.care_level : "") || "";
+ const basicText = prev ? prev.basic_info : `${r ? r.name : ""} 様。${curLvlBasic}。生年月日: ${r ? (r.birth_date || "未登録") : ""}。緊急連絡先: ${r ? (r.emergency_contact || "未登録") : ""}。看取り方針: ［${r ? (r.policy_stamp || "未設定") : ""}］。`;
  // [Claude修正] 前回のサマリーがないときは、登録済みの情報だけを入れ、それ以外は空欄にする（誰も書いていない例文を入れない）
  const backgroundText = prev ? prev.background : "";
  const physicalText = prev ? prev.physical_cognitive : `麻痺: ${r ? (r.paralysis || "未登録") : "未登録"}。病歴: ${r ? (r.diseases || "未登録") : "未登録"}。`;
@@ -488,8 +490,10 @@ function submitCareSummary() {
 			return;
 		}
 		const versionDate = (dateVal === (existingForVersion.created_at || existingForVersion.date || "")) ? toLocalDateStr(new Date()) : dateVal;
+		const maxSummaryId = db.data.care_summaries.reduce((m, s) => Math.max(m, Number(s.id) || 0), Date.now() - 1);
+		const newSummaryId = maxSummaryId >= Date.now() ? maxSummaryId + 1 : Date.now();
 		db.data.care_summaries.unshift(Object.assign({
-			id: Date.now(),
+			id: newSummaryId,
 			resident_id: rId,
 			created_at: versionDate,
 			updated_at: versionDate,
@@ -497,8 +501,10 @@ function submitCareSummary() {
 			previous_id: existingForVersion.id
 		}, fieldsNow));
 	} else {
+		const maxSummaryId = db.data.care_summaries.reduce((m, s) => Math.max(m, Number(s.id) || 0), Date.now() - 1);
+		const newSummaryId = maxSummaryId >= Date.now() ? maxSummaryId + 1 : Date.now();
 		const newSummary = Object.assign({
-			id: Date.now(),
+			id: newSummaryId,
 			resident_id: rId,
 			created_at: dateVal,
 			updated_at: dateVal,
@@ -1074,7 +1080,8 @@ function openEmergencySummaryModal(resId) {
  }
 
  const badgeEl = document.getElementById("emgResidentBadge");
- if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${r.care_level}) 救急隊・受診医療機関提出用`;
+ const curLvlPrint = (typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "";
+ if (badgeEl) badgeEl.textContent = `${r.room_no}号室 ${r.name} 様 (${curLvlPrint}) 救急隊・受診医療機関提出用`;
 
  const reasonInput = document.getElementById("emgReasonInput");
  if (reasonInput) {
@@ -1139,7 +1146,7 @@ function renderEmergencySummaryPreview(r) {
  <th style="width:120px; background:#f6f8f6; padding:6px; text-align:left;">氏名</th>
  <td style="padding:6px; font-weight:bold; font-size:14px;">${escapeHtml(r.name)} 様 (${escapeHtml(r.room_no)}号室)</td>
  <th style="width:100px; background:#f6f8f6; padding:6px; text-align:left;">要介護度</th>
- <td style="padding:6px; font-weight:bold;">${escapeHtml(r.care_level)}</td>
+ <td style="padding:6px; font-weight:bold;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "")}</td>
  </tr>
  <tr>
  <th style="background:#f6f8f6; padding:6px; text-align:left;">生年月日 / 年齢</th>
@@ -1233,7 +1240,7 @@ ${reasonText}
 
 ■ 基本情報
 氏名: ${r.name} 様 (${r.room_no}号室)
-要介護度: ${r.care_level}
+要介護度: ${(typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || ""}
 生年月日: ${r.birth_date || "-"}
 基本方針: ［${r.policy_stamp || "未設定"}］
 緊急連絡先: ${r.emergency_contact || "未登録"}

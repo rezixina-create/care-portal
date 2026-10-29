@@ -4043,6 +4043,7 @@
       // 35. 職員健康診断の記録・取消・権限の検証 (Test 177)
       log("--- 35. 職員健康診断の記録・取消・権限の検証 (Test 177) ---");
 
+      gState.stamps = db.data.stamps;
       const yoshidaStaff = (db.data.stamps || []).find(st => st.name === "吉田 誠");
       assert(yoshidaStaff !== undefined, "Test 177a-1: デモデータに吉田 誠さんが存在すること");
 
@@ -4566,11 +4567,11 @@
           name: "テスト 履歴様",
           care_level: "要介護3",
           care_start_date: "2026-10-15",
-          care_expiry_date: "2028-01-14",
+          care_expiry_date: "2027-04-14",
           benefit_rate: "80",
           care_cert_history: [
             { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-12-10", voided: false },
-            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2027-04-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
           ],
           benefit_rate_history: [
             { id: 1, rate: 90, start_ym: "2025-08", end_ym: "2026-07", voided: false },
@@ -4587,14 +4588,22 @@
         const rateNewYear = cpBenefitRateOn(mockRes, "2026-08");
         assert(rateNewYear === 80, "Test 183-4: 2026-08 の負担割合は新年度の 80% であること");
 
-        // 2. 履歴が空の場合でも既存プロパティから安全にフォールバックすること
-        const emptyRes = { id: 997, name: "テスト 空様", care_level: "要介護1", care_start_date: "2025-04-01", care_expiry_date: "2027-03-31", benefit_rate: "70" };
-        const certFallback = cpCareCertOn(emptyRes, "2026-05-01");
-        assert(certFallback.level === "要介護1", "Test 183-5: 履歴空時の care_level フォールバック確認");
-        const rateFallback = cpBenefitRateOn(emptyRes, "2026-05");
-        assert(rateFallback === 70, "Test 183-6: 履歴空時の benefit_rate フォールバック確認");
+        // 認定外・負担割合外の日に代わりの値で埋めない確認（Rule 25）
+        const certOutOfRange = cpCareCertOn(mockRes, "2024-01-01");
+        assert(certOutOfRange.level === "", "Test 183-5: 履歴外の日は空の認定を返すこと（今の値で埋めない）");
+        const rateOutOfRange = cpBenefitRateOn(mockRes, "2024-01");
+        assert(rateOutOfRange === null, "Test 183-6: 履歴外の月はnullを返すこと（90を作らない）");
 
-        // 3. 田中 ハナ 様 (ID 2) の 2026-10 月区分変更計算検証（実マスタ定義またはモック設定）
+        // 履歴空の利用者（直接保持値の期間内と期間外）
+        const emptyRes = { id: 997, name: "テスト 空様", care_level: "要介護1", care_start_date: "2025-04-01", care_expiry_date: "2027-03-31", benefit_rate: "70" };
+        const certInDirect = cpCareCertOn(emptyRes, "2026-05-01");
+        assert(certInDirect.level === "要介護1", "Test 183-7: 履歴空時の有効期間内は直接保持値を参照できること");
+        const certOutDirect = cpCareCertOn(emptyRes, "2024-01-01");
+        assert(certOutDirect.level === "", "Test 183-8: 履歴空時でも有効期間外は空の認定を返すこと");
+        const rateDirect = cpBenefitRateOn(emptyRes, "2026-05");
+        assert(rateDirect === 70, "Test 183-9: 履歴空時の benefit_rate 直接保持値を参照できること");
+
+        // 2. 田中 ハナ 様 (ID 2) の 2026-10 月区分変更計算検証
         const r2Model = {
           id: 2,
           room_no: "102",
@@ -4602,12 +4611,13 @@
           name: "田中 ハナ",
           care_level: "要介護3",
           care_start_date: "2026-10-15",
-          care_expiry_date: "2028-01-14",
+          care_expiry_date: "2027-04-14",
           benefit_rate: "90",
           admission_date: "2024-02-01",
           care_cert_history: [
-            { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-12-10", voided: false },
-            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+            { id: 1, level: "要介護2", start_date: "2024-01-15", end_date: "2026-01-14", kind: "更新", applied_date: "2023-12-10", voided: false },
+            { id: 2, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", original_end_date: "2028-01-14", kind: "更新", applied_date: "2025-12-10", voided: false },
+            { id: 3, level: "要介護3", start_date: "2026-10-15", end_date: "2027-04-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
           ],
           benefit_rate_history: [
             { id: 1, rate: 90, start_ym: "2025-08", end_ym: "2026-07", voided: false },
@@ -4624,35 +4634,86 @@
         const calcR2 = cpComputeMonthlyKasan(r2Model, "2026-10");
         const b2121 = calcR2.items.find(it => it.code === "2121");
         const b2131 = calcR2.items.find(it => it.code === "2131");
-        assert(!!b2121 && b2121.count === 14, "Test 183-7: 田中 ハナ 様 2026-10の要介護2基本サービスコード(2121)が14日であること");
-        assert(!!b2131 && b2131.count === 17, "Test 183-8: 田中 ハナ 様 2026-10の要介護3基本サービスコード(2131)が17日であること");
-        assert(calcR2.totalUnits === 32865, "Test 183-9: 田中 ハナ 様 2026-10の全算定単位数が 32865 単位であること");
+        assert(!!b2121 && b2121.count === 14, "Test 183-10: 田中 ハナ 様 2026-10の要介護2基本コード(2121)が14日であること");
+        assert(!!b2131 && b2131.count === 17, "Test 183-11: 田中 ハナ 様 2026-10の要介護3基本コード(2131)が17日であること");
+        assert(calcR2.totalUnits === 32865, `Test 183-12: 田中 ハナ 様 2026-10の全算定単位数が 32865 単位であること (実際: ${calcR2.totalUnits})`);
         if (origSettings) db.data.kasan_settings = origSettings;
 
-        // 4. 要支援2と要介護をまたぐ月の2明細分割検証
-        const rSpan = {
-          id: 996,
-          name: "テスト またぎ様",
+        // 3. 岡田 シズ子 様モデル（要支援2〜要介護1またぎ月 2026-09）の加算分割計算検証
+        const rOkada = {
+          id: 888,
+          name: "岡田 シズ子（テストモデル）",
           care_level: "要介護1",
-          care_start_date: "2026-10-15",
-          care_expiry_date: "2028-01-14",
+          care_start_date: "2026-09-15",
+          care_expiry_date: "2027-09-14",
           benefit_rate: "90",
-          insured_no: "9900000996",
-          insurer_no: "990001",
-          birth_date: "1940-01-01",
-          gender: "2",
-          admission_date: "2024-01-01",
-          pre_admission_status: "1",
+          admission_date: "2025-04-15",
           care_cert_history: [
-            { id: 1, level: "要支援2", start_date: "2025-10-15", end_date: "2026-10-14", kind: "更新", applied_date: "2025-10-01", voided: false },
-            { id: 2, level: "要介護1", start_date: "2026-10-15", end_date: "2028-01-14", kind: "区分変更", applied_date: "2026-10-15", voided: false }
+            { id: 1, level: "要支援2", start_date: "2025-09-15", end_date: "2026-09-14", kind: "更新", applied_date: "2025-09-01", voided: false },
+            { id: 2, level: "要介護1", start_date: "2026-09-15", end_date: "2027-09-14", kind: "区分変更", applied_date: "2026-09-15", voided: false }
+          ],
+          benefit_rate_history: [
+            { id: 1, rate: 90, start_ym: "2026-08", end_ym: "2027-07", voided: false }
           ]
         };
-        const calcSpan = cpComputeMonthlyKasan(rSpan, "2026-10");
-        const span37 = calcSpan.items.find(it => it.service_type === "37");
-        const span32 = calcSpan.items.find(it => it.service_type === "32");
-        assert(!!span37 && span37.count === 14, "Test 183-10: 要支援2期間(14日間)がサービス種類37として計上されること");
-        assert(!!span32 && span32.count === 17, "Test 183-11: 要介護1期間(17日間)がサービス種類32として計上されること");
+        const origSettings2 = db.data.kasan_settings ? JSON.parse(JSON.stringify(db.data.kasan_settings)) : null;
+        db.data.kasan_settings = {
+          office_no: "9900000001", media_code: "7", region_type: "その他", capacity: 18, shogu_type: "1_a",
+          taisei_items: { medical_coop: { option_key: "1_a" }, service_supply: { option_key: "2" } }
+        };
+        const calcOkada = cpComputeMonthlyKasan(rOkada, "2026-09");
+        const b32 = calcOkada.byServiceType ? calcOkada.byServiceType["32"] : null;
+        const b37 = calcOkada.byServiceType ? calcOkada.byServiceType["37"] : null;
+        assert(b32 && b32.days === 16, "Test 183-13: 岡田様モデル 2026-09の介護(32)日数が16日であること");
+        assert(b37 && b37.days === 14, "Test 183-14: 岡田様モデル 2026-09の予防(37)日数が14日であること");
+        // 7171(32): 2111(753*16=12048) + 1602(57*16=912) + 6100(18*16=288) = 13248, 6108 = round(13248*0.21) = 2782 => 合計 16030
+        assert(b32 && b32.units === 16030, `Test 183-15: 7171(32)の算定単位数が手計算どおり 16030 単位であること (実際: ${b32 ? b32.units : 0})`);
+        // 7172(37): 2121(749*14=10486) + 6100(18*14=252) = 10738, 6108 = round(10738*0.21) = 2255 => 合計 12993
+        assert(b37 && b37.units === 12993, `Test 183-16: 7172(37)の算定単位数が手計算どおり 12993 単位であること (実際: ${b37 ? b37.units : 0})`);
+        assert(calcOkada.totalUnits === 29023, `Test 183-17: 岡田様モデル 月合計単位数が 29023 単位であること (実際: ${calcOkada.totalUnits})`);
+        if (origSettings2) db.data.kasan_settings = origSettings2;
+
+        // 4. 区分変更取消時の直前認定終了日復帰検証
+        const rCatModel = {
+          id: 993,
+          name: "区分変更テスト様",
+          care_level: "要介護3",
+          care_start_date: "2026-10-15",
+          care_expiry_date: "2027-04-14",
+          care_cert_history: [
+            { id: 1, level: "要介護2", start_date: "2026-01-15", end_date: "2026-10-14", original_end_date: "2028-01-14", kind: "更新", voided: false },
+            { id: 2, level: "要介護3", start_date: "2026-10-15", end_date: "2027-04-14", kind: "区分変更", voided: false }
+          ]
+        };
+        // 取り消し処理を模倣（voidCareCertHistoryItemの復元ロジック）
+        rCatModel.care_cert_history[1].voided = true;
+        rCatModel.care_cert_history.forEach(h => {
+          if (h.original_end_date && h.end_date < h.original_end_date) {
+            h.end_date = h.original_end_date;
+            delete h.original_end_date;
+          }
+        });
+        assert(rCatModel.care_cert_history[0].end_date === "2028-01-14", "Test 183-18: 区分変更取消時に直前認定のend_dateがoriginal_end_date(2028-01-14)に復帰すること");
+
+        // 5. 認定期間外でのCSV検証失敗確認（「要介護度が入っていません」）
+        const rNoCert = {
+          id: 992,
+          name: "認定切れ様",
+          care_level: "",
+          birth_date: "1940-01-01",
+          admission_date: "2025-01-01",
+          insured_no: "1234567890",
+          insurer_no: "123456",
+          gender: "1",
+          benefit_rate: "90",
+          pre_admission_status: "1",
+          care_cert_history: [
+            { id: 1, level: "要介護1", start_date: "2024-01-01", end_date: "2024-12-31", kind: "更新", voided: false }
+          ]
+        };
+        const valNoCert = cpValidateResidentForKasanCsv(rNoCert, "2026-10");
+        assert(!valNoCert.valid, "Test 183-19: 対象月(2026-10)を覆う認定がない利用者はCSV検証で無効となること");
+        assert(valNoCert.missing.some(m => m.includes("要介護度が入っていません")), "Test 183-20: 不足項目に「要介護度が入っていません」が含まれること");
       }
 
             // 38. 総合結果判定

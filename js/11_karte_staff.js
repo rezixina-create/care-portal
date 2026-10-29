@@ -2138,8 +2138,9 @@ function addStaffHealthCheckRecord() {
 	if (window._savingStaffHealthCheck) return false;
 	window._savingStaffHealthCheck = true;
 	try {
+		const maxId = s.health_checks.reduce((m, r) => Math.max(m, Number(r.id) || 0), Date.now() - 1);
 		const rec = {
-			id: Date.now(),
+			id: maxId >= Date.now() ? maxId + 1 : Date.now(),
 			date: dateVal,
 			kind: kindVal,
 			kind_other: (kindVal === "その他") ? otherVal : "",

@@ -278,7 +278,7 @@ function renderResidentDetail() {
  <div>
  <span class="room-badge" style="font-size:13px;">${escapeHtml(r.room_no)}号室</span>
  <h2 style="font-size:20px; font-weight:bold; margin-top:4px;">${escapeHtml(r.name)} 様</h2>
- <span style="font-size:13px; color:var(--text-muted);">${escapeHtml(r.care_level)} / 生年月日: ${r.birth_date || "-"} / 入居日: ${r.admission_date || "-"}</span>
+ <span style="font-size:13px; color:var(--text-muted);">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "未登録")} / 生年月日: ${r.birth_date || "-"} / 入居日: ${r.admission_date || "-"}</span>
  </div>
  <div style="text-align:right;">
  <div class="policy-stamp ${stampClass}" style="font-size:14px; padding:4px 10px;">［ ${escapeHtml(r.policy_stamp)} ］</div>

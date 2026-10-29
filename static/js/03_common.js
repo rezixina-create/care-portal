@@ -1075,6 +1075,7 @@ function checkGlobalAlerts(baseDate) {
       // ケアプランを見直す前でも知らせが消えていた。新しい版からさかのぼり「最後に段階が変わった版」で知らせる
       // （知らせの印はその版の id。確認済・閉じるを押すまで残る）
       const hasAdl = s => s && Array.isArray(s.adl_items) && s.adl_items.length > 0;
+      
       let latest = null;
       let changes = [];
       for (let i = 0; i < rSummaries.length - 1; i++) {
@@ -1093,6 +1094,7 @@ function checkGlobalAlerts(baseDate) {
       }
       if (!latest) return;
 
+      
       if (changes.length > 0) {
         const adlAlertKey = `summary_adl_change_${latest.id}`;
         if (!isAlertDismissed(adlAlertKey)) {
@@ -1116,13 +1118,22 @@ function checkGlobalAlerts(baseDate) {
   {
     const expiringResidents = [];
     cpCurrentResidents().forEach(r => {
-      if (r.care_expiry_date) {
-        const expiryDate = new Date(r.care_expiry_date);
+      const curCert = cpCareCertOn(r, todayStr);
+      const curExpiry = curCert.end_date;
+      if (curExpiry) {
+        // 次の期間が登録済みか確認（今日より後に開始する有効な認定があるか）
+        const history = Array.isArray(r.care_cert_history) ? r.care_cert_history : [];
+        const hasNext = history.some(c => !c.voided && c.start_date && c.start_date > todayStr);
+        if (hasNext) {
+          // 次の認定がすでに登録済みならアラートの対象外
+          return;
+        }
+        const expiryDate = new Date(curExpiry);
         const diffDays = Math.ceil((expiryDate - today) / (1000 * 60 * 60 * 24));
         if (diffDays > 0 && diffDays <= 60) {
-          const expKey = `care_expiry_${r.id}_${r.care_expiry_date}`;
+          const expKey = `care_expiry_${r.id}_${curExpiry}`;
           if (!isAlertDismissed(expKey)) {
-            expiringResidents.push({ id: r.id, name: r.name, level: r.care_level, date: r.care_expiry_date, days: diffDays, key: expKey });
+            expiringResidents.push({ id: r.id, name: r.name, level: curCert.level || r.care_level, date: curExpiry, days: diffDays, key: expKey });
           }
         }
       }
@@ -1464,7 +1475,8 @@ document.addEventListener("click", (e) => {
 // 要介護認定履歴・負担割合履歴 アクセサ関数
 // ==========================================
 function cpCareCertOn(resident, targetDate) {
-  if (!resident) return { id: null, level: "", start_date: "", end_date: "", kind: "", applied_date: "" };
+  const empty = { id: null, level: "", start_date: "", end_date: "", kind: "", applied_date: "" };
+  if (!resident) return empty;
   const d = targetDate || toLocalDateStr(new Date());
   const history = resident.care_cert_history;
   if (Array.isArray(history) && history.length > 0) {
@@ -1474,26 +1486,36 @@ function cpCareCertOn(resident, targetDate) {
       const match = valid[0];
       return {
         id: match.id,
-        level: match.level || resident.care_level || "",
+        level: match.level || "",
         start_date: match.start_date,
         end_date: match.end_date,
         kind: match.kind || "更新",
         applied_date: match.applied_date || match.start_date
       };
     }
+    // 履歴があるがその日を覆う認定がないときは空を返す（今の値で埋めない）
+    return empty;
   }
-  return {
-    id: null,
-    level: resident.care_level || "",
-    start_date: resident.care_start_date || "",
-    end_date: resident.care_expiry_date || "",
-    kind: "新規",
-    applied_date: resident.care_start_date || ""
-  };
+  // 履歴がまったくない利用者だけ、今の値を「start〜expiry の1件」として読み、その期間の外の日は空
+  const s = resident.care_start_date || "";
+  const e = resident.care_expiry_date || "";
+  if (s && d < s) return empty;
+  if (e && d > e) return empty;
+  if (resident.care_level) {
+    return {
+      id: null,
+      level: resident.care_level,
+      start_date: s,
+      end_date: e,
+      kind: "直接保持",
+      applied_date: s
+    };
+  }
+  return empty;
 }
 
 function cpBenefitRateOn(resident, targetYm) {
-  if (!resident) return 90;
+  if (!resident) return null;
   let ym = targetYm;
   if (!ym) {
     const now = new Date();
@@ -1509,7 +1531,13 @@ function cpBenefitRateOn(resident, targetYm) {
       const rate = parseInt(valid[0].rate, 10);
       if (!isNaN(rate)) return rate;
     }
+    // 履歴があるがその月を覆う負担割合がないときは空(null)を返す（90を作らない）
+    return null;
   }
-  const fallback = parseInt(resident.benefit_rate, 10);
-  return !isNaN(fallback) && fallback > 0 ? fallback : 90;
+  // 今の値（benefit_rate）は、履歴がまったくないときだけ使う
+  if (resident.benefit_rate !== undefined && resident.benefit_rate !== null && resident.benefit_rate !== "") {
+    const parsed = parseInt(resident.benefit_rate, 10);
+    return isNaN(parsed) ? null : parsed;
+  }
+  return null;
 }

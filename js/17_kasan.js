@@ -1600,19 +1600,31 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
 
   // 日ごとの算定対象日をグルーピング
   const basicDaysByLevel = {};
+  const daysByServiceType = {};
+  let anyLevelMissing = false;
   if (daysCalc && daysCalc.details) {
     Object.keys(daysCalc.details).forEach(dStr => {
       if (daysCalc.details[dStr] === "BASIC") {
-        const certD = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, dStr) : { level: careLevel };
-        const lvl = certD.level || careLevel;
-        basicDaysByLevel[lvl] = (basicDaysByLevel[lvl] || 0) + 1;
+        const certD = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, dStr) : { level: "" };
+        const lvl = certD.level || "";
+        if (lvl) {
+          basicDaysByLevel[lvl] = (basicDaysByLevel[lvl] || 0) + 1;
+          const st = isShort ? (lvl === "要支援2" ? "39" : "38") : (lvl === "要支援2" ? "37" : "32");
+          daysByServiceType[st] = (daysByServiceType[st] || 0) + 1;
+        } else {
+          anyLevelMissing = true;
+        }
       }
     });
   } else if (basicDays > 0) {
-    basicDaysByLevel[careLevel] = basicDays;
+    if (careLevel) {
+      basicDaysByLevel[careLevel] = basicDays;
+      daysByServiceType[serviceType] = basicDays;
+    } else {
+      anyLevelMissing = true;
+    }
   }
   // 基本サービスコードの計上（介護度ごとに分納）
-  let anyLevelMissing = false;
   const levelKeys = Object.keys(basicDaysByLevel);
   if (levelKeys.length === 0 && basicDays > 0) {
     anyLevelMissing = true;
@@ -1906,16 +1918,59 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
         }
 
         if (def.unit_type === "日" && basicDays > 0) {
-          items.push({
-            category: "体制加算",
-            code: opt.code,
-            name: opt.label,
-            unit_price: opt.units,
-            count: basicDays,
-            unit_label: "日",
-            subtotal: opt.units * basicDays,
-            note: ""
-          });
+          const isCareOnly = (def.id === "medical_coop" || def.id === "medical_coop2");
+          const activeStList = Object.keys(daysByServiceType);
+          if (isCareOnly) {
+            // 医療連携体制加算は介護のみ（32 または 38）
+            const careSt = isShort ? "38" : "32";
+            const careDays = daysByServiceType[careSt] || 0;
+            if (careDays > 0) {
+              items.push({
+                category: "体制加算",
+                code: opt.code,
+                name: opt.label,
+                unit_price: opt.units,
+                count: careDays,
+                unit_label: "日",
+                subtotal: opt.units * careDays,
+                note: "",
+                service_type: careSt
+              });
+            }
+          } else {
+            // その他の日割体制加算（サービス提供体制強化加算等）
+            if (activeStList.length > 1) {
+              // 複数のサービス種類にまたがる場合、それぞれの明細書の日数で分納
+              activeStList.forEach(st => {
+                const stDays = daysByServiceType[st] || 0;
+                if (stDays > 0) {
+                  items.push({
+                    category: "体制加算",
+                    code: opt.code,
+                    name: opt.label,
+                    unit_price: opt.units,
+                    count: stDays,
+                    unit_label: "日",
+                    subtotal: opt.units * stDays,
+                    note: "",
+                    service_type: st
+                  });
+                }
+              });
+            } else {
+              items.push({
+                category: "体制加算",
+                code: opt.code,
+                name: opt.label,
+                unit_price: opt.units,
+                count: basicDays,
+                unit_label: "日",
+                subtotal: opt.units * basicDays,
+                note: "",
+                service_type: serviceType
+              });
+            }
+          }
         } else if (def.unit_type === "月" && basicDays > 0) {
           items.push({
             category: "体制加算",
@@ -1925,7 +1980,8 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
             count: 1,
             unit_label: "月",
             subtotal: opt.units,
-            note: ""
+            note: "",
+            service_type: isShort ? (careLevel === "要支援2" ? "39" : "38") : (careLevel === "要支援2" ? "37" : "32")
           });
         }
       }
@@ -2039,20 +2095,46 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
   if (settings.shogu_type && settings.shogu_type !== "none" && basicDays > 0) {
     const shoguDef = CP_KASAN_SHOGU_DEFS[settings.shogu_type];
     if (shoguDef) {
-      const sumOtherUnits = items.reduce((sum, it) => sum + (it.candidate ? 0 : it.subtotal), 0);
-      const shoguUnits = cpComputeShoguUnits(sumOtherUnits, shoguDef.rate);
+      const activeStList = Object.keys(daysByServiceType);
       const residentRoCheck = cpCheckShoguRoRequirements(settings);
       const isPledgedNote = (residentRoCheck.isRo && residentRoCheck.isPledged) ? "誓約中（令和8年度の配慮措置） " : "";
-      items.push({
-        category: "体制加算",
-        code: shoguDef.code,
-        name: shoguDef.name,
-        unit_price: shoguUnits,
-        count: 1,
-        unit_label: "月",
-        subtotal: shoguUnits,
-        note: `${isPledgedNote}他算定合計 ${sumOtherUnits}単位 × ${shoguDef.rate}/1000`
-      });
+
+      if (activeStList.length > 1) {
+        // 複数のサービス種類にまたがる場合（例: 37 と 32）、それぞれの明細書の合計に率をかけて四捨五入
+        activeStList.forEach(st => {
+          const stOtherSum = items
+            .filter(it => !it.candidate && (it.service_type === st || (!it.service_type && st === serviceType)))
+            .reduce((sum, it) => sum + it.subtotal, 0);
+          if (stOtherSum > 0) {
+            const stShoguUnits = cpComputeShoguUnits(stOtherSum, shoguDef.rate);
+            items.push({
+              category: "体制加算",
+              code: shoguDef.code,
+              name: shoguDef.name,
+              unit_price: stShoguUnits,
+              count: 1,
+              unit_label: "月",
+              subtotal: stShoguUnits,
+              service_type: st,
+              note: `${isPledgedNote}${st === "37" || st === "39" ? "予防" : "介護"}他算定合計 ${stOtherSum}単位 × ${shoguDef.rate}/1000`
+            });
+          }
+        });
+      } else {
+        const sumOtherUnits = items.reduce((sum, it) => sum + (it.candidate ? 0 : it.subtotal), 0);
+        const shoguUnits = cpComputeShoguUnits(sumOtherUnits, shoguDef.rate);
+        items.push({
+          category: "体制加算",
+          code: shoguDef.code,
+          name: shoguDef.name,
+          unit_price: shoguUnits,
+          count: 1,
+          unit_label: "月",
+          subtotal: shoguUnits,
+          service_type: serviceType,
+          note: `${isPledgedNote}他算定合計 ${sumOtherUnits}単位 × ${shoguDef.rate}/1000`
+        });
+      }
     }
   }
 
@@ -2090,6 +2172,17 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     }
   }
 
+  const byServiceType = {};
+  Object.keys(daysByServiceType).forEach(st => {
+    const stItems = items.filter(it => !it.candidate && (it.service_type === st || (!it.service_type && st === serviceType)));
+    const stUnits = stItems.reduce((sum, it) => sum + it.subtotal, 0);
+    byServiceType[st] = {
+      days: daysByServiceType[st] || 0,
+      units: stUnits,
+      items: stItems
+    };
+  });
+
   return {
     resident: r,
     yearMonth: yearMonth,
@@ -2109,7 +2202,9 @@ function cpComputeMonthlyKasan(resident, yearMonth) {
     unmanagedUnits: unmanagedUnits,
     planUnits: planUnits,
     isLimitExceeded: isLimitExceeded,
-    excessUnits: excessUnits
+    excessUnits: excessUnits,
+    byServiceType: byServiceType,
+    hasMixedServiceType: Object.keys(daysByServiceType).length > 1
   };
 }
 
@@ -2390,11 +2485,14 @@ function renderOfficeKasanTab() {
       <tr>
         <td style="font-weight:bold; white-space:nowrap;">
           ${escapeHtml(r.room_no || "-")}号 ${escapeHtml(r.name)}
-          ${res.isShort ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">短期利用（${res.serviceType}）</span>` : (res.serviceType === "37" ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">介護予防（37）</span>` : "")}
+          ${res.isShort ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">短期利用（${res.serviceType}）</span>` : (res.hasMixedServiceType ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:12px; margin-left:4px;">32/37混在</span>` : (res.serviceType === "37" ? `<span class="badge" style="background:var(--pine-tint); color:var(--pine-dark); font-size:13px; margin-left:4px;">介護予防（37）</span>` : ""))}
           ${r.status === "退所" ? `<span class="badge" style="background:var(--ground); color:var(--ink-3); font-size:13px; margin-left:4px;">退所</span>` : ""}
         </td>
-        <td style="text-align:center; white-space:nowrap;">${escapeHtml(r.care_level || "-")}</td>
-        <td style="text-align:right; font-weight:bold; white-space:nowrap;">${res.basicDays} 日</td>
+        <td style="text-align:center; white-space:nowrap;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "-")}</td>
+        <td style="text-align:right; font-weight:bold; white-space:nowrap;">
+          ${res.basicDays} 日
+          ${res.hasMixedServiceType ? `<div style="font-size:12px; font-weight:normal; color:var(--ink-2); line-height:1.3; margin-top:2px;">介護: ${res.byServiceType["32"]?.days || 0}日<br>予防: ${res.byServiceType["37"]?.days || 0}日</div>` : ""}
+        </td>
         <td style="text-align:right; white-space:nowrap;">${res.hospDays > 0 ? `${res.hospDays} 日` : "-"}</td>
         <td>
           ${codesHtml || `<span style="color:var(--ink-3);">加算対象なし</span>`}
@@ -2411,6 +2509,7 @@ function renderOfficeKasanTab() {
         </td>
         <td style="text-align:right; font-weight:bold; white-space:nowrap; font-size:14px; ${res.totalUnits < 0 ? 'color:var(--alert);' : 'color:var(--pine-dark);'}">
           ${res.totalUnits.toLocaleString()} 単位
+          ${res.hasMixedServiceType ? `<div style="font-size:12px; font-weight:normal; color:var(--ink-2); line-height:1.3; margin-top:2px;">介護: ${(res.byServiceType["32"]?.units || 0).toLocaleString()}単位<br>予防: ${(res.byServiceType["37"]?.units || 0).toLocaleString()}単位</div>` : ""}
         </td>
         <td style="text-align:right; white-space:nowrap; font-size:14px;">
           ${yenDisplay}
@@ -3335,15 +3434,15 @@ function cpValidateResidentForKasanCsv(r, ym) {
     missing.push("性別");
   }
 
-  const bRate = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, ym) : parseInt(String(r.benefit_rate), 10);
-  if (![90, 80, 70].includes(bRate)) {
-    missing.push("保険給付率");
+  const bRate = (typeof cpBenefitRateOn === "function") ? cpBenefitRateOn(r, ym) : (resident.benefit_rate ? parseInt(String(r.benefit_rate), 10) : null);
+  if (bRate === null || bRate === undefined || ![90, 80, 70].includes(bRate)) {
+    missing.push("保険給付率（給付率が入っていません）");
   }
 
   const [vyStr, vmStr] = (ym || "").split("-");
   const vDaysInMonth = (vyStr && vmStr) ? new Date(parseInt(vyStr, 10), parseInt(vmStr, 10), 0).getDate() : 30;
   const vLastDate = `${ym}-${String(vDaysInMonth).padStart(2, "0")}`;
-  const certEnd = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, vLastDate) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+  const certEnd = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, vLastDate) : { level: "", start_date: "", end_date: "" };
 
   if (!certEnd.start_date) {
     missing.push("認定有効期間開始日");
@@ -3395,9 +3494,10 @@ function cpValidateResidentForKasanCsv(r, ym) {
   }
 
   // 要介護度（通常入居・短期利用ともに要支援2または要介護1〜5）
-  const careCode = CP_KASAN_CARE_LEVEL_CODES[certEnd.level || r.care_level || ""];
+  const careLevelVal = certEnd.level || "";
+  const careCode = CP_KASAN_CARE_LEVEL_CODES[careLevelVal];
   if (!careCode) {
-    missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${certEnd.level || r.care_level || "未登録"}）`);
+    missing.push(`要介護度（要支援2または要介護1〜5が必要: 現在 ${careLevelVal || "要介護度が入っていません"}）`);
   }
 
   return {
@@ -3655,7 +3755,7 @@ function renderKasanCsvValidation(regularYm, currentProcessYm, baseDate) {
           <tr>
             <td style="text-align:center; white-space:nowrap;">${statusBadge}</td>
             <td style="font-weight:bold; white-space:nowrap;">${escapeHtml(r.room_no || "-")}号室 ${escapeHtml(r.name)}</td>
-            <td style="text-align:center; white-space:nowrap;">${escapeHtml(r.care_level || "未登録")}</td>
+            <td style="text-align:center; white-space:nowrap;">${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "未登録")}</td>
             <td style="text-align:right; font-weight:bold; white-space:nowrap;">${item.calc.totalUnits.toLocaleString()} 単位</td>
             <td>${missingText}</td>
           </tr>
@@ -5344,7 +5444,7 @@ function renderKasanClaimStatusTable(ym) {
           ${escapeHtml(roomStr)}${escapeHtml(r.name)} 様
         </td>
         <td style="text-align:center; font-size:13px; white-space:nowrap;">
-          ${escapeHtml(r.care_level || "-")}
+          ${escapeHtml((typeof cpCareCertOn === "function" ? cpCareCertOn(r, toLocalDateStr(new Date())).level : "") || r.care_level || "-")}
         </td>
         <td style="text-align:right; font-size:13px; white-space:nowrap;">
           ${calc.totalUnits.toLocaleString()} 単位

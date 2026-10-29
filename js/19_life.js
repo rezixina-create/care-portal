@@ -1181,7 +1181,10 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
     const r = item.resident ? item.resident : item;
     const a = item.assessment || {};
 
-    const isPrevGH = (r.care_level && r.care_level.includes("要支援2"));
+    const evalDateStr = a.evaluation_date || toLocalDateStr(new Date());
+    const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
+    const certLevel = lCertCsv.level || "";
+    const isPrevGH = (certLevel && certLevel.includes("要支援2"));
     const serviceCode = isPrevGH ? CP_LIFE_SERVICE_CODE_PREV : CP_LIFE_SERVICE_CODE_GH;
     const extNo = `${officeNo}${serviceCode}${r.id}`;
 
@@ -1203,8 +1206,6 @@ function cpBuildLifeUserCsvLines(validCandidatesOrResidents, officeNo = "1234567
     const bDayVal = cpFormatDateToYmd8(r.birth_date || r.birthday);
     // [Claude修正] 認定日は有効期間の開始日と同じとは限らないので、登録の欄ができるまで空にする（必須ではない）
     const certDateVal = cpFormatDateToYmd8(r.certified_date || "");
-    const evalDateStr = a.evaluation_date || toLocalDateStr(new Date());
-    const lCertCsv = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level, start_date: r.care_start_date, end_date: r.care_expiry_date };
     const startPeriodVal = cpFormatDateToYmd8(lCertCsv.start_date || r.care_start_date);
     const endPeriodVal = cpFormatDateToYmd8(lCertCsv.end_date || r.care_expiry_date);
     const careLevelVal = cpCareLevelToLifeCode(lCertCsv.level || r.care_level);
@@ -1263,7 +1264,10 @@ function cpBuildLifeEvalCsvLines(validCandidates, officeNo = "1234567890") {
     const r = item.resident ? item.resident : item;
     const a = item.assessment || {};
 
-    const isPrevGH = (r.care_level && r.care_level.includes("要支援2"));
+    const evalDateStr = a.evaluate_date || toLocalDateStr(new Date());
+    const lCertEval = (typeof cpCareCertOn === "function") ? cpCareCertOn(r, evalDateStr) : { level: r.care_level };
+    const certLevel = lCertEval.level || "";
+    const isPrevGH = (certLevel && certLevel.includes("要支援2"));
     const serviceCode = isPrevGH ? CP_LIFE_SERVICE_CODE_PREV : CP_LIFE_SERVICE_CODE_GH;
     // [Claude修正] 外部システム管理番号は半角英数（項目一覧）。「_」をやめ、区切りは英字の A にする
     const extNo = `${officeNo}${serviceCode}${r.id}A${a.id || 0}`;
