@@ -41,6 +41,7 @@ def main():
     incidents = d.setdefault("incidents", [])
     care_records = d.setdefault("care_records", [])
     notebooks = d.setdefault("notebooks", [])
+    mod_count = 0
 
     # ----------------------------------------------------
     # 1. 既存の 2025-12-03 事故報告書（104号 中島 正雄 様、resident_id: 6）に受傷ピン追加
@@ -87,15 +88,29 @@ def main():
                     "severity": "要観察 (経過観察中)",
                     "treatment": "看護師が確認し、経過観察",
                     "notes": "",
-                    "x_pct": 42.0,
+                    "x_pct": 35.0,
                     "y_pct": 43.0
                 }
             ]
         }
         incidents.append(inc2)
         inc2_added += 1
+    else:
+        # ピン座標の更新（手・腕の外側から内側へ）
+        for pin in inc2.get("injury_pins", []):
+            if pin.get("site_name") == "左の前腕":
+                if pin.get("x_pct") != 35.0 or pin.get("y_pct") != 43.0:
+                    pin["x_pct"] = 35.0
+                    pin["y_pct"] = 43.0
+                    mod_count += 1
 
     # 2026-09-14 経過記録（care_records）
+    # ※ 14:30 の「入浴（個別浴）実施」は実際の入浴記録（特浴・機械浴・14:26）と合わないため除去
+    old_cr_len = len(care_records)
+    care_records[:] = [cr for cr in care_records if not (cr.get("resident_id") == 7 and cr.get("recorded_at") == "2026-09-14 14:30")]
+    if len(care_records) != old_cr_len:
+        mod_count += 1
+
     cr2_needed = [
         {
             "resident_id": 7,
@@ -109,39 +124,36 @@ def main():
             "category": "看護",
             "recorded_at": "2026-09-14 14:15",
             "staff_name": "加藤 由美",
-            "content": "松田介護職員より連絡を受け患部を確認。左前腕に約3cmの皮下出血あり。腫脹や熱感、圧痛なし。処置は行わず、入浴・更衣時の皮膚状態の観察を継続する。"
-        },
-        {
-            "resident_id": 7,
-            "category": "連絡",
-            "recorded_at": "2026-09-14 14:30",
-            "staff_name": "松田 健二",
-            "content": "入浴（個別浴）実施。患部をこすらないよう注意して洗身。浴後も出血や腫れの悪化なし。"
+            "content": "松田介護職員より連絡を受け患部を確認。左前腕に約3cmの内出血を確認。経過を見る。"
         }
     ]
     cr_added = 0
     for cr in cr2_needed:
-        if not any(x.get("resident_id") == cr["resident_id"] and x.get("recorded_at") == cr["recorded_at"] and x.get("category") == cr["category"] for x in care_records):
+        existing_cr = next((x for x in care_records if x.get("resident_id") == cr["resident_id"] and x.get("recorded_at") == cr["recorded_at"] and x.get("category") == cr["category"]), None)
+        if not existing_cr:
             cr_copy = dict(cr)
             cr_copy["id"] = nid()
             care_records.append(cr_copy)
             cr_added += 1
+        else:
+            if existing_cr.get("content") != cr["content"]:
+                existing_cr["content"] = cr["content"]
+                mod_count += 1
 
-    migrated_count = 0
     # Clean up / migrate misassigned resident_id 14 on 2026-10-21 (森 ヨシエ 様 は resident_id: 13, 204号)
     for inc in incidents:
         if inc.get("resident_id") == 14 and (inc.get("occurred_at") or "").startswith("2026-10-21"):
             inc["resident_id"] = 13
-            migrated_count += 1
+            mod_count += 1
     for cr in care_records:
         if cr.get("resident_id") == 14 and (cr.get("recorded_at") or "").startswith("2026-10-21 14:"):
-            if "転倒" in cr.get("content", "") or "森 正志" in cr.get("content", ""):
-                cr["resident_id"] = 13
-                migrated_count += 1
+            cr["resident_id"] = 13
+            mod_count += 1
 
     # ----------------------------------------------------
     # 3. 新規事故報告書 b: 2026-10-21 14:20 204号 森 ヨシエ 様 (resident_id: 13)
     # ----------------------------------------------------
+    target_supervisor_comment = "転倒後の看護師処置、家族への報告は適切に行われた。再発防止のため歩行器の確認と見守り動線を改善すること。（管理者：木村 健一）"
     inc3 = next((inc for inc in incidents if inc.get("resident_id") == 13 and (inc.get("occurred_at") or "").startswith("2026-10-21")), None)
     inc3_added = 0
     if not inc3:
@@ -154,7 +166,7 @@ def main():
             "situation": "トイレから居室へ戻るとき、歩行器から手が離れて前に転んだ。右の膝をすりむき、左の肘を床に打った。頭は打っていないと話される。看護師が膝の傷を洗ってガーゼで保護。家族へ電話で報告。",
             "cause": "【本人】急いで戻ろうとした\n【ケア】トイレからの帰りの見守りが離れていた。",
             "prevention": "1. トイレの行き帰りはそばで見守る。\n2. 歩行器のブレーキと持ち手を確かめてから歩き出してもらう。",
-            "supervisor_comment": "転倒後のバイタル確認と看護師処置、家族への報告は適切に行われた。再発防止のため歩行器の確認と見守り動線を改善すること。（管理者：木村 健一）",
+            "supervisor_comment": target_supervisor_comment,
             "status": "承認済",
             "staff_name": "斉藤 翼",
             "injury_pins": [
@@ -165,8 +177,8 @@ def main():
                     "severity": "施設内処置完了",
                     "treatment": "看護師が洗ってガーゼで保護",
                     "notes": "",
-                    "x_pct": 20.0,
-                    "y_pct": 68.0
+                    "x_pct": 23.0,
+                    "y_pct": 75.0
                 },
                 {
                     "id": nid(),
@@ -175,13 +187,28 @@ def main():
                     "severity": "要観察 (経過観察中)",
                     "treatment": "",
                     "notes": "",
-                    "x_pct": 58.0,
-                    "y_pct": 38.0
+                    "x_pct": 65.0,
+                    "y_pct": 41.0
                 }
             ]
         }
         incidents.append(inc3)
         inc3_added += 1
+    else:
+        if inc3.get("supervisor_comment") != target_supervisor_comment:
+            inc3["supervisor_comment"] = target_supervisor_comment
+            mod_count += 1
+        for pin in inc3.get("injury_pins", []):
+            if pin.get("site_name") == "右の膝":
+                if pin.get("x_pct") != 23.0 or pin.get("y_pct") != 75.0:
+                    pin["x_pct"] = 23.0
+                    pin["y_pct"] = 75.0
+                    mod_count += 1
+            elif pin.get("site_name") == "左の肘":
+                if pin.get("x_pct") != 65.0 or pin.get("y_pct") != 41.0:
+                    pin["x_pct"] = 65.0
+                    pin["y_pct"] = 41.0
+                    mod_count += 1
 
     # 2026-10-21 経過記録（care_records）
     cr3_needed = [
@@ -197,31 +224,38 @@ def main():
             "category": "看護",
             "recorded_at": "2026-10-21 14:25",
             "staff_name": "加藤 由美",
-            "content": "転倒の連絡を受け訪室。意識清明、頭部強打なし。右膝に軽度の擦過傷、流水で洗浄しガーゼ保護。左肘に発赤・軽度腫脹あり、冷湿布にてクーリング。骨折等の疑いはなし。"
+            "content": "転倒の連絡を受け訪室。意識清明、頭部強打なし。右膝のすり傷を洗ってガーゼで保護。左肘に赤みあり。経過を見る。"
         },
         {
             "resident_id": 13,
             "category": "家族",
             "recorded_at": "2026-10-21 14:40",
             "staff_name": "佐々木 浩二",
-            "content": "長男様（キーパーソン：森 正志 様）へ電話。廊下での転倒状況、右膝の擦過傷処置および左肘の経過観察について報告。了承いただく。"
+            "content": "長女様へ電話。廊下での転倒状況、右膝の処置および左肘の経過観察について報告。了承いただく。"
         }
     ]
     for cr in cr3_needed:
-        if not any(x.get("resident_id") == cr["resident_id"] and x.get("recorded_at") == cr["recorded_at"] and x.get("category") == cr["category"] for x in care_records):
+        existing_cr = next((x for x in care_records if x.get("resident_id") == cr["resident_id"] and x.get("recorded_at") == cr["recorded_at"] and x.get("category") == cr["category"]), None)
+        if not existing_cr:
             cr_copy = dict(cr)
             cr_copy["id"] = nid()
             care_records.append(cr_copy)
             cr_added += 1
+        else:
+            if existing_cr.get("content") != cr["content"]:
+                existing_cr["content"] = cr["content"]
+                mod_count += 1
 
     # 2026-10-21 申し送り（notebooks）
+    target_nb_content = "森ヨシエ様（204号）：14:20頃廊下にて転倒。右膝すり傷（ガーゼ処置済）、左肘打撲（経過観察）。頭部強打なし、ご家族へ連絡済。夜勤帯も患部の腫れや痛みの訴えに留意願います。"
+    existing_nb = next((nb for nb in notebooks if nb.get("date") == "2026-10-21" and "森ヨシエ様" in nb.get("content", "")), None)
     nb_added = 0
-    if not any(nb.get("date") == "2026-10-21" and "森ヨシエ様" in nb.get("content", "") for nb in notebooks):
+    if not existing_nb:
         notebooks.append({
             "id": nid(),
             "date": "2026-10-21",
             "category": "申し送り",
-            "content": "森ヨシエ様（204号）：14:20頃廊下にて転倒。右膝すり傷（ガーゼ処置済）、左肘打撲（冷湿布・経過観察）。頭部強打なし、ご家族へ連絡済。夜勤帯も患部の腫れや痛みの訴えに留意願います。",
+            "content": target_nb_content,
             "status": "完了",
             "staff_name": "斉藤 翼",
             "resolved_staff": "斉藤 翼",
@@ -233,12 +267,16 @@ def main():
             }
         })
         nb_added += 1
+    else:
+        if existing_nb.get("content") != target_nb_content:
+            existing_nb["content"] = target_nb_content
+            mod_count += 1
 
     incidents.sort(key=lambda x: (x.get("occurred_at") or "", x.get("id") or 0))
     care_records.sort(key=lambda x: (x.get("recorded_at") or "", x.get("id") or 0))
 
-    total_added = pins_added_1 + inc2_added + inc3_added + cr_added + nb_added + migrated_count
-    if total_added > 0:
+    total_changes = pins_added_1 + inc2_added + inc3_added + cr_added + nb_added + mod_count
+    if total_changes > 0:
         if isinstance(d.get("_rev"), int):
             d["_rev"] += 1
         tmp = target_path + ".tmp_write"
@@ -251,6 +289,7 @@ def main():
     print(f"  新規事故報告書: {inc2_added + inc3_added} 件 (合計: {len(incidents)} 件)")
     print(f"  経過記録追加: {cr_added} 件")
     print(f"  申し送り追加: {nb_added} 件")
+    print(f"  既存レコード更新・修正: {mod_count} 件")
 
 if __name__ == "__main__":
     main()
