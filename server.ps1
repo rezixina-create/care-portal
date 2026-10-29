@@ -3253,16 +3253,20 @@ namespace CarePortal
                         return;
                     }
                     // [Claude修正] これより下の API と写真は、ログイン済み (有効なセッション) の場合だけ応答する
-                    bool needsAuth = urlPath.StartsWith("/api/") || urlPath.StartsWith("/data/photos/");
+                    bool needsAuth = urlPath.StartsWith("/api/", StringComparison.OrdinalIgnoreCase) || urlPath.StartsWith("/data/photos/", StringComparison.OrdinalIgnoreCase);
                     string sessStaff = needsAuth ? CheckSession(lines) : null;
                     if (needsAuth && sessStaff == null)
                     {
-                        if (urlPath == "/api/open-folder" && !IsHostConnection(client, lines))
+                        if (urlPath.Equals("/api/open-folder", StringComparison.OrdinalIgnoreCase) && !IsHostConnection(client, lines))
                         {
                             SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機で操作してください\"}");
                             return;
                         }
-                        if (urlPath.StartsWith("/api/incident-photo") || urlPath.StartsWith("/data/photos/incidents/"))
+                        string relChk = urlPath.TrimStart('/').Replace('/', Path.DirectorySeparatorChar);
+                        string fullChk = "";
+                        try { fullChk = Path.GetFullPath(Path.Combine(_baseDir, relChk)); } catch { }
+                        string incChkDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "incidents")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+                        if (urlPath.StartsWith("/api/incident-photo", StringComparison.OrdinalIgnoreCase) || (!string.IsNullOrEmpty(fullChk) && fullChk.StartsWith(incChkDir, StringComparison.OrdinalIgnoreCase)))
                         {
                             SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"ログインが必要です\"}");
                             return;
@@ -3324,12 +3328,13 @@ namespace CarePortal
                         return;
                     }
 
-                    // [Antigravity追加 2026-10-28] 事故報告書の写真送信（親機のみ受付・403）
+                    // [Antigravity修正 2026-10-29] 事故報告書の写真送信
+                    // 施設のタブレット（LAN接続）および親機から受付可能。トンネル接続（HasTunnelHeaders）のみ拒絶（403）
                     if (urlPath == "/api/incident-photo-upload" && method == "POST")
                     {
-                        if (!IsHostConnection(client, lines))
+                        if (HasTunnelHeaders(lines))
                         {
-                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機からのみ送信可能です\"}");
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"外部接続トンネルからの送信は禁止されています\"}");
                             return;
                         }
                         if (sessStaff == null)
@@ -3518,16 +3523,7 @@ namespace CarePortal
                         return;
                     }
 
-                    if (urlPath.ToLowerInvariant().StartsWith("/data/photos/incidents/"))
-                    {
-                        if (!IsHostConnection(client, lines) || sessStaff == null)
-                        {
-                            byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
-                            SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
-                            return;
-                        }
-                    }
-                    ServeStaticFile(stream, urlPath);
+                    ServeStaticFile(stream, urlPath, IsHostConnection(client, lines), sessStaff);
                 }
             }
             catch { }
@@ -3537,7 +3533,7 @@ namespace CarePortal
             }
         }
 
-        private void ServeStaticFile(NetworkStream stream, string urlPath)
+        private void ServeStaticFile(NetworkStream stream, string urlPath, bool isHost, string sessStaff)
         {
             if (urlPath == "/" || string.IsNullOrEmpty(urlPath))
             {
@@ -3566,6 +3562,19 @@ namespace CarePortal
                 byte[] deniedBytes2 = Encoding.UTF8.GetBytes("404 Not Found");
                 SendResponse(stream, 404, "Not Found", "text/plain", deniedBytes2);
                 return;
+            }
+
+            // [Antigravity修正 2026-10-29] 実際に開くファイルの場所（Path.GetFullPath の結果）が
+            // data/photos/incidents/ の中かで判定し、親機かつログイン済みでなければ 403 で拒絶する（文字列比較の抜け道を防止）
+            string incidentsDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "incidents")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
+            if (filePath.StartsWith(incidentsDir, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!isHost || string.IsNullOrEmpty(sessStaff))
+                {
+                    byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
+                    SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
+                    return;
+                }
             }
 
             if (!File.Exists(filePath))
