@@ -39,7 +39,7 @@ function renderDailyJournal() {
  let shiftSummaryText = "";
  let journalDateTitle = "本日のフロア勤務体制:";
  if (roster) {
-  let dirT = "木村";
+  let dirT = "-";
   if (roster.director.length > 0) {
    const dir = roster.director[0];
    dirT = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;
@@ -51,7 +51,7 @@ function renderDailyJournal() {
   journalDateTitle = `【${roster.month}月${roster.day}日】フロア勤務体制（勤務表連動）:`;
  } else {
   const shiftText = (document.getElementById("todayShiftBar") ? document.getElementById("todayShiftBar").innerText : "").replace(" 本日の勤務体制:", "").trim();
-  shiftSummaryText = shiftText || "管理者: 木村 | 看護: 鈴木 | 介護体制確認中";
+  shiftSummaryText = shiftText || "管理者: - | 看護: - | 介護体制確認中";
   journalDateTitle = "本日のフロア勤務体制:";
  }
 
@@ -134,7 +134,7 @@ function printDailyJournal() {
  const roster = (typeof getDailyShiftRoster === "function") ? getDailyShiftRoster(gState.selectedDate) : null;
  let printRosterHtml = "";
  if (roster) {
-  let dirT = "木村";
+  let dirT = "-";
   if (roster.director.length > 0) {
    const dir = roster.director[0];
    dirT = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;

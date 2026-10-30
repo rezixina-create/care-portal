@@ -1077,7 +1077,11 @@ namespace CarePortal
         {
             public string Staff;
             public DateTime LastSeen;
+            public bool IsMc;
         }
+        private string _hostResetCode = null;
+        private DateTime _hostResetExpires = DateTime.MinValue;
+        private const string EmptyDbJson = "{\"_rev\":0,\"residents\":[],\"stamps\":[],\"staff_accounts\":[]}";
         private readonly Dictionary<string, SessionInfo> _sessions = new Dictionary<string, SessionInfo>();
         // [Claude修正 2026-10-18] 失敗した時刻を覚え、10分以内の失敗だけを数える
         private readonly Dictionary<string, List<DateTime>> _failTimes = new Dictionary<string, List<DateTime>>();
@@ -1130,6 +1134,8 @@ namespace CarePortal
         {
             string t = GetRequestToken(lines);
             if (string.IsNullOrEmpty(t)) return null;
+            string staff = null;
+            bool isMc = false;
             lock (_authLock)
             {
                 SessionInfo si;
@@ -1140,8 +1146,20 @@ namespace CarePortal
                     return null;
                 }
                 si.LastSeen = DateTime.Now;
-                return si.Staff;
+                staff = si.Staff;
+                isMc = si.IsMc || staff == "MC";
             }
+            if (isMc)
+            {
+                JObj db = null;
+                try { db = LoadDb(); } catch { db = null; }
+                if (IsMcClosed(db))
+                {
+                    DropMcSessions();
+                    return null;
+                }
+            }
+            return staff;
         }
 
         // [Claude修正 2026-10-18] 読むだけに使う（ログインの照合・暗証番号の確かめ など）。書き換えない。
@@ -1204,7 +1222,7 @@ namespace CarePortal
         private static string FindLoginStaff(JObj db, string sid, string pw, out bool isCustom)
         {
             isCustom = false;
-            if (db == null || string.IsNullOrEmpty(sid)) return null;
+            if (db == null || string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(pw)) return null;
             Dictionary<string, bool> inStamps = new Dictionary<string, bool>();
             foreach (object st in GetList(db, "stamps")) { string nm = StaffName(st); if (!string.IsNullOrEmpty(nm)) inStamps[nm] = true; }
             foreach (object o in GetList(db, "staff_accounts"))
@@ -1213,9 +1231,11 @@ namespace CarePortal
                 if (acc == null) continue;
                 string nm = acc.GetStr("staff_name");
                 if (string.IsNullOrEmpty(nm) || !inStamps.ContainsKey(nm)) continue;
-                string sidV = acc.GetStr("staff_id") ?? "";
+                string sidV = (acc.GetStr("staff_id") ?? "").Trim();
+                if (string.IsNullOrEmpty(sidV)) continue; // 職員IDが空のアカウントではログインできない（aaaa とみなさない）
                 if (!string.Equals(sidV, sid, StringComparison.OrdinalIgnoreCase)) continue;
-                string pwV = acc.GetStr("password"); if (string.IsNullOrEmpty(pwV)) pwV = "0000";
+                string pwV = acc.GetStr("password") ?? "";
+                if (string.IsNullOrEmpty(pwV)) return null; // パスワードが空のアカウントではログインできない（0000 とみなさない）
                 if (pwV != pw) return null; // 同じIDの最初のアカウントでパスワードを確かめる
                 isCustom = IsTrue(acc.Get("is_custom"));
                 return nm;
@@ -1225,8 +1245,7 @@ namespace CarePortal
 
         private static string[] GetCredentials(JObj db, string name)
         {
-            if (string.IsNullOrEmpty(name)) return null;
-            if (db == null) return new string[] { "aaaa", "0000", "false" };
+            if (string.IsNullOrEmpty(name) || db == null) return null;
             bool inStamps = false;
             foreach (object st in GetList(db, "stamps"))
             {
@@ -1234,11 +1253,38 @@ namespace CarePortal
             }
             if (!inStamps) return null;
             JObj acc = FindByField(GetList(db, "staff_accounts"), "staff_name", name);
-            if (acc == null) return new string[] { "aaaa", "0000", "false" };
-            // [Claude修正] 空のとき（パスワードを含まないバックアップから戻した場合など）は初期値として扱う
-            string sidV = acc.GetStr("staff_id"); if (string.IsNullOrEmpty(sidV)) sidV = "aaaa";
-            string pwV = acc.GetStr("password"); if (string.IsNullOrEmpty(pwV)) pwV = "0000";
+            if (acc == null) return null;
+            string sidV = (acc.GetStr("staff_id") ?? "").Trim();
+            string pwV = acc.GetStr("password") ?? "";
+            if (string.IsNullOrEmpty(sidV) || string.IsNullOrEmpty(pwV)) return null;
             return new string[] { sidV, pwV, IsTrue(acc.Get("is_custom")) ? "true" : "false" };
+        }
+
+        private static string NextFreeLoginId(List<object> accs)
+        {
+            HashSet<string> used = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            used.Add("zzzz");
+            if (accs != null)
+            {
+                foreach (object o in accs)
+                {
+                    JObj a = o as JObj;
+                    if (a != null)
+                    {
+                        string id = (a.GetStr("staff_id") ?? "").Trim();
+                        if (!string.IsNullOrEmpty(id)) used.Add(id);
+                    }
+                }
+            }
+            for (int len = 4; len < 10; len++)
+            {
+                for (int c = 0; c < 26; c++)
+                {
+                    string cand = new string((char)('a' + c), len);
+                    if (!used.Contains(cand)) return cand;
+                }
+            }
+            return "staff" + DateTime.Now.Ticks.ToString();
         }
 
         private int LockRemaining(string key)
@@ -1297,18 +1343,64 @@ namespace CarePortal
             return acc != null && acc.GetStr("status") == "休止中";
         }
 
-        // 保存されたデータで休止中になった職員のログイン中セッションを終了させる
-        private void DropSuspendedSessions(string json)
+        private static void GetMcRoleCounts(JObj db, out int adminCount, out int clerkCount)
         {
-            JObj db = null;
-            try { db = MiniJson.Parse(json) as JObj; } catch { db = null; }
+            adminCount = 0;
+            clerkCount = 0;
             if (db == null) return;
+            List<object> stamps = GetList(db, "stamps");
+            List<object> accs = GetList(db, "staff_accounts");
+            foreach (object o in stamps)
+            {
+                JObj st = o as JObj;
+                if (st == null) continue;
+                if (st.GetStr("status") == "休止中") continue;
+                string nm = (st.GetStr("name") ?? "").Trim();
+                if (string.IsNullOrEmpty(nm)) continue;
+                JObj acc = FindByField(accs, "staff_name", nm);
+                if (acc == null) continue;
+                string sid = (acc.GetStr("staff_id") ?? "").Trim();
+                string pw = (acc.GetStr("password") ?? "").Trim();
+                if (string.IsNullOrEmpty(sid) || string.IsNullOrEmpty(pw)) continue;
+                if (IsAdminRole(st)) adminCount++;
+                else if (IsClerkRole(st)) clerkCount++;
+            }
+        }
+
+        private static bool IsMcClosed(JObj db)
+        {
+            int adminCount, clerkCount;
+            GetMcRoleCounts(db, out adminCount, out clerkCount);
+            return adminCount >= 1 && clerkCount >= 1 && (adminCount + clerkCount) >= 3;
+        }
+
+        private void DropMcSessions()
+        {
             lock (_authLock)
             {
                 List<string> remove = new List<string>();
                 foreach (KeyValuePair<string, SessionInfo> kv in _sessions)
                 {
-                    if (IsSuspended(db, kv.Value.Staff)) remove.Add(kv.Key);
+                    if (kv.Value.IsMc || kv.Value.Staff == "MC") remove.Add(kv.Key);
+                }
+                foreach (string k in remove) _sessions.Remove(k);
+            }
+        }
+
+        // 保存されたデータで休止中になった職員および閉じる条件を満たしたMCのログイン中セッションを終了させる
+        private void DropSuspendedSessions(string json)
+        {
+            JObj db = null;
+            try { db = MiniJson.Parse(json) as JObj; } catch { db = null; }
+            if (db == null) return;
+            bool mcClosed = IsMcClosed(db);
+            lock (_authLock)
+            {
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, SessionInfo> kv in _sessions)
+                {
+                    if (mcClosed && (kv.Value.IsMc || kv.Value.Staff == "MC")) remove.Add(kv.Key);
+                    else if (IsSuspended(db, kv.Value.Staff)) remove.Add(kv.Key);
                 }
                 foreach (string k in remove) _sessions.Remove(k);
             }
@@ -1540,14 +1632,14 @@ namespace CarePortal
         }
 
 
-        private void HandleLogin(NetworkStream stream, string body)
+        private void HandleLogin(NetworkStream stream, string body, string remoteIp)
         {
             JObj req = null;
             try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
             if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
             string sid = (req.GetStr("staff_id") ?? "").Trim();
             string pw = req.GetStr("password") ?? "";
-            // ロックは職員IDごと（大文字・小文字は区別しない）
+            // ロックは職員IDごと（大文字・小文字は区別しない。MC の zzzz も同じ扱い）
             string lockKey = "id:" + sid.ToLowerInvariant();
 
             int remain = LockRemaining(lockKey);
@@ -1559,12 +1651,66 @@ namespace CarePortal
 
             JObj db = null;
             try { db = LoadDb(); } catch { db = null; }
+
+            // [Antigravity追加 2026-10-30] 最初の入口 MC（職員ID zzzz・パスワード 1111）
+            // 閉じる条件（管理者と事務員を合わせて3人以上、かつ管理者1人以上・事務員1人以上）を満たしていないときだけ受け付ける。
+            // 満たしているときは、ふつうのまちがいと同じ 401（MC があることも分からない返事）を返す。
+            if (string.Equals(sid, "zzzz", StringComparison.OrdinalIgnoreCase))
+            {
+                if (!IsMcClosed(db) && pw == "1111")
+                {
+                    ClearFail(lockKey);
+                    string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+                    UpdateDb(delegate(JObj d)
+                    {
+                        List<object> logs = d.Get("mc_audit_logs") as List<object>;
+                        if (logs == null) { logs = new List<object>(); d.Set("mc_audit_logs", logs); }
+                        JObj entry = new JObj();
+                        entry.Set("id", "mc_login_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                        entry.Set("action", "login");
+                        entry.Set("timestamp", nowStr);
+                        entry.Set("remote_ip", remoteIp ?? "");
+                        entry.Set("notified_admin", false);
+                        logs.Add(entry);
+                        return true;
+                    });
+                    string mcToken = NewToken();
+                    lock (_authLock)
+                    {
+                        SessionInfo si = new SessionInfo();
+                        si.Staff = "MC";
+                        si.IsMc = true;
+                        si.LastSeen = DateTime.Now;
+                        _sessions[mcToken] = si;
+                    }
+                    string mcJson = "{\"token\":\"" + mcToken + "\",\"staff_name\":\"MC\",\"staff_id\":\"zzzz\",\"is_custom\":true,\"is_mc\":true}";
+                    SendJsonResponse(stream, 200, mcJson, "cp_session=" + mcToken + "; Path=/; HttpOnly; SameSite=Strict");
+                    return;
+                }
+                else
+                {
+                    int left = RegisterFail(lockKey);
+                    if (left == 0)
+                    {
+                        SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + LockRemaining(lockKey) + "}");
+                        return;
+                    }
+                    SendJsonResponse(stream, 401, "{\"error\":\"invalid\",\"remaining\":" + left + "}");
+                    return;
+                }
+            }
+
             bool isCustom;
             string name = FindLoginStaff(db, sid, pw, out isCustom);
             if (name == null)
             {
                 // IDとパスワードのどちらが違うかは返さない
                 int left = RegisterFail(lockKey);
+                if (left == 0)
+                {
+                    SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + LockRemaining(lockKey) + "}");
+                    return;
+                }
                 SendJsonResponse(stream, 401, "{\"error\":\"invalid\",\"remaining\":" + left + "}");
                 return;
             }
@@ -1580,11 +1726,387 @@ namespace CarePortal
             {
                 SessionInfo si = new SessionInfo();
                 si.Staff = name;
+                si.IsMc = false;
                 si.LastSeen = DateTime.Now;
                 _sessions[token] = si;
             }
             string json = "{\"token\":\"" + token + "\",\"staff_name\":" + MiniJson.Quote(name) + ",\"staff_id\":" + MiniJson.Quote(sid) + ",\"is_custom\":" + (isCustom ? "true" : "false") + "}";
             SendJsonResponse(stream, 200, json, "cp_session=" + token + "; Path=/; HttpOnly; SameSite=Strict");
+        }
+
+        // [Antigravity追加 2026-10-30] 最初の入口（MC）での職員登録
+        private void HandleMcRegisterStaff(NetworkStream stream, string body, string sessStaff, string remoteIp)
+        {
+            if (sessStaff != "MC")
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"最初の入口（MC）でのみ操作できます\"}");
+                return;
+            }
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string name = (req.GetStr("name") ?? "").Trim();
+            string role = (req.GetStr("role") ?? "").Trim();
+            string empType = (req.GetStr("employment_type") ?? "").Trim();
+            string dutyType = (req.GetStr("duty_type") ?? "").Trim();
+            string staffId = (req.GetStr("staff_id") ?? "").Trim().ToLowerInvariant();
+            string password = (req.GetStr("password") ?? "").Trim();
+            string pin = (req.GetStr("pin") ?? "").Trim();
+            if (string.IsNullOrEmpty(name) || name == "MC" || string.IsNullOrEmpty(role))
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"missing_fields\",\"message\":\"氏名と役職を入力してください\"}");
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(staffId, "^[-a-z0-9_]{4,20}$") || staffId == "zzzz")
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_staff_id\",\"message\":\"職員IDは4〜20文字の半角英数字で入力してください（zzzz は使用できません）\"}");
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(password, "^[0-9]{4}$"))
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_password\",\"message\":\"パスワードは数字4桁で入力してください\"}");
+                return;
+            }
+            if (!System.Text.RegularExpressions.Regex.IsMatch(pin, "^[0-9]{4}$"))
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_pin\",\"message\":\"暗証番号は数字4桁で入力してください\"}");
+                return;
+            }
+
+            string errCode = null;
+            string errMsg = null;
+            bool closedNow = false;
+            int adminCount = 0;
+            int clerkCount = 0;
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                if (IsMcClosed(d))
+                {
+                    errCode = "mc_closed";
+                    errMsg = "最初の入口（MC）はすでに閉じられています";
+                    return false;
+                }
+                List<object> stamps = d.Get("stamps") as List<object>;
+                if (stamps == null) { stamps = new List<object>(); d.Set("stamps", stamps); }
+                if (FindStamp(stamps, name) != null)
+                {
+                    errCode = "duplicate_name";
+                    errMsg = "同じ氏名の職員がすでに登録されています";
+                    return false;
+                }
+                List<object> accs = d.Get("staff_accounts") as List<object>;
+                if (accs == null) { accs = new List<object>(); d.Set("staff_accounts", accs); }
+                foreach (object o in accs)
+                {
+                    JObj a = o as JObj;
+                    if (a != null && string.Equals((a.GetStr("staff_id") ?? "").Trim(), staffId, StringComparison.OrdinalIgnoreCase))
+                    {
+                        errCode = "duplicate_id";
+                        errMsg = "同じ職員IDがすでに使われています";
+                        return false;
+                    }
+                }
+
+                JObj st = new JObj();
+                st.Set("name", name);
+                st.Set("role", role);
+                st.Set("employment_type", empType);
+                st.Set("duty_type", dutyType);
+                st.Set("qualifications", "");
+                st.Set("pin", pin);
+                st.Set("is_initial_pin", pin == "0000");
+                st.Set("status", "正常");
+                stamps.Add(st);
+
+                JObj acc = new JObj();
+                acc.Set("id", name);
+                acc.Set("staff_name", name);
+                acc.Set("staff_id", staffId);
+                acc.Set("password", password);
+                acc.Set("is_custom", password != "0000");
+                acc.Set("updated_at", nowStr.Substring(0, 16));
+                accs.Add(acc);
+
+                List<object> logs = d.Get("mc_audit_logs") as List<object>;
+                if (logs == null) { logs = new List<object>(); d.Set("mc_audit_logs", logs); }
+                JObj entry = new JObj();
+                entry.Set("id", "mc_reg_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                entry.Set("action", "register_staff");
+                entry.Set("timestamp", nowStr);
+                entry.Set("remote_ip", remoteIp ?? "");
+                entry.Set("staff_name", name);
+                entry.Set("role", role);
+                entry.Set("staff_id", staffId);
+                entry.Set("notified_admin", false);
+                logs.Add(entry);
+
+                GetMcRoleCounts(d, out adminCount, out clerkCount);
+                closedNow = (adminCount >= 1 && clerkCount >= 1 && (adminCount + clerkCount) >= 3);
+                if (closedNow)
+                {
+                    JObj closeEntry = new JObj();
+                    closeEntry.Set("id", "mc_close_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                    closeEntry.Set("action", "mc_closed");
+                    closeEntry.Set("timestamp", nowStr);
+                    closeEntry.Set("remote_ip", remoteIp ?? "");
+                    closeEntry.Set("notified_admin", false);
+                    logs.Add(closeEntry);
+                }
+                return true;
+            });
+
+            if (!saved)
+            {
+                int stCode = errCode == "mc_closed" ? 403 : 400;
+                if (errCode == "mc_closed") DropMcSessions();
+                SendJsonResponse(stream, stCode, "{\"error\":" + MiniJson.Quote(errCode ?? "save_failed") + ",\"message\":" + MiniJson.Quote(errMsg ?? "保存に失敗しました") + "}");
+                return;
+            }
+
+            if (closedNow)
+            {
+                DropMcSessions();
+                SendJsonResponse(stream, 200, "{\"ok\":true,\"success\":true,\"mc_closed\":true,\"admin_count\":" + adminCount + ",\"clerk_count\":" + clerkCount + "}", "cp_session=; Path=/; HttpOnly; SameSite=Strict; Max-Age=0");
+                return;
+            }
+
+            SendJsonResponse(stream, 200, "{\"ok\":true,\"success\":true,\"mc_closed\":false,\"admin_count\":" + adminCount + ",\"clerk_count\":" + clerkCount + "}");
+        }
+
+        // [Antigravity追加 2026-10-30] 最初の入口（MC）での施設名・事業所情報の初期設定
+        private void HandleMcSaveFacility(NetworkStream stream, string body, string sessStaff, string remoteIp)
+        {
+            if (sessStaff != "MC")
+            {
+                SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"最初の入口（MC）でのみ操作できます\"}");
+                return;
+            }
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string facName = (req.GetStr("facility_name") ?? "").Trim();
+            JObj officeInfo = req.Get("office_info") as JObj;
+            if (string.IsNullOrEmpty(facName) && officeInfo == null)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"missing_fields\",\"message\":\"施設名または事業所の情報を入力してください\"}");
+                return;
+            }
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+            bool mcClosedErr = false;
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                if (IsMcClosed(d)) { mcClosedErr = true; return false; }
+                if (!string.IsNullOrEmpty(facName)) d.Set("facility_name", facName);
+                if (officeInfo != null)
+                {
+                    JObj curOff = d.Get("office_info") as JObj;
+                    if (curOff == null) { curOff = new JObj(); d.Set("office_info", curOff); }
+                    foreach (string k in officeInfo.Keys) curOff.Set(k, officeInfo.Get(k));
+                }
+                List<object> logs = d.Get("mc_audit_logs") as List<object>;
+                if (logs == null) { logs = new List<object>(); d.Set("mc_audit_logs", logs); }
+                JObj entry = new JObj();
+                entry.Set("id", "mc_fac_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                entry.Set("action", "save_facility");
+                entry.Set("timestamp", nowStr);
+                entry.Set("remote_ip", remoteIp ?? "");
+                entry.Set("facility_name", facName);
+                entry.Set("notified_admin", false);
+                logs.Add(entry);
+                return true;
+            });
+            if (!saved)
+            {
+                if (mcClosedErr) DropMcSessions();
+                SendJsonResponse(stream, mcClosedErr ? 403 : 500, "{\"error\":\"save_failed\"}");
+                return;
+            }
+            SendJsonResponse(stream, 200, "{\"ok\":true,\"success\":true}");
+        }
+
+        // [Antigravity追加 2026-10-30] 親機専用の管理者パスワード初期化（確認番号の発行）
+        private void HandleHostAdminResetRequest(NetworkStream stream)
+        {
+            string lockKey = "host_admin_reset";
+            int remain = LockRemaining(lockKey);
+            if (remain > 0)
+            {
+                SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + remain + "}");
+                return;
+            }
+            JObj db = null;
+            try { db = LoadDb(); } catch { db = null; }
+            List<JObj> admins = new List<JObj>();
+            if (db != null)
+            {
+                foreach (object o in GetList(db, "stamps"))
+                {
+                    JObj st = o as JObj;
+                    if (st == null) continue;
+                    if (st.GetStr("status") == "休止中") continue;
+                    if (IsAdminRole(st)) admins.Add(st);
+                }
+            }
+            if (admins.Count == 0)
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"no_admin\",\"message\":\"管理者が登録されていません\"}");
+                return;
+            }
+            byte[] rb = new byte[4];
+            using (System.Security.Cryptography.RandomNumberGenerator rng = System.Security.Cryptography.RandomNumberGenerator.Create())
+            {
+                rng.GetBytes(rb);
+            }
+            uint rv = BitConverter.ToUInt32(rb, 0) % 900000u + 100000u;
+            string code = rv.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            DateTime exp = DateTime.Now.AddMinutes(5);
+            lock (_authLock)
+            {
+                _hostResetCode = code;
+                _hostResetExpires = exp;
+            }
+            string expStr = exp.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+            Console.WriteLine("");
+            Console.WriteLine("================================================================");
+            Console.WriteLine("[管理者パスワード初期化] 親機の画面で入力する確認番号: " + code);
+            Console.WriteLine("有効期限: " + expStr + "（5分間有効）");
+            Console.WriteLine("================================================================");
+            Console.WriteLine("");
+
+            StringBuilder sb = new StringBuilder("{\"ok\":true,\"success\":true,\"expires_in\":300,\"admins\":[");
+            for (int i = 0; i < admins.Count; i++)
+            {
+                if (i > 0) sb.Append(',');
+                sb.Append(MiniJson.Quote(admins[i].GetStr("name") ?? ""));
+            }
+            sb.Append("]}");
+            SendJsonResponse(stream, 200, sb.ToString());
+        }
+
+        // [Antigravity追加 2026-10-30] 親機専用の管理者パスワード初期化（確認番号の照合と実行）
+        private void HandleHostAdminResetExecute(NetworkStream stream, string body)
+        {
+            string lockKey = "host_admin_reset";
+            int remain = LockRemaining(lockKey);
+            if (remain > 0)
+            {
+                SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + remain + "}");
+                return;
+            }
+            JObj req = ParseBody(body);
+            if (req == null) { SendJsonResponse(stream, 400, "{\"error\":\"bad_request\"}"); return; }
+            string target = (req.GetStr("target") ?? "").Trim();
+            string code = (req.GetStr("code") ?? "").Trim();
+            if (string.IsNullOrEmpty(target) || string.IsNullOrEmpty(code))
+            {
+                SendJsonResponse(stream, 400, "{\"error\":\"bad_request\",\"message\":\"対象の管理者と確認番号を入力してください\"}");
+                return;
+            }
+
+            string expectedCode = null;
+            DateTime expires = DateTime.MinValue;
+            lock (_authLock)
+            {
+                expectedCode = _hostResetCode;
+                expires = _hostResetExpires;
+            }
+            if (string.IsNullOrEmpty(expectedCode) || DateTime.Now > expires)
+            {
+                lock (_authLock) { _hostResetCode = null; }
+                SendJsonResponse(stream, 400, "{\"error\":\"code_expired\",\"message\":\"確認番号の有効期限が切れているか、発行されていません。もう一度確認番号を発行してください。\"}");
+                return;
+            }
+            if (code != expectedCode)
+            {
+                int left = RegisterFail(lockKey);
+                if (left == 0)
+                {
+                    SendJsonResponse(stream, 423, "{\"error\":\"locked\",\"retry_after\":" + LockRemaining(lockKey) + "}");
+                    return;
+                }
+                SendJsonResponse(stream, 400, "{\"error\":\"invalid_code\",\"remaining\":" + left + ",\"message\":\"確認番号が一致しません。\"}");
+                return;
+            }
+
+            string errCode = null;
+            string errMsg = null;
+            string targetLoginId = "";
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+            bool saved = UpdateDb(delegate(JObj d)
+            {
+                List<object> stamps = GetList(d, "stamps");
+                JObj st = FindStamp(stamps, target);
+                if (st == null || st.GetStr("status") == "休止中" || !IsAdminRole(st))
+                {
+                    errCode = "not_admin";
+                    errMsg = "親機での初期化は管理者（施設長）のアカウントのみ対象です。";
+                    return false;
+                }
+                st.Set("pin", "0000");
+                st.Set("is_initial_pin", true);
+
+                List<object> accs = d.Get("staff_accounts") as List<object>;
+                if (accs == null) { accs = new List<object>(); d.Set("staff_accounts", accs); }
+                JObj acc = FindByField(accs, "staff_name", target);
+                List<object> otherAccs = new List<object>();
+                foreach (object o in accs)
+                {
+                    if (!object.ReferenceEquals(o, acc)) otherAccs.Add(o);
+                }
+                string resetLoginId = NextFreeLoginId(otherAccs);
+                if (acc == null)
+                {
+                    acc = new JObj();
+                    acc.Set("id", target);
+                    acc.Set("staff_name", target);
+                    accs.Add(acc);
+                }
+                acc.Set("staff_id", resetLoginId);
+                targetLoginId = resetLoginId;
+                acc.Set("password", "0000");
+                acc.Set("is_custom", false);
+                acc.Set("updated_at", nowStr.Substring(0, 16));
+                acc.Set("host_reset_notice_pending", true);
+                acc.Set("host_reset_at", nowStr);
+
+                List<object> logs = d.Get("host_recovery_logs") as List<object>;
+                if (logs == null) { logs = new List<object>(); d.Set("host_recovery_logs", logs); }
+                JObj entry = new JObj();
+                entry.Set("id", "hr_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                entry.Set("target_staff", target);
+                entry.Set("role", st.GetStr("role") ?? "管理者");
+                entry.Set("staff_id", targetLoginId);
+                entry.Set("timestamp", nowStr);
+                entry.Set("remote_ip", "127.0.0.1");
+                entry.Set("notified", false);
+                logs.Add(entry);
+                return true;
+            });
+
+            if (!saved)
+            {
+                SendJsonResponse(stream, errCode == "not_admin" ? 403 : 500, "{\"error\":" + MiniJson.Quote(errCode ?? "save_failed") + ",\"message\":" + MiniJson.Quote(errMsg ?? "初期化に失敗しました") + "}");
+                return;
+            }
+
+            lock (_authLock)
+            {
+                _hostResetCode = null;
+                List<string> remove = new List<string>();
+                foreach (KeyValuePair<string, SessionInfo> kv in _sessions)
+                {
+                    if (kv.Value.Staff == target) remove.Add(kv.Key);
+                }
+                foreach (string k in remove) _sessions.Remove(k);
+            }
+            ClearFail(lockKey);
+            ClearFail(target);
+            ClearFail("pin:" + target);
+            if (!string.IsNullOrEmpty(targetLoginId)) ClearFail("id:" + targetLoginId.ToLowerInvariant());
+
+            Console.WriteLine("[管理者パスワード初期化] 親機での操作により管理者「" + target + "」（ID: " + targetLoginId + "）のパスワードと暗証番号を初期値（0000）に戻しました（" + nowStr + "）");
+            SendJsonResponse(stream, 200, "{\"ok\":true,\"success\":true,\"target\":" + MiniJson.Quote(target) + ",\"staff_id\":" + MiniJson.Quote(targetLoginId) + "}");
         }
 
         private void HandleLogout(NetworkStream stream, string[] lines)
@@ -1639,8 +2161,8 @@ namespace CarePortal
                     string aRole = a != null ? (a.GetStr("role") ?? "") : "";
                     string oRole = o != null ? (o.GetStr("role") ?? "") : "";
                     approved = a != null && o != null && targetOk
-                        && (aRole.Contains("管理者") || aRole.Contains("施設長"))
-                        && oRole.Contains("事務")
+                        && IsAdminRole(a)
+                        && IsClerkRole(o)
                         && (a.GetStr("pin") ?? "0000") == adminPin
                         && (o.GetStr("pin") ?? "0000") == officePin;
                     if (approved)
@@ -1657,7 +2179,12 @@ namespace CarePortal
                             acc = new JObj();
                             acc.Set("id", target);
                             acc.Set("staff_name", target);
+                            acc.Set("staff_id", NextFreeLoginId(accs));
                             accs.Add(acc);
+                        }
+                        if (string.IsNullOrEmpty((acc.GetStr("staff_id") ?? "").Trim()))
+                        {
+                            acc.Set("staff_id", NextFreeLoginId(accs));
                         }
                         // [Claude修正 2026-10-18] IDはそのまま（職員ごとに別のIDのため）。パスワードだけ初期値に戻す
                         acc.Set("password", "0000");
@@ -1711,8 +2238,8 @@ namespace CarePortal
         {
             lock (_fileLock)
             {
-                if (!DbExists()) return false;
-                string txt = DbReadText();
+                string txt = DbExists() ? DbReadText() : EmptyDbJson;
+                if (string.IsNullOrEmpty(txt)) txt = EmptyDbJson;
                 JObj db = null;
                 try { db = MiniJson.Parse(txt) as JObj; } catch { db = null; }
                 if (db == null) return false;
@@ -1720,9 +2247,15 @@ namespace CarePortal
                 long rev = 0;
                 JNum rn = db.Get("_rev") as JNum;
                 if (rn != null) long.TryParse(rn.Raw, out rev);
-                db.Set("_rev", new JNum((rev + 1).ToString(System.Globalization.CultureInfo.InvariantCulture)));
+                long newRev = rev + 1;
+                db.Set("_rev", new JNum(newRev.ToString(System.Globalization.CultureInfo.InvariantCulture)));
                 string outTxt = MiniJson.Serialize(db);
                 DbWriteText(outTxt);
+                _dbCache = MiniJson.Parse(outTxt) as JObj;
+                _dbCacheStamp = DbStamp();
+                _revCacheVal = newRev;
+                _revCacheStamp = _dbCacheStamp;
+                if (_store != null) { try { SyncJsonFile(false); } catch { } }
                 try
                 {
                     string ts = DateTime.Now.ToString("yyyyMMdd_HHmm");
@@ -1744,7 +2277,7 @@ namespace CarePortal
         private static bool IsAdminRole(JObj stamp)
         {
             string r = stamp != null ? (stamp.GetStr("role") ?? "") : "";
-            return r.Contains("管理者") || r.Contains("施設長");
+            return PermHas(r, "管理者", "施設長", "所長", "ホーム長", "院長", "理事");
         }
 
         private static bool IsClerkRole(JObj stamp)
@@ -2300,8 +2833,10 @@ namespace CarePortal
                     }
                     else
                     {
-                        ps.Set("pin", "0000");
-                        ps.Set("is_initial_pin", true);
+                        string postedPin = ps.GetStr("pin") ?? "";
+                        if (!System.Text.RegularExpressions.Regex.IsMatch(postedPin, "^[0-9]{4}$")) postedPin = "0000";
+                        ps.Set("pin", postedPin);
+                        ps.Set("is_initial_pin", postedPin == "0000");
                     }
                 }
             }
@@ -2344,7 +2879,7 @@ namespace CarePortal
                 string pPw = pa.GetStr("password") ?? "";
                 if (ca == null)
                 {
-                    if (pPw == "") pa.Set("password", "0000");
+                    if (!pa.Map.ContainsKey("password")) pa.Set("password", "0000");
                     continue;
                 }
                 string pUpd = pa.GetStr("updated_at") ?? "";
@@ -2398,7 +2933,7 @@ namespace CarePortal
         // [Claude修正 2026-10-16] 以前は端末が取りに来るたびに読み込み・伏せ字の処理をし、その間ほかの要求を待たせていた
         private string GetMaskedText()
         {
-            if (!DbExists()) return "";
+            if (!DbExists()) return EmptyDbJson;
             long stamp = DbStamp();
             if (_maskedCache != null && stamp == _maskedCacheStamp) return _maskedCache;
             string txt = DbReadText();
@@ -2545,7 +3080,7 @@ namespace CarePortal
         // _fileLock の中で呼ぶ
         private long GetCurrentRev()
         {
-            if (!DbExists()) return -1;
+            if (!DbExists()) return 0;
             long stamp = DbStamp();
             if (_revCacheVal >= 0 && stamp == _revCacheStamp) return _revCacheVal;
             string txt = DbReadText();
@@ -2558,7 +3093,7 @@ namespace CarePortal
         // _fileLock の中で呼ぶ。ファイルが変わっていなければ、読み込み済みのデータを使う
         private JObj GetDbCached()
         {
-            if (!DbExists()) return null;
+            if (!DbExists()) return MiniJson.Parse(EmptyDbJson) as JObj;
             long stamp = DbStamp();
             if (_dbCache != null && stamp == _dbCacheStamp) return _dbCache;
             string txt = DbReadText();
@@ -2867,9 +3402,28 @@ namespace CarePortal
             return null;
         }
 
+        private static readonly string[] McAllowedKeys = new string[] {
+            "stamps", "staff_accounts", "facility_name", "office_info", "units", "unit_logs", "settings_logs", "mc_audit_logs"
+        };
+
         // 差分の保存の全部の操作を確かめる。止めるときは {key, who} を返す
         private static string[] PermCheckOps(JObj db, string staff, List<object> ops, bool isHost)
         {
+            if (staff == "MC")
+            {
+                if (IsMcClosed(db)) return new string[] { "mc", "最初の入口（MC）はすでに閉じられています" };
+                foreach (object o in ops)
+                {
+                    JObj op = o as JObj;
+                    if (op == null) continue;
+                    string k = op.GetStr("k");
+                    if (Array.IndexOf(McAllowedKeys, k) < 0)
+                    {
+                        return new string[] { k ?? "", "最初の入口（MC）では職員の登録と施設名・事業所の情報の設定のみ行えます" };
+                    }
+                }
+                return null;
+            }
             PermCtx p = MakePerm(db, staff, isHost);
             foreach (object o in ops)
             {
@@ -2900,7 +3454,25 @@ namespace CarePortal
         // 全体の保存のとき
         private static string[] PermCheckWhole(JObj curDb, JObj newDb, string staff, bool isHost)
         {
-            if (curDb == null || newDb == null) return null;
+            if (newDb == null) return null;
+            if (curDb == null) curDb = MiniJson.Parse(EmptyDbJson) as JObj;
+            if (staff == "MC")
+            {
+                if (IsMcClosed(curDb)) return new string[] { "mc", "最初の入口（MC）はすでに閉じられています" };
+                foreach (string k in newDb.Keys)
+                {
+                    if (k == "_rev" || k == "qualification_master" || k == "night_turn_templates") continue;
+                    if (Array.IndexOf(McAllowedKeys, k) >= 0) continue;
+                    object cv = curDb.Get(k);
+                    object nv = newDb.Get(k);
+                    if (PermEmpty(cv) && PermEmpty(nv)) continue;
+                    if (!PermSame(cv, nv))
+                    {
+                        return new string[] { k, "最初の入口（MC）では職員の登録と施設名・事業所の情報の設定のみ行えます" };
+                    }
+                }
+                return null;
+            }
             PermCtx p = MakePerm(curDb, staff, isHost);
             foreach (string k in PermWatchKeys)
             {
@@ -2914,7 +3486,57 @@ namespace CarePortal
             return "{\"error\":\"forbidden\",\"key\":" + MiniJson.Quote(r[0]) + ",\"who\":" + MiniJson.Quote(r[1]) + (r.Length > 2 && r[2] != null ? ",\"id\":" + MiniJson.Quote(r[2]) : "") + "}";
         }
 
-        private void HandleSaveDiff(NetworkStream stream, string body, string sessStaff, bool isHost)
+        private static void RecordMcSaveAudit(JObj curDb, JObj newDb, string remoteIp)
+        {
+            if (newDb == null) return;
+            HashSet<string> oldNames = new HashSet<string>(StringComparer.Ordinal);
+            if (curDb != null)
+            {
+                foreach (object o in GetList(curDb, "stamps"))
+                {
+                    string nm = StaffName(o);
+                    if (!string.IsNullOrEmpty(nm)) oldNames.Add(nm);
+                }
+            }
+            List<object> newStamps = GetList(newDb, "stamps");
+            List<object> accs = GetList(newDb, "staff_accounts");
+            List<object> logs = newDb.Get("mc_audit_logs") as List<object>;
+            if (logs == null) { logs = new List<object>(); newDb.Set("mc_audit_logs", logs); }
+            string nowStr = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+            bool anyAdded = false;
+            foreach (object o in newStamps)
+            {
+                JObj st = o as JObj;
+                if (st == null) continue;
+                string nm = (st.GetStr("name") ?? "").Trim();
+                if (string.IsNullOrEmpty(nm) || oldNames.Contains(nm)) continue;
+                JObj acc = FindByField(accs, "staff_name", nm);
+                string sid = acc != null ? (acc.GetStr("staff_id") ?? "") : "";
+                JObj entry = new JObj();
+                entry.Set("id", "mc_reg_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                entry.Set("action", "register_staff");
+                entry.Set("timestamp", nowStr);
+                entry.Set("remote_ip", remoteIp ?? "");
+                entry.Set("staff_name", nm);
+                entry.Set("role", st.GetStr("role") ?? "");
+                entry.Set("staff_id", sid);
+                entry.Set("notified_admin", false);
+                logs.Add(entry);
+                anyAdded = true;
+            }
+            if (anyAdded && IsMcClosed(newDb))
+            {
+                JObj closeEntry = new JObj();
+                closeEntry.Set("id", "mc_close_" + DateTime.Now.ToString("yyyyMMddHHmmssfff") + "_" + NewToken().Substring(0, 4));
+                closeEntry.Set("action", "mc_closed");
+                closeEntry.Set("timestamp", nowStr);
+                closeEntry.Set("remote_ip", remoteIp ?? "");
+                closeEntry.Set("notified_admin", false);
+                logs.Add(closeEntry);
+            }
+        }
+
+        private void HandleSaveDiff(NetworkStream stream, string body, string sessStaff, bool isHost, string remoteIp)
         {
             JObj req = null;
             try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
@@ -3043,14 +3665,27 @@ namespace CarePortal
                             {
                                 outJson = MergeAccountSecrets(MiniJson.Serialize(db), beforeJson);
                                 _dbCache = MiniJson.Parse(outJson) as JObj;
+                                if (sessStaff == "MC" && _dbCache != null)
+                                {
+                                    JObj bObj = !string.IsNullOrEmpty(beforeJson) ? (MiniJson.Parse(beforeJson) as JObj) : null;
+                                    RecordMcSaveAudit(bObj, _dbCache, remoteIp);
+                                    outJson = MiniJson.Serialize(_dbCache);
+                                }
                                 sessionsJson = outJson;
                                 DbWriteText(outJson);
+                                if (_store != null) { try { SyncJsonFile(false); } catch { } }
                             }
-                            else if (_store != null)
+                            else if (_store != null && !_store.IsEmpty)
                             {
                                 // [第2段階] データベースには、変わった記録と版番号だけを書く（全体を組み立て直さない）
                                 change = DescribeOps(ops);
                                 _store.WriteDelta(db, ops, prevRev, newRev, change);
+                            }
+                            else if (_store != null)
+                            {
+                                outJson = MiniJson.Serialize(db);
+                                _store.Write(outJson);
+                                change = DescribeOps(ops);
                             }
                             else
                             {
@@ -3075,6 +3710,15 @@ namespace CarePortal
                 }
             }
             if (sessionsJson != null) { try { DropSuspendedSessions(sessionsJson); } catch { } }
+            else if (status == 200)
+            {
+                try
+                {
+                    JObj chkDb = LoadDb();
+                    if (IsMcClosed(chkDb)) DropMcSessions();
+                }
+                catch { }
+            }
             SendJsonResponse(stream, status, resp);
         }
 
@@ -3393,10 +4037,42 @@ namespace CarePortal
                         SendJsonResponse(stream, 200, "{\"is_host\":" + (isHost ? "true" : "false") + "}");
                         return;
                     }
+                    if (urlPath == "/api/host-admin-reset-request" && method == "POST")
+                    {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機でのみ操作できます\"}");
+                            return;
+                        }
+                        HandleHostAdminResetRequest(stream);
+                        return;
+                    }
+                    if (urlPath == "/api/host-admin-reset-execute" && method == "POST")
+                    {
+                        if (!IsHostConnection(client, lines))
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"親機でのみ操作できます\"}");
+                            return;
+                        }
+                        HandleHostAdminResetExecute(stream, Encoding.UTF8.GetString(bodyBytes));
+                        return;
+                    }
+
+                    string clientRemoteIp = "";
+                    try
+                    {
+                        IPEndPoint remEp = client.Client.RemoteEndPoint as IPEndPoint;
+                        if (remEp != null && remEp.Address != null) clientRemoteIp = remEp.Address.ToString();
+                    }
+                    catch { }
+                    string cfConnIp = GetHeader(lines, "Cf-Connecting-Ip");
+                    string xffIp = GetHeader(lines, "X-Forwarded-For");
+                    if (!string.IsNullOrEmpty(cfConnIp)) clientRemoteIp = cfConnIp + " (via " + clientRemoteIp + ")";
+                    else if (!string.IsNullOrEmpty(xffIp)) clientRemoteIp = xffIp + " (via " + clientRemoteIp + ")";
 
                     if (urlPath == "/api/login" && method == "POST")
                     {
-                        HandleLogin(stream, Encoding.UTF8.GetString(bodyBytes));
+                        HandleLogin(stream, Encoding.UTF8.GetString(bodyBytes), clientRemoteIp);
                         return;
                     }
                     if (urlPath == "/api/logout" && method == "POST")
@@ -3429,6 +4105,28 @@ namespace CarePortal
                         SendJsonResponse(stream, 401, "{\"error\":\"unauthorized\"}");
                         return;
                     }
+                    // [Antigravity追加 2026-10-30] 最初の入口（MC）専用APIと、MCセッションでの他API遮断（403）
+                    if (urlPath == "/api/mc-register-staff" && method == "POST")
+                    {
+                        HandleMcRegisterStaff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff, clientRemoteIp);
+                        return;
+                    }
+                    if (urlPath == "/api/mc-save-facility" && method == "POST")
+                    {
+                        HandleMcSaveFacility(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff, clientRemoteIp);
+                        return;
+                    }
+                    if (sessStaff == "MC")
+                    {
+                        bool mcAllowedUrl = (urlPath == "/api/data" || urlPath == "/api/rev" || urlPath == "/api/changes"
+                            || urlPath == "/api/ip" || urlPath == "/api/save-diff" || urlPath == "/api/save");
+                        if (!mcAllowedUrl)
+                        {
+                            SendJsonResponse(stream, 403, "{\"error\":\"forbidden\",\"message\":\"最初の入口（MC）では職員の登録と施設名・事業所の情報の設定のみ行えます\"}");
+                            return;
+                        }
+                    }
+
                     // [Claude修正 2026-10-18] ID・パスワードの初期化は、ログインしてから（職員の一覧はログイン前に出さないため）
                     if (urlPath == "/api/account-reset" && method == "POST")
                     {
@@ -3683,7 +4381,7 @@ namespace CarePortal
                     }
                     if (urlPath == "/api/save-diff" && method == "POST")
                     {
-                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff, IsHostConnection(client, lines));
+                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff, IsHostConnection(client, lines), clientRemoteIp);
                         return;
                     }
 
@@ -3711,16 +4409,28 @@ namespace CarePortal
                                 {
                                     revConflict = true;
                                 }
-                                if (!revConflict && currentJson != null)
+                                if (!revConflict)
                                 {
-                                    // [Claude追加 2026-10-22] 全体の保存でも、職種で変えられない記録が変わっていないか確かめる
-                                    try { permDenied = PermCheckWhole(MiniJson.Parse(currentJson) as JObj, MiniJson.Parse(postData) as JObj, sessStaff, IsHostConnection(client, lines)); } catch { permDenied = null; }
+                                    // [Claude追加 2026-10-22 / Antigravity修正 2026-10-30] 全体の保存でも、職種およびMCで変えられない記録が変わっていないか確かめる（初回保存で currentJson が null のときも検査する）
+                                    try { permDenied = PermCheckWhole(currentJson != null ? (MiniJson.Parse(currentJson) as JObj) : null, MiniJson.Parse(postData) as JObj, sessStaff, IsHostConnection(client, lines)); } catch { permDenied = null; }
                                 }
                                 if (!revConflict && permDenied == null)
                                 {
                                 // [Claude修正] 伏せ字で届いたパスワードを、サーバー側の本物で補う
                                 try { postData = MergeAccountSecrets(postData, currentJson); } catch { }
+                                if (sessStaff == "MC")
+                                {
+                                    try
+                                    {
+                                        JObj pObj = MiniJson.Parse(postData) as JObj;
+                                        JObj cObj = currentJson != null ? (MiniJson.Parse(currentJson) as JObj) : null;
+                                        RecordMcSaveAudit(cObj, pObj, clientRemoteIp);
+                                        if (pObj != null) postData = MiniJson.Serialize(pObj);
+                                    }
+                                    catch { }
+                                }
                                 DbWriteText(postData);
+                                if (_store != null) { try { SyncJsonFile(false); } catch { } }
                                 try { DropSuspendedSessions(postData); } catch { }
                                 // [Claude修正 2026-10-16] 控えは差分保存と同じ手順（分ごとに1つ・古いものは整理）
                                 WriteMinuteBackup(postData);

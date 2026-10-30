@@ -139,7 +139,8 @@ const CP_MODAL_BACKDROP_EXCLUDED = new Set([
   "facilityNameModal",      // 施設名変更（管理者・事務員2名承認）
   "staffPinAuthModal",      // 職員切り替え認証（暗証番号入力）
   "initialPinModal",        // 職員自己暗証番号変更（初回設定）
-  "accountSettingsModal"    // ID・パスワード個別設定
+  "accountSettingsModal",   // ID・パスワード個別設定
+  "hostAdminResetModal"     // 親機専用：管理者のパスワード・暗証番号初期化
 ]);
 
 let _cpBackdropPointerDownTarget = null;

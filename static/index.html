@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261030_a5">
+	<link rel="stylesheet" href="style.css?v=20261030_a6">
 </head>
 <body>
 
@@ -86,6 +86,100 @@
  <!-- アラートはホーム画面では出さず、各ポータル内へ完全分離配置 -->
 
  <main class="portal-content">
+
+    <!-- ============================================================ -->
+    <!-- 【MC】最初の入口（初期セットアップ専用画面） -->
+    <!-- ============================================================ -->
+    <div id="mcInitialSetupSection" style="display:none; max-width:760px; margin:20px auto; padding:0 12px;">
+      <div style="background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:18px 20px; box-shadow:0 2px 6px rgba(0,0,0,0.06);">
+        <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:10px; border-bottom:2px solid var(--pine); padding-bottom:12px; margin-bottom:14px;">
+          <div>
+            <h2 style="margin:0; font-size:18px; color:var(--pine-dark);">初期セットアップ（最初の入口：MC）</h2>
+            <div style="font-size:13px; color:var(--ink-2); margin-top:2px;">最初の職員登録と施設の基本情報の設定のみ行えます。</div>
+          </div>
+          <button type="button" class="btn btn-secondary" onclick="handleLogout()">ログアウト</button>
+        </div>
+
+        <div id="mcStatusSummaryBox" style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:8px; padding:12px 14px; margin-bottom:16px;"></div>
+
+        <div style="background:var(--ground); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+          <h3 style="margin:0 0 10px 0; font-size:15px; color:var(--pine-dark);">1. 施設名・事業所の基本情報（任意）</h3>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">施設名:</label>
+              <input type="text" id="mcFacilityNameInput" class="form-control" style="width:100%; font-size:14px;" oninput="this.dataset.edited='1'">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">事業所番号（半角数字10桁）:</label>
+              <input type="text" id="mcOfficeNumberInput" maxlength="10" inputmode="numeric" data-cp-halfwidth="1" class="form-control" style="width:100%; font-size:14px;" oninput="this.dataset.edited='1'">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">地域区分:</label>
+              <select id="mcRegionGradeSelect" class="form-control" style="width:100%; font-size:14px;" onchange="this.dataset.edited='1'">
+                <option value="">選んでください</option>
+                <option value="1級地">1級地</option>
+                <option value="2級地">2級地</option>
+                <option value="3級地">3級地</option>
+                <option value="4級地">4級地</option>
+                <option value="5級地">5級地</option>
+                <option value="6級地">6級地</option>
+                <option value="7級地">7級地</option>
+                <option value="その他">その他（0%）</option>
+              </select>
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button type="button" class="btn btn-secondary" onclick="submitMcFacilitySetup()">施設名・基本情報を保存</button>
+          </div>
+        </div>
+
+        <div style="background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px 16px; margin-bottom:16px;">
+          <h3 style="margin:0 0 10px 0; font-size:15px; color:var(--pine-dark);">2. 職員の登録（管理者・事務員ほか）</h3>
+          <div style="display:grid; grid-template-columns:repeat(auto-fit, minmax(200px, 1fr)); gap:12px; margin-bottom:12px;">
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">氏名 <span style="color:var(--alert);">*</span>:</label>
+              <input type="text" id="mcStaffNameInput" class="form-control" style="width:100%; font-size:14px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">役職 <span style="color:var(--alert);">*</span>:</label>
+              <select id="mcStaffRoleSelect" class="form-control" style="width:100%; font-size:14px;">
+                <option value="">選んでください</option>
+                <option value="管理者（施設長）">管理者（施設長）</option>
+                <option value="事務員">事務員</option>
+                <option value="事務員 (パート)">事務員 (パート)</option>
+                <option value="計画作成担当者（ケアマネ）">計画作成担当者（ケアマネ）</option>
+                <option value="生活相談員">生活相談員</option>
+                <option value="主任看護師">主任看護師</option>
+                <option value="看護師">看護師</option>
+                <option value="介護リーダー">介護リーダー</option>
+                <option value="介護職員">介護職員</option>
+                <option value="夜勤専従（介護）">夜勤専従（介護）</option>
+              </select>
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">職員ID（半角英字4文字以上） <span style="color:var(--alert);">*</span>:</label>
+              <input type="text" id="mcStaffIdInput" data-cp-halfwidth="1" inputmode="latin" autocapitalize="none" autocorrect="off" spellcheck="false" class="form-control" style="width:100%; font-size:14px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">最初のパスワード（数字4桁） <span style="color:var(--alert);">*</span>:</label>
+              <input type="text" id="mcStaffPwInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" data-cp-halfwidth="1" class="form-control" style="width:100%; font-size:14px;">
+            </div>
+            <div>
+              <label style="display:block; font-size:13px; font-weight:bold; color:var(--ink); margin-bottom:4px;">暗証番号（数字4桁） <span style="color:var(--alert);">*</span>:</label>
+              <input type="text" id="mcStaffPinInput" maxlength="4" inputmode="numeric" pattern="[0-9]*" data-cp-halfwidth="1" class="form-control" style="width:100%; font-size:14px;">
+            </div>
+          </div>
+          <div style="text-align:right;">
+            <button type="button" class="btn btn-primary" onclick="submitMcStaffRegistration()">職員を登録する</button>
+          </div>
+        </div>
+
+        <div style="background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:14px 16px;">
+          <h3 style="margin:0 0 10px 0; font-size:15px; color:var(--pine-dark);">3. 登録済み職員一覧</h3>
+          <div id="mcRegisteredStaffList"></div>
+        </div>
+      </div>
+    </div>
 
     <!-- ============================================================ -->
     <!-- 【0】ホーム画面 (ログイン後に最初に表示・ポータル選択) -->
@@ -3781,10 +3875,6 @@
  <div style="margin-bottom:12px;">
  <label style="font-size:13px; font-weight:bold; color:#36443e;">対象入居者 / フロア:</label>
  <select id="djmResidentSelect" class="form-control" style="margin-top:3px; font-weight:bold;">
- <option value="1">101号室 佐藤 健一 様</option>
- <option value="2">102号室 田中 ヨシ 様</option>
- <option value="3">103号室 鈴木 一郎 様</option>
- <option value="4">105号室 高橋 幸子 様</option>
  <option value="0">【全体・フロア共通】（特定入居者なし）</option>
  </select>
  </div>
@@ -4917,26 +5007,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261030_a5"></script>
- <script src="js/02_terms.js?v=20261030_a5"></script>
- <script src="js/03_common.js?v=20261030_a5"></script>
- <script src="js/04_care_record.js?v=20261030_a5"></script>
- <script src="js/05_summary_print_audit.js?v=20261030_a5"></script>
- <script src="js/06_schema_history.js?v=20261030_a5"></script>
- <script src="js/07_daily_tables.js?v=20261030_a5"></script>
- <script src="js/08_meds.js?v=20261030_a5"></script>
- <script src="js/09_night_misc.js?v=20261030_a5"></script>
- <script src="js/10_office.js?v=20261030_a5"></script>
- <script src="js/11_karte_staff.js?v=20261030_a5"></script>
- <script src="js/12_hospital_photos.js?v=20261030_a5"></script>
- <script src="js/13_shift_units.js?v=20261030_a5"></script>
- <script src="js/14_auth_home.js?v=20261030_a5"></script>
- <script src="js/15_single_write.js?v=20261030_a5"></script>
- <script src="js/16_careplan.js?v=20261030_a5"></script>
-	<script src="js/17_kasan.js?v=20261030_a5"></script>
-	<script src="js/18_stats.js?v=20261030_a5"></script>
-	<script src="js/19_life.js?v=20261030_a5"></script>
-	<script src="js/20_invoice.js?v=20261030_a5"></script>
+ <script src="js/01_core.js?v=20261030_a6"></script>
+ <script src="js/02_terms.js?v=20261030_a6"></script>
+ <script src="js/03_common.js?v=20261030_a6"></script>
+ <script src="js/04_care_record.js?v=20261030_a6"></script>
+ <script src="js/05_summary_print_audit.js?v=20261030_a6"></script>
+ <script src="js/06_schema_history.js?v=20261030_a6"></script>
+ <script src="js/07_daily_tables.js?v=20261030_a6"></script>
+ <script src="js/08_meds.js?v=20261030_a6"></script>
+ <script src="js/09_night_misc.js?v=20261030_a6"></script>
+ <script src="js/10_office.js?v=20261030_a6"></script>
+ <script src="js/11_karte_staff.js?v=20261030_a6"></script>
+ <script src="js/12_hospital_photos.js?v=20261030_a6"></script>
+ <script src="js/13_shift_units.js?v=20261030_a6"></script>
+ <script src="js/14_auth_home.js?v=20261030_a6"></script>
+ <script src="js/15_single_write.js?v=20261030_a6"></script>
+ <script src="js/16_careplan.js?v=20261030_a6"></script>
+	<script src="js/17_kasan.js?v=20261030_a6"></script>
+	<script src="js/18_stats.js?v=20261030_a6"></script>
+	<script src="js/19_life.js?v=20261030_a6"></script>
+	<script src="js/20_invoice.js?v=20261030_a6"></script>
   
 
   <!-- ============================================================ -->
@@ -7002,6 +7092,53 @@
 			<div id="incidentInjuryPhotoContent" style="text-align:center; padding:10px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px;"></div>
 			<div style="margin-top:12px; text-align:right;">
 				<button type="button" class="btn btn-secondary" onclick="closeModal('incidentInjuryPhotoModal')">閉じる</button>
+			</div>
+		</div>
+	</div>
+
+	<!-- 親機専用：管理者のパスワード・暗証番号初期化モーダル -->
+	<div class="modal-overlay" id="hostAdminResetModal" style="display:none;">
+		<div class="modal-card" style="max-width:560px; width:95%;">
+			<div class="modal-header">
+				<h3 style="margin:0; font-size:16px; color:var(--pine-dark);">IDやパスワードを忘れたとき（親機）</h3>
+				<button type="button" class="modal-close-btn" onclick="closeModal('hostAdminResetModal')">&times;</button>
+			</div>
+			<div style="padding:14px 0; font-size:13px; line-height:1.6; color:var(--ink);">
+				<div style="background:var(--ground); border:1px solid var(--line); border-radius:6px; padding:10px 12px; margin-bottom:14px;">
+					<strong>ふだんの職員の初期化（2名承認）</strong><br>
+					職員がIDやパスワードを忘れたときは、管理者か事務員に伝えてください。管理者（または事務員）がログインして「職員アカウント・暗証番号管理」を開くと、IDを確かめたり、管理者＋事務員の2名承認でパスワード・暗証番号を初期値に戻したりできます。
+				</div>
+
+				<div style="background:var(--pine-tint-2); border:1px solid var(--line); border-radius:6px; padding:12px 14px;">
+					<div style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:6px;">親機での管理者のパスワード・暗証番号の戻し方</div>
+					<div style="color:var(--ink-2); margin-bottom:10px;">
+						管理者自身がパスワードや暗証番号を忘れ、ほかの管理者もいないときは、この親機PCで起動しているサーバーの黒い画面（コンソール）に表示される6桁の確認番号（5分間有効）を使って、管理者のパスワードと暗証番号を初期値（0000）に戻せます（※管理者の役職のみ対象）。
+					</div>
+					<div style="margin-bottom:10px;">
+						<button type="button" class="btn btn-secondary" onclick="requestHostAdminResetCode()">1. 確認番号を発行する（親機の黒い画面に表示）</button>
+					</div>
+
+					<div id="hostResetStep2Area" style="display:none; border-top:1px dashed var(--line); padding-top:10px; margin-top:10px;">
+						<div style="margin-bottom:10px;">
+							<label style="display:block; font-weight:bold; margin-bottom:4px; color:var(--ink);">対象管理者 <span style="color:var(--alert);">*</span>:</label>
+							<select id="hostResetAdminSelect" class="form-control" style="width:100%; font-size:14px;">
+								<option value="">選んでください</option>
+							</select>
+						</div>
+						<div style="margin-bottom:10px;">
+							<label style="display:block; font-weight:bold; margin-bottom:4px; color:var(--ink);">確認番号（親機の黒い画面に出た6桁の数字） <span style="color:var(--alert);">*</span>:</label>
+							<input type="text" id="hostResetCodeInput" maxlength="6" inputmode="numeric" pattern="[0-9]*" data-cp-halfwidth="1" class="form-control" style="width:180px; font-size:16px; letter-spacing:4px;">
+						</div>
+						<div>
+							<button type="button" class="btn btn-primary" onclick="executeHostAdminReset()">2. 管理者のパスワード・暗証番号を初期値に戻す</button>
+						</div>
+					</div>
+
+					<div id="hostResetResultBox" style="display:none; margin-top:12px; padding:10px 12px; background:var(--surface); border:1px solid var(--pine); border-radius:6px;"></div>
+				</div>
+			</div>
+			<div style="display:flex; justify-content:flex-end; margin-top:8px;">
+				<button type="button" class="btn btn-secondary" onclick="closeModal('hostAdminResetModal')">閉じる</button>
 			</div>
 		</div>
 	</div>

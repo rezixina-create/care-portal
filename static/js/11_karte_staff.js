@@ -652,6 +652,25 @@ function submitNewStaffStamp() {
  gState.stamps.push(cpNewStaff);
  gState.stamps = sortStaffList(gState.stamps);
  db.data.stamps = gState.stamps;
+ if (!Array.isArray(db.data.staff_accounts)) db.data.staff_accounts = [];
+ let cpAssignedLoginId = "";
+ const cpExistingAcc = db.data.staff_accounts.find(a => a && a.staff_name === name);
+ if (!cpExistingAcc) {
+  cpAssignedLoginId = cpNextFreeLoginId(db.data.staff_accounts);
+  db.data.staff_accounts.push({
+   id: name,
+   staff_name: name,
+   staff_id: cpAssignedLoginId,
+   password: "0000",
+   is_custom: false,
+   updated_at: toLocalDateTimeStr(new Date())
+  });
+ } else {
+  if (!String(cpExistingAcc.staff_id || "").trim()) {
+   cpExistingAcc.staff_id = cpNextFreeLoginId(db.data.staff_accounts);
+  }
+  cpAssignedLoginId = cpExistingAcc.staff_id;
+ }
  db.save();
 
  renderStaffSelect();

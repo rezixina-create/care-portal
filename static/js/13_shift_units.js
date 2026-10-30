@@ -795,6 +795,7 @@ function generateMonthlyShiftData(yearMonth) {
  // 1. スタッフ分類（役職で判定。管理者・計画作成担当者・相談員・事務は日勤専従）
  const allStamps = sortStaffList(db.data.stamps || []);
  const staffList = allStamps.map(s => typeof s === "string" ? { name: s, role: "介護職員" } : s);
+ if (staffList.length === 0) return {};
 
  const isDirector = s => ["director", "caremanager", "counselor"].includes(getStaffRoleCategory(s.name));
  const isOffice = s => ["office", "parttime"].includes(getStaffRoleCategory(s.name));
@@ -831,7 +832,7 @@ function generateMonthlyShiftData(yearMonth) {
   shiftData[s.name] = {};
  });
 
- // 2. 施設長 (木村 健一): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
+ // 2. 施設長・管理者: 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
  directors.forEach(s => {
   for (let d = 1; d <= daysInMonth; d++) {
    const dow = new Date(year, month - 1, d).getDay();
@@ -844,7 +845,7 @@ function generateMonthlyShiftData(yearMonth) {
   }
  });
 
- // 3. 事務員 (2名体制: 田中 慎一、松本 陽子): 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
+ // 3. 事務員: 日勤専従 ＆ 週休2日 (土日・祝日・年末年始12/29〜1/3は公休「休」、希望休配慮)
  officeStaff.forEach((s) => {
   for (let d = 1; d <= daysInMonth; d++) {
    const dow = new Date(year, month - 1, d).getDay();
@@ -857,7 +858,7 @@ function generateMonthlyShiftData(yearMonth) {
   }
  });
 
- // 4. 看護師 (2名体制: 鈴木 美智子、加藤 由美): 日勤専従 ＆ 週休2日 (相互カバーで毎日配置、希望休配慮)
+ // 4. 看護師: 日勤専従 ＆ 週休2日 (相互カバーで毎日配置、希望休配慮)
  nurses.forEach((s, idx) => {
   for (let d = 1; d <= daysInMonth; d++) {
    const dow = new Date(year, month - 1, d).getDay();
@@ -1149,7 +1150,7 @@ function renderShiftTable(yearMonth) {
  });
  needRegen = false;
  }
- if (needRegen) {
+ if (needRegen && staffList.length > 0) {
  generateMonthlyShiftData(ym);
  }
  const shiftData = db.data.monthly_shifts[ym] || {};
@@ -1262,6 +1263,9 @@ function renderShiftTable(yearMonth) {
  hopeOffs.forEach(h => {
   hopeOffMap[`${h.staff_name}_${h.day}`] = h;
  });
+ if (staffList.length === 0) {
+  tbodyHtml += `<tr><td colspan="${daysInMonth + 5}" style="padding:20px; text-align:center; color:var(--text-muted); font-size:13px;">登録されている職員がいません。</td></tr>`;
+ }
  staffList.forEach(st => {
  const staffShifts = shiftData[st.name] || {};
  const isCareStaff = getStaffRoleCategory(st.name) === "care";
@@ -2220,7 +2224,7 @@ function renderTodayShiftBar(targetDateStr) {
  const roster = getDailyShiftRoster(targetDateStr);
 
  // 管理者テキスト
- let directorText = "-"; // [Claude修正] 管理者がいないときに架空の「木村」と出していた
+ let directorText = "-"; // [Claude修正] 管理者がいないときは「-」とする
  if (roster.director.length > 0) {
   const dir = roster.director[0];
   directorText = dir.shift === "休" ? `${dir.shortName}(公休)` : dir.shortName;

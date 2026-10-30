@@ -2847,3 +2847,16 @@ tr.cp-away-row td { background: #f3f4f3; }
   text-align: center;
   border-bottom: 1px solid var(--line);
 }
+
+/* 最初の入口（MC）初期設定・親機専用管理者パスワード初期化 [Antigravity追加 2026-10-30] */
+#mcInitialSetupSection {
+  color: var(--ink);
+}
+#mcInitialSetupSection code,
+#hostAdminResetModal code {
+  background: var(--ground);
+  border: 1px solid var(--line);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: monospace;
+}

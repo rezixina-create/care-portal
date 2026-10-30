@@ -503,6 +503,9 @@ function renderCareExpiryNotes() {
 // [Claude修正] openModal() が未定義のまま呼ばれており、介護記録の編集・巡視定型文の編集・
 // 皮膚シェーマ図の各画面がエラーで開かなかった。他のモーダルと同じ表示方法で定義する。
 function openModal(id) {
+ if (gState && gState.session && gState.session.is_mc) {
+  return;
+ }
  const el = document.getElementById(id);
  if (!el) {
  alert("画面が見つかりません: " + id);
@@ -608,8 +611,20 @@ function reloadStateFromDb() {
  if (typeof renderCalendar === 'function') renderCalendar();
  if (typeof loadDateRecords === 'function') loadDateRecords(gState.selectedDate);
  if (typeof checkGlobalAlerts === 'function') checkGlobalAlerts();
+ if (gState.session && gState.session.is_mc) {
+  if (typeof cpIsMcClosed === "function" && cpIsMcClosed(db.data)) {
+   if (typeof handleLogout === "function") handleLogout({ reason: "mc_closed" });
+   return;
+  }
+  if (typeof cpApplyMcUiMode === "function") cpApplyMcUiMode();
+  if (typeof renderMcInitialSetup === "function") renderMcInitialSetup();
+  return;
+ }
  if (gState.activePortal === "office") {
  if (typeof loadOfficeData === 'function') loadOfficeData();
+ }
+ if (typeof cpCheckPostLoginAdminNotices === "function") {
+  cpCheckPostLoginAdminNotices();
  }
 }
 

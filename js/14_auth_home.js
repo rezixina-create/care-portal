@@ -404,24 +404,10 @@ function resetAutoLogoutTimer() {
 });
 
 
-// 職員アカウントデータの初期化
+// 職員アカウントデータの初期化（見本の15人の名前や aaaa/0000 の自動生成は行わず、配列の箱だけ整える）
 function initStaffAccounts() {
-  if (!Array.isArray(db.data.staff_accounts) || db.data.staff_accounts.length === 0) {
-    const staffList = (db.data.stamps || []).map(s => s.name || s);
-    const defaults = staffList.length > 0 ? staffList : [
-      "木村 健一", "鈴木 美智子", "山田 孝之", "佐藤 健太", "加藤 由美",
-      "高橋 直樹", "伊藤 翔太", "渡辺 拓也", "中村 大輔", "小林 亮",
-      "斉藤 翼", "吉田 誠", "清水 翔平", "田中 慎一", "松本 陽子"
-    ];
+  if (!Array.isArray(db.data.staff_accounts)) {
     db.data.staff_accounts = [];
-    defaults.forEach(name => db.data.staff_accounts.push({
-      id: name,
-      staff_name: name,
-      staff_id: cpNextFreeLoginId(db.data.staff_accounts),
-      password: "0000",
-      is_custom: false,
-      updated_at: toLocalDateTimeStr(new Date())
-    }));
   }
 }
 
@@ -440,9 +426,22 @@ function renderLoginStaffSelect() {
   }
 }
 
-// IDやパスワードを忘れたとき
-function cpForgotLoginInfo() {
-  alert("IDやパスワードを忘れたときは、管理者か事務員に伝えてください。\n\n管理者（または事務員）がログインして「職員アカウント・暗証番号管理」を開くと、IDを確かめたり、2名の承認でパスワードを初期値に戻したりできます。");
+// IDやパスワードを忘れたとき（親機のときだけ管理者パスワード初期化の案内も出す。LAN・トンネルには出さない）
+async function cpForgotLoginInfo() {
+  const stdMsg = "IDやパスワードを忘れたときは、管理者か事務員に伝えてください。\n\n管理者（または事務員）がログインして「職員アカウント・暗証番号管理」を開くと、IDを確かめたり、2名の承認でパスワードを初期値に戻したりできます。";
+  try {
+    const res = await fetch('/api/is-host', { cache: 'no-store', credentials: 'same-origin' });
+    if (res.ok) {
+      const info = await res.json();
+      if (info && info.is_host === true) {
+        gState.isHostMachine = true;
+        openHostAdminResetModal();
+        return;
+      }
+      gState.isHostMachine = false;
+    }
+  } catch (e) {}
+  alert(stdMsg);
 }
 window.cpForgotLoginInfo = cpForgotLoginInfo;
 
@@ -452,7 +451,8 @@ window.cpForgotLoginInfo = cpForgotLoginInfo;
 // パソコンの日本語入力をページ側から強制的に半角にすることはブラウザの決まりでできないため
 const CP_HALFWIDTH_IDS = ["loginStaffIdInput", "loginPasswordInput", "staffAuthApprover1Pin", "staffAuthApprover2Pin",
   "initialPinCurrent", "initialPinNew", "initialPinConfirm", "accSetNewId", "accSetNewPw1", "accSetNewPw2",
-  "resetAdminPin", "resetOfficePin", "facAdminPin", "facOfficePin"];
+  "resetAdminPin", "resetOfficePin", "facAdminPin", "facOfficePin",
+  "mcStaffIdInput", "mcStaffPwInput", "mcStaffPinInput", "hostResetCodeInput"];
 function cpToHalfWidth(str) {
   return String(str || "").replace(/[\uFF01-\uFF5E]/g, ch => String.fromCharCode(ch.charCodeAt(0) - 0xFEE0)).replace(/\u3000/g, " ");
 }
@@ -555,15 +555,16 @@ async function handleLoginSubmit() {
   cpSetToken(info.token);
   await db.initServerSync();
   if (typeof reloadStateFromDb === "function") reloadStateFromDb();
-  finishLoginUi(info.staff_name, staffId, !!info.is_custom);
+  finishLoginUi(info.staff_name, staffId, !!info.is_custom, !!info.is_mc);
 }
 
 // ログイン成功後の画面切り替え (サーバー照合・端末照合で共通)
-function finishLoginUi(staffName, staffId, isCustom) {
+function finishLoginUi(staffName, staffId, isCustom, isMc) {
   gState.session = {
     staffName: staffName,
     staffId: staffId,
-    is_custom: isCustom,
+    is_custom: !!isCustom,
+    is_mc: !!isMc,
     loggedInAt: toLocalDateTimeStr(new Date())
   };
   try {
@@ -574,7 +575,7 @@ function finishLoginUi(staffName, staffId, isCustom) {
   const headerName = document.getElementById("headerStaffName");
   if (headerName) headerName.textContent = `${staffName} 様`;
   const btnSettings = document.getElementById("btnHeaderAccountSettings");
-  if (btnSettings) btnSettings.style.display = !isCustom ? "inline-block" : "none";
+  if (btnSettings) btnSettings.style.display = (!isCustom && !isMc) ? "inline-block" : "none";
   const loginSec = document.getElementById("loginSection");
   const mainWrap = document.getElementById("appMainWrapper");
   if (loginSec) loginSec.style.display = "none";
@@ -582,8 +583,15 @@ function finishLoginUi(staffName, staffId, isCustom) {
   document.body.style.overflow = "";
   const pwInput = document.getElementById("loginPasswordInput");
   if (pwInput) pwInput.value = "";
+  cpApplyMcUiMode();
+  if (isMc) {
+    renderMcInitialSetup();
+    startAutoLogoutTimer();
+    return;
+  }
   goToHome();
   startAutoLogoutTimer();
+  cpCheckPostLoginAdminNotices();
 }
 
 // ログイン実行 (サーバーを使わない単体動作時)
@@ -603,56 +611,40 @@ function handleLoginSubmitLocal() {
     return;
   }
 
-  initStaffAccounts();
-  // [Claude修正 2026-10-18] 職員IDで本人を探す（同じIDが重なっていれば先の方）
-  const acc = (db.data.staff_accounts || []).find(a => String(a.staff_id || "").toLowerCase() === staffId.toLowerCase());
-
-  // IDとパスワードの照合（どちらが違うかは出さない）
-  if (!acc || (acc.password || "0000") !== password || !(db.data.stamps || []).some(st => (st.name || st) === acc.staff_name)) {
+  // [Antigravity追加 2026-10-30] 最初の入口 MC (zzzz / 1111)
+  if (staffId.toLowerCase() === "zzzz") {
+    if (typeof cpIsMcClosed === "function" && !cpIsMcClosed(db.data) && password === "1111") {
+      if (!Array.isArray(db.data.mc_audit_logs)) db.data.mc_audit_logs = [];
+      db.data.mc_audit_logs.push({
+        id: Date.now() + Math.floor(Math.random() * 1000),
+        action: "login",
+        timestamp: toLocalDateTimeStr(new Date()),
+        remote_ip: "local"
+      });
+      db.save();
+      finishLoginUi("MC", "zzzz", true, true);
+      return;
+    }
     alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は、管理者か事務員に伝えてください。");
     return;
   }
 
-  // ログイン成功
-  gState.session = {
-    staffName: acc.staff_name,
-    staffId: acc.staff_id,
-    is_custom: acc.is_custom,
-    loggedInAt: toLocalDateTimeStr(new Date())
-  };
+  initStaffAccounts();
+  // [Antigravity修正 2026-10-30] 空のID・空のパスワードではログインできない（aaaa / 0000 の穴埋めをしない）
+  const acc = (db.data.staff_accounts || []).find(a => a && String(a.staff_id || "").trim() !== "" && String(a.staff_id || "").trim().toLowerCase() === staffId.toLowerCase());
+  const accPw = acc ? String(acc.password || "").trim() : "";
+  const stObj = acc ? (db.data.stamps || []).find(st => (st.name || st) === acc.staff_name) : null;
 
-  try {
-    sessionStorage.setItem("carePortalSession", JSON.stringify(gState.session));
-  } catch(e) {}
-
-  // 担当職員をログイン者に自動固定
-  const curStaffSelect = document.getElementById("currentStaff");
-  if (curStaffSelect) {
-    curStaffSelect.value = acc.staff_name;
+  if (!acc || !accPw || accPw !== password || !stObj) {
+    alert("職員IDまたはパスワードが正しくありません。\nお忘れの場合は、管理者か事務員に伝えてください。");
+    return;
+  }
+  if (stObj.status === "休止中") {
+    alert("このアカウントは現在ロック（休止中）されています。\n管理者または事務員にお問い合わせください。");
+    return;
   }
 
-  // ヘッダー情報更新
-  const headerName = document.getElementById("headerStaffName");
-  if (headerName) headerName.textContent = `${acc.staff_name} 様`;
-
-  // 初期値の時のみ「ID・PW設定」ボタンを表示
-  const btnSettings = document.getElementById("btnHeaderAccountSettings");
-  if (btnSettings) {
-    btnSettings.style.display = !acc.is_custom ? "inline-block" : "none";
-  }
-
-  // 画面切り替え: ログイン画面を非表示、本体ラッパーを表示
-  const loginSec = document.getElementById("loginSection");
-  const mainWrap = document.getElementById("appMainWrapper");
-  if (loginSec) loginSec.style.display = "none";
-  if (mainWrap) mainWrap.style.display = "block";
-  document.body.style.overflow = "";
-
-  // ホーム画面を表示
-  goToHome();
-
-  // 自動ログアウトタイマー開始
-  startAutoLogoutTimer();
+  finishLoginUi(acc.staff_name, acc.staff_id, !!acc.is_custom, false);
 }
 
 // ログアウト実行
@@ -695,6 +687,7 @@ function cpLogoutNoticeText(reason, unsentLost) {
   const parts = [];
   if (reason === "auto") parts.push("一定時間（15分）操作がなかったため、自動でログアウトしました。");
   if (reason === "expired") parts.push("ログインの有効期限が切れたか、サーバーが再起動されたため、ログアウトしました。\nお手数ですが、もう一度ログインしてください。");
+  if (reason === "mc_closed") parts.push("管理者と事務員が合計3名以上（管理者1名以上・事務員1名以上）そろったため、最初の入口（MC）を閉じました。\nこれ以降は登録した職員のIDとパスワードでログインしてください。");
   if (unsentLost) parts.push("【注意】親機に送れていない記録がありました（通信が切れていた可能性があります）。\nログイン後、入力した内容が記録に残っているかを確かめ、残っていなければ入力し直してください。");
   return parts.join("\n\n");
 }
@@ -847,6 +840,12 @@ window.addEventListener("popstate", (e) => {
 });
 
 function goToHome() {
+  if (gState.session && gState.session.is_mc) {
+    cpApplyMcUiMode();
+    renderMcInitialSetup();
+    return;
+  }
+  cpApplyMcUiMode();
   if (typeof cpMedPendingGuard === "function") cpMedPendingGuard();
   const homeSec = document.getElementById("portalHomeSection");
   const careSec = document.getElementById("portalCareSection");
@@ -878,6 +877,11 @@ function goToHome() {
 
 // ポータルへ入る
 function enterPortal(portalType) {
+  if (gState.session && gState.session.is_mc) {
+    cpApplyMcUiMode();
+    renderMcInitialSetup();
+    return;
+  }
   if (portalType !== "care" && typeof cpMedPendingGuard === "function") cpMedPendingGuard();
   cpNavRecord(); // [Claude修正 2026-10-16] 戻るボタン用の履歴
   const homeSec = document.getElementById("portalHomeSection");
@@ -924,6 +928,10 @@ function submitAccountSettings() {
   // バリデーション
   if (!newId || !/^[a-zA-Z]{4,}$/.test(newId)) {
     alert("新しいIDは半角英字（ローマ字）4文字以上で入力してください。");
+    return;
+  }
+  if (newId.toLowerCase() === "zzzz") {
+    alert("そのIDは予約されているため使えません。別のIDにしてください。");
     return;
   }
   if (!pw1 || !/^\d{4}$/.test(pw1)) {
@@ -1290,7 +1298,7 @@ function restoreSessionOnLoad() {
 
         const btnSettings = document.getElementById("btnHeaderAccountSettings");
         if (btnSettings) {
-          btnSettings.style.display = (!sess.is_custom || (sess.staffId === "aaaa")) ? "inline-block" : "none";
+          btnSettings.style.display = (!sess.is_custom && !sess.is_mc) ? "inline-block" : "none";
         }
 
         const loginSec = document.getElementById("loginSection");
@@ -1298,8 +1306,20 @@ function restoreSessionOnLoad() {
         if (loginSec) loginSec.style.display = "none";
         if (mainWrap) mainWrap.style.display = "block";
 
+        cpApplyMcUiMode();
+        if (sess.is_mc) {
+          if (typeof cpIsMcClosed === "function" && cpIsMcClosed(db.data)) {
+            handleLogout({ reason: "mc_closed" });
+            return;
+          }
+          renderMcInitialSetup();
+          startAutoLogoutTimer();
+          return;
+        }
+
         goToHome();
         startAutoLogoutTimer();
+        setTimeout(() => cpCheckPostLoginAdminNotices(), 150);
         return;
       }
     }
@@ -1873,3 +1893,542 @@ function voidCareCertHistoryItem(residentId, certId) {
   if (typeof renderResidentsStrip === "function") renderResidentsStrip();
   alert("認定履歴を取り消しました。");
 }
+
+// =====================================================================
+// [Antigravity実装 2026-10-30] 最初の入口（MC）初期設定画面 ＆ 監査お知らせ ＆ 親機専用の管理者パスワード初期化
+// =====================================================================
+function cpApplyMcUiMode() {
+  const isMc = !!(gState && gState.session && gState.session.is_mc);
+  const hdr = document.querySelector("#appMainWrapper > header.portal-header");
+  const shiftBar = document.getElementById("todayShiftBar");
+  const homeSec = document.getElementById("portalHomeSection");
+  const careSec = document.getElementById("portalCareSection");
+  const officeSec = document.getElementById("portalOfficeSection");
+  const mcSec = document.getElementById("mcInitialSetupSection");
+  if (hdr) hdr.style.display = isMc ? "none" : "";
+  if (shiftBar) shiftBar.style.display = isMc ? "none" : "";
+  if (isMc) {
+    if (homeSec) homeSec.style.display = "none";
+    if (careSec) careSec.style.display = "none";
+    if (officeSec) officeSec.style.display = "none";
+    if (mcSec) mcSec.style.display = "block";
+  } else {
+    if (mcSec) mcSec.style.display = "none";
+  }
+}
+
+function renderMcInitialSetup() {
+  const mcSec = document.getElementById("mcInitialSetupSection");
+  if (!mcSec) return;
+  const counts = (typeof cpGetMcRoleCounts === "function") ? cpGetMcRoleCounts(db.data) : { adminCount: 0, clerkCount: 0, totalAdminClerk: 0, closed: false };
+  const summaryEl = document.getElementById("mcStatusSummaryBox");
+  if (summaryEl) {
+    summaryEl.innerHTML = `
+      <div style="font-weight:bold; font-size:14px; color:var(--pine-dark); margin-bottom:4px;">
+        現在の管理者・事務員の登録数: 管理者 <strong>${counts.adminCount}</strong> 名 ／ 事務員 <strong>${counts.clerkCount}</strong> 名（合計 <strong>${counts.totalAdminClerk}</strong> 名）
+      </div>
+      <div style="font-size:13px; color:var(--ink-2); line-height:1.6;">
+        管理者1名以上・事務員1名以上を含め、管理者と事務員が合計3名以上登録されると、この最初の入口（MC）は自動的に閉じます。<br>
+        入口が閉じたあとは、ここで登録した職員IDとパスワードでログインしてください。
+      </div>
+    `;
+  }
+
+  const facInput = document.getElementById("mcFacilityNameInput");
+  if (facInput && !facInput.dataset.edited) {
+    facInput.value = (db.data && db.data.facility_name) ? db.data.facility_name : "";
+  }
+  const oi = (db.data && db.data.office_info && typeof db.data.office_info === "object") ? db.data.office_info : {};
+  const numInput = document.getElementById("mcOfficeNumberInput");
+  if (numInput && !numInput.dataset.edited) {
+    numInput.value = oi.office_no || oi.office_number || "";
+  }
+  const regSel = document.getElementById("mcRegionGradeSelect");
+  if (regSel && !regSel.dataset.edited) {
+    regSel.value = oi.region_grade || "";
+  }
+
+  const idInput = document.getElementById("mcStaffIdInput");
+  if (idInput && !idInput.value) {
+    idInput.value = cpNextFreeLoginId((db.data && db.data.staff_accounts) || []);
+  }
+  const pwInput = document.getElementById("mcStaffPwInput");
+  if (pwInput && !pwInput.value) pwInput.value = "0000";
+  const pinInput = document.getElementById("mcStaffPinInput");
+  if (pinInput && !pinInput.value) pinInput.value = "0000";
+
+  const listEl = document.getElementById("mcRegisteredStaffList");
+  if (listEl) {
+    const stamps = (db.data && Array.isArray(db.data.stamps)) ? db.data.stamps : [];
+    const accounts = (db.data && Array.isArray(db.data.staff_accounts)) ? db.data.staff_accounts : [];
+    if (stamps.length === 0) {
+      listEl.innerHTML = `<div style="font-size:13px; color:var(--ink-3); padding:10px;">まだ職員は登録されていません。</div>`;
+    } else {
+      const rows = stamps.map(s => {
+        const nm = s.name || s;
+        const rl = s.role || "";
+        const acc = accounts.find(a => a && a.staff_name === nm);
+        const sid = (acc && acc.staff_id) ? acc.staff_id : "-";
+        return `<tr style="border-bottom:1px solid var(--line);">
+          <td style="padding:8px 10px; font-weight:bold;">${escapeHtml(nm)}</td>
+          <td style="padding:8px 10px;">${escapeHtml(rl)}</td>
+          <td style="padding:8px 10px;"><code>${escapeHtml(sid)}</code></td>
+        </tr>`;
+      }).join("");
+      listEl.innerHTML = `
+        <table class="data-table" style="width:100%; border-collapse:collapse; font-size:13px;">
+          <thead>
+            <tr style="background:var(--ground); border-bottom:2px solid var(--line);">
+              <th style="text-align:left; padding:8px 10px;">氏名</th>
+              <th style="text-align:left; padding:8px 10px;">役職</th>
+              <th style="text-align:left; padding:8px 10px;">職員ID</th>
+            </tr>
+          </thead>
+          <tbody>${rows}</tbody>
+        </table>
+      `;
+    }
+  }
+}
+
+async function submitMcFacilitySetup() {
+  if (!gState.session || !gState.session.is_mc) return;
+  const facName = (document.getElementById("mcFacilityNameInput")?.value || "").trim();
+  const offNo = (document.getElementById("mcOfficeNumberInput")?.value || "").trim();
+  const regGrade = (document.getElementById("mcRegionGradeSelect")?.value || "").trim();
+  if (!facName && !offNo && !regGrade) {
+    alert("設定する項目を入力してください。");
+    return;
+  }
+  if (offNo && !/^\d{10}$/.test(offNo)) {
+    alert("事業所番号は半角数字10桁で入力してください（空欄のままでも保存できます）。");
+    return;
+  }
+  const officeInfo = Object.assign({}, (db.data && db.data.office_info) || {});
+  if (facName) officeInfo.facility_name = facName;
+  if (offNo) { officeInfo.office_no = offNo; officeInfo.office_number = offNo; }
+  if (regGrade) officeInfo.region_grade = regGrade;
+
+  if (db && db.isServerMode) {
+    const r = await cpPostJson('/api/mc-save-facility', { facility_name: facName, office_info: officeInfo });
+    if (!r.ok) {
+      alert((r.info && r.info.message) || "基本情報の保存に失敗しました。");
+      return;
+    }
+    await db._pullForSave();
+    updateFacilityNameUI();
+    alert("施設名・事業所の基本情報を保存しました。");
+    return;
+  }
+  if (facName) db.data.facility_name = facName;
+  db.data.office_info = officeInfo;
+  if (!Array.isArray(db.data.mc_audit_logs)) db.data.mc_audit_logs = [];
+  db.data.mc_audit_logs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    action: "save_facility",
+    timestamp: toLocalDateTimeStr(new Date()),
+    remote_ip: "local",
+    facility_name: facName
+  });
+  db.save();
+  updateFacilityNameUI();
+  alert("施設名・事業所の基本情報を保存しました。");
+}
+
+async function submitMcStaffRegistration() {
+  if (!gState.session || !gState.session.is_mc) return;
+  cpHalfwidthAll();
+  const nameEl = document.getElementById("mcStaffNameInput");
+  const roleEl = document.getElementById("mcStaffRoleSelect");
+  const idEl = document.getElementById("mcStaffIdInput");
+  const pwEl = document.getElementById("mcStaffPwInput");
+  const pinEl = document.getElementById("mcStaffPinInput");
+
+  const name = (nameEl?.value || "").trim();
+  const role = (roleEl?.value || "").trim();
+  const staffId = (idEl?.value || "").trim().toLowerCase();
+  const password = (pwEl?.value || "").trim();
+  const pin = (pinEl?.value || "").trim();
+
+  if (!name) { alert("職員の氏名を入力してください。"); return; }
+  if (!role) { alert("役職を選んでください。"); return; }
+  if (!staffId || !/^[a-z]{4,}$/.test(staffId) || staffId === "zzzz") {
+    alert("職員IDは半角英字4文字以上で入力してください（zzzz は使えません）。");
+    return;
+  }
+  if (!password || !/^\d{4}$/.test(password)) {
+    alert("最初のパスワードは半角数字4桁で入力してください。");
+    return;
+  }
+  if (!pin || !/^\d{4}$/.test(pin)) {
+    alert("暗証番号は半角数字4桁で入力してください。");
+    return;
+  }
+
+  if (db && db.isServerMode) {
+    const r = await cpPostJson('/api/mc-register-staff', {
+      name: name,
+      role: role,
+      staff_id: staffId,
+      password: password,
+      pin: pin
+    });
+    if (!r.ok) {
+      alert((r.info && r.info.message) || "職員の登録に失敗しました。");
+      return;
+    }
+    if (nameEl) nameEl.value = "";
+    if (roleEl) roleEl.value = "";
+    if (idEl) idEl.value = "";
+    if (r.info && r.info.mc_closed) {
+      handleLogout({ reason: "mc_closed" });
+      return;
+    }
+    await db._pullForSave();
+    if (typeof reloadStateFromDb === "function") reloadStateFromDb();
+    renderMcInitialSetup();
+    alert(`職員「${name}」（役職: ${role} / 職員ID: ${staffId}）を登録しました。`);
+    return;
+  }
+
+  if (!Array.isArray(db.data.stamps)) db.data.stamps = [];
+  if (!Array.isArray(db.data.staff_accounts)) db.data.staff_accounts = [];
+  if (db.data.stamps.some(s => (s.name || s) === name)) {
+    alert("同じ名前の職員がすでに登録されています。");
+    return;
+  }
+  if (db.data.staff_accounts.some(a => a && String(a.staff_id || "").trim().toLowerCase() === staffId)) {
+    alert("その職員IDはすでに使われています。別のIDを入力してください。");
+    return;
+  }
+  db.data.stamps.push({
+    name: name,
+    role: role,
+    status: "正常",
+    pin: pin,
+    is_initial_pin: (pin === "0000"),
+    qual_ids: []
+  });
+  db.data.stamps = sortStaffList(db.data.stamps);
+  gState.stamps = db.data.stamps;
+  db.data.staff_accounts.push({
+    id: name,
+    staff_name: name,
+    staff_id: staffId,
+    password: password,
+    is_custom: (password !== "0000"),
+    updated_at: toLocalDateTimeStr(new Date())
+  });
+  if (!Array.isArray(db.data.mc_audit_logs)) db.data.mc_audit_logs = [];
+  db.data.mc_audit_logs.push({
+    id: Date.now() + Math.floor(Math.random() * 1000),
+    action: "register_staff",
+    timestamp: toLocalDateTimeStr(new Date()),
+    remote_ip: "local",
+    staff_name: name,
+    role: role,
+    staff_id: staffId,
+    notified_admin: false
+  });
+
+  if (nameEl) nameEl.value = "";
+  if (roleEl) roleEl.value = "";
+  if (idEl) idEl.value = "";
+
+  const counts = cpGetMcRoleCounts(db.data);
+  if (counts.closed) {
+    db.data.mc_audit_logs.push({
+      id: Date.now() + Math.floor(Math.random() * 1000) + 1,
+      action: "mc_closed",
+      timestamp: toLocalDateTimeStr(new Date()),
+      remote_ip: "local",
+      admin_count: counts.adminCount,
+      clerk_count: counts.clerkCount
+    });
+    db.save();
+    handleLogout({ reason: "mc_closed" });
+    return;
+  }
+  db.save();
+  renderMcInitialSetup();
+  alert(`職員「${name}」（役職: ${role} / 職員ID: ${staffId}）を登録しました。`);
+}
+
+// 管理者がログインしたときの1回限りのお知らせ（MCで登録された職員の通知 ＆ 親機で初期化された管理者本人の通知）
+let _cpPostLoginNoticeRunning = false;
+function cpCheckPostLoginAdminNotices() {
+  if (_cpPostLoginNoticeRunning) return;
+  if (!gState || !gState.session || gState.session.is_mc || !gState.session.staffName) return;
+  if (!db || !db.data) return;
+  if (db.isServerMode && !db.hasSyncedWithServer) return;
+
+  const me = gState.session.staffName;
+  const st = (db.data.stamps || []).find(s => (s.name || s) === me);
+  const role = st ? (st.role || "") : "";
+  const isAdmin = typeof cpIsAdminRoleText === "function" ? cpIsAdminRoleText(role) : /管理者|施設長|所長|ホーム長|院長|理事/.test(role);
+
+  let needsSave = false;
+  _cpPostLoginNoticeRunning = true;
+  try {
+    // 1. MC で登録された職員のお知らせ（管理者に一度だけ表示）
+    if (isAdmin && Array.isArray(db.data.mc_audit_logs)) {
+      const unnotified = db.data.mc_audit_logs.filter(item => item && item.action === "register_staff" && !item.notified_admin);
+      if (unnotified.length > 0) {
+        const lines = unnotified.map(item => `・${item.staff_name || "-"}（${item.role || "職員"} / ID: ${item.staff_id || "-"} / 日時: ${item.timestamp || "-"}）`);
+        const nowStr = toLocalDateTimeStr(new Date());
+        unnotified.forEach(item => {
+          item.notified_admin = true;
+          item.notified_by = me;
+          item.notified_at = nowStr;
+        });
+        needsSave = true;
+        alert(`最初の入口（MC）で次の職員が登録されました:\n${lines.join("\n")}`);
+      }
+    }
+
+    // 2. 親機で管理者のパスワード・暗証番号が初期化されたときのお知らせ（本人に一度だけ表示して設定画面を開く）
+    const acc = (db.data.staff_accounts || []).find(a => a && a.staff_name === me);
+    const unnotifiedHostLogs = Array.isArray(db.data.host_recovery_logs)
+      ? db.data.host_recovery_logs.filter(item => item && item.target_staff === me && !item.notified)
+      : [];
+    if ((acc && acc.host_reset_notice_pending) || unnotifiedHostLogs.length > 0) {
+      const nowStr = toLocalDateTimeStr(new Date());
+      if (acc && acc.host_reset_notice_pending) {
+        delete acc.host_reset_notice_pending;
+      }
+      unnotifiedHostLogs.forEach(item => {
+        item.notified = true;
+        item.notified_at = nowStr;
+      });
+      needsSave = true;
+      alert("親機で管理者のパスワード・暗証番号が初期化されました。\n新しいID・パスワードを設定してください。");
+      if (typeof openAccountSettingsModal === "function") {
+        openAccountSettingsModal();
+      }
+    }
+
+    if (needsSave) {
+      db.save();
+    }
+  } finally {
+    _cpPostLoginNoticeRunning = false;
+  }
+}
+
+// 親機専用：管理者のパスワード・暗証番号を初期値に戻す小窓
+let _cpLocalHostResetState = null;
+
+function openHostAdminResetModal() {
+  if (gState && gState.isHostMachine === false) {
+    alert("IDやパスワードを忘れたときは、管理者か事務員に伝えてください。\n\n管理者のパスワードを戻す操作は、親機のパソコンでのみ行えます。");
+    return;
+  }
+  const modal = document.getElementById("hostAdminResetModal");
+  if (!modal) return;
+  const step2 = document.getElementById("hostResetStep2Area");
+  if (step2) step2.style.display = "none";
+  const resBox = document.getElementById("hostResetResultBox");
+  if (resBox) { resBox.style.display = "none"; resBox.textContent = ""; }
+  const codeInput = document.getElementById("hostResetCodeInput");
+  if (codeInput) codeInput.value = "";
+  const sel = document.getElementById("hostResetAdminSelect");
+  if (sel) sel.innerHTML = `<option value="">選んでください</option>`;
+  modal.style.display = "flex";
+}
+
+async function requestHostAdminResetCode() {
+  if (gState && gState.isHostMachine === false) {
+    alert("この操作は親機PCでのみ実行できます。");
+    return;
+  }
+  if (!db || !db.isServerMode) {
+    const admins = (db && db.data && Array.isArray(db.data.stamps) ? db.data.stamps : [])
+      .filter(s => s && s.status !== "休止中" && cpIsAdminRoleText(s.role || ""))
+      .map(s => s.name)
+      .filter(Boolean);
+    if (admins.length === 0) {
+      alert("確認番号を発行できませんでした（管理者が登録されているか確認してください）。");
+      return;
+    }
+    const code = String(Math.floor(100000 + Math.random() * 900000));
+    _cpLocalHostResetState = { code: code, expiresAt: Date.now() + 5 * 60 * 1000, admins: admins };
+    console.log(`[Care Portal 親機専用] 管理者パスワード初期化 確認番号: ${code} (5分間有効)`);
+    const sel = document.getElementById("hostResetAdminSelect");
+    if (sel) {
+      sel.innerHTML = `<option value="">選んでください</option>`;
+      admins.forEach(nm => {
+        const opt = document.createElement("option");
+        opt.value = nm;
+        opt.textContent = nm;
+        sel.appendChild(opt);
+      });
+      if (admins.length === 1) sel.value = admins[0];
+    }
+    const step2 = document.getElementById("hostResetStep2Area");
+    if (step2) step2.style.display = "block";
+    const codeInput = document.getElementById("hostResetCodeInput");
+    if (codeInput) { codeInput.value = ""; codeInput.focus(); }
+    alert("親機PCで動いているサーバーの黒い画面（コンソール）に6桁の確認番号を表示しました（5分間有効）。\n黒い画面を見て、確認番号を入力してください。");
+    return;
+  }
+  let res;
+  try {
+    res = await fetch('/api/host-admin-reset-request', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: '{}'
+    });
+  } catch (e) {
+    alert("サーバーに接続できませんでした。");
+    return;
+  }
+  let info = {};
+  try { info = await res.json(); } catch (e) {}
+  if (res.status === 403) {
+    alert("この操作は親機PCでのみ実行できます。");
+    return;
+  }
+  if (!res.ok || !info.ok) {
+    alert((info && info.message) || "確認番号を発行できませんでした（管理者が登録されているか確認してください）。");
+    return;
+  }
+  const sel = document.getElementById("hostResetAdminSelect");
+  if (sel) {
+    sel.innerHTML = `<option value="">選んでください</option>`;
+    (info.admins || []).forEach(nm => {
+      const opt = document.createElement("option");
+      opt.value = nm;
+      opt.textContent = nm;
+      sel.appendChild(opt);
+    });
+    if ((info.admins || []).length === 1) {
+      sel.value = info.admins[0];
+    }
+  }
+  const step2 = document.getElementById("hostResetStep2Area");
+  if (step2) step2.style.display = "block";
+  const codeInput = document.getElementById("hostResetCodeInput");
+  if (codeInput) { codeInput.value = ""; codeInput.focus(); }
+  alert("親機PCで動いているサーバーの黒い画面（コンソール）に6桁の確認番号を表示しました（5分間有効）。\n黒い画面を見て、確認番号を入力してください。");
+}
+
+async function executeHostAdminReset() {
+  cpHalfwidthAll();
+  if (gState && gState.isHostMachine === false) {
+    alert("この操作は親機PCでのみ実行できます。");
+    return;
+  }
+  const target = (document.getElementById("hostResetAdminSelect")?.value || "").trim();
+  const code = (document.getElementById("hostResetCodeInput")?.value || "").trim();
+  if (!target) {
+    alert("パスワード・暗証番号を初期値に戻す管理者を選んでください。");
+    return;
+  }
+  if (!code || !/^\d{6}$/.test(code)) {
+    alert("親機の黒い画面に表示された6桁の確認番号を半角数字で入力してください。");
+    return;
+  }
+  if (!db || !db.isServerMode) {
+    if (!_cpLocalHostResetState || Date.now() > _cpLocalHostResetState.expiresAt || _cpLocalHostResetState.code !== code) {
+      alert("確認番号が一致しないか、有効期限（5分）が切れています。");
+      return;
+    }
+    const stObj = (db.data.stamps || []).find(s => s && (s.name || s) === target);
+    if (!stObj || !cpIsAdminRoleText(stObj.role || "")) {
+      alert("管理者の役職のアカウントのみ親機から初期化できます。");
+      return;
+    }
+    stObj.pin = "0000";
+    stObj.is_initial_pin = true;
+    stObj.status = "正常";
+    if (!Array.isArray(db.data.staff_accounts)) db.data.staff_accounts = [];
+    let accObj = db.data.staff_accounts.find(a => a && a.staff_name === target);
+    const otherAccs = db.data.staff_accounts.filter(a => a !== accObj);
+    const newStaffId = !otherAccs.some(a => a && String(a.staff_id || "").trim().toLowerCase() === "aaaa")
+      ? "aaaa"
+      : cpNextFreeLoginId(otherAccs);
+    const nowStr = toLocalDateTimeStr(new Date());
+    if (!accObj) {
+      accObj = { id: target, staff_name: target, staff_id: newStaffId, password: "0000", is_custom: false, host_reset_notice_pending: true, updated_at: nowStr };
+      db.data.staff_accounts.push(accObj);
+    } else {
+      accObj.staff_id = newStaffId;
+      accObj.password = "0000";
+      accObj.is_custom = false;
+      accObj.host_reset_notice_pending = true;
+      accObj.updated_at = nowStr;
+    }
+    if (!Array.isArray(db.data.host_recovery_logs)) db.data.host_recovery_logs = [];
+    db.data.host_recovery_logs.push({
+      id: Date.now() + Math.floor(Math.random() * 1000),
+      target_staff: target,
+      staff_id: newStaffId,
+      timestamp: nowStr,
+      remote_ip: "127.0.0.1",
+      notified: false
+    });
+    _cpLocalHostResetState = null;
+    db.save();
+    const resBoxLocal = document.getElementById("hostResetResultBox");
+    if (resBoxLocal) {
+      resBoxLocal.style.display = "block";
+      resBoxLocal.innerHTML = `
+        <div style="font-weight:bold; color:var(--pine-dark); margin-bottom:6px;">初期化が完了しました</div>
+        <div>対象管理者: <strong>${escapeHtml(target)}</strong> 様</div>
+        <div>職員ID: <code style="font-size:15px; font-weight:bold; color:var(--ink);">${escapeHtml(newStaffId)}</code></div>
+        <div>初期パスワード: <code style="font-size:15px; font-weight:bold; color:var(--ink);">0000</code></div>
+        <div>初期暗証番号: <code style="font-size:15px; font-weight:bold; color:var(--ink);">0000</code></div>
+        <div style="margin-top:6px; font-size:12px; color:var(--ink-2);">※この画面を閉じて上記の職員IDと初期パスワード（0000）でログインし、新しいID・パスワード・暗証番号を設定してください。</div>
+      `;
+    }
+    return;
+  }
+  let res;
+  try {
+    res = await fetch('/api/host-admin-reset-execute', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'same-origin',
+      body: JSON.stringify({ target: target, code: code })
+    });
+  } catch (e) {
+    alert("サーバーに接続できませんでした。");
+    return;
+  }
+  let info = {};
+  try { info = await res.json(); } catch (e) {}
+  if (res.status === 423) {
+    alert("確認番号の入力失敗が続いたため、5分間ロックしています。しばらく待ってからやり直してください。");
+    return;
+  }
+  if (res.status === 403) {
+    alert((info && info.message) || "管理者の役職のアカウントのみ親機から初期化できます。");
+    return;
+  }
+  if (!res.ok || !info.ok) {
+    alert((info && info.message) || "確認番号が一致しないか、有効期限（5分）が切れています。");
+    return;
+  }
+  const resBox = document.getElementById("hostResetResultBox");
+  if (resBox) {
+    resBox.style.display = "block";
+    resBox.innerHTML = `
+      <div style="font-weight:bold; color:var(--pine-dark); margin-bottom:6px;">初期化が完了しました</div>
+      <div>対象管理者: <strong>${escapeHtml(info.target || target)}</strong> 様</div>
+      <div>職員ID: <code style="font-size:15px; font-weight:bold; color:var(--ink);">${escapeHtml(info.staff_id || "-")}</code></div>
+      <div>初期パスワード: <code style="font-size:15px; font-weight:bold; color:var(--ink);">0000</code></div>
+      <div>初期暗証番号: <code style="font-size:15px; font-weight:bold; color:var(--ink);">0000</code></div>
+      <div style="margin-top:6px; font-size:12px; color:var(--ink-2);">※この画面を閉じて上記の職員IDと初期パスワード（0000）でログインし、新しいID・パスワード・暗証番号を設定してください。</div>
+    `;
+  }
+}
+
+window.cpApplyMcUiMode = cpApplyMcUiMode;
+window.renderMcInitialSetup = renderMcInitialSetup;
+window.submitMcFacilitySetup = submitMcFacilitySetup;
+window.submitMcStaffRegistration = submitMcStaffRegistration;
+window.cpCheckPostLoginAdminNotices = cpCheckPostLoginAdminNotices;
+window.openHostAdminResetModal = openHostAdminResetModal;
+window.requestHostAdminResetCode = requestHostAdminResetCode;
+window.executeHostAdminReset = executeHostAdminReset;
