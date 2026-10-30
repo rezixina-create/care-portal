@@ -739,7 +739,7 @@ function renderPhotoGrid() {
 				</div>
 			`;
 		} else {
-			// 親機以外: 写真は出さず、題名・日時・登録者と「写真は親機で確認できます」のみ
+			// 親機以外: 写真は出さず、題名・日時・登録者と「写真は親機で確認できます」のみ（取消ボタンも出さない）
 			card.innerHTML = `
 				<div style="padding:16px 10px; background:var(--ground); color:var(--ink-2); font-size:12px; text-align:center; border-bottom:1px solid var(--line);">
 					写真は親機で確認できます
@@ -751,9 +751,6 @@ function renderPhotoGrid() {
 						</div>
 						<div style="font-size:11px; color:var(--ink-2);">${escapeHtml(p.uploaded_at || "-")}</div>
 						<div style="font-size:11px; color:var(--ink-2);">担当: ${escapeHtml(p.uploader || "-")}</div>
-					</div>
-					<div style="margin-top:8px; display:flex; justify-content:flex-end; align-items:center; border-top:1px solid var(--line-2); padding-top:6px;">
-						<button class="btn" style="background:var(--alert-tint); color:var(--alert); border:1px solid var(--alert); font-size:11px; padding:3px 8px; border-radius:4px; cursor:pointer;" onclick="deletePhoto(${p.id})">取消</button>
 					</div>
 				</div>
 			`;
@@ -916,6 +913,11 @@ function saveNewPhoto() {
 }
 
 function deletePhoto(id) {
+	// [Antigravity修正 2026-10-30] 保管庫の写真の取消は親機のみ可能
+	if (!window.gIsHostMachine) {
+		alert("写真の取消は親機で行ってください。");
+		return;
+	}
 	// [Claude修正] 写真・書類は消さずに「取消」として残す（理由必須）
 	const ph = (db.data.photos || []).find(p => p.id === id);
 	if (!cpVoidRecord(ph, "この写真・書類")) return;

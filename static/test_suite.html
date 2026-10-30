@@ -4329,8 +4329,9 @@
       renderIncidentDetailPhotos(mockIncDetail);
       const nonHostNotice = document.getElementById("incDetailNonHostNotice");
       const hostWrapEl = document.getElementById("incDetailHostPhotosWrap");
-      assert(nonHostNotice.style.display !== "none" && nonHostNotice.textContent.includes("写真あり（現場・傷）— 親機で確認できます"), "Test 179d-1: 非親機では「写真あり（現場・傷）— 親機で確認できます」が表示されること");
-      assert(hostWrapEl.style.display === "none", "Test 179d-2: 非親機では写真本体領域が非表示であること");
+      assert(nonHostNotice.style.display !== "none" && nonHostNotice.textContent.includes("傷の写真は親機で確認できます"), "Test 179d-1: 非親機では「傷の写真は親機で確認できます」が表示されること");
+      const siteWrapElInit = document.getElementById("incDetailSitePhotoWrap");
+      assert(hostWrapEl.style.display !== "none" && siteWrapElInit.style.display !== "none", "Test 179d-2: 非親機でも現場写真領域が表示されること");
 
       // 親機（gIsHostMachine = true）の場合: 現場写真を直接表示、傷写真ボタンを表示
       window.gIsHostMachine = true;
@@ -4385,7 +4386,8 @@
       window.gIsHostMachine = false;
       printCapturedHtml = "";
       printIncidentReport(99991);
-      assert(!printCapturedHtml.includes("現場の写真") && !printCapturedHtml.includes("site_test.jpg"), "Test 179e-3: 非親機からの印刷には写真が含まれないこと");
+      assert(printCapturedHtml.includes("現場の写真") && printCapturedHtml.includes("site_test.jpg"), "Test 179e-3: 非親機での印刷にも現場写真が含まれること");
+      assert(!printCapturedHtml.includes("injury_test.jpg"), "Test 179e-4: 非親機での印刷に傷写真は含まれないこと");
 
       // 後始末
       window.open = origWindowOpen;
@@ -4949,7 +4951,8 @@
         assert(!legacyCardNonHost.querySelector("img"), "Test 184-7b: 非親機では過去の data: URL 形式でも画像タグは出ないこと");
         assert(legacyCardNonHost.textContent.includes("写真は親機で確認できます"), "Test 184-7c: 非親機では過去データも「写真は親機で確認できます」が表示されること");
 
-        // Test 184-8: 取消機能の検証（理由必須、レコードとファイルは残し voided: true になること）
+        // Test 184-8: 取消機能の検証（理由必須、親機のみ可能、レコードとファイルは残し voided: true になること）
+        window.gIsHostMachine = true;
         let promptReason = "書類改訂のため取消";
         const origPrompt = window.prompt;
         window.prompt = () => promptReason;
@@ -5009,6 +5012,171 @@
         window.gIsHostMachine = false;
         // テスト用に追加したモック写真のクリーンアップ
         db.data.photos = (db.data.photos || []).filter(p => p.id !== latestPhoto.id && p.id !== 999988);
+        }
+
+        // ----------------------------------------------------
+        // Test 185: [Antigravity追加 2026-10-30] 写真の端末別閲覧・取消権限制御・事故報告書および傷写真の個別印刷
+        // ----------------------------------------------------
+        {
+        log("40. 写真の端末別閲覧・取消権限制御・事故報告書および傷写真の個別印刷 (Test 185)");
+        let secEl185 = document.getElementById("incDetailPhotosSection");
+        if (!secEl185) {
+          secEl185 = document.createElement("div"); secEl185.id = "incDetailPhotosSection";
+          secEl185.innerHTML = `
+            <div id="incDetailNonHostNotice" style="display:none;"></div>
+            <div id="incDetailHostPhotosWrap" style="display:none;">
+              <div id="incDetailSitePhotoWrap" style="display:none;"><div id="incDetailSitePhotoImgWrap"></div></div>
+              <div id="incDetailInjuryPhotoWrap" style="display:none;"><button id="btnIncDetailViewInjuryPhoto"></button></div>
+            </div>
+            <button id="btnIncidentInjuryPrint" style="display:none;"></button>
+          `;
+          document.body.appendChild(secEl185);
+        }
+
+        const origAlert185 = window.alert;
+        const origPrompt185 = window.prompt;
+        const origLoginFn185 = window.cpLoginStaffName;
+        const origOpen = window.open;
+        let lastAlertMsg = "";
+        window.alert = (msg) => { lastAlertMsg = msg; };
+
+        // モック事故データ
+        const mockInc = {
+          id: 888801,
+          resident_id: 1,
+          occurred_at: "2026-10-30 14:00",
+          report_type: "事故",
+          place: "食堂",
+          photos: [
+            { id: 701, photo_type: "site", filename: "site_20261030_140000_aaa.jpg", uploaded_at: "2026-10-30 14:05", uploaded_by: "木村 健一", voided: false },
+            { id: 702, photo_type: "injury", filename: "injury_20261030_140000_bbb.jpg", uploaded_at: "2026-10-30 14:06", uploaded_by: "鈴木 美智子", voided: false }
+          ]
+        };
+        if (!Array.isArray(db.data.incidents)) db.data.incidents = [];
+        db.data.incidents.unshift(mockInc);
+
+        // --- 1. 親機での事故詳細写真表示 ---
+        window.gIsHostMachine = true;
+        renderIncidentDetailPhotos(mockInc);
+        const siteWrap = document.getElementById("incDetailSitePhotoWrap");
+        const injuryWrap = document.getElementById("incDetailInjuryPhotoWrap");
+        const nonHostNotice = document.getElementById("incDetailNonHostNotice");
+        const btnInjuryPrint = document.getElementById("btnIncidentInjuryPrint");
+
+        assert(siteWrap && siteWrap.style.display !== "none", "Test 185-1a: 親機で現場の写真が表示されること");
+        assert(injuryWrap && injuryWrap.style.display !== "none", "Test 185-1b: 親機で傷の写真を見るボタンが表示されること");
+        assert(nonHostNotice && nonHostNotice.style.display === "none", "Test 185-1c: 親機では「親機で確認できます」通知が非表示であること");
+        assert(btnInjuryPrint && btnInjuryPrint.style.display !== "none" && btnInjuryPrint.textContent.includes("傷の写真を印刷"), "Test 185-1d: 親機で傷の写真を印刷ボタンが表示されること");
+
+        // --- 2. タブレット（子機）での事故詳細写真表示 ---
+        window.gIsHostMachine = false;
+        renderIncidentDetailPhotos(mockInc);
+        assert(siteWrap && siteWrap.style.display !== "none", "Test 185-2a: タブレットでも現場の写真が表示されること");
+        assert(injuryWrap && injuryWrap.style.display === "none", "Test 185-2b: タブレットでは傷の写真を見るボタンが非表示であること");
+        assert(nonHostNotice && nonHostNotice.style.display !== "none" && nonHostNotice.textContent.includes("傷の写真は親機で確認できます"), "Test 185-2c: タブレットで傷の写真があるとき「傷の写真は親機で確認できます」と通知されること");
+        assert(btnInjuryPrint && btnInjuryPrint.style.display === "none" && btnInjuryPrint.textContent === "", "Test 185-2d: タブレットでは傷の写真を印刷ボタン・文言が非表示であること");
+
+        // --- 3. 現場写真のみ（傷写真なし）のタブレット表示 ---
+        const mockSiteOnly = {
+          id: 888802,
+          resident_id: 1,
+          photos: [
+            { id: 703, photo_type: "site", filename: "site_20261030_141000_ccc.jpg", uploaded_at: "2026-10-30 14:15", uploaded_by: "木村 健一", voided: false }
+          ]
+        };
+        renderIncidentDetailPhotos(mockSiteOnly);
+        assert(nonHostNotice && nonHostNotice.style.display === "none", "Test 185-3: 傷の写真がない場合、タブレットでも傷写真案内通知が出ないこと");
+
+        // --- 4. voidIncidentPhoto: 未ログインでの取消抑止 ---
+        window.cpLoginStaffName = () => "";
+        lastAlertMsg = "";
+        gState.currentIncidentPhotos = JSON.parse(JSON.stringify(mockInc.photos));
+        voidIncidentPhoto("site", 701);
+        assert(lastAlertMsg.includes("ログイン"), "Test 185-4a: 未ログイン時は取消を抑止しログイン案内が出ること");
+        assert(!gState.currentIncidentPhotos[0].voided, "Test 185-4b: 未ログイン時は現場写真が取消されないこと");
+
+        // --- 5. voidIncidentPhoto: タブレットでの傷写真取消抑止と現場写真取消許可 ---
+        window.cpLoginStaffName = () => "井上 蓮";
+        window.gIsHostMachine = false;
+        lastAlertMsg = "";
+        voidIncidentPhoto("injury", 702);
+        assert(lastAlertMsg.includes("写真の取消は親機で行ってください"), "Test 185-5a: タブレットからの傷写真取消がブロックされ案内が出ること");
+        assert(!gState.currentIncidentPhotos[1].voided, "Test 185-5b: タブレットからは傷写真が取消されないこと");
+
+        window.prompt = () => "現場記録の誤りのため取消";
+        voidIncidentPhoto("site", 701);
+        assert(gState.currentIncidentPhotos[0].voided === true, "Test 185-5c: タブレットから現場写真は理由付きで取消できること");
+        assert(gState.currentIncidentPhotos[0].voided_by === "井上 蓮", "Test 185-5d: 取消者にログイン職員の実名が記録され「未記録」などの代替値で埋められないこと");
+        assert(gState.currentIncidentPhotos[0].void_reason === "現場記録の誤りのため取消", "Test 185-5e: 取消理由が記録されること");
+
+        // --- 6. 事故報告書印刷: タブレット印刷でも現場写真を含め、傷写真は含めない ---
+        let openedPrintHtml = "";
+        window.open = () => {
+          return {
+            document: {
+              open: () => {},
+              write: (html) => { openedPrintHtml = html; },
+              close: () => {},
+              querySelector: () => null
+            },
+            focus: () => {},
+            print: () => {}
+          };
+        };
+        window.gIsHostMachine = false; // タブレット状態
+        printIncidentReport(888801);
+        assert(openedPrintHtml.includes("site_20261030_140000_aaa.jpg"), "Test 185-6a: タブレットからの事故報告書印刷で現場写真が含まれること");
+        assert(!openedPrintHtml.includes("injury_20261030_140000_bbb.jpg"), "Test 185-6b: 事故報告書印刷には傷の写真が含まれないこと");
+
+        // --- 7. 傷の写真個別印刷 ---
+        window.gIsHostMachine = false; // タブレット状態
+        lastAlertMsg = "";
+        openedPrintHtml = "";
+        printIncidentInjuryPhoto(888801);
+        assert(lastAlertMsg.includes("親機"), "Test 185-7a: タブレットからの傷写真印刷がブロックされること");
+        assert(!openedPrintHtml, "Test 185-7b: タブレットでは傷写真印刷画面が開かないこと");
+
+        window.gIsHostMachine = true; // 親機状態
+        openedPrintHtml = "";
+        printIncidentInjuryPhoto(888801);
+        assert(openedPrintHtml.includes("injury_20261030_140000_bbb.jpg"), "Test 185-7c: 親機からの傷写真印刷で傷写真が含まれること");
+        assert(openedPrintHtml.includes("佐藤 太郎"), "Test 185-7d: 傷写真印刷に対象利用者名が含まれること");
+        assert(openedPrintHtml.includes("2026-10-30 14:00"), "Test 185-7e: 傷写真印刷に事故発生日時が含まれること");
+        assert(openedPrintHtml.includes("鈴木 美智子"), "Test 185-7f: 傷写真印刷に撮影者名が含まれること");
+        assert(!openedPrintHtml.includes("site_20261030_140000_aaa.jpg"), "Test 185-7g: 傷写真印刷には現場写真が含まれないこと");
+
+        // --- 8. 保管庫の写真: タブレットでの取消ボタン非表示とdeletePhotoブロック ---
+        const origPhotos = (db.data.photos || []).slice();
+        db.data.photos = [
+          { id: 99881, resident_id: 1, category: "documents", title: "同意書原本", filename: "documents_20261030_100000_xyz.jpg", uploaded_at: "2026-10-30 10:00", uploader: "木村 健一", voided: false }
+        ];
+        window.gIsHostMachine = false;
+        renderPhotoGrid();
+        const photoGrid = document.getElementById("photoGridArea");
+        assert(!photoGrid.textContent.includes("取消") && !photoGrid.querySelector("button"), "Test 185-8a: タブレット表示時は保管庫の写真カードに取消ボタンが存在しないこと");
+
+        lastAlertMsg = "";
+        deletePhoto(99881);
+        assert(lastAlertMsg.includes("写真の取消は親機で行ってください"), "Test 185-8b: タブレットからの deletePhoto 呼び出しがアラートでブロックされること");
+        assert(!db.data.photos[0].voided, "Test 185-8c: タブレットからの呼び出しでは写真が取消状態にならないこと");
+
+        // --- 9. _revertForbiddenKey: 写真取消の拒否通知文言検証 ---
+        let forbidAlertMsg = "";
+        window.alert = (msg) => { forbidAlertMsg = msg; };
+        db._forbidShown = {};
+        db._revertForbiddenKey({ key: "photos", who: "写真の取消は親機で行ってください", id: 99881 });
+        await new Promise(r => setTimeout(r, 60));
+        assert(forbidAlertMsg.includes("写真の取消は親機で行ってください"), "Test 185-9: _revertForbiddenKey で「写真の取消は親機で行ってください」が通知されること");
+        if (secEl185 && secEl185.parentNode) secEl185.parentNode.removeChild(secEl185);
+
+        // クリーンアップ
+        db.data.incidents = (db.data.incidents || []).filter(x => x.id !== 888801 && x.id !== 888802);
+        db.data.photos = origPhotos;
+        window.alert = origAlert185;
+        window.prompt = origPrompt185;
+        window.cpLoginStaffName = origLoginFn185;
+        window.open = origOpen;
+        window.gIsHostMachine = false;
         }
 
       // 40. 総合結果判定

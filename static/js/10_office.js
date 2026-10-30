@@ -2979,6 +2979,10 @@ function renderIncidentPhotosEditUI() {
 	const injuryInputWrap = document.getElementById("incInjuryPhotoInputWrap");
 	if (injuryInfoEl && injuryInputWrap) {
 		if (injuryPhoto) {
+			const isHost = (typeof window !== "undefined" && window.gIsHostMachine === true);
+			const injuryVoidBtn = isHost
+				? `<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:var(--alert); border-color:var(--alert);" onclick="voidIncidentPhoto('injury', ${injuryPhoto.id})">取消</button>`
+				: '';
 			injuryInfoEl.innerHTML = `
 				<div style="background:var(--ground); border:1px solid var(--line); border-radius:4px; padding:6px 8px; display:flex; justify-content:space-between; align-items:center;">
 					<div>
@@ -2986,7 +2990,7 @@ function renderIncidentPhotosEditUI() {
 						<span style="font-size:11px; color:var(--ink-2); margin-left:6px;">${escapeHtml(injuryPhoto.filename)}</span>
 						<div style="font-size:11px; color:var(--ink-3); margin-top:2px;">${escapeHtml(injuryPhoto.uploaded_at)} (${escapeHtml(injuryPhoto.uploaded_by)})</div>
 					</div>
-					<button type="button" class="btn btn-secondary" style="font-size:11px; padding:2px 8px; color:var(--alert); border-color:var(--alert);" onclick="voidIncidentPhoto('injury', ${injuryPhoto.id})">取消</button>
+					${injuryVoidBtn}
 				</div>
 			`;
 			injuryInputWrap.style.display = "none";
@@ -2998,8 +3002,18 @@ function renderIncidentPhotosEditUI() {
 }
 window.renderIncidentPhotosEditUI = renderIncidentPhotosEditUI;
 
-// [Antigravity追加 2026-10-28] 写真の取消（ファイルは残し、取消理由・取消者を残す）
+// [Antigravity追加 2026-10-28 / 修正 2026-10-30] 写真の取消（ファイルは残し、取消理由・取消者を残す）
 function voidIncidentPhoto(type, photoId) {
+	// [Antigravity修正 2026-10-30] 傷の写真の取消は親機のみ可能
+	if (type === "injury" && (!window.gIsHostMachine)) {
+		alert("写真の取消は親機で行ってください。");
+		return;
+	}
+	const staff = (typeof cpLoginStaffName === "function") ? cpLoginStaffName() : "";
+	if (!staff) {
+		alert("ログインしていません。取消はできません。");
+		return;
+	}
 	const reason = prompt("写真を取り消す理由を入力してください（必須）:", "");
 	if (reason === null) return;
 	if (!reason.trim()) {
@@ -3012,7 +3026,7 @@ function voidIncidentPhoto(type, photoId) {
 	if (p) {
 		p.voided = true;
 		p.voided_at = (typeof toLocalDateTimeStr === "function" ? toLocalDateTimeStr(new Date()) : new Date().toISOString());
-		p.voided_by = (typeof cpLoginStaffName === "function" ? cpLoginStaffName() : "") || "未記録";
+		p.voided_by = staff;
 		p.void_reason = reason.trim();
 		renderIncidentPhotosEditUI();
 	}
@@ -3494,10 +3508,9 @@ function printIncidentReport(incId) {
 	}
 	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
 	const pins = inc.injury_pins || [];
-	// 現場の写真（親機から印刷した場合のみ掲載・傷の写真やボタンは含めない）
+	// 現場の写真（親機・タブレットとも掲載・傷の写真やボタンは含めない）
 	let sitePhotoPrintHtml = "";
-	const isHostPrint = !!window.gIsHostMachine;
-	if (isHostPrint && Array.isArray(inc.photos)) {
+	if (Array.isArray(inc.photos)) {
 		const activeSitePhoto = inc.photos.find(p => !p.voided && (p.photo_type === "site" || p.photo_type === "現場"));
 		if (activeSitePhoto && activeSitePhoto.filename) {
 			sitePhotoPrintHtml = `
@@ -4590,6 +4603,7 @@ function renderIncidentDetailPhotos(inc) {
 	const siteImgWrap = document.getElementById("incDetailSitePhotoImgWrap");
 	const injuryWrap = document.getElementById("incDetailInjuryPhotoWrap");
 	const btnInjury = document.getElementById("btnIncDetailViewInjuryPhoto");
+	const btnInjuryPrint = document.getElementById("btnIncidentInjuryPrint");
 
 	if (!secEl) return;
 
@@ -4603,6 +4617,7 @@ function renderIncidentDetailPhotos(inc) {
 		secEl.style.display = "none";
 		if (nonHostEl) nonHostEl.style.display = "none";
 		if (hostWrap) hostWrap.style.display = "none";
+		if (btnInjuryPrint) { btnInjuryPrint.style.display = "none"; btnInjuryPrint.textContent = ""; }
 		return;
 	}
 
@@ -4611,36 +4626,25 @@ function renderIncidentDetailPhotos(inc) {
 	// 親機判定
 	const isHost = !!window.gIsHostMachine;
 
-	if (!isHost) {
-		if (hostWrap) hostWrap.style.display = "none";
-		if (nonHostEl) {
-			nonHostEl.style.display = "block";
-			const types = [];
-			if (sitePhoto) types.push("現場");
-			if (injuryPhoto) types.push("傷");
-			nonHostEl.textContent = `写真あり（${types.join("・")}）— 親機で確認できます`;
-		}
-	} else {
-		if (nonHostEl) nonHostEl.style.display = "none";
-		if (hostWrap) hostWrap.style.display = "block";
-
-		// 現場の写真
-		if (sitePhoto && siteWrap && siteImgWrap) {
-			siteWrap.style.display = "block";
-			siteImgWrap.innerHTML = `
-				<div style="text-align:center;">
-					<img src="/api/incident-photo?file=${encodeURIComponent(sitePhoto.filename)}" alt="現場の写真" style="max-width:100%; max-height:360px; object-fit:contain; border-radius:4px; border:1px solid var(--line); display:block; margin:0 auto;">
-					<div style="font-size:11.5px; color:var(--ink-2); margin-top:4px;">
-						${escapeHtml(sitePhoto.uploaded_at || '')} (${escapeHtml(sitePhoto.uploaded_by || '未記録')})
-					</div>
+	// 1. 現場の写真: 親機・タブレットとも詳細にそのまま出す
+	if (sitePhoto && siteWrap && siteImgWrap) {
+		siteWrap.style.display = "block";
+		siteImgWrap.innerHTML = `
+			<div style="text-align:center;">
+				<img src="/api/incident-photo?file=${encodeURIComponent(sitePhoto.filename)}" alt="現場の写真" style="max-width:100%; max-height:360px; object-fit:contain; border-radius:4px; border:1px solid var(--line); display:block; margin:0 auto;">
+				<div style="font-size:11.5px; color:var(--ink-2); margin-top:4px;">
+					${escapeHtml(sitePhoto.uploaded_at || '')} (${escapeHtml(sitePhoto.uploaded_by || '未記録')})
 				</div>
-			`;
-		} else if (siteWrap) {
-			siteWrap.style.display = "none";
-			if (siteImgWrap) siteImgWrap.innerHTML = "";
-		}
+			</div>
+		`;
+	} else if (siteWrap) {
+		siteWrap.style.display = "none";
+		if (siteImgWrap) siteImgWrap.innerHTML = "";
+	}
 
-		// 傷の写真ボタン
+	// 2. 傷の写真: 親機のみ閲覧ボタン表示、タブレットは「傷の写真は親機で確認できます」のみ（傷の写真がある時だけ）
+	if (isHost) {
+		if (nonHostEl) nonHostEl.style.display = "none";
 		if (injuryPhoto && injuryWrap && btnInjury) {
 			injuryWrap.style.display = "block";
 			btnInjury.onclick = function() {
@@ -4648,6 +4652,31 @@ function renderIncidentDetailPhotos(inc) {
 			};
 		} else if (injuryWrap) {
 			injuryWrap.style.display = "none";
+		}
+	} else {
+		if (injuryWrap) injuryWrap.style.display = "none";
+		if (injuryPhoto && nonHostEl) {
+			nonHostEl.style.display = "block";
+			nonHostEl.textContent = "傷の写真は親機で確認できます";
+		} else if (nonHostEl) {
+			nonHostEl.style.display = "none";
+		}
+	}
+
+	if (hostWrap) {
+		const hasContent = (sitePhoto && siteWrap && siteWrap.style.display !== "none") ||
+			(isHost && injuryPhoto && injuryWrap && injuryWrap.style.display !== "none");
+		hostWrap.style.display = hasContent ? "block" : "none";
+	}
+
+	// 3. 傷の写真の印刷ボタン（親機かつ傷の写真がある時のみ表示、タブレットではボタンも言葉も出さない）
+	if (btnInjuryPrint) {
+		if (isHost && injuryPhoto) {
+			btnInjuryPrint.style.display = "inline-block";
+			btnInjuryPrint.textContent = "傷の写真を印刷";
+		} else {
+			btnInjuryPrint.style.display = "none";
+			btnInjuryPrint.textContent = "";
 		}
 	}
 }
@@ -4757,8 +4786,110 @@ function printCurrentIncidentDetail() {
 	printIncidentReport(gState.selectedIncidentDetailId);
 }
 
+// [Antigravity追加 2026-10-30] 傷の写真印刷（親機のみ実行可能、傷の写真だけを1枚に印刷）
+function printIncidentInjuryPhoto(incId) {
+	if (!window.gIsHostMachine) {
+		alert("傷の写真は親機でのみ印刷できます。");
+		return;
+	}
+	const inc = (db.data.incidents || []).find(x => x.id === incId);
+	if (!inc) {
+		alert("対象の事故報告書が見つかりません。");
+		return;
+	}
+	const res = (gState.residents || []).find(r => r.id === inc.resident_id);
+	const photos = Array.isArray(inc.photos) ? inc.photos : [];
+	const injuryPhotos = photos.filter(p => !p.voided && (p.photo_type === "injury" || p.photo_type === "傷"));
+	if (injuryPhotos.length === 0) {
+		alert("印刷可能な傷の写真がありません。");
+		return;
+	}
+
+	const facilityName = (typeof getFacilityName === "function") ? getFacilityName() : "陽だまりの家";
+
+	let photosHtml = "";
+	injuryPhotos.forEach((p) => {
+		photosHtml += `
+			<div style="text-align:center; margin-bottom:14px; page-break-inside:avoid;">
+				<img src="/api/incident-photo?file=${encodeURIComponent(p.filename)}" alt="傷の写真" style="max-width:180mm; max-height:150mm; object-fit:contain; border:1px solid #333; display:block; margin:0 auto;">
+				<div style="font-size:9.5pt; color:#222; margin-top:6px;">
+					<strong>撮影日時:</strong> ${escapeHtml(p.uploaded_at || '-')} &nbsp;&nbsp;&nbsp;&nbsp;
+					<strong>撮影者:</strong> ${escapeHtml(p.uploaded_by || '-')}
+				</div>
+			</div>
+		`;
+	});
+
+	const printHtml = `
+		<!DOCTYPE html>
+		<html lang="ja">
+		<head>
+			<meta charset="UTF-8">
+			<title>事故報告書 傷の写真 - ${escapeHtml(res ? res.name : '利用者')}</title>
+			<style>
+				body { font-family: "Hiragino Kaku Gothic ProN", Meiryo, sans-serif; font-size: 10pt; color: #111; margin: 0 auto; max-width: 190mm; line-height: 1.4; padding: 10mm 0; }
+				table { width: 100%; border-collapse: collapse; margin-bottom: 12px; }
+				th, td { border: 1px solid #333; padding: 5px 8px; font-size: 9.5pt; }
+				th { background: #eef2ef; text-align: left; width: 22%; white-space: nowrap; }
+				.h-title { text-align: center; font-size: 15pt; font-weight: bold; margin-bottom: 10px; border-bottom: 2px solid #333; padding-bottom: 4px; }
+				@media print {
+					@page { size: A4 portrait; margin: 10mm; }
+					body { max-width: 100%; padding: 0; }
+				}
+			</style>
+		</head>
+		<body>
+			<div class="h-title">事故・ヒヤリハット報告 傷の写真</div>
+			<div style="text-align:right; font-size:9pt; margin-bottom:8px; color:#444;">${escapeHtml(facilityName)}</div>
+			<table>
+				<tr>
+					<th>対象利用者</th>
+					<td><strong>${escapeHtml(res ? (res.room_no ? res.room_no + '号室 ' : '') + res.name + ' 様' : '未登録')}</strong></td>
+					<th>事故種別</th>
+					<td>${escapeHtml(inc.report_type || '-')}</td>
+				</tr>
+				<tr>
+					<th>事故発生日時</th>
+					<td>${escapeHtml(inc.occurred_at || '-')}</td>
+					<th>発生場所</th>
+					<td>${escapeHtml(inc.place || '-')}</td>
+				</tr>
+			</table>
+
+			<div style="border:1px solid #333; padding:10px; margin-top:8px;">
+				<div style="font-size:10.5pt; font-weight:bold; margin-bottom:10px; border-bottom:1px solid #cdd6d0; padding-bottom:3px;">
+					傷の写真
+				</div>
+				${photosHtml}
+			</div>
+		</body>
+		</html>
+	`;
+
+	const win = window.open('', '_blank');
+	if (win) {
+		win.document.open();
+		win.document.write(printHtml);
+		win.document.close();
+		const doPrint = function() {
+			try { win.focus(); win.print(); } catch (e) { }
+		};
+		if (win.document.readyState === 'complete') doPrint();
+		else setTimeout(doPrint, 300);
+	} else {
+		alert("印刷用の画面を開けませんでした。ブラウザのポップアップ設定を確認してください。");
+	}
+}
+
+function printCurrentIncidentInjuryPhoto() {
+	if (!gState.selectedIncidentDetailId) return;
+	printIncidentInjuryPhoto(gState.selectedIncidentDetailId);
+}
+
 window.openIncidentDetailModal = openIncidentDetailModal;
 window.printCurrentIncidentDetail = printCurrentIncidentDetail;
+window.printIncidentInjuryPhoto = printIncidentInjuryPhoto;
+window.printCurrentIncidentInjuryPhoto = printCurrentIncidentInjuryPhoto;
 
 // ==========================================
 // 負担割合履歴モーダル

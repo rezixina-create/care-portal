@@ -2599,16 +2599,18 @@ namespace CarePortal
         {
             public string Staff = "";
             public bool Admin, Director, Cm, Nurse;
+            public bool IsHost;
         }
         private static bool PermHas(string role, params string[] words)
         {
             foreach (string w in words) if (role.IndexOf(w, StringComparison.Ordinal) >= 0) return true;
             return false;
         }
-        private static PermCtx MakePerm(JObj db, string staff)
+        private static PermCtx MakePerm(JObj db, string staff, bool isHost)
         {
             PermCtx p = new PermCtx();
             p.Staff = staff ?? "";
+            p.IsHost = isHost;
             string role = "";
             List<object> stamps = db != null ? db.Get("stamps") as List<object> : null;
             if (stamps != null && staff != null)
@@ -2633,7 +2635,8 @@ namespace CarePortal
         private static readonly string[] PermResAdminCmFields = new string[] { "care_level", "care_start_date", "care_expiry_date", "renewal_steps", "care_cert_history" };
         private static readonly string[] PermWatchKeys = new string[] { "kasan_settings", "billing_settings", "billing_overrides", "units", "contract_docs", "contract_doc_types",
             "office_info", "staff_archive", "shift_ng_pairs", "shift_staffing", "shift_events", "monthly_shift_units", "monthly_shifts", "resident_medications", "eyedrop_orders",
-            "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "quality_evaluations", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables" };
+            "dementia_assessments", "life_assessments", "residents", "care_plans", "care_summaries", "quality_evaluations", "stamps", "staff_accounts", "shift_hope_offs", "invoices", "invoice_fee_tables",
+            "photos", "incidents" };
 
         private static bool PermEmpty(object v)
         {
@@ -2712,6 +2715,61 @@ namespace CarePortal
                 if (p.Admin) return null;
                 bool own = (cur == null || cur.GetStr("staff_name") == p.Staff) && (nv == null || nv.GetStr("staff_name") == p.Staff);
                 return own ? null : "本人（ほかの方の分は管理者・事務員）";
+            }
+            if (k == "photos")
+            {
+                // [Antigravity追加 2026-10-30] 保管庫の写真の取消は親機のみ許可（タブレット等の子機は403で拒絶）
+                if (!p.IsHost)
+                {
+                    bool curVoided = (cur != null && cur.Get("voided") is bool) ? (bool)cur.Get("voided") : false;
+                    bool curActive = (cur != null && !curVoided);
+                    bool nvVoided = (nv != null && nv.Get("voided") is bool) ? (bool)nv.Get("voided") : false;
+                    bool nvCancelled = (nv == null || nvVoided);
+                    if (curActive && nvCancelled)
+                    {
+                        return "写真の取消は親機で行ってください";
+                    }
+                }
+                return null;
+            }
+            if (k == "incidents")
+            {
+                // [Antigravity追加 2026-10-30] 事故報告書の傷の写真（injury）の取消は親機のみ許可（タブレット等の子機は403で拒絶）
+                if (!p.IsHost && cur != null)
+                {
+                    List<object> curPhotos = cur.Get("photos") as List<object>;
+                    if (curPhotos != null)
+                    {
+                        List<object> nvPhotos = nv != null ? nv.Get("photos") as List<object> : null;
+                        foreach (object o in curPhotos)
+                        {
+                            JObj cp = o as JObj;
+                            if (cp == null) continue;
+                            string pType = cp.GetStr("photo_type") ?? "";
+                            bool isInjury = (pType.Equals("injury", StringComparison.OrdinalIgnoreCase) || pType == "傷");
+                            bool cpVoided = (cp.Get("voided") is bool) ? (bool)cp.Get("voided") : false;
+                            if (isInjury && !cpVoided)
+                            {
+                                string pid = cp.GetStr("id");
+                                JObj np = null;
+                                if (nvPhotos != null)
+                                {
+                                    foreach (object no in nvPhotos)
+                                    {
+                                        JObj x = no as JObj;
+                                        if (x != null && x.GetStr("id") == pid) { np = x; break; }
+                                    }
+                                }
+                                bool npVoided = (np != null && np.Get("voided") is bool) ? (bool)np.Get("voided") : false;
+                                if (np == null || npVoided)
+                                {
+                                    return "写真の取消は親機で行ってください";
+                                }
+                            }
+                        }
+                    }
+                }
+                return null;
             }
             return null;
         }
@@ -2810,9 +2868,9 @@ namespace CarePortal
         }
 
         // 差分の保存の全部の操作を確かめる。止めるときは {key, who} を返す
-        private static string[] PermCheckOps(JObj db, string staff, List<object> ops)
+        private static string[] PermCheckOps(JObj db, string staff, List<object> ops, bool isHost)
         {
-            PermCtx p = MakePerm(db, staff);
+            PermCtx p = MakePerm(db, staff, isHost);
             foreach (object o in ops)
             {
                 JObj op = o as JObj;
@@ -2840,10 +2898,10 @@ namespace CarePortal
             return null;
         }
         // 全体の保存のとき
-        private static string[] PermCheckWhole(JObj curDb, JObj newDb, string staff)
+        private static string[] PermCheckWhole(JObj curDb, JObj newDb, string staff, bool isHost)
         {
             if (curDb == null || newDb == null) return null;
-            PermCtx p = MakePerm(curDb, staff);
+            PermCtx p = MakePerm(curDb, staff, isHost);
             foreach (string k in PermWatchKeys)
             {
                 string who = PermWhole(p, k, curDb.Get(k), newDb.Get(k));
@@ -2856,7 +2914,7 @@ namespace CarePortal
             return "{\"error\":\"forbidden\",\"key\":" + MiniJson.Quote(r[0]) + ",\"who\":" + MiniJson.Quote(r[1]) + (r.Length > 2 && r[2] != null ? ",\"id\":" + MiniJson.Quote(r[2]) : "") + "}";
         }
 
-        private void HandleSaveDiff(NetworkStream stream, string body, string sessStaff)
+        private void HandleSaveDiff(NetworkStream stream, string body, string sessStaff, bool isHost)
         {
             JObj req = null;
             try { req = MiniJson.Parse(body) as JObj; } catch { req = null; }
@@ -2919,7 +2977,7 @@ namespace CarePortal
                             }
                             else { conflictKey = "?"; break; }
                         }
-                        string[] denied = conflictKey == null ? PermCheckOps(db, sessStaff, ops) : null;
+                        string[] denied = conflictKey == null ? PermCheckOps(db, sessStaff, ops, isHost) : null;
                         if (conflictKey != null)
                         {
                             status = 409; resp = "{\"error\":\"conflict\",\"key\":" + MiniJson.Quote(conflictKey) + "}";
@@ -3443,18 +3501,49 @@ namespace CarePortal
                         return;
                     }
 
-                    // [Antigravity追加 2026-10-28] 事故報告書の写真取得（親機のみ閲覧可能・403）
+                    // [Antigravity追加 2026-10-28 / 修正 2026-10-30] 事故報告書の写真取得（現場写真は親機・LANタブレット可、傷写真は親機のみ、トンネル禁止）
                     if (urlPath == "/api/incident-photo" && method == "GET")
                     {
-                        if (!IsHostConnection(client, lines))
+                        string reqFileName = "";
+                        int q = rawUrl.IndexOf('?');
+                        if (q >= 0)
                         {
-                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Host only");
+                            string qs = rawUrl.Substring(q + 1);
+                            string[] parts = qs.Split('&');
+                            foreach (string part in parts)
+                            {
+                                if (part.StartsWith("file=", StringComparison.OrdinalIgnoreCase))
+                                {
+                                    string rawVal = part.Substring(5);
+                                    string unesc = Uri.UnescapeDataString(rawVal);
+                                    if (unesc.Contains("..") || unesc.Contains("/") || unesc.Contains("\\") || unesc.Contains(":"))
+                                    {
+                                        byte[] err = Encoding.UTF8.GetBytes("400 Bad Request");
+                                        SendResponse(stream, 400, "Bad Request", "text/plain", err);
+                                        return;
+                                    }
+                                    reqFileName = Path.GetFileName(unesc);
+                                    break;
+                                }
+                            }
+                        }
+                        bool isSite = reqFileName.StartsWith("site_", StringComparison.OrdinalIgnoreCase);
+
+                        if (HasTunnelHeaders(lines))
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Tunnel not allowed");
                             SendResponse(stream, 403, "Forbidden", "text/plain", denied);
                             return;
                         }
                         if (sessStaff == null)
                         {
                             byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Login required");
+                            SendResponse(stream, 403, "Forbidden", "text/plain", denied);
+                            return;
+                        }
+                        if (!isSite && !IsHostConnection(client, lines))
+                        {
+                            byte[] denied = Encoding.UTF8.GetBytes("403 Forbidden: Host only");
                             SendResponse(stream, 403, "Forbidden", "text/plain", denied);
                             return;
                         }
@@ -3594,7 +3683,7 @@ namespace CarePortal
                     }
                     if (urlPath == "/api/save-diff" && method == "POST")
                     {
-                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff);
+                        HandleSaveDiff(stream, Encoding.UTF8.GetString(bodyBytes), sessStaff, IsHostConnection(client, lines));
                         return;
                     }
 
@@ -3625,7 +3714,7 @@ namespace CarePortal
                                 if (!revConflict && currentJson != null)
                                 {
                                     // [Claude追加 2026-10-22] 全体の保存でも、職種で変えられない記録が変わっていないか確かめる
-                                    try { permDenied = PermCheckWhole(MiniJson.Parse(currentJson) as JObj, MiniJson.Parse(postData) as JObj, sessStaff); } catch { permDenied = null; }
+                                    try { permDenied = PermCheckWhole(MiniJson.Parse(currentJson) as JObj, MiniJson.Parse(postData) as JObj, sessStaff, IsHostConnection(client, lines)); } catch { permDenied = null; }
                                 }
                                 if (!revConflict && permDenied == null)
                                 {
@@ -3657,7 +3746,7 @@ namespace CarePortal
                         return;
                     }
 
-                    ServeStaticFile(stream, urlPath, IsHostConnection(client, lines), sessStaff);
+                    ServeStaticFile(stream, urlPath, IsHostConnection(client, lines), HasTunnelHeaders(lines), sessStaff);
                 }
             }
             catch { }
@@ -3667,7 +3756,7 @@ namespace CarePortal
             }
         }
 
-        private void ServeStaticFile(NetworkStream stream, string urlPath, bool isHost, string sessStaff)
+        private void ServeStaticFile(NetworkStream stream, string urlPath, bool isHost, bool isTunnel, string sessStaff)
         {
             if (urlPath == "/" || string.IsNullOrEmpty(urlPath))
             {
@@ -3681,14 +3770,28 @@ namespace CarePortal
             string vaultDir = Path.GetFullPath(Path.Combine(Path.Combine(_dataDir, "photos"), "vault")).TrimEnd(Path.DirectorySeparatorChar) + Path.DirectorySeparatorChar;
 
             // [Antigravity修正 2026-10-29/2026-10-30] 実際に開くファイルの場所（Path.GetFullPath の結果）が
-            // data/photos/incidents/ または data/photos/vault/ の中かで判定し、親機かつログイン済みでなければ 403 で拒絶する（文字列比較の抜け道を防止）
-            if (!string.IsNullOrEmpty(filePath) && (filePath.StartsWith(incidentsDir, StringComparison.OrdinalIgnoreCase) || filePath.StartsWith(vaultDir, StringComparison.OrdinalIgnoreCase)))
+            // data/photos/incidents/ または data/photos/vault/ の中かで判定
+            if (!string.IsNullOrEmpty(filePath))
             {
-                if (!isHost || string.IsNullOrEmpty(sessStaff))
+                if (filePath.StartsWith(incidentsDir, StringComparison.OrdinalIgnoreCase))
                 {
-                    byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
-                    SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
-                    return;
+                    string fn = Path.GetFileName(filePath);
+                    bool isSitePhoto = fn.StartsWith("site_", StringComparison.OrdinalIgnoreCase);
+                    if (string.IsNullOrEmpty(sessStaff) || isTunnel || (!isSitePhoto && !isHost))
+                    {
+                        byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
+                        SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
+                        return;
+                    }
+                }
+                else if (filePath.StartsWith(vaultDir, StringComparison.OrdinalIgnoreCase))
+                {
+                    if (!isHost || string.IsNullOrEmpty(sessStaff) || isTunnel)
+                    {
+                        byte[] deniedBytes = Encoding.UTF8.GetBytes("403 Forbidden");
+                        SendResponse(stream, 403, "Forbidden", "text/plain", deniedBytes);
+                        return;
+                    }
                 }
             }
 
