@@ -5661,6 +5661,22 @@
           }
         }
 
+        // Test 188: 病名ガイド「てんかん・痙攣発作」の報告基準（emergency）の文言確認
+        {
+          const expectedTenkanEmergency = "【看護師・医師への報告基準】けいれんが5分以上続くとき、発作をくり返してその間に意識が戻らないとき、初めての発作やいつもと違う発作のとき、けがをしているときは119番（本人・家族と決めた対応がある場合はそれに従う）。発作があったときは必ず看護師へ報告する。";
+          const guideObj = DISEASE_GUIDE && DISEASE_GUIDE["てんかん・痙攣発作"];
+          openDiseaseGuide("てんかん");
+          const dispEl = document.getElementById("dispGuideEmergency");
+          const dispText = dispEl ? dispEl.textContent : "";
+          closeModal("diseaseModal");
+          assert(
+            guideObj &&
+            guideObj.emergency === expectedTenkanEmergency &&
+            dispText === expectedTenkanEmergency,
+            "Test 188: 病名ガイド「てんかん・痙攣発作」の emergency が指定の報告基準文言と一致し、openDiseaseGuide('てんかん') で表示されること"
+          );
+        }
+
       // 40. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
