@@ -1021,21 +1021,23 @@ function updateCareRecord() {
    alert(`身体拘束の記録には4つの項目すべての入力が必要です。\n未入力の欄: ${missing.join("、")}`);
    return;
   }
-  if (rEnd && rStart > rEnd) {
-   alert("時間の終了時刻は開始時刻より後の時刻を入力してください。");
+  if (rEnd && rStart === rEnd) {
+   alert("開始時刻と終了時刻が同じ時刻になっています。打ち間違いでないか確認してください。");
    return;
   }
+  const isEndNextDay = Boolean(rEnd && rEnd < rStart);
   const datePart = (newTime.slice(0, 10) || (rec.recorded_at || "").slice(0, 10));
   const updatedRecordedAt = datePart ? `${datePart} ${rStart}` : newTime;
   const formattedContent = (typeof cpFormatRestraintContent === "function")
-   ? cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason)
-   : `【態様】${rManner}\n【時間】${rEnd ? rStart + "〜" + rEnd : rStart + "〜（継続中）"}\n【その際の心身の状況】${rCond}\n【緊急やむを得ない理由】${rReason}`;
+   ? cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason, isEndNextDay)
+   : `【態様】${rManner}\n【時間】${rEnd ? rStart + "〜" + (isEndNextDay ? "翌" : "") + rEnd : rStart + "〜（継続中）"}\n【その際の心身の状況】${rCond}\n【緊急やむを得ない理由】${rReason}`;
   const before = {
    recorded_at: rec.recorded_at || rec.record_time || "",
    category: rec.category || "",
    restraint_manner: rec.restraint_manner || "",
    restraint_start_time: rec.restraint_start_time || "",
    restraint_end_time: rec.restraint_end_time || "",
+   restraint_end_next_day: Boolean(rec.restraint_end_next_day),
    restraint_condition: rec.restraint_condition || "",
    restraint_reason: rec.restraint_reason || "",
    content: rec.content || ""
@@ -1046,6 +1048,7 @@ function updateCareRecord() {
    before.restraint_manner === rManner &&
    before.restraint_start_time === rStart &&
    before.restraint_end_time === rEnd &&
+   before.restraint_end_next_day === isEndNextDay &&
    before.restraint_condition === rCond &&
    before.restraint_reason === rReason &&
    before.content === formattedContent
@@ -1064,6 +1067,7 @@ function updateCareRecord() {
   rec.restraint_manner = rManner;
   rec.restraint_start_time = rStart;
   rec.restraint_end_time = rEnd;
+  rec.restraint_end_next_day = isEndNextDay;
   rec.restraint_condition = rCond;
   rec.restraint_reason = rReason;
   rec.content = formattedContent;

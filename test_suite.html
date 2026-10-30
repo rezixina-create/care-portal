@@ -5395,9 +5395,11 @@
           assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("未入力の欄: 緊急やむを得ない理由"), "Test 187-2e: 緊急やむを得ない理由が空のとき「緊急やむを得ない理由」と出て保存されないこと");
 
           document.getElementById("swRestraintReason").value = "切迫性があり一時的に安全確保が必要";
-          document.getElementById("swRestraintEndTime").value = "13:30";
+          document.getElementById("swRestraintStartTime").value = "22:00";
+          document.getElementById("swRestraintEndTime").value = "22:00";
           saveSingleWriteScreen("event");
-          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("終了時刻は開始時刻より後の時刻"), "Test 187-2f: 終了時刻＜開始時刻のとき保存されないこと");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("開始時刻と終了時刻が同じ時刻"), "Test 187-2f: 開始時刻と終了時刻が同じ（22:00〜22:00）のとき保存されないこと");
+          document.getElementById("swRestraintStartTime").value = "14:00";
 
           // 未ログイン時は保存停止
           document.getElementById("swRestraintEndTime").value = "";
@@ -5522,6 +5524,127 @@
             saveSingleWriteScreen("event");
             assert(db.data.care_records.length === cBefore + 1 && db.data.care_records[0].staff_name === st.staffName, `Test 187-7${idx === 0 ? "a" : "b"}: ${st.role}（${st.staffName}）で身体拘束を記録できること`);
           });
+
+          // 8. 夜をまたぐ身体拘束（22:00〜06:00 / 訂正での翌日終了）と、特変・連絡の2回押しで申し送りが2件にならないことの確認
+          gState.session = { staffId: "dddd", staffName: "井上 蓮", role: "介護職員" };
+          gState.currentStaff = "井上 蓮";
+          if (staffSelectEl) staffSelectEl.value = "井上 蓮";
+          renderSingleWriteScreen();
+          document.getElementById("swEventCategory").value = "身体拘束";
+          cpOnSwEventCategoryChange();
+          document.getElementById("swRestraintManner").value = "ベッド柵4点による囲み（夜間）";
+          document.getElementById("swRestraintStartTime").value = "22:00";
+          document.getElementById("swRestraintEndTime").value = "06:00";
+          document.getElementById("swRestraintCondition").value = "夜間帯の立ち上がりによる転倒危険が高い状態";
+          document.getElementById("swRestraintReason").value = "夜間帯で他の見守り手段では安全確保が困難なため";
+          const cBeforeNight187 = db.data.care_records.length;
+          saveSingleWriteScreen("event");
+          const nightRec187 = db.data.care_records[0];
+          assert(
+            db.data.care_records.length === cBeforeNight187 + 1 &&
+            nightRec187.restraint_start_time === "22:00" &&
+            nightRec187.restraint_end_time === "06:00" &&
+            nightRec187.restraint_end_next_day === true &&
+            nightRec187.content.includes("【時間】22:00〜翌06:00"),
+            "Test 187-8a: 経過記録で 22:00〜06:00 が保存でき、restraint_end_next_day=true かつ【時間】が「22:00〜翌06:00」になること"
+          );
+
+          renderSelectedDateRecords();
+          const listNightText187 = document.getElementById("selectedDateRecordsList").textContent || "";
+          document.getElementById("ppResident").value = "1";
+          document.getElementById("ppFrom").value = "2026-10-30";
+          document.getElementById("ppTo").value = "2026-10-30";
+          document.getElementById("ppCare").checked = true;
+          printPeriodRecords();
+          const ppNightHtml187 = document.getElementById("printArea").innerHTML || "";
+          const expNightColl187 = cpCollectExportRecords({
+            resVal: "1",
+            startDate: "2026-10-30",
+            endDate: "2026-10-30",
+            selectedTypes: new Set(["care_records"]),
+            includeVoided: false
+          });
+          const csvNight187 = cpBuildCareRecordsCsv(expNightColl187.allRecords);
+          assert(
+            listNightText187.includes("22:00〜翌06:00") &&
+            ppNightHtml187.includes("22:00〜翌06:00") &&
+            csvNight187.includes("【時間】22:00〜翌06:00"),
+            "Test 187-8b: 個別記録（見る）・記録の期間印刷・記録の書き出し（CSV）で次の日の終わり（22:00〜翌06:00）が出ること"
+          );
+
+          // 終了を空で保存した記録に、訂正で次の日の終了時刻（開始より前）を入れる
+          document.getElementById("swEventCategory").value = "身体拘束";
+          cpOnSwEventCategoryChange();
+          document.getElementById("swRestraintManner").value = "ミトン型手袋の装着";
+          document.getElementById("swRestraintStartTime").value = "14:00";
+          document.getElementById("swRestraintEndTime").value = "";
+          document.getElementById("swRestraintCondition").value = "点滴チューブ自己抜去のおそれがある状態";
+          document.getElementById("swRestraintReason").value = "治療継続のため一時的にやむを得ず実施";
+          saveSingleWriteScreen("event");
+          const ongoingRec187 = db.data.care_records[0];
+
+          openEditCareRecordModal(ongoingRec187.id);
+          document.getElementById("editCrRestraintEndTime").value = "14:00";
+          updateCareRecord();
+          assert(
+            ongoingRec187.restraint_end_time === "" &&
+            alerts187[alerts187.length - 1].includes("開始時刻と終了時刻が同じ時刻"),
+            "Test 187-8c: 訂正でも開始と終了が同じ時刻（14:00〜14:00）は止まること"
+          );
+
+          window.prompt = function() { return "翌日01:00に解除したため終了時刻を記入"; };
+          document.getElementById("editCrRestraintEndTime").value = "01:00";
+          updateCareRecord();
+          assert(
+            ongoingRec187.restraint_end_time === "01:00" &&
+            ongoingRec187.restraint_end_next_day === true &&
+            ongoingRec187.content.includes("【時間】14:00〜翌01:00") &&
+            ongoingRec187.edit_history.length === 1 &&
+            ongoingRec187.edit_history[0].before.restraint_end_time === "" &&
+            ongoingRec187.edit_history[0].before.restraint_end_next_day === false &&
+            ongoingRec187.edit_history[0].before.content.includes("14:00〜（継続中）"),
+            "Test 187-8d: 終了を空で保存した記録に訂正で次の日の終了時刻（01:00）を入れられ、直す前が履歴に残ること"
+          );
+
+          // 特変の印を付けて同じ内容を同じ分に2回保存しても care_records も notebooks も1件ずつしか増えないこと
+          renderSingleWriteScreen();
+          const crBeforeTok187 = db.data.care_records.length;
+          const nbBeforeTok187 = (db.data.notebooks || []).length;
+          document.getElementById("swEventTime").value = "18:30";
+          document.getElementById("swEventTokukan").checked = true;
+          cpOnSwEventCategoryChange();
+          document.getElementById("swEventContent").value = "夕食後に軽いむせ込みあり、経過観察実施";
+          saveSingleWriteScreen("event");
+          // 同じ分・同じ内容で2回目の保存
+          document.getElementById("swEventTime").value = "18:30";
+          document.getElementById("swEventTokukan").checked = true;
+          cpOnSwEventCategoryChange();
+          document.getElementById("swEventContent").value = "夕食後に軽いむせ込みあり、経過観察実施";
+          saveSingleWriteScreen("event");
+          assert(
+            db.data.care_records.length === crBeforeTok187 + 1 &&
+            (db.data.notebooks || []).length === nbBeforeTok187 + 1,
+            "Test 187-8e: 特変の印を付けて同じ内容を同じ分に2回保存しても care_records も notebooks も1件ずつしか増えないこと"
+          );
+
+          // 区分「連絡」で同じ内容を同じ分に2回保存しても care_records も notebooks も1件ずつしか増えないこと
+          const crBeforeRen187 = db.data.care_records.length;
+          const nbBeforeRen187 = (db.data.notebooks || []).length;
+          document.getElementById("swEventTime").value = "19:00";
+          document.getElementById("swEventCategory").value = "連絡";
+          cpOnSwEventCategoryChange();
+          document.getElementById("swEventContent").value = "ご家族より明日面会予定との連絡あり";
+          saveSingleWriteScreen("event");
+          document.getElementById("swEventTime").value = "19:00";
+          document.getElementById("swEventCategory").value = "連絡";
+          cpOnSwEventCategoryChange();
+          document.getElementById("swEventContent").value = "ご家族より明日面会予定との連絡あり";
+          saveSingleWriteScreen("event");
+          assert(
+            db.data.care_records.length === crBeforeRen187 + 1 &&
+            (db.data.notebooks || []).length === nbBeforeRen187 + 1,
+            "Test 187-8f: 区分「連絡」で同じ内容を同じ分に2回保存しても care_records も notebooks も1件ずつしか増えないこと"
+          );
 
           // 復元
           window.alert = prevAlert187;

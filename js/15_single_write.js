@@ -103,8 +103,9 @@ function cpOnSwEventCategoryChange() {
   if (tokWrap) tokWrap.style.display = isRestraint ? "none" : "block";
 }
 
-function cpFormatRestraintContent(manner, startTime, endTime, condition, reason) {
-  const timeText = endTime ? `${startTime}〜${endTime}` : `${startTime}〜（継続中）`;
+function cpFormatRestraintContent(manner, startTime, endTime, condition, reason, endNextDay) {
+  const isNextDay = Boolean(endTime && (endNextDay || endTime < startTime));
+  const timeText = endTime ? `${startTime}〜${isNextDay ? "翌" : ""}${endTime}` : `${startTime}〜（継続中）`;
   return `【態様】${manner}\n【時間】${timeText}\n【その際の心身の状況】${condition}\n【緊急やむを得ない理由】${reason}`;
 }
 
@@ -680,12 +681,13 @@ function saveSingleWriteScreen(only) {
         alert(`身体拘束の記録には4つの項目すべての入力が必要です。\n未入力の欄: ${missing.join("、")}`);
         return "abort";
       }
-      if (rEnd && rStart > rEnd) {
-        alert("時間の終了時刻は開始時刻より後の時刻を入力してください。");
+      if (rEnd && rStart === rEnd) {
+        alert("開始時刻と終了時刻が同じ時刻になっています。打ち間違いでないか確認してください。");
         return "abort";
       }
+      const isEndNextDay = Boolean(rEnd && rEnd < rStart);
       const recAt = `${dateStr} ${rStart}`;
-      const formattedContent = cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason);
+      const formattedContent = cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason, isEndNextDay);
       if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
       const dup = db.data.care_records.find(r =>
         !r.voided &&
@@ -695,6 +697,7 @@ function saveSingleWriteScreen(only) {
         r.restraint_manner === rManner &&
         r.restraint_start_time === rStart &&
         (r.restraint_end_time || "") === rEnd &&
+        Boolean(r.restraint_end_next_day) === isEndNextDay &&
         r.restraint_condition === rCond &&
         r.restraint_reason === rReason
       );
@@ -707,6 +710,7 @@ function saveSingleWriteScreen(only) {
           restraint_manner: rManner,
           restraint_start_time: rStart,
           restraint_end_time: rEnd,
+          restraint_end_next_day: isEndNextDay,
           restraint_condition: rCond,
           restraint_reason: rReason,
           content: formattedContent,
@@ -737,17 +741,17 @@ function saveSingleWriteScreen(only) {
           content: evtContent,
           staff_name: staff
         });
-      }
-      if (finalCat === "特変" || finalCat === "連絡") {
-        if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
-        db.data.notebooks.unshift({
-          id: Date.now() + (idOffset++),
-          date: dateStr,
-          resident_id: resId,
-          content: `［${finalCat}］(${res.room_no}号室 ${res.name} 様) ${evtContent}`,
-          staff_name: staff,
-          status: "未対応"
-        });
+        if (finalCat === "特変" || finalCat === "連絡") {
+          if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
+          db.data.notebooks.unshift({
+            id: Date.now() + (idOffset++),
+            date: dateStr,
+            resident_id: resId,
+            content: `［${finalCat}］(${res.room_no}号室 ${res.name} 様) ${evtContent}`,
+            staff_name: staff,
+            status: "未対応"
+          });
+        }
       }
       savedItems.push(`様子・出来事（${finalCat}）`);
     }
