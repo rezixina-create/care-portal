@@ -703,7 +703,7 @@ function renderPhotoGrid() {
 					${isDoc ? '重要書類・同意書はまだありません' : '個人写真はまだありません'}
 				</div>
 				<div style="font-size:12px; color:var(--ink-2);">
-					${isHost ? '右上の「写真・書類の追加」から撮影・アップロードするか、<br>PCの保存フォルダに直接ファイルを入れてください。' : '右上の「写真・書類の追加」から撮影・アップロードしてください。'}
+					右上の「写真・書類の追加」から撮影・アップロードしてください。
 				</div>
 			</div>
 		`;
@@ -793,11 +793,6 @@ function onPhotoFilePicked(event) {
 	const file = event.target.files && event.target.files[0];
 	if (!file) return;
 
-	const titleInput = document.getElementById("photoNewTitle");
-	if (titleInput && !titleInput.value.trim()) {
-		const baseName = file.name.replace(/\.[^/.]+$/, "");
-		titleInput.value = baseName;
-	}
 
 	const reader = new FileReader();
 	reader.onload = function(e) {
@@ -855,9 +850,12 @@ function saveNewPhoto() {
 	}
 
 	const cat = (document.getElementById("photoNewCategory") && document.getElementById("photoNewCategory").value) || currentPhotoCategory || 'documents';
-	let title = (document.getElementById("photoNewTitle") && document.getElementById("photoNewTitle").value.trim()) || "";
+	const title = (document.getElementById("photoNewTitle") && document.getElementById("photoNewTitle").value.trim()) || "";
 	if (!title) {
-		title = (cat === "documents" ? "重要書類 " : "写真 ") + (typeof toLocalDateStr === "function" ? toLocalDateStr(new Date()) : new Date().toLocaleDateString());
+		alert("題名を入れてください。");
+		const titleInput = document.getElementById("photoNewTitle");
+		if (titleInput) titleInput.focus();
+		return;
 	}
 
 	isVaultPhotoSubmitting = true;

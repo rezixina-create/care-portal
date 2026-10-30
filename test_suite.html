@@ -4968,6 +4968,40 @@
         assert(noticeBanner && noticeBanner.textContent.includes("個人のスマホでの撮影は禁止されています"), "Test 184-9c: バナーに「個人のスマホでの撮影は禁止されています」が含まれること");
         assert(noticeBanner && noticeBanner.textContent.includes("撮影したあと端末のアルバムに残ったときは消してください"), "Test 184-9d: バナーに「撮影したあと端末のアルバムに残ったときは消してください」が含まれること");
 
+        // Test 184-10: 一覧空時の案内文言（PCの保存フォルダに直接ファイルを入れてください の削除確認）
+        const origPhotosList = (db.data.photos || []).slice();
+        db.data.photos = [];
+        window.gIsHostMachine = true;
+        renderPhotoGrid();
+        const gridHostEmpty = document.getElementById("photoGridArea");
+        assert(!gridHostEmpty.textContent.includes("PCの保存フォルダ"), "Test 184-10a: 親機表示時に「PCの保存フォルダに直接ファイルを入れてください」が含まれないこと");
+        assert(gridHostEmpty.textContent.includes("右上の「写真・書類の追加」から撮影・アップロードしてください。"), "Test 184-10b: 親機表示時に「右上の「写真・書類の追加」から撮影・アップロードしてください。」と案内されること");
+
+        window.gIsHostMachine = false;
+        renderPhotoGrid();
+        const gridNonHostEmpty = document.getElementById("photoGridArea");
+        assert(!gridNonHostEmpty.textContent.includes("PCの保存フォルダ"), "Test 184-10c: 子機表示時に「PCの保存フォルダに直接ファイルを入れてください」が含まれないこと");
+        assert(gridNonHostEmpty.textContent.includes("右上の「写真・書類の追加」から撮影・アップロードしてください。"), "Test 184-10d: 子機表示時に「右上の「写真・書類の追加」から撮影・アップロードしてください。」と案内されること");
+
+        // Test 184-11: ファイル選択時にファイル名が題名に自動補完されないこと
+        const testTitleInput = document.getElementById("photoNewTitle");
+        if (testTitleInput) testTitleInput.value = "";
+        onPhotoFilePicked({ target: { files: [new File(["dummy content"], "test_medical_cert.pdf", { type: "application/pdf" })] } });
+        assert(testTitleInput && testTitleInput.value === "", "Test 184-11: onPhotoFilePicked 実行後に題名入力欄が空のままであること（ファイル名から自動設定しない）");
+
+        // Test 184-12: 題名が未入力の場合の保存抑止とアラート検証（代替文言補完の禁止）
+        let emptyTitleAlert = "";
+        window.alert = (msg) => { emptyTitleAlert = msg; };
+        window.cpLoginStaffName = () => "木村 健一";
+        currentPickedPhotoDataUrl = "data:image/jpeg;base64,/9j/4AAQSkZJRg==";
+        if (testTitleInput) testTitleInput.value = "   ";
+        saveNewPhoto();
+        assert(emptyTitleAlert.includes("題名を入れてください"), "Test 184-12a: 題名未入力時に「題名を入れてください。」とアラートが出ること");
+        assert((db.data.photos || []).length === 0, "Test 184-12b: 題名未入力時は自動補完せず保存を中止し db.data.photos に追加されないこと");
+
+        // 復元
+        db.data.photos = origPhotosList;
+
         // 後始末
         window.cpLoginStaffName = origLoginFn;
         window.alert = origAlert;
