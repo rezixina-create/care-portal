@@ -5179,6 +5179,109 @@
         window.gIsHostMachine = false;
         }
 
+        // ----------------------------------------------------
+        // Test 186: [Antigravity追加 2026-10-30] 保管庫写真の移し替え後データ（filenameあり・url空）および移し替え前データ（url base64）の画面表示検証
+        // ----------------------------------------------------
+        {
+        log("41. 保管庫写真の移し替え後データおよび旧形式データの画面表示検証 (Test 186)");
+        const origPhotos186 = (db.data.photos || []).slice();
+        const origSelRes186 = gState.selectedResidentId;
+        gState.selectedResidentId = 1;
+
+        // 移し替え後の記録3件（重要書類1件・個人写真1件・取消済み1件）
+        db.data.photos = [
+          {
+            id: 998901,
+            resident_id: 1,
+            category: "documents",
+            title: "身元引受同意書（移し替え済）",
+            filename: "documents_20261015_103000_a1b2c3.jpg",
+            url: "",
+            uploaded_at: "2026-10-15 10:30",
+            uploader: "松本 陽子",
+            voided: false,
+            void_reason: "",
+            voided_by: "",
+            voided_at: ""
+          },
+          {
+            id: 998902,
+            resident_id: 1,
+            category: "personal",
+            title: "秋のレクリエーション写真（移し替え済）",
+            filename: "personal_20261016_142000_d4e5f6.jpg",
+            url: "",
+            uploaded_at: "2026-10-16 14:20",
+            uploader: "井上 蓮",
+            voided: false,
+            void_reason: "",
+            voided_by: "",
+            voided_at: ""
+          },
+          {
+            id: 998903,
+            resident_id: 1,
+            category: "documents",
+            title: "旧同意書（取消済・移し替え済）",
+            filename: "documents_20261010_090000_112233.jpg",
+            url: "",
+            uploaded_at: "2026-10-10 09:00",
+            uploader: "木村 健一",
+            voided: true,
+            void_reason: "差し替えのため取消",
+            voided_by: "木村 健一",
+            voided_at: "2026-10-15 10:35"
+          }
+        ];
+
+        // 1. 親機での移し替え後データの表示確認
+        window.gIsHostMachine = true;
+        switchPhotoCategory("documents");
+        const grid186 = document.getElementById("photoGridArea");
+        const imgDoc = grid186 ? grid186.querySelector("img") : null;
+        assert(imgDoc && imgDoc.getAttribute("src") === "/api/vault-photo?type=documents&file=documents_20261015_103000_a1b2c3.jpg", "Test 186-1a: 親機で移し替え後の重要書類が /api/vault-photo から表示されること");
+        assert(grid186.textContent.includes("身元引受同意書（移し替え済）") && grid186.textContent.includes("松本 陽子"), "Test 186-1b: 移し替え後の重要書類の題名・登録者が表示されること");
+        assert(!grid186.textContent.includes("旧同意書（取消済・移し替え済）"), "Test 186-1c: 移し替え後の取消済み記録は一覧に出ないこと");
+
+        switchPhotoCategory("personal");
+        const imgPer = grid186 ? grid186.querySelector("img") : null;
+        assert(imgPer && imgPer.getAttribute("src") === "/api/vault-photo?type=personal&file=personal_20261016_142000_d4e5f6.jpg", "Test 186-1d: 親機で移し替え後の個人写真が /api/vault-photo から表示されること");
+        assert(grid186.textContent.includes("秋のレクリエーション写真（移し替え済）") && grid186.textContent.includes("井上 蓮"), "Test 186-1e: 移し替え後の個人写真の題名・登録者が表示されること");
+
+        // 2. タブレットでの移し替え後データの表示確認
+        window.gIsHostMachine = false;
+        switchPhotoCategory("documents");
+        assert(!grid186.querySelector("img") && grid186.textContent.includes("写真は親機で確認できます"), "Test 186-2a: タブレットでは移し替え後の重要書類の画像は出ず「写真は親機で確認できます」と出ること");
+        assert(!grid186.textContent.includes("旧同意書（取消済・移し替え済）"), "Test 186-2b: タブレットでも取消済み記録は一覧に出ないこと");
+
+        // 3. 前の作りの記録（filenameなし・urlにdata:image/...）が残っているときの画面互換確認
+        db.data.photos = [
+          {
+            id: 998904,
+            resident_id: 1,
+            category: "documents",
+            title: "未移行の同意書",
+            url: "data:image/jpeg;base64,/9j/4AAQSkZJRgABAQAAAQABAAD/2wBDAAgGBgcGBQgHBwcJCQgKDBQNDAsLDBkSEw8UHRofHh0aHBwgJC4nICIsIxwcKDcpLDAxNDQ0Hyc5PTgyPC4zNDL/wAALCAABAAEBAREA/8QAFAABAAAAAAAAAAAAAAAAAAAACf/EABQQAQAAAAAAAAAAAAAAAAAAAAD/2gAIAQEAAD8AVN//2Q==",
+            uploaded_at: "2026-09-01 11:00",
+            uploader: "松本 陽子",
+            voided: false
+          }
+        ];
+        window.gIsHostMachine = true;
+        switchPhotoCategory("documents");
+        const imgLegacy = grid186 ? grid186.querySelector("img") : null;
+        assert(imgLegacy && imgLegacy.getAttribute("src").startsWith("data:image/jpeg;base64,"), "Test 186-3a: 前の作りの記録（filenameなし）は親機で url からそのまま表示されること");
+
+        window.gIsHostMachine = false;
+        renderPhotoGrid();
+        assert(!grid186.querySelector("img") && grid186.textContent.includes("写真は親機で確認できます"), "Test 186-3b: 前の作りの記録でもタブレットでは「写真は親機で確認できます」となること");
+
+        // 復元
+        db.data.photos = origPhotos186;
+        gState.selectedResidentId = origSelRes186;
+        switchPhotoCategory("documents");
+        }
+
       // 40. 総合結果判定
       log("====================================================");
       log(`  全テスト完了: 合計 ${passCount + failCount} 件中 [合格: ${passCount}件, 失敗: ${failCount}件]`);
