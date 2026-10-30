@@ -626,12 +626,24 @@ const CP_AUDIT_SOURCES = [
  { key: "residents", label: "利用者情報", summary: r => `${r.room_no || ""}号室 ${r.name || ""}` }
 ];
 
+const CP_AUDIT_FIELD_LABELS = {
+ recorded_at: "記録日時",
+ category: "区分",
+ content: "内容",
+ restraint_manner: "態様",
+ restraint_start_time: "開始時刻",
+ restraint_end_time: "終了時刻",
+ restraint_condition: "その際の心身の状況",
+ restraint_reason: "緊急やむを得ない理由"
+};
+
 function cpAuditBeforeText(before) {
  if (!before || typeof before !== "object") return "";
  return Object.keys(before).map(k => {
  const v = before[k];
  const s = (v !== null && typeof v === "object") ? JSON.stringify(v) : String(v ?? "");
- return `${k}: ${s.length > 80 ? s.slice(0, 80) + "…" : s}`;
+ const label = CP_AUDIT_FIELD_LABELS[k] || k;
+ return `${label}: ${s.length > 80 ? s.slice(0, 80) + "…" : s}`;
  }).join(" / ");
 }
 

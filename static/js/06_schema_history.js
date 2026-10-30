@@ -1410,6 +1410,7 @@ function getCategoryBadgeStyle(cat) {
  if (cat === "看護") return "background:#dcfce7; color:#166534; font-weight:bold; border:1px solid #bbf7d0;";
  if (cat === "リハビリ") return "background:#ede9fe; color:#6b21a8; font-weight:bold; border:1px solid #ddd6fe;";
  if (cat === "家族") return "background:#ffedd5; color:#c2410c; font-weight:bold; border:1px solid #fed7aa;";
+ if (cat === "身体拘束") return "background:var(--ground); color:var(--ink-2); border:1px solid var(--line);";
  if (cat === "巡視" || cat === "体位変換") return "background:#eef2ef; color:#4a5852; border:1px solid #cdd6d0;";
  if (cat === "バイタル") return "background:#fef3c7; color:#92400e; border:1px solid #fde68a;";
  if (cat === "食事・水分") return "background:#e0f2fe; color:#0369a1; border:1px solid #bae6fd;";
@@ -1455,7 +1456,7 @@ function cpBuildUnifiedResidentRecords(resId, targetDate, isAllScope, includeVoi
  // 1. 様子・経過記録 (care_records)
  (db.data.care_records || []).forEach(r => {
   if (r.resident_id !== resId) return;
-  if (includeVoided === false && r.voided) return;
+  if (!includeVoided && r.voided) return;
   // 体位変換から自動生成された「巡視」は turns 側と重複するため除外（ただし手動記録や特変は残す）
   if (r.auto_night_turn && r.category === "巡視") return;
   const dtStr = r.recorded_at || r.record_time || "";
@@ -1813,10 +1814,14 @@ function renderSelectedDateRecords() {
  list.innerHTML = "";
 
  // 選択中利用者の全種類の記録を日付と時間の順に統合
- const allUserRecords = cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, true);
- const records = isAllScope
-  ? allUserRecords
+ const catFilterEl = document.getElementById("personalRecordCategoryFilter");
+ const catFilter = catFilterEl ? String(catFilterEl.value || "").trim() : "";
+ const allUserRecordsRaw = cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, true);
+ const allUserRecords = catFilter ? allUserRecordsRaw.filter(r => r.category === catFilter) : allUserRecordsRaw;
+ const dayRecordsRaw = isAllScope
+  ? allUserRecordsRaw
   : cpBuildUnifiedResidentRecords(gState.selectedResidentId, gState.selectedDate, false);
+ const records = catFilter ? dayRecordsRaw.filter(r => r.category === catFilter) : dayRecordsRaw;
 
  if (records.length === 0) {
   if (!isAllScope && allUserRecords.length > 0) {

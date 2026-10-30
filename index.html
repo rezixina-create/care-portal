@@ -5,7 +5,7 @@
  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
  <title>介護施設 統合業務ポータルシステム</title>
  <link rel="icon" href="data:,">
-	<link rel="stylesheet" href="style.css?v=20261030_a2">
+	<link rel="stylesheet" href="style.css?v=20261030_a3">
 </head>
 <body>
 
@@ -249,6 +249,24 @@
  <span id="personalSelectedDateBadge" style="font-size:13px; background:#f1f6f3; color:#1a4f3d; padding:3px 10px; border-radius:12px; font-weight:bold; border:1px solid #c9e0d5;"></span>
  </div>
  <div style="display:flex; gap:8px; align-items:center; flex-wrap:wrap;">
+ <select id="personalRecordCategoryFilter" class="form-control" style="font-size:13px; padding:4px 8px; width:auto; border:1px solid var(--line); background:var(--surface); color:var(--ink);" onchange="renderSelectedDateRecords()" aria-label="記録の区分で絞り込み">
+  <option value="">すべての区分</option>
+  <option value="介護">介護</option>
+  <option value="連絡">連絡</option>
+  <option value="家族">家族</option>
+  <option value="リハビリ">リハビリ</option>
+  <option value="巡視">巡視</option>
+  <option value="看護">看護</option>
+  <option value="特変">特変</option>
+  <option value="バイタル">バイタル</option>
+  <option value="食事・水分">食事・水分</option>
+  <option value="口腔ケア">口腔ケア</option>
+  <option value="排泄">排泄</option>
+  <option value="入浴">入浴</option>
+  <option value="体位変換">体位変換</option>
+  <option value="服薬">服薬</option>
+  <option value="身体拘束">身体拘束</option>
+ </select>
  <button type="button" class="btn btn-primary" style="font-size:13px; padding:4px 10px; background:#1e5b47; color:#fff;" onclick="switchCareTab('write_single')">
  経過記録へ
  </button>
@@ -4718,7 +4736,7 @@
  <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; margin-bottom:12px;">
  <div>
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">区分</label>
- <select id="editCrCategory" class="form-control" style="font-size:13px; font-weight:bold;">
+ <select id="editCrCategory" class="form-control" style="font-size:13px; font-weight:bold;" onchange="cpOnEditCrCategoryChange()">
  <option value="巡視">巡視</option>
  <option value="特変">特変</option>
  <option value="申送り">申送り</option>
@@ -4728,7 +4746,12 @@
  <option value="排泄">排泄</option>
  <option value="入浴">入浴</option>
  <option value="処置">処置</option>
+ <option value="介護">介護</option>
+ <option value="家族">家族</option>
+ <option value="リハビリ">リハビリ</option>
+ <option value="看護">看護</option>
  <option value="介護記録">介護記録</option>
+ <option value="身体拘束">身体拘束</option>
  </select>
  </div>
  <div>
@@ -4736,9 +4759,33 @@
  <input type="text" id="editCrStaff" class="form-control" style="font-size:13px;">
  </div>
  </div>
- <div style="margin-bottom:16px;">
+ <div id="editCrNormalContentWrap" style="margin-bottom:16px;">
  <label style="font-weight:bold; font-size:13px; color:#36443e; display:block; margin-bottom:4px;">記録内容 (自動生成文の微調整・現場特変の加筆)</label>
  <textarea id="editCrContent" class="form-control" rows="6" style="width:100%; font-size:14px; line-height:1.7; padding:10px; resize:vertical;"></textarea>
+ </div>
+ <div id="editCrRestraintFieldsWrap" style="display:none; margin-bottom:16px; padding:12px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px;">
+  <div style="margin-bottom:10px;">
+   <label for="editCrRestraintManner" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">態様（どのような身体拘束か・必須）</label>
+   <input type="text" id="editCrRestraintManner" class="form-control" style="font-size:13px;">
+  </div>
+  <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:10px;">
+   <div>
+    <label for="editCrRestraintStartTime" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">時間（開始時刻・必須）</label>
+    <input type="time" id="editCrRestraintStartTime" class="form-control" style="font-size:13px;">
+   </div>
+   <div>
+    <label for="editCrRestraintEndTime" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">時間（終了時刻・継続中は空欄可）</label>
+    <input type="time" id="editCrRestraintEndTime" class="form-control" style="font-size:13px;">
+   </div>
+  </div>
+  <div style="margin-bottom:10px;">
+   <label for="editCrRestraintCondition" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">その際の心身の状況（必須）</label>
+   <textarea id="editCrRestraintCondition" class="form-control" rows="2" style="width:100%; font-size:13px; line-height:1.5; resize:vertical;"></textarea>
+  </div>
+  <div>
+   <label for="editCrRestraintReason" style="font-weight:bold; font-size:13px; color:var(--ink); display:block; margin-bottom:4px;">緊急やむを得ない理由（必須）</label>
+   <textarea id="editCrRestraintReason" class="form-control" rows="2" style="width:100%; font-size:13px; line-height:1.5; resize:vertical;"></textarea>
+  </div>
  </div>
  <div style="display:flex; justify-content:space-between; align-items:center; border-top:1px solid #dfe5e1; padding-top:14px;">
  <button type="button" id="btnDeleteCareRecord" class="btn btn-secondary" style="color:#dc2626; border-color:#fca5a5; font-size:13px;" onclick="deleteCareRecord()">この記録を取消</button>
@@ -4870,26 +4917,26 @@
 	</div>
 
 	<!-- [Claude整理 2026-10-19] app.js を役割ごとに分けた。上から順に読み込む（順番を変えない） -->
- <script src="js/01_core.js?v=20261030_a2"></script>
- <script src="js/02_terms.js?v=20261030_a2"></script>
- <script src="js/03_common.js?v=20261030_a2"></script>
- <script src="js/04_care_record.js?v=20261030_a2"></script>
- <script src="js/05_summary_print_audit.js?v=20261030_a2"></script>
- <script src="js/06_schema_history.js?v=20261030_a2"></script>
- <script src="js/07_daily_tables.js?v=20261030_a2"></script>
- <script src="js/08_meds.js?v=20261030_a2"></script>
- <script src="js/09_night_misc.js?v=20261030_a2"></script>
- <script src="js/10_office.js?v=20261030_a2"></script>
- <script src="js/11_karte_staff.js?v=20261030_a2"></script>
- <script src="js/12_hospital_photos.js?v=20261030_a2"></script>
- <script src="js/13_shift_units.js?v=20261030_a2"></script>
- <script src="js/14_auth_home.js?v=20261030_a2"></script>
- <script src="js/15_single_write.js?v=20261030_a2"></script>
- <script src="js/16_careplan.js?v=20261030_a2"></script>
-	<script src="js/17_kasan.js?v=20261030_a2"></script>
-	<script src="js/18_stats.js?v=20261030_a2"></script>
-	<script src="js/19_life.js?v=20261030_a2"></script>
-	<script src="js/20_invoice.js?v=20261030_a2"></script>
+ <script src="js/01_core.js?v=20261030_a3"></script>
+ <script src="js/02_terms.js?v=20261030_a3"></script>
+ <script src="js/03_common.js?v=20261030_a3"></script>
+ <script src="js/04_care_record.js?v=20261030_a3"></script>
+ <script src="js/05_summary_print_audit.js?v=20261030_a3"></script>
+ <script src="js/06_schema_history.js?v=20261030_a3"></script>
+ <script src="js/07_daily_tables.js?v=20261030_a3"></script>
+ <script src="js/08_meds.js?v=20261030_a3"></script>
+ <script src="js/09_night_misc.js?v=20261030_a3"></script>
+ <script src="js/10_office.js?v=20261030_a3"></script>
+ <script src="js/11_karte_staff.js?v=20261030_a3"></script>
+ <script src="js/12_hospital_photos.js?v=20261030_a3"></script>
+ <script src="js/13_shift_units.js?v=20261030_a3"></script>
+ <script src="js/14_auth_home.js?v=20261030_a3"></script>
+ <script src="js/15_single_write.js?v=20261030_a3"></script>
+ <script src="js/16_careplan.js?v=20261030_a3"></script>
+	<script src="js/17_kasan.js?v=20261030_a3"></script>
+	<script src="js/18_stats.js?v=20261030_a3"></script>
+	<script src="js/19_life.js?v=20261030_a3"></script>
+	<script src="js/20_invoice.js?v=20261030_a3"></script>
   
 
   <!-- ============================================================ -->

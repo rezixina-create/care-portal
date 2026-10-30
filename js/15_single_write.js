@@ -80,9 +80,51 @@ function renderSingleWriteScreen() {
       if (el.type === "checkbox") el.checked = true; else el.value = swKeep[id];
     });
   }
+  cpOnSwEventCategoryChange();
   cpSwLockIfAway();
   if (typeof renderQuickTemplates === "function") renderQuickTemplates();
   updateRecordCharCount();
+}
+
+function cpOnSwEventCategoryChange() {
+  const catEl = document.getElementById("swEventCategory");
+  const tokEl = document.getElementById("swEventTokukan");
+  const timeWrap = document.getElementById("swEventTimeWrap");
+  const tokWrap = document.getElementById("swEventTokukanWrap");
+  const normalWrap = document.getElementById("swEventNormalWrap");
+  const restraintWrap = document.getElementById("swRestraintFieldsWrap");
+  const isRestraint = Boolean(catEl && catEl.value === "身体拘束");
+  if (isRestraint && tokEl && tokEl.checked) {
+    tokEl.checked = false;
+  }
+  if (restraintWrap) restraintWrap.style.display = isRestraint ? "block" : "none";
+  if (normalWrap) normalWrap.style.display = isRestraint ? "none" : "block";
+  if (timeWrap) timeWrap.style.display = isRestraint ? "none" : "block";
+  if (tokWrap) tokWrap.style.display = isRestraint ? "none" : "block";
+}
+
+function cpFormatRestraintContent(manner, startTime, endTime, condition, reason) {
+  const timeText = endTime ? `${startTime}〜${endTime}` : `${startTime}〜（継続中）`;
+  return `【態様】${manner}\n【時間】${timeText}\n【その際の心身の状況】${condition}\n【緊急やむを得ない理由】${reason}`;
+}
+
+function cpGetMissingRestraintFields(manner, startTime, condition, reason) {
+  const missing = [];
+  if (!String(manner || "").trim()) missing.push("態様");
+  if (!String(startTime || "").trim()) missing.push("時間（開始時刻）");
+  if (!String(condition || "").trim()) missing.push("その際の心身の状況");
+  if (!String(reason || "").trim()) missing.push("緊急やむを得ない理由");
+  return missing;
+}
+
+function cpGetAuthenticatedStaffName() {
+  const fromSession = (gState.session && gState.session.staffName) ? String(gState.session.staffName).trim() : "";
+  if (fromSession && fromSession !== "担当職員" && fromSession !== "未記録") return fromSession;
+  const fromEl = (document.getElementById("currentStaff")?.value || "").trim();
+  if (fromEl && fromEl !== "担当職員" && fromEl !== "未記録") return fromEl;
+  const fromState = (gState.currentStaff || "").trim();
+  if (fromState && fromState !== "担当職員" && fromState !== "未記録") return fromState;
+  return "";
 }
 
 // [Claude修正 2026-10-28] 一日ずっと入院・外泊の日は、「様子・出来事」だけ書ける（病院からの連絡など）。ほかの項目は止める
@@ -303,30 +345,31 @@ function cpRenderSingleWriteScreenInner(container) {
       </div>
       ${eventsFilledHtml}
       <div class="cp-sw-grid" style="align-items:end;">
-        <div>
+        <div id="swEventTimeWrap">
           <label class="cp-sw-label">時間（空欄なら今の時刻）</label>
           <input type="time" id="swEventTime" class="form-control" value="">
         </div>
         <div>
           <label class="cp-sw-label">区分（特変に印を付けると自動で「特変」になります）</label>
-          <select id="swEventCategory" class="form-control">
+          <select id="swEventCategory" class="form-control" onchange="cpOnSwEventCategoryChange()">
             <option value="介護" selected>介護（日常の様子）</option>
             <option value="連絡">連絡</option>
             <option value="家族">家族</option>
             <option value="リハビリ">リハビリ</option>
             <option value="巡視">巡視</option>
             ${isNurse ? `<option value="看護">看護</option>` : ""}
+            <option value="身体拘束">身体拘束</option>
           </select>
         </div>
-        <div>
+        <div id="swEventTokukanWrap">
           <label style="display:inline-flex; align-items:center; gap:6px; background:#fee2e2; color:#991b1b; border:1px solid #fca5a5; padding:7px 12px; border-radius:6px; font-weight:bold; font-size:13px; cursor:pointer;">
-            <input type="checkbox" id="swEventTokukan" style="width:16px; height:16px;">
+            <input type="checkbox" id="swEventTokukan" style="width:16px; height:16px;" onchange="cpOnSwEventCategoryChange()">
             特変の印を付ける
           </label>
         </div>
       </div>
       <!-- [Claude修正 2026-10-16] 定型文・全画面・ヒヤリハットの作成をここへまとめた（前は下にたたんだ補助の欄にあった） -->
-      <div style="margin-top:8px;">
+      <div id="swEventNormalWrap" style="margin-top:8px;">
         <div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; gap:6px; margin-bottom:4px;">
           <label class="cp-sw-label" style="margin:0;">あったこと・様子</label>
           <span style="font-size:12px; color:var(--text-muted);">文字数: <strong id="swEventCharCount" style="color:#1e5b47;">0</strong> 字</span>
@@ -340,6 +383,30 @@ function cpRenderSingleWriteScreenInner(container) {
         <div style="display:flex; gap:8px; flex-wrap:wrap; margin-top:6px;">
           <button type="button" class="btn btn-secondary" style="font-size:12.5px; background:#f1f6f3; color:#1a4f3d; border:1px solid #c9e0d5;" onclick="openFullscreenRecord()">全画面で大きく書く</button>
           <button type="button" class="btn btn-secondary" style="font-size:12.5px;" onclick="openIncidentFromRecord()">ヒヤリハット・事故報告書を作成</button>
+        </div>
+      </div>
+      <div id="swRestraintFieldsWrap" style="display:none; margin-top:10px; padding:12px; background:var(--surface-2); border:1px solid var(--line); border-radius:6px;">
+        <div style="margin-bottom:10px;">
+          <label class="cp-sw-label" for="swRestraintManner">態様（どのような身体拘束か・必須）</label>
+          <input type="text" id="swRestraintManner" class="form-control" value="">
+        </div>
+        <div class="cp-sw-grid" style="margin-bottom:10px;">
+          <div>
+            <label class="cp-sw-label" for="swRestraintStartTime">時間（開始時刻・必須）</label>
+            <input type="time" id="swRestraintStartTime" class="form-control" value="">
+          </div>
+          <div>
+            <label class="cp-sw-label" for="swRestraintEndTime">時間（終了時刻・継続中は空欄可、終了後に訂正から記入）</label>
+            <input type="time" id="swRestraintEndTime" class="form-control" value="">
+          </div>
+        </div>
+        <div style="margin-bottom:10px;">
+          <label class="cp-sw-label" for="swRestraintCondition">その際の心身の状況（必須）</label>
+          <textarea id="swRestraintCondition" class="form-control" rows="2" style="width:100%; resize:vertical; line-height:1.5;"></textarea>
+        </div>
+        <div>
+          <label class="cp-sw-label" for="swRestraintReason">緊急やむを得ない理由（必須）</label>
+          <textarea id="swRestraintReason" class="form-control" rows="2" style="width:100%; resize:vertical; line-height:1.5;"></textarea>
         </div>
       </div>
       <div class="cp-sw-section-save"><button type="button" class="btn btn-secondary" style="font-size:12.5px; padding:4px 14px; border:1px solid #1e5b47; color:#1e5b47; background:#fff; font-weight:bold;" onclick="saveSingleWriteScreen('event')">この項目だけ保存</button></div>
@@ -565,7 +632,7 @@ function cpRenderSingleWriteScreenInner(container) {
 // [Claude修正 2026-10-16] 項目ごとに保存できるようにした（only に項目名: event/vital/meal/exc/bath/turn/nurse）。
 // まとめて保存で途中の項目が止まっても、ほかの項目は保存し、止まった項目の入力は残す
 const CP_SW_SECTION_IDS = {
-  event: ["swEventTime", "swEventCategory", "swEventTokukan", "swEventContent"],
+  event: ["swEventTime", "swEventCategory", "swEventTokukan", "swEventContent", "swRestraintManner", "swRestraintStartTime", "swRestraintEndTime", "swRestraintCondition", "swRestraintReason"],
   vital: ["swVitalTemp", "swVitalBpHigh", "swVitalBpLow", "swVitalPulse", "swVitalSpo2", "swVitalUnusual"],
   meal: ["swMealType", "swMealMain", "swMealSide", "swMealWater"],
   exc: ["swExcTime", "swExcUrine", "swExcStoolAmount", "swExcStoolCond", "swExcNotes"],
@@ -581,33 +648,96 @@ function saveSingleWriteScreen(only) {
     alert("記録する利用者を選択してください。");
     return;
   }
+  const loginStaff = cpGetAuthenticatedStaffName();
+  if (!loginStaff) {
+    alert("記録者（ログインした職員）が確認できないため保存できません。ログインし直してください。");
+    return;
+  }
   const resId = res.id;
   const dateStr = gState.selectedDate || getTodayStr();
-  const staff = cpLedgerStaff();
+  const staff = loginStaff;
   const nowTime = new Date().toTimeString().slice(0, 5);
   const savedItems = [];
   let idOffset = 1;
 
   const sec = {};
   sec.event = () => {
-    // 1. 時間＋あったこと（様子・特変）
+    // 1. 時間＋あったこと（様子・特変・身体拘束）
     const evtTime = (document.getElementById("swEventTime")?.value || "").trim();
     const evtCatSel = (document.getElementById("swEventCategory")?.value || "介護").trim();
     const evtTokukan = Boolean(document.getElementById("swEventTokukan")?.checked);
     const evtContent = (document.getElementById("swEventContent")?.value || "").trim();
 
+    if (evtCatSel === "身体拘束" && !evtTokukan) {
+      const rManner = (document.getElementById("swRestraintManner")?.value || "").trim();
+      const rStart = (document.getElementById("swRestraintStartTime")?.value || "").trim();
+      const rEnd = (document.getElementById("swRestraintEndTime")?.value || "").trim();
+      const rCond = (document.getElementById("swRestraintCondition")?.value || "").trim();
+      const rReason = (document.getElementById("swRestraintReason")?.value || "").trim();
+
+      const missing = cpGetMissingRestraintFields(rManner, rStart, rCond, rReason);
+      if (missing.length > 0) {
+        alert(`身体拘束の記録には4つの項目すべての入力が必要です。\n未入力の欄: ${missing.join("、")}`);
+        return "abort";
+      }
+      if (rEnd && rStart > rEnd) {
+        alert("時間の終了時刻は開始時刻より後の時刻を入力してください。");
+        return "abort";
+      }
+      const recAt = `${dateStr} ${rStart}`;
+      const formattedContent = cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason);
+      if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
+      const dup = db.data.care_records.find(r =>
+        !r.voided &&
+        Number(r.resident_id) === Number(resId) &&
+        r.category === "身体拘束" &&
+        r.recorded_at === recAt &&
+        r.restraint_manner === rManner &&
+        r.restraint_start_time === rStart &&
+        (r.restraint_end_time || "") === rEnd &&
+        r.restraint_condition === rCond &&
+        r.restraint_reason === rReason
+      );
+      if (!dup) {
+        db.data.care_records.unshift({
+          id: Date.now() + (idOffset++),
+          recorded_at: recAt,
+          resident_id: resId,
+          category: "身体拘束",
+          restraint_manner: rManner,
+          restraint_start_time: rStart,
+          restraint_end_time: rEnd,
+          restraint_condition: rCond,
+          restraint_reason: rReason,
+          content: formattedContent,
+          staff_name: staff
+        });
+      }
+      savedItems.push("様子・出来事（身体拘束）");
+      return;
+    }
+
     if (evtContent) {
       const finalCat = evtTokukan ? "特変" : (evtCatSel || "介護");
       const recTime = evtTime || nowTime;
       if (!Array.isArray(db.data.care_records)) db.data.care_records = [];
-      db.data.care_records.unshift({
-        id: Date.now() + (idOffset++),
-        recorded_at: `${dateStr} ${recTime}`,
-        resident_id: resId,
-        category: finalCat,
-        content: evtContent,
-        staff_name: staff
-      });
+      const dupNormal = db.data.care_records.find(r =>
+        !r.voided &&
+        Number(r.resident_id) === Number(resId) &&
+        r.category === finalCat &&
+        r.recorded_at === `${dateStr} ${recTime}` &&
+        r.content === evtContent
+      );
+      if (!dupNormal) {
+        db.data.care_records.unshift({
+          id: Date.now() + (idOffset++),
+          recorded_at: `${dateStr} ${recTime}`,
+          resident_id: resId,
+          category: finalCat,
+          content: evtContent,
+          staff_name: staff
+        });
+      }
       if (finalCat === "特変" || finalCat === "連絡") {
         if (!Array.isArray(db.data.notebooks)) db.data.notebooks = [];
         db.data.notebooks.unshift({
@@ -901,12 +1031,25 @@ function saveSingleWriteScreen(only) {
 
   db.save();
   // 保存した項目の欄だけ空欄に戻す（ほかの項目の書きかけは残す）
-  window._cpSwClearIds = savedKeys.reduce((a, k) => a.concat(CP_SW_SECTION_IDS[k]), []);
+  const clearIds = savedKeys.reduce((a, k) => a.concat(CP_SW_SECTION_IDS[k]), []);
+  clearIds.forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.type === "checkbox") el.checked = false;
+    else if (el.id === "swEventCategory") el.value = "介護";
+    else el.value = "";
+  });
+  cpOnSwEventCategoryChange();
+  window._cpSwClearIds = clearIds;
   loadDateRecords(dateStr);
   renderCalendar();
   alert(`【${res.name} 様】の記録（${savedItems.join("・")}）を保存しました！` + (stoppedKeys.length ? `\n\n保存しなかった項目（${stoppedKeys.map(k => CP_SW_SECTION_LABELS[k]).join("・")}）の入力は残っています。` : ""));
 }
 
+window.cpOnSwEventCategoryChange = cpOnSwEventCategoryChange;
+window.cpFormatRestraintContent = cpFormatRestraintContent;
+window.cpGetMissingRestraintFields = cpGetMissingRestraintFields;
+window.cpGetAuthenticatedStaffName = cpGetAuthenticatedStaffName;
 window.renderSingleWriteScreen = renderSingleWriteScreen;
 window.saveSingleWriteScreen = saveSingleWriteScreen;
 window.cpOnSingleWriteMealTypeChange = cpOnSingleWriteMealTypeChange;

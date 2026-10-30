@@ -247,16 +247,46 @@
       <textarea id="eoNotes"></textarea>
       <select id="eoStatus"></select>
     </div>
+    <select id="personalRecordCategoryFilter">
+      <option value="">すべての区分</option>
+      <option value="介護">介護</option>
+      <option value="身体拘束">身体拘束</option>
+    </select>
+    <div id="singleWriteContainer"></div>
+    <div id="periodPrintModal" style="display:none;">
+      <select id="ppResident"><option value="1">1</option></select>
+      <input type="date" id="ppFrom">
+      <input type="date" id="ppTo">
+      <input type="checkbox" id="ppCare" checked>
+      <input type="checkbox" id="ppVitals">
+      <input type="checkbox" id="ppMeds">
+      <input type="checkbox" id="ppTopical">
+      <input type="checkbox" id="ppTurns">
+      <input type="checkbox" id="ppIncludeVoided">
+    </div>
     <div id="editCareRecordModal" style="display:none;">
       <input type="hidden" id="editCrId">
       <input type="text" id="editCrResidentName">
       <input type="text" id="editCrDateTime">
-      <select id="editCrCategory">
+      <select id="editCrCategory" onchange="cpOnEditCrCategoryChange()">
         <option value="巡視">巡視</option>
         <option value="特変">特変</option>
+        <option value="介護">介護</option>
+        <option value="看護">看護</option>
+        <option value="介護記録">介護記録</option>
+        <option value="身体拘束">身体拘束</option>
       </select>
       <input type="text" id="editCrStaff">
-      <textarea id="editCrContent"></textarea>
+      <div id="editCrNormalContentWrap">
+        <textarea id="editCrContent"></textarea>
+      </div>
+      <div id="editCrRestraintFieldsWrap" style="display:none;">
+        <input type="text" id="editCrRestraintManner">
+        <input type="time" id="editCrRestraintStartTime">
+        <input type="time" id="editCrRestraintEndTime">
+        <textarea id="editCrRestraintCondition"></textarea>
+        <textarea id="editCrRestraintReason"></textarea>
+      </div>
       <button id="btnDeleteCareRecord"></button>
       <button id="btnSaveCareRecord"></button>
     </div>
@@ -5280,6 +5310,232 @@
         db.data.photos = origPhotos186;
         gState.selectedResidentId = origSelRes186;
         switchPhotoCategory("documents");
+        }
+
+        // =========================================================================
+        // Test 187: 経過記録「身体拘束」区分（4項目入力・終了時刻あとから訂正・出力・取消・職種別記録）
+        // =========================================================================
+        log("--- [Test 187] 経過記録「身体拘束」区分と4項目の記録・訂正・出力・取消の検証 ---", "info");
+        {
+          const origCareRecs187 = JSON.parse(JSON.stringify(db.data.care_records || []));
+          const origNotebooks187 = JSON.parse(JSON.stringify(db.data.notebooks || []));
+          const origSelRes187 = gState.selectedResidentId;
+          const origSelDate187 = gState.selectedDate;
+          const origSession187 = gState.session ? JSON.parse(JSON.stringify(gState.session)) : null;
+          const origCurStaff187 = gState.currentStaff;
+          const staffSelectEl = document.getElementById("currentStaff");
+          const origStaffHtml187 = staffSelectEl ? staffSelectEl.innerHTML : "";
+          const origStaffVal187 = staffSelectEl ? staffSelectEl.value : "";
+
+          gState.selectedResidentId = 1; // 101号室 佐藤 太郎 様
+          gState.selectedDate = "2026-10-30";
+          gState.session = { staffId: "dddd", staffName: "井上 蓮", role: "介護職員" };
+          gState.currentStaff = "井上 蓮";
+          if (staffSelectEl) {
+            staffSelectEl.innerHTML = '<option value="井上 蓮">井上 蓮</option><option value="鈴木 美智子">鈴木 美智子</option><option value="小林 恵子">小林 恵子</option><option value="">未選択</option>';
+            staffSelectEl.value = "井上 蓮";
+          }
+
+          // 1. 区分「身体拘束」の表示切り替えと例文なしの確認
+          renderSingleWriteScreen();
+          const swCatEl = document.getElementById("swEventCategory");
+          const swOpts = swCatEl ? Array.from(swCatEl.options).map(o => o.value) : [];
+          assert(swOpts[swOpts.length - 1] === "身体拘束", "Test 187-1a: swEventCategory の最後に「身体拘束」があること");
+          const restraintWrap = document.getElementById("swRestraintFieldsWrap");
+          const normalWrap = document.getElementById("swEventNormalWrap");
+          assert(restraintWrap && restraintWrap.style.display === "none" && normalWrap && normalWrap.style.display !== "none", "Test 187-1b: 初期状態（介護）では4項目の欄が出ないこと");
+
+          swCatEl.value = "身体拘束";
+          cpOnSwEventCategoryChange();
+          assert(restraintWrap.style.display === "block" && normalWrap.style.display === "none", "Test 187-1c: 「身体拘束」を選ぶと4項目の欄が出て、通常の様子欄が隠れること");
+
+          ["連絡", "家族", "リハビリ", "巡視", "介護"].forEach(cat => {
+            swCatEl.value = cat;
+            cpOnSwEventCategoryChange();
+            assert(restraintWrap.style.display === "none", `Test 187-1d (${cat}): ほかの区分（${cat}）では4項目の欄が出ないこと`);
+          });
+          swCatEl.value = "身体拘束";
+          cpOnSwEventCategoryChange();
+
+          const rInputs = ["swRestraintManner", "swRestraintStartTime", "swRestraintEndTime", "swRestraintCondition", "swRestraintReason"].map(id => document.getElementById(id));
+          assert(rInputs.every(el => el && !el.getAttribute("placeholder")), "Test 187-1e: 身体拘束の入力欄に placeholder（例文・見本）がないこと");
+
+          const badgeStyle187 = getCategoryBadgeStyle("身体拘束");
+          assert(badgeStyle187.includes("var(--ground)") && !badgeStyle187.includes("#fee2e2"), "Test 187-1f: 身体拘束バッジが目立たない :root 変数スタイルであること");
+
+          // 2. 4項目の必須チェック（どれかが空だと保存されず、どの欄かが出る）
+          const alerts187 = [];
+          const prevAlert187 = window.alert;
+          window.alert = function(msg) { alerts187.push(String(msg)); };
+
+          const countBefore187 = db.data.care_records.length;
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("態様") && alerts187[alerts187.length - 1].includes("時間（開始時刻）") && alerts187[alerts187.length - 1].includes("その際の心身の状況") && alerts187[alerts187.length - 1].includes("緊急やむを得ない理由"), "Test 187-2a: 全欄が空のとき保存されず4つの欄名すべてが知らされること");
+
+          document.getElementById("swRestraintManner").value = "";
+          document.getElementById("swRestraintStartTime").value = "14:00";
+          document.getElementById("swRestraintCondition").value = "立ち上がりによる転倒のおそれが高い状態";
+          document.getElementById("swRestraintReason").value = "切迫性があり一時的に安全確保が必要";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("未入力の欄: 態様"), "Test 187-2b: 態様が空のとき「態様」と出て保存されないこと");
+
+          document.getElementById("swRestraintManner").value = "車いす安全ベルトの装着";
+          document.getElementById("swRestraintStartTime").value = "";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("未入力の欄: 時間（開始時刻）"), "Test 187-2c: 開始時刻が空のとき「時間（開始時刻）」と出て保存されないこと");
+
+          document.getElementById("swRestraintStartTime").value = "14:00";
+          document.getElementById("swRestraintCondition").value = "";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("未入力の欄: その際の心身の状況"), "Test 187-2d: 心身の状況が空のとき「その際の心身の状況」と出て保存されないこと");
+
+          document.getElementById("swRestraintCondition").value = "立ち上がりによる転倒のおそれが高い状態";
+          document.getElementById("swRestraintReason").value = "";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("未入力の欄: 緊急やむを得ない理由"), "Test 187-2e: 緊急やむを得ない理由が空のとき「緊急やむを得ない理由」と出て保存されないこと");
+
+          document.getElementById("swRestraintReason").value = "切迫性があり一時的に安全確保が必要";
+          document.getElementById("swRestraintEndTime").value = "13:30";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("終了時刻は開始時刻より後の時刻"), "Test 187-2f: 終了時刻＜開始時刻のとき保存されないこと");
+
+          // 未ログイン時は保存停止
+          document.getElementById("swRestraintEndTime").value = "";
+          gState.session = null;
+          gState.currentStaff = "";
+          if (staffSelectEl) staffSelectEl.value = "";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 && alerts187[alerts187.length - 1].includes("記録者（ログインした職員）が確認できない"), "Test 187-2g: ログインした職員が取れないときは保存されないこと");
+
+          // 3. 終了時刻を空にして保存（介護職員 井上 蓮）・申し送りに入らないこと・2回呼んでも増えないこと
+          gState.session = { staffId: "dddd", staffName: "井上 蓮", role: "介護職員" };
+          gState.currentStaff = "井上 蓮";
+          if (staffSelectEl) staffSelectEl.value = "井上 蓮";
+          const nbCountBefore187 = (db.data.notebooks || []).length;
+
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 + 1, "Test 187-3a: 終了時刻が空でも保存できること（介護職員 井上 蓮）");
+          assert((db.data.notebooks || []).length === nbCountBefore187, "Test 187-3b: 申し送り（notebooks）には自動で入らないこと");
+
+          // 続けて2回目の呼び出し（空欄化後＆同じ値の再投入）でも増えないこと
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 + 1, "Test 187-3c: 2回続けて押しても記録が増えないこと");
+          document.getElementById("swEventCategory").value = "身体拘束";
+          cpOnSwEventCategoryChange();
+          document.getElementById("swRestraintManner").value = "車いす安全ベルトの装着";
+          document.getElementById("swRestraintStartTime").value = "14:00";
+          document.getElementById("swRestraintEndTime").value = "";
+          document.getElementById("swRestraintCondition").value = "立ち上がりによる転倒のおそれが高い状態";
+          document.getElementById("swRestraintReason").value = "切迫性があり一時的に安全確保が必要";
+          saveSingleWriteScreen("event");
+          assert(db.data.care_records.length === countBefore187 + 1, "Test 187-3d: 同じ内容で2回呼んでも重複して増えないこと");
+
+          const savedRec187 = db.data.care_records[0];
+          assert(
+            savedRec187.category === "身体拘束" &&
+            savedRec187.restraint_manner === "車いす安全ベルトの装着" &&
+            savedRec187.restraint_start_time === "14:00" &&
+            savedRec187.restraint_end_time === "" &&
+            savedRec187.restraint_condition === "立ち上がりによる転倒のおそれが高い状態" &&
+            savedRec187.restraint_reason === "切迫性があり一時的に安全確保が必要" &&
+            savedRec187.staff_name === "井上 蓮" &&
+            savedRec187.content.includes("【態様】車いす安全ベルトの装着") &&
+            savedRec187.content.includes("【時間】14:00〜（継続中）"),
+            "Test 187-3e: 4つの個別項目とcontentの両方に保存され、記録者がログイン本人であること"
+          );
+
+          // 4. あとから訂正で終了時刻を入れ、直す前が履歴に残ること
+          const prevPrompt187 = window.prompt;
+          window.prompt = function() { return "身体拘束終了のため終了時刻を記入"; };
+          openEditCareRecordModal(savedRec187.id);
+          assert(document.getElementById("editCrRestraintFieldsWrap").style.display === "block", "Test 187-4a: 身体拘束の訂正モーダルで4項目の欄が開くこと");
+          document.getElementById("editCrRestraintEndTime").value = "15:15";
+          updateCareRecord();
+
+          assert(savedRec187.restraint_end_time === "15:15" && savedRec187.content.includes("【時間】14:00〜15:15"), "Test 187-4b: 訂正で終了時刻が更新され content にも反映されること");
+          assert(Array.isArray(savedRec187.edit_history) && savedRec187.edit_history.length === 1, "Test 187-4c: edit_history に訂正履歴が1件残ること");
+          assert(
+            savedRec187.edit_history[0].reason === "身体拘束終了のため終了時刻を記入" &&
+            savedRec187.edit_history[0].before.restraint_end_time === "" &&
+            savedRec187.edit_history[0].before.content.includes("14:00〜（継続中）"),
+            "Test 187-4d: 直す前の終了時刻（空欄）と content が edit_history[0].before に残ること"
+          );
+          const auditBefore187 = cpAuditBeforeText(savedRec187.edit_history[0].before);
+          assert(auditBefore187.includes("態様:") && auditBefore187.includes("終了時刻:") && !auditBefore187.includes("restraint_manner"), "Test 187-4e: 取消と訂正の履歴表示でプログラム項目名が出ず日本語見出しになること");
+
+          // 5. 個別記録（見る）・区分絞り込み・期間印刷・記録の書き出し（CSV・印刷）の確認
+          const filterEl187 = document.getElementById("personalRecordCategoryFilter");
+          if (filterEl187) filterEl187.value = "身体拘束";
+          renderSelectedDateRecords();
+          const listText187 = document.getElementById("selectedDateRecordsList").textContent || "";
+          assert(listText187.includes("［身体拘束］") && listText187.includes("車いす安全ベルトの装着") && listText187.includes("14:00〜15:15"), "Test 187-5a: 個別記録（見る）および区分「身体拘束」絞り込みで4項目が出ること");
+          if (filterEl187) filterEl187.value = "";
+
+          document.getElementById("ppResident").innerHTML = '<option value="1" selected>1</option>';
+          document.getElementById("ppResident").value = "1";
+          document.getElementById("ppFrom").value = "2026-10-30";
+          document.getElementById("ppTo").value = "2026-10-30";
+          document.getElementById("ppCare").checked = true;
+          printPeriodRecords();
+          const ppHtml187 = document.getElementById("printArea").innerHTML || "";
+          assert(ppHtml187.includes("身体拘束") && ppHtml187.includes("車いす安全ベルトの装着") && ppHtml187.includes("14:00〜15:15"), "Test 187-5b: 記録の期間印刷（printPeriodRecords）に4項目が出ること");
+
+          const expColl187 = cpCollectExportRecords({
+            resVal: "1",
+            startDate: "2026-10-30",
+            endDate: "2026-10-30",
+            selectedTypes: new Set(["care_records"]),
+            includeVoided: false
+          });
+          const csv187 = cpBuildCareRecordsCsv(expColl187.allRecords);
+          assert(csv187.includes(',身体拘束,"【態様】車いす安全ベルトの装着\n【時間】14:00〜15:15\n【その際の心身の状況】立ち上がりによる転倒のおそれが高い状態\n【緊急やむを得ない理由】切迫性があり一時的に安全確保が必要",井上 蓮,'), "Test 187-5c: 記録の書き出しCSV（cpBuildCareRecordsCsv）に種類「身体拘束」と4項目が出ること");
+
+          // 6. 取消すると一覧から消え、取消と訂正の履歴に理由つきで出ること
+          window.prompt = function() { return "テスト確認後の取消"; };
+          openEditCareRecordModal(savedRec187.id);
+          deleteCareRecord();
+          assert(savedRec187.voided === true && savedRec187.void_reason === "テスト確認後の取消", "Test 187-6a: 取消で voided=true と理由が保存されること");
+          renderSelectedDateRecords();
+          const afterVoidText187 = document.getElementById("selectedDateRecordsList").textContent || "";
+          assert(!afterVoidText187.includes("車いす安全ベルトの装着"), "Test 187-6b: 取消後に個別記録（見る）の一覧から消えること");
+          const auditEntries187 = cpCollectAuditEntries();
+          assert(auditEntries187.some(e => e.kind === "介護記録" && e.type === "取消" && e.detail.includes("テスト確認後の取消") && e.summary.includes("[身体拘束]")), "Test 187-6c: 取消と訂正の履歴に理由つきで出ること");
+
+          // 7. 看護師（鈴木 美智子）・計画作成担当者（小林 恵子）での記録確認
+          [
+            { staffId: "bbbb", staffName: "鈴木 美智子", role: "主任看護師", start: "16:00", end: "16:30" },
+            { staffId: "ffff", staffName: "小林 恵子", role: "計画作成担当者", start: "17:00", end: "17:20" }
+          ].forEach((st, idx) => {
+            gState.session = { staffId: st.staffId, staffName: st.staffName, role: st.role };
+            gState.currentStaff = st.staffName;
+            if (staffSelectEl) staffSelectEl.value = st.staffName;
+            renderSingleWriteScreen();
+            const catSel = document.getElementById("swEventCategory");
+            catSel.value = "身体拘束";
+            cpOnSwEventCategoryChange();
+            document.getElementById("swRestraintManner").value = "ベッド柵4点による囲み";
+            document.getElementById("swRestraintStartTime").value = st.start;
+            document.getElementById("swRestraintEndTime").value = st.end;
+            document.getElementById("swRestraintCondition").value = "不穏によりベッドからの転落危険が高い状態";
+            document.getElementById("swRestraintReason").value = "夜間帯で代替の見守り手段がなく一時的に実施";
+            const cBefore = db.data.care_records.length;
+            saveSingleWriteScreen("event");
+            assert(db.data.care_records.length === cBefore + 1 && db.data.care_records[0].staff_name === st.staffName, `Test 187-7${idx === 0 ? "a" : "b"}: ${st.role}（${st.staffName}）で身体拘束を記録できること`);
+          });
+
+          // 復元
+          window.alert = prevAlert187;
+          window.prompt = prevPrompt187;
+          db.data.care_records = origCareRecs187;
+          db.data.notebooks = origNotebooks187;
+          gState.selectedResidentId = origSelRes187;
+          gState.selectedDate = origSelDate187;
+          gState.session = origSession187;
+          gState.currentStaff = origCurStaff187;
+          if (staffSelectEl) {
+            staffSelectEl.innerHTML = origStaffHtml187;
+            staffSelectEl.value = origStaffVal187;
+          }
         }
 
       // 40. 総合結果判定

@@ -941,6 +941,15 @@ function clearRecordForm() {
 // ======================================================================
 // 登録後 介護記録・カルテの個別編集・修正・加筆・削除機能
 // ======================================================================
+function cpOnEditCrCategoryChange() {
+ const catEl = document.getElementById("editCrCategory");
+ const normalWrap = document.getElementById("editCrNormalContentWrap");
+ const restraintWrap = document.getElementById("editCrRestraintFieldsWrap");
+ const isRestraint = Boolean(catEl && catEl.value === "身体拘束");
+ if (restraintWrap) restraintWrap.style.display = isRestraint ? "block" : "none";
+ if (normalWrap) normalWrap.style.display = isRestraint ? "none" : "block";
+}
+
 function openEditCareRecordModal(recId) {
  const rec = (db.data.care_records || []).find(r => Number(r.id) === Number(recId));
  if (!rec) {
@@ -956,6 +965,11 @@ function openEditCareRecordModal(recId) {
  const catEl = document.getElementById("editCrCategory");
  const staffEl = document.getElementById("editCrStaff");
  const contentEl = document.getElementById("editCrContent");
+ const mannerEl = document.getElementById("editCrRestraintManner");
+ const startEl = document.getElementById("editCrRestraintStartTime");
+ const endEl = document.getElementById("editCrRestraintEndTime");
+ const condEl = document.getElementById("editCrRestraintCondition");
+ const reasonEl = document.getElementById("editCrRestraintReason");
 
  if (idEl) idEl.value = rec.id;
  if (nameEl) nameEl.value = resName;
@@ -963,6 +977,13 @@ function openEditCareRecordModal(recId) {
  if (catEl) catEl.value = rec.category || "介護記録";
  if (staffEl) { staffEl.value = rec.staff_name || ""; staffEl.readOnly = true; } // [Claude修正] 記録者名は訂正で変えられないようにする
  if (contentEl) contentEl.value = rec.content || "";
+ const recTimePart = (rec.recorded_at || rec.record_time || "").length >= 16 ? (rec.recorded_at || rec.record_time || "").slice(11, 16) : "";
+ if (mannerEl) mannerEl.value = rec.restraint_manner || "";
+ if (startEl) startEl.value = rec.restraint_start_time || recTimePart;
+ if (endEl) endEl.value = rec.restraint_end_time || "";
+ if (condEl) condEl.value = rec.restraint_condition || "";
+ if (reasonEl) reasonEl.value = rec.restraint_reason || "";
+ cpOnEditCrCategoryChange();
 
  openModal("editCareRecordModal");
 }
@@ -982,17 +1003,86 @@ function updateCareRecord() {
  return;
  }
 
+ const timeEl = document.getElementById("editCrDateTime");
+ const catEl = document.getElementById("editCrCategory");
+ const newTime = (timeEl && timeEl.value.trim()) ? timeEl.value.trim() : (rec.recorded_at || "");
+ const newCat = catEl ? catEl.value : rec.category;
+
+ if (newCat === "身体拘束") {
+  const rManner = (document.getElementById("editCrRestraintManner")?.value || "").trim();
+  const rStart = (document.getElementById("editCrRestraintStartTime")?.value || "").trim();
+  const rEnd = (document.getElementById("editCrRestraintEndTime")?.value || "").trim();
+  const rCond = (document.getElementById("editCrRestraintCondition")?.value || "").trim();
+  const rReason = (document.getElementById("editCrRestraintReason")?.value || "").trim();
+  const missing = (typeof cpGetMissingRestraintFields === "function")
+   ? cpGetMissingRestraintFields(rManner, rStart, rCond, rReason)
+   : [];
+  if (missing.length > 0) {
+   alert(`身体拘束の記録には4つの項目すべての入力が必要です。\n未入力の欄: ${missing.join("、")}`);
+   return;
+  }
+  if (rEnd && rStart > rEnd) {
+   alert("時間の終了時刻は開始時刻より後の時刻を入力してください。");
+   return;
+  }
+  const datePart = (newTime.slice(0, 10) || (rec.recorded_at || "").slice(0, 10));
+  const updatedRecordedAt = datePart ? `${datePart} ${rStart}` : newTime;
+  const formattedContent = (typeof cpFormatRestraintContent === "function")
+   ? cpFormatRestraintContent(rManner, rStart, rEnd, rCond, rReason)
+   : `【態様】${rManner}\n【時間】${rEnd ? rStart + "〜" + rEnd : rStart + "〜（継続中）"}\n【その際の心身の状況】${rCond}\n【緊急やむを得ない理由】${rReason}`;
+  const before = {
+   recorded_at: rec.recorded_at || rec.record_time || "",
+   category: rec.category || "",
+   restraint_manner: rec.restraint_manner || "",
+   restraint_start_time: rec.restraint_start_time || "",
+   restraint_end_time: rec.restraint_end_time || "",
+   restraint_condition: rec.restraint_condition || "",
+   restraint_reason: rec.restraint_reason || "",
+   content: rec.content || ""
+  };
+  if (
+   before.recorded_at === updatedRecordedAt &&
+   before.category === newCat &&
+   before.restraint_manner === rManner &&
+   before.restraint_start_time === rStart &&
+   before.restraint_end_time === rEnd &&
+   before.restraint_condition === rCond &&
+   before.restraint_reason === rReason &&
+   before.content === formattedContent
+  ) {
+   alert("変更された内容がありません。");
+   return;
+  }
+  const reason = prompt("訂正の理由を入力してください (例: 身体拘束終了のため終了時刻を記入、誤字の修正)\n直す前の内容は訂正履歴として残ります。", "");
+  if (reason === null) return;
+  if (!reason.trim()) { alert("訂正の理由を入力してください。保存は行っていません。"); return; }
+
+  if (!Array.isArray(rec.edit_history)) rec.edit_history = [];
+  rec.edit_history.push({ edited_at: toLocalDateTimeStr(new Date()), edited_by: cpLedgerStaff(), reason: reason.trim(), before: before });
+  rec.recorded_at = updatedRecordedAt;
+  rec.category = "身体拘束";
+  rec.restraint_manner = rManner;
+  rec.restraint_start_time = rStart;
+  rec.restraint_end_time = rEnd;
+  rec.restraint_condition = rCond;
+  rec.restraint_reason = rReason;
+  rec.content = formattedContent;
+
+  db.save();
+  closeModal("editCareRecordModal");
+  renderSelectedDateRecords();
+  if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") renderSingleWriteScreen();
+  if (typeof renderDailyJournal === "function") renderDailyJournal();
+  alert("介護記録を訂正しました。直す前の内容は訂正履歴に残っています。");
+  return;
+ }
+
  const contentEl = document.getElementById("editCrContent");
  const newContent = contentEl ? contentEl.value.trim() : "";
  if (!newContent) {
  alert("記録内容を入力してください。");
  return;
  }
-
- const timeEl = document.getElementById("editCrDateTime");
- const catEl = document.getElementById("editCrCategory");
- const newTime = (timeEl && timeEl.value.trim()) ? timeEl.value.trim() : (rec.recorded_at || "");
- const newCat = catEl ? catEl.value : rec.category;
 
  const before = { recorded_at: rec.recorded_at || rec.record_time || "", category: rec.category || "", content: rec.content || "" };
  if (before.recorded_at === newTime && before.category === newCat && before.content === newContent) {
@@ -1012,6 +1102,7 @@ function updateCareRecord() {
  db.save();
  closeModal("editCareRecordModal");
  renderSelectedDateRecords();
+ if (typeof renderSingleWriteScreen === "function" && gState.activeCareTab === "write_single") renderSingleWriteScreen();
  if (typeof renderDailyJournal === "function") renderDailyJournal();
  alert("介護記録を訂正しました。直す前の内容は訂正履歴に残っています。");
 }
